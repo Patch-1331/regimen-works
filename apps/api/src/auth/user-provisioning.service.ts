@@ -1,12 +1,20 @@
 import { Injectable } from '@nestjs/common';
-import { progressionLine } from '@regimen-works/shared';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
  * Creates the rows a signed-in user needs before anything else can reference
- * them: their User row (which every per-user foreign key points at) plus the
- * per-user defaults the deploy seed used to create globally — a ScheduleRule
- * and one SkillLevel per progression line.
+ * them: their User row (which every per-user foreign key points at) plus a
+ * ScheduleRule, the one per-user default the deploy seed used to create
+ * globally.
+ *
+ * Deliberately **not** a SkillLevel per progression line (DN-86). Provisioning
+ * a rung is the app forming an opinion about someone it has never seen train:
+ * it used to start everyone at rung 0, so an athlete who can do ten pull-ups
+ * was handed negative pull-ups and knee push-ups on day one. `applyCurrentRung`
+ * passes a movement through unchanged when its line has no rung on record, so
+ * creating nothing means the first workout is the library's own prescription —
+ * and the app personalises only once the athlete has chosen something in the
+ * swap panel.
  *
  * Clerk owns identity, so there is no sign-up hook here; a user simply exists
  * the first time they present a valid token.
@@ -41,8 +49,8 @@ export class UserProvisioningService {
     // no-op, so none of these writes was ever an update — they are all
     // "create if missing".
     //
-    // Order matters inside the transaction: ScheduleRule and SkillLevel carry
-    // foreign keys to User, so the User row goes first.
+    // Order matters inside the transaction: ScheduleRule carries a foreign
+    // key to User, so the User row goes first.
     await this.prisma.$transaction([
       this.prisma.user.createMany({
         data: [{ id: userId }],
@@ -50,14 +58,6 @@ export class UserProvisioningService {
       }),
       this.prisma.scheduleRule.createMany({
         data: [{ userId }],
-        skipDuplicates: true,
-      }),
-      this.prisma.skillLevel.createMany({
-        data: progressionLine.options.map((line) => ({
-          userId,
-          line,
-          rung: 0,
-        })),
         skipDuplicates: true,
       }),
     ]);

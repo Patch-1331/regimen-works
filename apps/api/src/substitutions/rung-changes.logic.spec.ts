@@ -71,8 +71,18 @@ describe('proposeRungChanges', () => {
     expect(proposals[0]).toMatchObject({ toRung: 2 });
   });
 
-  it('ignores a line the athlete has no skill level for', () => {
-    expect(proposeRungChanges([chinUp], new Map())).toEqual([]);
+  // DN-86. This used to propose nothing, which made sense only while everyone
+  // was provisioned at rung 0 — with no provisioning, every line looks like
+  // this on a new athlete's first session, and the first choice is the one
+  // most worth remembering.
+  it('proposes a line with no rung on record, as a change from null', () => {
+    const proposals = proposeRungChanges([chinUp], new Map());
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0]).toMatchObject({
+      line: 'pull',
+      fromRung: null,
+      toRung: 2,
+    });
   });
 
   it('handles several lines in one session', () => {

@@ -10,7 +10,12 @@ import { progressionLine } from "./enums.js";
  */
 export const proposedRungChangeSchema = z.object({
   line: progressionLine,
-  fromRung: z.number().int().nonnegative(),
+  /**
+   * Null when the athlete has no default on this line yet — the ordinary case
+   * for a first swap since DN-86 stopped provisioning a rung for everyone. It
+   * is a proposal like any other: "no default yet" → "chin-ups".
+   */
+  fromRung: z.number().int().nonnegative().nullable(),
   toRung: z.number().int().nonnegative(),
   exerciseId: z.string(),
   exerciseName: z.string(),

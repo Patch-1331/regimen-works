@@ -1,0 +1,17 @@
+-- DN-86: drop the rung-0 rows provisioning handed out.
+--
+-- `user-provisioning.service.ts` used to create a SkillLevel at rung 0 on all
+-- eight lines for every new user, so existing athletes are still sitting on
+-- knee push-ups and negative pull-ups even though new ones no longer are. No
+-- row means `applyCurrentRung` passes the movement through and the WOD reads
+-- as the library wrote it, so deleting these gives everyone the same honest
+-- starting point.
+--
+-- `lastChange IS NULL` keeps any row the old automatic advancement rule
+-- touched. It cannot tell a provisioned 0 from a deliberately chosen 0 —
+-- SkillLevel has no createdAt, and `setRung` clears lastChange either way —
+-- so a deliberate rung 0 is deleted with the rest. That is the accepted cost:
+-- the athlete sees the prescribed movement next session and is one tap from
+-- putting their choice back, which is exactly the flow this project is built
+-- around.
+DELETE FROM "SkillLevel" WHERE "rung" = 0 AND "lastChange" IS NULL;
