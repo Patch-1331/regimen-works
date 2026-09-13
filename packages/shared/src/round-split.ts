@@ -87,32 +87,6 @@ export function repsForRound(
   return perRound[Math.min(Math.max(roundIndex, 0), perRound.length - 1)];
 }
 
-/**
- * Reps actually performed for one movement, given how many round-taps were
- * logged.
- *
- * No production caller since DN-87 deleted the advancement rule, which was
- * what measured itself against this. Kept because it answers "what was
- * actually trained today", which is a question about the record rather than
- * about the athlete, and the one Progress tracking is built on.
- *
- * A flat, unsplit movement is open-ended: an AMRAP credits every round tapped.
- * A scheme or a split is finite, so taps past the last round add nothing —
- * there are no more reps prescribed to have performed.
- */
-export function totalRepsForMovement(
-  movement: SplittableMovement,
-  completedRounds: number,
-  roundSplitCount: number | null,
-): number {
-  if (movement.repScheme.length === 0 && (!roundSplitCount || roundSplitCount <= 1)) {
-    return completedRounds * movement.reps;
-  }
-  const perRound = roundRepsFor(movement, roundSplitCount);
-  const taps = Math.min(Math.max(completedRounds, 0), perRound.length);
-  return perRound.slice(0, taps).reduce((sum, r) => sum + r, 0);
-}
-
 /** The movement with the highest total reps — the natural anchor for a reps-per-round split. */
 export function anchorMovement<T extends { reps: number }>(movements: T[]): T {
   return movements.reduce((max, m) => (m.reps > max.reps ? m : max), movements[0]);
