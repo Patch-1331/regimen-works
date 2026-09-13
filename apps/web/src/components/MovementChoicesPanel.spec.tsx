@@ -1,0 +1,158 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { SkillLevel } from "@regimen-works/shared";
+import type { ApiExercise } from "../lib/api";
+import { api } from "../lib/api";
+import { MovementChoicesPanel } from "./MovementChoicesPanel";
+
+/**
+ * The first component test in the repo (DN-95). Until now `apps/web` ran
+ * Vitest with no DOM, so everything that renders shipped on typecheck, lint
+ * and a green build — this panel included, and it was rewritten wholesale in
+ * DN-91 without a single assertion on what it puts on screen.
+ *
+ * Queried through the accessibility tree on purpose. The expander carries
+ * `aria-expanded` / `aria-controls` and the chosen movement is marked with
+ * `aria-current` as well as by colour; asserting on those is what keeps them
+ * from quietly rotting, since nothing else checks them.
+ */
+
+vi.mock("../lib/api", () => ({
+  api: { setSkillLevel: vi.fn() },
+}));
+
+const setSkillLevel = vi.mocked(api.setSkillLevel);
+
+function exercise(
+  partial: Partial<ApiExercise> & { id: string },
+): ApiExercise {
+  return {
+    name: partial.id,
+    pattern: "pull",
+    needsBar: false,
+    scalable: true,
+    unit: "reps",
+    line: "pull",
+    rung: 0,
+    altExercise: null,
+    ...partial,
+  };
+}
+
+function skill(line: string, rung: number): SkillLevel {
+  return {
+    id: `sl-${line}`,
+    line: line as SkillLevel["line"],
+    rung,
+    updatedAt: "2026-09-13T10:00:00.000Z",
+  };
+}
+
+const PULL_LINE = [
+  exercise({ id: "negative", name: "Negative chin-up", rung: 0 }),
+  exercise({ id: "chin-up", name: "Chin-up", rung: 1 }),
+  exercise({ id: "pull-up", name: "Pull-up", rung: 2 }),
+];
+
+function renderPanel(skillLevels: SkillLevel[], exercises = PULL_LINE) {
+  const queryClient = new QueryClient({
+    defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MovementChoicesPanel exercises={exercises} skillLevels={skillLevels} />
+    </QueryClientProvider>,
+  );
+}
+
+/**
+ * The expander for one line. Found through `aria-controls`, which also checks
+ * that the button and the list it opens are actually wired to each other —
+ * "Pull" as an accessible name would match the Pull-up option too.
+ */
+function expander(line: string) {
+  return screen.getByRole("button", {
+    name: (_name, element) =>
+      element.getAttribute("aria-controls") === `movement-choice-${line}`,
+  });
+}
+
+beforeEach(() => {
+  setSkillLevel.mockReset();
+  setSkillLevel.mockResolvedValue(skill("pull", 2));
+});
+
+describe("MovementChoicesPanel", () => {
+  it("explains itself when the athlete has chosen nothing", () => {
+    // DN-86 stopped provisioning everyone onto rung 0, so this is what a new
+    // athlete sees. A bare heading over nothing would read like a failure.
+    renderPanel([]);
+    expect(
+      screen.getByText(/your workouts come exactly as written/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("names the chosen movement under its line, and hides the rest until asked", () => {
+    renderPanel([skill("pull", 1)]);
+
+    expect(screen.getByText("Pull")).toBeInTheDocument();
+    expect(screen.getByText("Chin-up")).toBeInTheDocument();
+    expect(expander("pull")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Pull-up")).not.toBeInTheDocument();
+  });
+
+  it("offers the whole line in order once expanded, marking only the chosen one", async () => {
+    const user = userEvent.setup();
+    renderPanel([skill("pull", 1)]);
+
+    await user.click(expander("pull"));
+    expect(expander("pull")).toHaveAttribute("aria-expanded", "true");
+
+    const options = within(screen.getByRole("list")).getAllByRole("button");
+    expect(options.map((o) => o.textContent)).toEqual([
+      "Negative chin-up",
+      "Chin-up",
+      "Pull-up",
+    ]);
+    // Nothing is cleared or locked — a movement below the choice and one above
+    // it are indistinguishable (DN-91).
+    expect(options.map((o) => o.getAttribute("aria-current"))).toEqual([
+      "false",
+      "true",
+      "false",
+    ]);
+  });
+
+  it("saves the picked movement against its line and closes the list", async () => {
+    const user = userEvent.setup();
+    renderPanel([skill("pull", 1)]);
+
+    await user.click(expander("pull"));
+    await user.click(screen.getByRole("button", { name: "Pull-up" }));
+
+    expect(setSkillLevel).toHaveBeenCalledWith("pull", { rung: 2 });
+    await waitFor(() =>
+      expect(expander("pull")).toHaveAttribute("aria-expanded", "false"),
+    );
+  });
+
+  it("does not let the athlete re-pick what is already chosen", async () => {
+    const user = userEvent.setup();
+    renderPanel([skill("pull", 1)]);
+
+    await user.click(expander("pull"));
+    await user.click(screen.getByRole("button", { name: "Chin-up" }));
+
+    expect(setSkillLevel).not.toHaveBeenCalled();
+  });
+
+  it("says nothing rather than the wrong thing when the rung has no movement", () => {
+    // A stored rung with nothing seeded at it. The line is still offered in
+    // full, so the athlete can pick their way out of the gap.
+    renderPanel([skill("pull", 9)]);
+    expect(screen.getByText(/not on the current library/i)).toBeInTheDocument();
+  });
+});
