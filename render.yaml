@@ -5,200 +5,236 @@
 # changes it. Services created by hand in the dashboard are NOT adopted by a
 # blueprint; they have to be re-created from here.
 #
-# `name` is the identity key, and it is not a label. Changing it does not
-# rename anything: the sync creates a NEW service with a new slug and leaves
-# the old one running and orphaned, still serving and still billing. Verified
-# on a throwaway blueprint — the new service appeared within seconds of the
-# push and the old one answered 200 throughout. The new service also starts
-# with none of the `sync: false` values below, so it cannot serve correctly
-# until they are set by hand. Renaming a service here is therefore a migration,
-# not an edit. Renaming it in the dashboard instead changes only the display
-# name — the slug and .onrender.com URL are fixed at creation and immutable.
+# `name` is the identity key, not a label, and the sync matches on the
+# resource's CURRENT name:
+#
+#   name matches an existing resource  -> that resource is updated IN PLACE,
+#                                         keeping its slug, env vars and
+#                                         custom domains
+#   name matches nothing               -> a NEW resource is created, with a new
+#                                         slug, none of the `sync: false`
+#                                         values below, and no domains
+#
+# Both halves were observed directly. A throwaway blueprint renamed from
+# bp-probe-alpha to bp-probe-gamma created a second service and left the first
+# running. A later sync renaming these services matched the names they had
+# already been given in the dashboard and adopted them untouched, while the
+# database — whose name matched nothing — was created fresh and empty.
+#
+# The practical consequences:
+#   - To rename a resource and keep it, rename it in the DASHBOARD first, then
+#     make this file agree. The dashboard rename changes only the display name;
+#     the slug and .onrender.com URL are fixed at creation and immutable.
+#   - To genuinely replace a resource (the only way to change a slug), make
+#     sure the new name matches nothing, and expect to re-enter every
+#     `sync: false` value and re-attach every domain by hand.
 #
 # Region must match between the web service and the database, otherwise the
 # service can't reach the database over its internal connection string.
+#
+# Resources live inside a project environment. Declared at the top level
+# instead, they merely "keep their currently assigned environment (if any)" —
+# which means a newly created resource is assigned none, and drifts out of the
+# environment its siblings are in. That happened to regimen-works-db, which was
+# created into an environment of its own while the services stayed in
+# Production. Declaring the project here is what keeps them together.
 
-databases:
-  - name: regimen-works-db
-    # databaseName and user are fixed when the database is created; Render has
-    # no way to change either afterwards. Renaming them here creates a NEW,
-    # EMPTY database — the old one is orphaned with its data intact but nothing
-    # connected to it. That is deliberate here: the rename from wod_engine was
-    # taken as a fresh start rather than a dump-and-restore. It rebuilds itself
-    # because preDeployCommand runs `prisma migrate deploy` and an idempotent
-    # seed, so schema and WOD library come back automatically; user rows and
-    # training history do not. Never change these two lines casually.
-    databaseName: regimen_works
-    user: regimen_works
-    # Not free: free databases expire 30 days after creation and are deleted
-    # after a 14-day grace period, taking all data with them. $6/month.
-    plan: 0.1c-256mb
-    region: ohio
-    # Block all external connections. The allow list governs only the external
-    # URL; regimen-works-api reaches the database over the internal URL, which
-    # ignores it, as do Render's backups, PITR and the dashboard psql shell.
-    # Render's default is 0.0.0.0/0 — open to the whole internet with only the
-    # password in the way. The cost of this is that a local psql or GUI client
-    # can no longer reach it; add a CIDR back here to restore that:
-    #   ipAllowList:
-    #     - source: "203.0.113.4/32"
-    #       description: "home"
-    ipAllowList: []
+projects:
+  - name: RegimenWorks
+    environments:
+      - name: Production
+        databases:
+          - name: regimen-works-db
+            # databaseName and user are fixed when the database is created; Render has
+            # no way to change either afterwards. Renaming them here creates a NEW,
+            # EMPTY database — the old one is orphaned with its data intact but nothing
+            # connected to it. That is deliberate here: the rename from wod_engine was
+            # taken as a fresh start rather than a dump-and-restore. It rebuilds itself
+            # because preDeployCommand runs `prisma migrate deploy` and an idempotent
+            # seed, so schema and WOD library come back automatically; user rows and
+            # training history do not. Never change these two lines casually.
+            databaseName: regimen_works
+            user: regimen_works
+            # Not free: free databases expire 30 days after creation and are deleted
+            # after a 14-day grace period, taking all data with them. $6/month.
+            plan: 0.1c-256mb
+            # Pinned rather than left to default. Render sizes a new database's
+            # disk from the compute plan's TIER — Free 1 GB, Basic 15 GB, Pro
+            # 100 GB — so an unpinned database silently inherits whatever that
+            # default happens to be. This one came up at 15 GB for exactly that
+            # reason, while its predecessor had 1 GB only because it had been
+            # created on the free tier and upgraded later. Storage bills at
+            # $0.30/GB/month on the size ALLOCATED, not used, so 15 GB is
+            # $4.50/month against 1 GB's $0.30. Kept at 15 deliberately.
+            # Can be increased at any time but never decreased: lowering this
+            # number requires replacing the database, so treat it as one-way.
+            diskSizeGB: 15
+            region: ohio
+            # Block all external connections. The allow list governs only the external
+            # URL; regimen-works-api reaches the database over the internal URL, which
+            # ignores it, as do Render's backups, PITR and the dashboard psql shell.
+            # Render's default is 0.0.0.0/0 — open to the whole internet with only the
+            # password in the way. The cost of this is that a local psql or GUI client
+            # can no longer reach it; add a CIDR back here to restore that:
+            #   ipAllowList:
+            #     - source: "203.0.113.4/32"
+            #       description: "home"
+            ipAllowList: []
 
-services:
-  - type: web
-    name: regimen-works-api
-    runtime: node
-    region: ohio
-    # Free web services spin down after ~15 minutes idle, and the next request
-    # pays a cold start before the app's own ~5s boot. $7/month. Note the plan
-    # id: Render renamed instance types to compute plans, and "starter" is no
-    # longer an accepted value.
-    plan: 0.5c-512mb
-    branch: main
-    # Install at the repo root: this is an npm workspaces monorepo and
-    # apps/api depends on @regimen-works/shared, so apps/api can't install alone.
-    rootDir: .
-    # Without this, every push to main redeploys this service even when it
-    # only touched apps/web. packages/shared is listed here *and* in the web
-    # service's filter because both apps depend on it; leaving it out of one
-    # means a shared-package change never reaches that app. The root
-    # package.json and lockfile are in because they change what npm ci
-    # installs, and render.yaml because it defines the build itself.
-    # Trade-off: a commit matching no filter creates no deploy record at all,
-    # so this service's latest deploy can sit several commits behind main.
-    buildFilter:
-      paths:
-        - apps/api/**
-        - packages/shared/**
-        - package.json
-        - package-lock.json
-        - render.yaml
-    # prisma generate is explicit because the root postinstall only builds
-    # packages/shared, and @prisma/client's own postinstall doesn't reliably
-    # find apps/api/prisma/schema.prisma through a hoisted workspace install.
-    buildCommand: >-
-      npm ci &&
-      npm run prisma:generate --workspace apps/api &&
-      npm run build
-    # Runs after the build succeeds but before the new instance starts, on a
-    # throwaway instance of its own; the paid plan above is what makes it
-    # available. A non-zero exit fails the whole deploy, so a bad migration
-    # never reaches startCommand and the current instance keeps serving.
-    # This is why migrations don't belong in buildCommand: a build runs to
-    # completion even when its deploy is never promoted — superseded by a
-    # newer commit, cancelled, or failed afterwards — so the schema changed
-    # under code that never shipped. Pre-deploy only runs for a deploy that is
-    # actually going out.
-    # healthCheckPath is evaluated against the new instance after startCommand,
-    # strictly later than this, so the app is only probed once the schema it
-    # expects is in place.
-    # The seed is idempotent (upserts throughout, and skillLevel updates to a
-    # no-op so re-seeding never resets progress), so it's safe on every deploy.
-    # Without it migrate deploy leaves empty tables and the scheduler has no
-    # exercises or schedule rule to build a WOD from.
-    # Run through the workspace, not `npx prisma ... --schema <path>` from the
-    # root: Prisma 7 takes the connection string from apps/api/prisma.config.ts,
-    # and it only finds that file when apps/api is the working directory. From
-    # the root it fails with "datasource.url property is required".
-    preDeployCommand: >-
-      npm run prisma:migrate:deploy --workspace apps/api &&
-      npm run prisma:seed --workspace apps/api
-    # Not dist/main: prisma/seed.ts sits inside the compile scope, so nest
-    # build emits to dist/src/ rather than flattening to dist/.
-    startCommand: node apps/api/dist/src/main
-    healthCheckPath: /
-    # Custom domain deliberately absent for this step. api.regimenworks.com is
-    # still attached to the service this one replaces, and a domain cannot sit
-    # on two services at once — declaring it here would have the sync fight for
-    # a domain that is still serving traffic. It goes back once the new service
-    # is verified and the old one has released it:
-    #   domains:
-    #     - api.regimenworks.com
-    # When it returns: Render issues and renews the certificate itself, so the
-    # Cloudflare record for this host must stay DNS-only (grey cloud) until the
-    # certificate is issued — proxying first is the usual cause of a cert that
-    # never validates, and nothing reports the proxy as the reason.
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: regimen-works-db
-          property: connectionString
-      - key: NODE_VERSION
-        value: "22"
-      # Clerk verifies session tokens with this. Unlike the shared secret it
-      # replaces, it is not generatable — paste the production instance's
-      # secret key from dashboard.clerk.com. The service refuses to boot
-      # without it, so it can never serve unauthenticated.
-      - key: CLERK_SECRET_KEY
-        sync: false
-      # CORS allowlist, comma-separated — see apps/api/src/common/origins.ts.
-      # The frontend calls this API cross-origin, so an unset value falls back
-      # to the Vite dev server and the deployed site is refused.
-      # While this service is being verified its own domain is not attached
-      # yet, so the only way to reach the new frontend is its Render subdomain.
-      # Set it to that alone during verification:
-      #   https://regimen-works-web.onrender.com
-      # then to the custom domain alone once the domain has moved across:
-      #   https://regimenworks.com
-      # Listing both across the swap costs nothing and avoids a moment where
-      # CORS has to flip in step with DNS. Narrow it to the custom domain once
-      # the cutover is done — the Render subdomain is a public URL that would
-      # otherwise stay a valid origin forever.
-      - key: WEB_ORIGIN
-        sync: false
+        services:
+          - type: web
+            name: regimen-works-api
+            runtime: node
+            region: ohio
+            # Free web services spin down after ~15 minutes idle, and the next request
+            # pays a cold start before the app's own ~5s boot. $7/month. Note the plan
+            # id: Render renamed instance types to compute plans, and "starter" is no
+            # longer an accepted value.
+            plan: 0.5c-512mb
+            branch: main
+            # Install at the repo root: this is an npm workspaces monorepo and
+            # apps/api depends on @regimen-works/shared, so apps/api can't install alone.
+            rootDir: .
+            # Without this, every push to main redeploys this service even when it
+            # only touched apps/web. packages/shared is listed here *and* in the web
+            # service's filter because both apps depend on it; leaving it out of one
+            # means a shared-package change never reaches that app. The root
+            # package.json and lockfile are in because they change what npm ci
+            # installs, and render.yaml because it defines the build itself.
+            # Trade-off: a commit matching no filter creates no deploy record at all,
+            # so this service's latest deploy can sit several commits behind main.
+            buildFilter:
+              paths:
+                - apps/api/**
+                - packages/shared/**
+                - package.json
+                - package-lock.json
+                - render.yaml
+            # prisma generate is explicit because the root postinstall only builds
+            # packages/shared, and @prisma/client's own postinstall doesn't reliably
+            # find apps/api/prisma/schema.prisma through a hoisted workspace install.
+            buildCommand: >-
+              npm ci &&
+              npm run prisma:generate --workspace apps/api &&
+              npm run build
+            # Runs after the build succeeds but before the new instance starts, on a
+            # throwaway instance of its own; the paid plan above is what makes it
+            # available. A non-zero exit fails the whole deploy, so a bad migration
+            # never reaches startCommand and the current instance keeps serving.
+            # This is why migrations don't belong in buildCommand: a build runs to
+            # completion even when its deploy is never promoted — superseded by a
+            # newer commit, cancelled, or failed afterwards — so the schema changed
+            # under code that never shipped. Pre-deploy only runs for a deploy that is
+            # actually going out.
+            # healthCheckPath is evaluated against the new instance after startCommand,
+            # strictly later than this, so the app is only probed once the schema it
+            # expects is in place.
+            # The seed is idempotent (upserts throughout, and skillLevel updates to a
+            # no-op so re-seeding never resets progress), so it's safe on every deploy.
+            # Without it migrate deploy leaves empty tables and the scheduler has no
+            # exercises or schedule rule to build a WOD from.
+            # Run through the workspace, not `npx prisma ... --schema <path>` from the
+            # root: Prisma 7 takes the connection string from apps/api/prisma.config.ts,
+            # and it only finds that file when apps/api is the working directory. From
+            # the root it fails with "datasource.url property is required".
+            preDeployCommand: >-
+              npm run prisma:migrate:deploy --workspace apps/api &&
+              npm run prisma:seed --workspace apps/api
+            # Not dist/main: prisma/seed.ts sits inside the compile scope, so nest
+            # build emits to dist/src/ rather than flattening to dist/.
+            startCommand: node apps/api/dist/src/main
+            healthCheckPath: /
+            # Custom domain deliberately absent for this step. api.regimenworks.com is
+            # still attached to the service this one replaces, and a domain cannot sit
+            # on two services at once — declaring it here would have the sync fight for
+            # a domain that is still serving traffic. It goes back once the new service
+            # is verified and the old one has released it:
+            #   domains:
+            #     - api.regimenworks.com
+            # When it returns: Render issues and renews the certificate itself, so the
+            # Cloudflare record for this host must stay DNS-only (grey cloud) until the
+            # certificate is issued — proxying first is the usual cause of a cert that
+            # never validates, and nothing reports the proxy as the reason.
+            envVars:
+              - key: DATABASE_URL
+                fromDatabase:
+                  name: regimen-works-db
+                  property: connectionString
+              - key: NODE_VERSION
+                value: "22"
+              # Clerk verifies session tokens with this. Unlike the shared secret it
+              # replaces, it is not generatable — paste the production instance's
+              # secret key from dashboard.clerk.com. The service refuses to boot
+              # without it, so it can never serve unauthenticated.
+              - key: CLERK_SECRET_KEY
+                sync: false
+              # CORS allowlist, comma-separated — see apps/api/src/common/origins.ts.
+              # The frontend calls this API cross-origin, so an unset value falls back
+              # to the Vite dev server and the deployed site is refused.
+              # While this service is being verified its own domain is not attached
+              # yet, so the only way to reach the new frontend is its Render subdomain.
+              # Set it to that alone during verification:
+              #   https://regimen-works-web.onrender.com
+              # then to the custom domain alone once the domain has moved across:
+              #   https://regimenworks.com
+              # Listing both across the swap costs nothing and avoids a moment where
+              # CORS has to flip in step with DNS. Narrow it to the custom domain once
+              # the cutover is done — the Render subdomain is a public URL that would
+              # otherwise stay a valid origin forever.
+              - key: WEB_ORIGIN
+                sync: false
 
-  # Static frontend. Served from Render's CDN, which is free at any scale — it
-  # needs no compute plan of its own.
-  - type: web
-    name: regimen-works-web
-    runtime: static
-    branch: main
-    rootDir: .
-    # See the API service's filter above for the reasoning. Note that this one
-    # deliberately excludes apps/api: nothing the API ships is baked into the
-    # frontend bundle — the API's origin arrives through VITE_API_BASE_URL,
-    # which is service config rather than a tracked file.
-    buildFilter:
-      paths:
-        - apps/web/**
-        - packages/shared/**
-        - package.json
-        - package-lock.json
-        - render.yaml
-    # Only the web workspace: npm ci already builds packages/shared via the
-    # root postinstall, and the API is a separate service.
-    buildCommand: npm ci && npm run build --workspace apps/web
-    staticPublishPath: ./apps/web/dist
-    # Custom domain deliberately absent for this step — see the API service
-    # above for why. It goes back once this service is verified and the old one
-    # has released it:
-    #   domains:
-    #     - regimenworks.com
-    # Declaring the apex is enough: Render creates the www subdomain and the
-    # reciprocal redirect between the two. The matching Cloudflare DNS records
-    # still have to exist — Render creating its own domain entry does not
-    # create anyone else's DNS.
-    routes:
-      # React Router owns the paths. Without this, a refresh or a shared link
-      # to /history asks the CDN for a file that does not exist and 404s.
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      # Vite inlines these at build time, so both are baked into the bundle.
-      # That is correct for a publishable key and for a public API URL; never
-      # put a secret here.
-      # Set to the API's full origin — https://api.regimenworks.com once that
-      # domain's certificate is issued. fromService could supply the host, but
-      # not the scheme, and this value is used as a URL prefix.
-      # Vite inlines this at build time, so changing it needs a rebuild; an env
-      # edit alone changes nothing. Unset, apps/web/src/lib/api.ts falls back
-      # to "/api", which 404s against the CDN rather than erroring loudly.
-      - key: VITE_API_BASE_URL
-        sync: false
-      # Clerk's publishable key for the instance this frontend signs in
-      # against. Public by design, but instance-specific, so it is set rather
-      # than committed — pk_test_ for development, pk_live_ for production.
-      - key: VITE_CLERK_PUBLISHABLE_KEY
-        sync: false
+          # Static frontend. Served from Render's CDN, which is free at any scale — it
+          # needs no compute plan of its own.
+          - type: web
+            name: regimen-works-web
+            runtime: static
+            branch: main
+            rootDir: .
+            # See the API service's filter above for the reasoning. Note that this one
+            # deliberately excludes apps/api: nothing the API ships is baked into the
+            # frontend bundle — the API's origin arrives through VITE_API_BASE_URL,
+            # which is service config rather than a tracked file.
+            buildFilter:
+              paths:
+                - apps/web/**
+                - packages/shared/**
+                - package.json
+                - package-lock.json
+                - render.yaml
+            # Only the web workspace: npm ci already builds packages/shared via the
+            # root postinstall, and the API is a separate service.
+            buildCommand: npm ci && npm run build --workspace apps/web
+            staticPublishPath: ./apps/web/dist
+            # Custom domain deliberately absent for this step — see the API service
+            # above for why. It goes back once this service is verified and the old one
+            # has released it:
+            #   domains:
+            #     - regimenworks.com
+            # Declaring the apex is enough: Render creates the www subdomain and the
+            # reciprocal redirect between the two. The matching Cloudflare DNS records
+            # still have to exist — Render creating its own domain entry does not
+            # create anyone else's DNS.
+            routes:
+              # React Router owns the paths. Without this, a refresh or a shared link
+              # to /history asks the CDN for a file that does not exist and 404s.
+              - type: rewrite
+                source: /*
+                destination: /index.html
+            envVars:
+              # Vite inlines these at build time, so both are baked into the bundle.
+              # That is correct for a publishable key and for a public API URL; never
+              # put a secret here.
+              # Set to the API's full origin — https://api.regimenworks.com once that
+              # domain's certificate is issued. fromService could supply the host, but
+              # not the scheme, and this value is used as a URL prefix.
+              # Vite inlines this at build time, so changing it needs a rebuild; an env
+              # edit alone changes nothing. Unset, apps/web/src/lib/api.ts falls back
+              # to "/api", which 404s against the CDN rather than erroring loudly.
+              - key: VITE_API_BASE_URL
+                sync: false
+              # Clerk's publishable key for the instance this frontend signs in
+              # against. Public by design, but instance-specific, so it is set rather
+              # than committed — pk_test_ for development, pk_live_ for production.
+              - key: VITE_CLERK_PUBLISHABLE_KEY
+                sync: false
