@@ -32,7 +32,6 @@ function skill(line: string, rung: number): SkillLevel {
     line: line as SkillLevel["line"],
     rung,
     updatedAt: "2026-09-13T10:00:00.000Z",
-    lastChange: null,
   };
 }
 

@@ -353,11 +353,11 @@ doesn't.
 struggling is answered by swapping down. `HOLD_FLOOR`/`HOLD_FLOOR_SECONDS`
 and their branch come out.
 
-`SkillLevel.lastChange` comes out of the schema entirely. It has exactly one
-consumer (the Stats "level up" banner, `apps/web/src/lib/progressions.ts`);
-its writer went with automatic advancement in DN-7, and the rule that fed it
-was deleted outright in DN-87. Once the banner stops being about level,
-nothing reads it — DN-8 does the removal.
+`SkillLevel.lastChange` came out of the schema entirely (DN-97). Its writer
+went with automatic advancement in DN-7 and the rule that fed it was deleted
+in DN-87; its one consumer, the Stats "level up" banner, went with the ladder
+in DN-91. Under the reframing it is not merely unused — a preference cannot be
+an achievement or a demotion, so no value it could hold would mean anything.
 
 ### Completion is what gets celebrated
 
@@ -479,7 +479,8 @@ project, with a story per item below.
 
 - **Phase 1 — athlete-owned progression.** Substitution UI on Today, the
   post-session confirm, demote `computeRungChanges`, delete the drop rule,
-  drop `lastChange` and retarget the Stats banner at workout completion.
+  drop `lastChange` and retarget the Stats banner at workout completion. All
+  shipped bar the celebration itself, which is DN-8.
   Ships standalone value, no new models, and settles the principle before
   programs are built on it.
 - **Phase 2 — program foundation.** Prisma models + migration (partial unique

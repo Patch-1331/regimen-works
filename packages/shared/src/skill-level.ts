@@ -15,8 +15,6 @@ export const skillLevelSchema = z.object({
   line: progressionLine,
   rung: z.number().int().nonnegative(),
   updatedAt: z.string().datetime(),
-  /** Set by the automatic advancement rule; null until then or after a manual override. */
-  lastChange: z.enum(["advanced", "dropped"]).nullable(),
 });
 export type SkillLevel = z.infer<typeof skillLevelSchema>;
 

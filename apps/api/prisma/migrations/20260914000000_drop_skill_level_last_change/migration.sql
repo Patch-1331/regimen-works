@@ -1,0 +1,15 @@
+-- DN-97: drop SkillLevel.lastChange.
+--
+-- It recorded whether the app had advanced or dropped an athlete's line. Both
+-- writers are gone -- automatic advancement was demoted in DN-7 and the rule
+-- deleted in DN-87 -- and the last reader, the Stats "LEVELED UP" badge, went
+-- with the ladder in DN-91. The only remaining write set it back to null.
+--
+-- It is not merely unused. Under DN-88, SkillLevel is the athlete's standing
+-- choice rather than a level, and a preference cannot be an achievement or a
+-- demotion: there is no value this column could hold that would mean anything.
+--
+-- Rows written before DN-7 may still carry 'advanced' or 'dropped'. Nothing
+-- reads them and nothing can act on them, so this loses no information anyone
+-- can see.
+ALTER TABLE "SkillLevel" DROP COLUMN "lastChange";

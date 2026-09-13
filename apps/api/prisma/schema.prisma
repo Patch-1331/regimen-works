@@ -70,11 +70,6 @@ model SkillLevel {
   line       String // push_horizontal | push_vertical | pull | squat | hinge | core_dynamic | core_hold | core_side
   rung       Int      @default(0)
   updatedAt  DateTime @updatedAt
-  // Set by the automatic advancement rule (#7) so the Stats "level up"
-  // banner (#10) can tell a fresh advance from a drop or a manual override.
-  // Null until the first automatic change; a manual override (#8) clears
-  // it back to null since that's a correction, not an achievement.
-  lastChange String? // advanced | dropped
 
   @@unique([userId, line])
 }
