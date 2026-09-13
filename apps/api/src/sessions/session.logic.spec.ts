@@ -1,4 +1,8 @@
-import { advanceInterval, mergeRoundSplit } from './session.logic';
+import {
+  advanceInterval,
+  mergeRoundSplit,
+  snapshotMovements,
+} from './session.logic';
 
 describe('mergeRoundSplit', () => {
   it('appends a new round to an empty list', () => {
@@ -87,5 +91,59 @@ describe('advanceInterval', () => {
     });
 
     expect(result.roundSplits).toEqual([{ round: 1, atSeconds: 61 }]);
+  });
+});
+
+describe('snapshotMovements', () => {
+  const resolved = {
+    id: 'wm-1',
+    order: 1,
+    reps: 45,
+    repScheme: [21, 15, 9],
+    isSwapped: true,
+    exercise: {
+      id: 'ex-ring',
+      name: 'Ring row',
+      unit: 'reps',
+      line: 'pull',
+      rung: 1,
+      // The rest of an Exercise row rides along on the resolved movement and
+      // must not end up in the snapshot -- it describes the exercise in
+      // general, not this day's training.
+      instructions: 'Lean back, pull the rings to the chest.',
+      needsBar: false,
+      altExerciseId: 'ex-table',
+    },
+  };
+
+  it('keeps what history needs and nothing else', () => {
+    expect(snapshotMovements([resolved])).toEqual([
+      {
+        wodMovementId: 'wm-1',
+        order: 1,
+        reps: 45,
+        repScheme: [21, 15, 9],
+        isSwapped: true,
+        exercise: {
+          id: 'ex-ring',
+          name: 'Ring row',
+          unit: 'reps',
+          line: 'pull',
+          rung: 1,
+        },
+      },
+    ]);
+  });
+
+  it('orders by the movement order, whatever order the rows arrived in', () => {
+    const first = { ...resolved, id: 'wm-0', order: 0 };
+    expect(
+      snapshotMovements([resolved, first]).map((m) => m.wodMovementId),
+    ).toEqual(['wm-0', 'wm-1']);
+  });
+
+  it('copies the rep scheme rather than sharing the array', () => {
+    const [snap] = snapshotMovements([resolved]);
+    expect(snap.repScheme).not.toBe(resolved.repScheme);
   });
 });

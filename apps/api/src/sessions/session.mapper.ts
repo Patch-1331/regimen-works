@@ -2,7 +2,11 @@ import type {
   Prisma,
   WorkoutSession as PrismaWorkoutSession,
 } from '@prisma/client';
-import type { RoundSplit, WorkoutSession } from '@regimen-works/shared';
+import type {
+  RoundSplit,
+  SessionMovement,
+  WorkoutSession,
+} from '@regimen-works/shared';
 
 /**
  * `roundSplits` is a jsonb column, so Prisma hands it back as a JsonValue --
@@ -14,6 +18,11 @@ export function toRoundSplits(value: Prisma.JsonValue): RoundSplit[] {
   return (value ?? []) as RoundSplit[];
 }
 
+/** Same contract as toRoundSplits, for the movement snapshot (DN-90). */
+export function toSessionMovements(value: Prisma.JsonValue): SessionMovement[] {
+  return (value ?? []) as SessionMovement[];
+}
+
 export function toSessionDto(session: PrismaWorkoutSession): WorkoutSession {
   return {
     id: session.id,
@@ -21,6 +30,7 @@ export function toSessionDto(session: PrismaWorkoutSession): WorkoutSession {
     startedAt: session.startedAt.toISOString(),
     capSeconds: session.capSeconds,
     roundSplits: toRoundSplits(session.roundSplits),
+    movements: toSessionMovements(session.movements),
     status: session.status as WorkoutSession['status'],
     finishedAtSeconds: session.finishedAtSeconds,
     roundSplitCount: session.roundSplitCount,

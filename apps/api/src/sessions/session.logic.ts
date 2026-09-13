@@ -1,4 +1,56 @@
-import type { RoundSplit } from '@regimen-works/shared';
+import type {
+  ExerciseUnit,
+  ProgressionLine,
+  RoundSplit,
+  SessionMovement,
+} from '@regimen-works/shared';
+
+/** The resolved movement as the scheduler hands it over -- see MovementResolutionService. */
+export type ResolvedMovementInput = {
+  id: string;
+  order: number;
+  reps: number;
+  repScheme: number[];
+  isSwapped: boolean;
+  exercise: {
+    id: string;
+    name: string;
+    unit: string;
+    line: string | null;
+    rung: number | null;
+  };
+};
+
+/**
+ * Pins the resolved movement list down as it stood when the session started
+ * (DN-90). Copies rather than references: the point is that nothing which
+ * moves afterwards -- the rung on record, the swap rows, an exercise's name
+ * -- can change what this session says was trained.
+ *
+ * Only what history needs is kept. Coaching prose, equipment flags and the
+ * alternative exercise id describe the movement in general, and stay on
+ * Exercise; a row here is a fact about one day.
+ */
+export function snapshotMovements(
+  movements: ResolvedMovementInput[],
+): SessionMovement[] {
+  return [...movements]
+    .sort((a, b) => a.order - b.order)
+    .map((m) => ({
+      wodMovementId: m.id,
+      order: m.order,
+      reps: m.reps,
+      repScheme: [...m.repScheme],
+      isSwapped: m.isSwapped,
+      exercise: {
+        id: m.exercise.id,
+        name: m.exercise.name,
+        unit: m.exercise.unit as ExerciseUnit,
+        line: m.exercise.line as ProgressionLine | null,
+        rung: m.exercise.rung,
+      },
+    }));
+}
 
 /**
  * Merges a newly-tapped round split into the existing list.

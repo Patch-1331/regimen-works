@@ -13,11 +13,11 @@ datasource db {
 model User {
   id String @id
 
-  assignments  DailyAssignment[]
-  sessions     WorkoutSession[]
-  logs         WorkoutLog[]
-  skillLevels  SkillLevel[]
-  scheduleRule ScheduleRule?
+  assignments   DailyAssignment[]
+  sessions      WorkoutSession[]
+  logs          WorkoutLog[]
+  skillLevels   SkillLevel[]
+  scheduleRule  ScheduleRule?
   substitutions AssignmentSubstitution[]
 }
 
@@ -124,7 +124,7 @@ model WodMovement {
   // split anchor keep reading one number. A CHECK constraint added in this
   // field's migration holds `reps = sum(repScheme)` whenever a scheme is set —
   // the two can never drift, whatever writes the row.
-  repScheme  Int[]    @default([])
+  repScheme Int[] @default([])
 
   substitutions AssignmentSubstitution[]
 }
@@ -212,6 +212,17 @@ model WorkoutSession {
   startedAt         DateTime        @default(now())
   capSeconds        Int
   roundSplits       Json            @default("[]") // RoundSplit[]
+  // What the athlete actually trained (DN-90): the WOD's movement list after
+  // the current-rung scaling and the day's swaps were applied, written once
+  // when the session starts. Snapshotted for the same reason capSeconds and
+  // autoStopAtCap are -- a workout runs under the rules it began with -- and
+  // because nothing else keeps it: the rung, the swap rows and the exercise
+  // names all keep moving, so a past day re-read through them describes
+  // today's settings, not that day's training. Exercise name/line/rung are
+  // copied rather than referenced so a renamed or re-rung exercise cannot
+  // rewrite history. jsonb, like roundSplits, so a malformed write is refused
+  // at the database. Empty only on sessions older than this column.
+  movements         Json            @default("[]") // SessionMovement[]
   status            String          @default("in_progress") // in_progress | completed | abandoned
   finishedAtSeconds Int? // elapsed time when "Finish" was tapped — the natural score for a For Time WOD
   roundSplitCount   Int? // optional user-chosen round count to break high-rep movements into; null = unsplit
@@ -220,7 +231,7 @@ model WorkoutSession {
   // the same reason capSeconds is: a workout runs under the rules it began
   // with, and every read of them (the screen's clock, the finish time, the
   // past-cap round guard) then costs no extra lookup.
-  autoStopAtCap     Boolean @default(true)
+  autoStopAtCap     Boolean         @default(true)
 
   // Feature #63 — stamped when each checklist is finished; read later for stats.
   warmupCompletedAt   DateTime?

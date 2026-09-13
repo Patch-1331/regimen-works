@@ -4,26 +4,24 @@ import { PrismaService } from '../prisma/prisma.service';
 import { toSessionDto } from '../sessions/session.mapper';
 import { WodsService } from '../wods/wods.service';
 import {
-  applyCurrentRung,
-  applySubstitutions,
+  MovementResolutionService,
+  resolvableMovementInclude,
+} from './movement-resolution.service';
+import {
   getWeekRange,
   isRestDay,
   pickWod,
   RecentAssignment,
 } from './scheduler.logic';
 
-const wodInclude = {
-  movements: {
-    include: { exercise: true },
-    orderBy: { order: 'asc' as const },
-  },
-};
+const wodInclude = resolvableMovementInclude;
 
 @Injectable()
 export class SchedulerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly wodsService: WodsService,
+    private readonly resolution: MovementResolutionService,
   ) {}
 
   /** Returns today's assignment, generating one if the day hasn't been decided yet. */
@@ -133,50 +131,21 @@ export class SchedulerService {
   }
 
   /**
-   * Replaces each movement's exercise with the one at the user's current
-   * rung on that movement's line (Feature #2) — the Wod row itself is a
-   * shared, reusable template, so substitution happens here at read time
-   * rather than by mutating WodMovement.
+   * The WOD as this athlete trains it today -- see MovementResolutionService.
+   * Resolved here at read time rather than stored on the assignment, because
+   * `Wod` is shared library content; the session snapshot (DN-90) is where
+   * the result is finally pinned down.
    */
   private async scaleWodToCurrentRung<
-    W extends {
-      movements: { id: string; exercise: Exercise }[];
-    },
+    W extends { movements: { id: string; exercise: Exercise }[] },
   >(userId: string, assignmentId: string, wod: W): Promise<W> {
-    const [skillLevels, linedExercises, substitutions] = await Promise.all([
-      this.prisma.skillLevel.findMany({ where: { userId } }),
-      this.prisma.exercise.findMany({ where: { line: { not: null } } }),
-      this.prisma.assignmentSubstitution.findMany({
-        where: { userId, assignmentId },
-        include: { exercise: true },
-      }),
-    ]);
-
-    const currentRung = new Map(skillLevels.map((s) => [s.line, s.rung]));
-    const exerciseAtRung = new Map(
-      linedExercises.map((e) => [`${e.line}:${e.rung}`, e]),
-    );
-
-    // The rung is what the app assigned; the swap is what the athlete chose.
-    // The athlete wins, so their layer goes on last (WOD-5).
-    const atRung = applyCurrentRung(wod.movements, currentRung, exerciseAtRung);
-    const swapped = applySubstitutions(
-      atRung,
-      new Map(substitutions.map((s) => [s.wodMovementId, s.exerciseId])),
-      new Map(substitutions.map((s) => [s.exerciseId, s.exercise])),
-    );
-
-    // Flagged rather than inferred: once a swap has been applied there is
-    // nothing left in the movement to tell it from a plain rung scaling, and
-    // the plate needs to know which rows the athlete chose themselves.
-    const swappedIds = new Set(substitutions.map((s) => s.wodMovementId));
-
     return {
       ...wod,
-      movements: swapped.map((m) => ({
-        ...m,
-        isSwapped: swappedIds.has(m.id),
-      })),
+      movements: await this.resolution.resolve(
+        userId,
+        assignmentId,
+        wod.movements,
+      ),
     };
   }
 
