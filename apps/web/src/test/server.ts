@@ -1,0 +1,47 @@
+import { setupServer } from "msw/node";
+import { http, HttpResponse } from "msw";
+import * as fixtures from "./fixtures";
+
+/**
+ * The API, stubbed at the network boundary rather than by mocking
+ * `src/lib/api.ts`.
+ *
+ * Stubbing fetch means `api.ts` itself is under test too — the `/api` base
+ * path, the Authorization header, the empty-body-means-absent branch — and the
+ * handlers survive a refactor of the `api` object's shape. It is also what the
+ * e2e phase will want (DN-72), so the fixtures get a second life there.
+ *
+ * These are the happy-path defaults every route test starts from. A test that
+ * cares about a different response overrides it with `server.use(...)`.
+ */
+
+// Matches API_BASE in src/lib/api.ts: vite proxies "/api" to the local API in
+// development, and a deployed build points at the API's own origin.
+const api = (path: string) => `/api${path}`;
+
+export const handlers = [
+  http.get(api("/today"), () => HttpResponse.json(fixtures.today())),
+  http.get(api("/logs"), () => HttpResponse.json([fixtures.workoutLog()])),
+  http.get(api("/exercises"), () => HttpResponse.json([fixtures.apiExercise()])),
+  http.get(api("/skill-levels"), () => HttpResponse.json([fixtures.skillLevel()])),
+  http.get(api("/schedule-rule"), () => HttpResponse.json({ maxDaysPerWeek: 5 })),
+  http.get(api("/settings"), () => HttpResponse.json(fixtures.settings())),
+
+  // 204 is how the API says "no log yet" — api.ts turns the empty body into null.
+  http.get(api(`/assignments/:assignmentId/log`), () => new HttpResponse(null, { status: 204 })),
+  http.get(api(`/assignments/:assignmentId/session`), () => new HttpResponse(null, { status: 204 })),
+  http.get(api(`/assignments/:assignmentId/substitutions/rung-changes`), () => HttpResponse.json([])),
+
+  http.post(api(`/assignments/:assignmentId/session`), () => HttpResponse.json(fixtures.session())),
+  http.post(api(`/assignments/:assignmentId/session/warmup-complete`), () =>
+    HttpResponse.json(fixtures.session({ warmupCompletedAt: "2026-09-16T10:01:00.000Z" })),
+  ),
+  http.post(api(`/assignments/:assignmentId/session/cooldown-complete`), () =>
+    HttpResponse.json(fixtures.session({ cooldownCompletedAt: "2026-09-16T10:30:00.000Z" })),
+  ),
+];
+
+export const server = setupServer(...handlers);
+
+/** Re-exported so tests can override a handler without a second msw import. */
+export { http, HttpResponse };
