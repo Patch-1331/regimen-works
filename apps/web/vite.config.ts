@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
@@ -10,6 +10,13 @@ export default defineConfig({
   // source — so its runtime exports have to be pre-bundled into ESM first.
   optimizeDeps: {
     include: ['@regimen-works/shared'],
+  },
+  // Components render into jsdom (DN-95). The pure helpers in src/lib do not
+  // need a DOM, but they cost nothing to run in one, so there is a single
+  // environment rather than a per-file annotation to keep straight.
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
   },
   server: {
     proxy: {

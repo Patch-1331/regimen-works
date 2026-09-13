@@ -100,3 +100,9 @@ rebuild on save.
 - `npm run dev:api` / `npm run dev:web` — run one app
 - `npm run build` — build all workspaces
 - `npm run lint` / `npm run typecheck` / `npm run test` — across all workspaces
+
+`apps/web`'s Vitest suite runs in jsdom, so components can be mounted and
+asserted on with Testing Library — see
+`src/components/MovementChoicesPanel.spec.tsx` for the shape: mock
+`src/lib/api`, wrap in a `QueryClientProvider`, and query through the
+accessibility tree (`getByRole`) rather than by class or test id.

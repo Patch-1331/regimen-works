@@ -87,7 +87,10 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: 20
+          # Matches NODE_VERSION in render.yaml. CI on 20 was testing a runtime
+          # nothing runs: jsdom reaches worker_threads.markAsUncloneable
+          # through undici, which does not exist before Node 22.10 (DN-95).
+          node-version: 22
           cache: npm
 
       - run: npm ci
