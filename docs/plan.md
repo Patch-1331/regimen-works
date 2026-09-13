@@ -41,7 +41,7 @@ seeded exercise pool (24 movements) and WOD library (11 WODs).
 | `Wod` | type, timeCapMinutes, movements, isNamed, dominantPattern, work/rest seconds + intervalCount | A reusable workout definition; the interval fields drive the EMOM/Tabata timer. |
 | `ScheduleRule` | maxDaysPerWeek, patternCooldownDays, warm-up/cool-down + auto-stop toggles | Config the scheduler reads, plus the preferences the Settings screen writes. |
 | `DailyAssignment` | date, wodId, status | "Today's WOD" — scheduled → in_progress → completed. |
-| `WorkoutSession` | startedAt, capSeconds, autoStopAtCap, roundSplits, status, intervalIndex | The live timer's state, autosaved on every round tap and every interval rollover. The clock stops at `capSeconds` — reaching it finishes the session rather than counting on — unless `autoStopAtCap`, snapshotted from the athlete's setting at start, says otherwise. |
+| `WorkoutSession` | startedAt, capSeconds, autoStopAtCap, movements, roundSplits, status, intervalIndex | The live timer's state, autosaved on every round tap and every interval rollover. The clock stops at `capSeconds` — reaching it finishes the session rather than counting on — unless `autoStopAtCap`, snapshotted from the athlete's setting at start, says otherwise. `movements` is the WOD as it resolved for that athlete that day (current rung, then swaps), snapshotted at start too, so history reads what was trained rather than what today's settings would prescribe. |
 | `WorkoutLog` | resultType, resultValue, rpe, notes | What actually happened — pre-filled from the finished session. |
 | `User` | id | v1 stub; unlocks multi-user/auth later without a migration. |
 

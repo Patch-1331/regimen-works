@@ -3,6 +3,7 @@ import { SessionsService } from '../sessions/sessions.service';
 import { SettingsService } from '../settings/settings.service';
 import { SkillLevelsService } from '../skill-levels/skill-levels.service';
 import { SchedulerService } from '../scheduler/scheduler.service';
+import { MovementResolutionService } from '../scheduler/movement-resolution.service';
 import type { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -104,7 +105,10 @@ describe('per-user query scoping', () => {
 
   it('scopes a session lookup, so another user id cannot reach it', async () => {
     const prisma = recordingPrisma();
-    await new SessionsService(prisma).get(ALICE, 'assignment-1');
+    await new SessionsService(
+      prisma,
+      new MovementResolutionService(prisma),
+    ).get(ALICE, 'assignment-1');
     for (const where of whereOf(prisma, 'workoutSession.findFirst')) {
       expect(where).toContain(ALICE);
     }
@@ -118,7 +122,11 @@ describe('per-user query scoping', () => {
     // No assignment exists, so this runs on into WOD generation. That throws
     // with an empty catalogue, which is fine — the queries under test were
     // already issued, and what matters is the scope they carried.
-    await new SchedulerService(prisma, wods)
+    await new SchedulerService(
+      prisma,
+      wods,
+      new MovementResolutionService(prisma),
+    )
       .getToday(ALICE, '2026-09-07')
       .catch(() => undefined);
 

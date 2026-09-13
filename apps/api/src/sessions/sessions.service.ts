@@ -15,12 +15,23 @@ import {
   resolveIntervalConfig,
 } from '@regimen-works/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  MovementResolutionService,
+  resolvableMovementInclude,
+} from '../scheduler/movement-resolution.service';
 import { toRoundSplits, toSessionDto } from './session.mapper';
-import { advanceInterval, mergeRoundSplit } from './session.logic';
+import {
+  advanceInterval,
+  mergeRoundSplit,
+  snapshotMovements,
+} from './session.logic';
 
 @Injectable()
 export class SessionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly resolution: MovementResolutionService,
+  ) {}
 
   /**
    * Idempotent: an upsert with a no-op update, not a check-then-create — two
@@ -31,7 +42,7 @@ export class SessionsService {
     // Scoped by userId so another user's assignment id reads as not found.
     const assignment = await this.prisma.dailyAssignment.findFirst({
       where: { id: assignmentId, userId },
-      include: { wod: true },
+      include: { wod: { include: resolvableMovementInclude } },
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
     if (!assignment.wod)
@@ -45,8 +56,24 @@ export class SessionsService {
       where: { userId },
     });
 
+    // The same resolution the Today plate showed -- current rung, then the
+    // day's swaps -- pinned down as the movements this session trained
+    // (DN-90). Nothing else records it: the rung and the swap rows both keep
+    // moving after today, so without this a past day re-reads as whatever
+    // the settings say now.
+    const movements = snapshotMovements(
+      await this.resolution.resolve(
+        userId,
+        assignmentId,
+        assignment.wod.movements,
+      ),
+    );
+
     const session = await this.prisma.workoutSession.upsert({
       where: { assignmentId },
+      // A second start (a double effect, a reload) finds the session already
+      // running and leaves it be -- including its snapshot, which must say
+      // what the workout began with, not what a later swap would have made it.
       update: {},
       create: {
         assignmentId,
@@ -54,6 +81,7 @@ export class SessionsService {
         capSeconds: assignment.wod.timeCapMinutes * 60,
         autoStopAtCap: rule?.autoStopAtCapEnabled ?? true,
         roundSplits: [],
+        movements,
         status: 'in_progress',
       },
     });

@@ -1,6 +1,16 @@
 import { BadRequestException } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { MovementResolutionService } from '../scheduler/movement-resolution.service';
 import { SessionsService } from './sessions.service';
+
+/** Only `start` resolves movements; every other method never touches it. */
+const noResolution = {
+  resolve: jest.fn(() => Promise.reject(new Error('not expected'))),
+} as unknown as MovementResolutionService;
+
+function service(prisma: PrismaService, resolution = noResolution) {
+  return new SessionsService(prisma, resolution);
+}
 
 /**
  * A rep scheme prescribes the rounds, so a scheme-driven WOD has nothing left
@@ -20,6 +30,7 @@ function prismaWith(movements: { reps: number; repScheme: number[] }[]) {
       startedAt: new Date(),
       capSeconds: 600,
       roundSplits: [],
+      movements: [],
       status: 'in_progress',
       finishedAtSeconds: null,
       roundSplitCount: null,
@@ -58,7 +69,7 @@ describe('SessionsService.setRoundSplit', () => {
     const { prisma, update } = prismaWith(ladder);
 
     await expect(
-      new SessionsService(prisma).setRoundSplit(ALICE, 'assignment-1', 3),
+      service(prisma).setRoundSplit(ALICE, 'assignment-1', 3),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(update).not.toHaveBeenCalled();
   });
@@ -69,18 +80,14 @@ describe('SessionsService.setRoundSplit', () => {
     // its scheme.
     const { prisma, update } = prismaWith(ladder);
 
-    await new SessionsService(prisma).setRoundSplit(
-      ALICE,
-      'assignment-1',
-      null,
-    );
+    await service(prisma).setRoundSplit(ALICE, 'assignment-1', null);
     expect(update).toHaveBeenCalled();
   });
 
   it('allows a split on a flat WOD', async () => {
     const { prisma, update } = prismaWith(flat);
 
-    await new SessionsService(prisma).setRoundSplit(ALICE, 'assignment-1', 5);
+    await service(prisma).setRoundSplit(ALICE, 'assignment-1', 5);
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { roundSplitCount: 5 } }),
     );
@@ -109,6 +116,7 @@ function prismaWithSession(overrides: {
     startedAt: overrides.startedAt,
     capSeconds: CAP_SECONDS,
     roundSplits: [],
+    movements: [],
     status: overrides.status ?? 'in_progress',
     finishedAtSeconds: overrides.finishedAtSeconds ?? null,
     roundSplitCount: null,
@@ -143,10 +151,7 @@ describe('SessionsService.finish', () => {
       startedAt: secondsAgo(487),
     });
 
-    const session = await new SessionsService(prisma).finish(
-      ALICE,
-      'assignment-1',
-    );
+    const session = await service(prisma).finish(ALICE, 'assignment-1');
 
     expect(session.finishedAtSeconds).toBe(487);
     expect(update).toHaveBeenCalledWith(
@@ -163,10 +168,7 @@ describe('SessionsService.finish', () => {
       startedAt: secondsAgo(CAP_SECONDS + 300),
     });
 
-    const session = await new SessionsService(prisma).finish(
-      ALICE,
-      'assignment-1',
-    );
+    const session = await service(prisma).finish(ALICE, 'assignment-1');
 
     expect(session.finishedAtSeconds).toBe(CAP_SECONDS);
   });
@@ -179,10 +181,7 @@ describe('SessionsService.finish', () => {
       autoStopAtCap: false,
     });
 
-    const session = await new SessionsService(prisma).finish(
-      ALICE,
-      'assignment-1',
-    );
+    const session = await service(prisma).finish(ALICE, 'assignment-1');
 
     expect(session.finishedAtSeconds).toBe(CAP_SECONDS + 300);
   });
@@ -196,10 +195,7 @@ describe('SessionsService.finish', () => {
       finishedAtSeconds: CAP_SECONDS,
     });
 
-    const session = await new SessionsService(prisma).finish(
-      ALICE,
-      'assignment-1',
-    );
+    const session = await service(prisma).finish(ALICE, 'assignment-1');
 
     expect(session.finishedAtSeconds).toBe(CAP_SECONDS);
     expect(update).not.toHaveBeenCalled();
@@ -212,7 +208,7 @@ describe('SessionsService.logRound', () => {
       startedAt: secondsAgo(CAP_SECONDS),
     });
 
-    await new SessionsService(prisma).logRound(ALICE, 'assignment-1', {
+    await service(prisma).logRound(ALICE, 'assignment-1', {
       round: 1,
       atSeconds: CAP_SECONDS,
     });
@@ -226,7 +222,7 @@ describe('SessionsService.logRound', () => {
     });
 
     await expect(
-      new SessionsService(prisma).logRound(ALICE, 'assignment-1', {
+      service(prisma).logRound(ALICE, 'assignment-1', {
         round: 1,
         atSeconds: CAP_SECONDS + 30,
       }),
@@ -241,7 +237,7 @@ describe('SessionsService.logRound', () => {
       autoStopAtCap: false,
     });
 
-    await new SessionsService(prisma).logRound(ALICE, 'assignment-1', {
+    await service(prisma).logRound(ALICE, 'assignment-1', {
       round: 1,
       atSeconds: CAP_SECONDS + 30,
     });
@@ -251,10 +247,66 @@ describe('SessionsService.logRound', () => {
 });
 
 /**
- * The setting is snapshotted onto the session at start, like capSeconds, so a
- * workout runs under the rule it began with.
+ * The session starts under the rules it will run by: the auto-stop setting,
+ * like capSeconds, is copied on at start -- and so is the movement list as it
+ * resolved that morning (DN-90), because nothing else keeps it.
  */
 describe('SessionsService.start', () => {
+  // The template says push-ups; the athlete is on knee push-ups and swapped the
+  // pull movement to ring rows for today.
+  const template = [
+    {
+      id: 'wm-push',
+      order: 0,
+      reps: 10,
+      repScheme: [],
+      exercise: {
+        id: 'ex-pushup',
+        name: 'Push-up',
+        unit: 'reps',
+        line: 'push_horizontal',
+        rung: 2,
+      },
+    },
+    {
+      id: 'wm-pull',
+      order: 1,
+      reps: 5,
+      repScheme: [],
+      exercise: {
+        id: 'ex-pullup',
+        name: 'Pull-up',
+        unit: 'reps',
+        line: 'pull',
+        rung: 3,
+      },
+    },
+  ];
+  const resolved = [
+    {
+      ...template[0],
+      isSwapped: false,
+      exercise: {
+        id: 'ex-knee',
+        name: 'Knee push-up',
+        unit: 'reps',
+        line: 'push_horizontal',
+        rung: 1,
+      },
+    },
+    {
+      ...template[1],
+      isSwapped: true,
+      exercise: {
+        id: 'ex-ring',
+        name: 'Ring row',
+        unit: 'reps',
+        line: 'pull',
+        rung: 1,
+      },
+    },
+  ];
+
   function prismaForStart(rule: { autoStopAtCapEnabled: boolean } | null) {
     const upsert = jest.fn((args: { create: Record<string, unknown> }) =>
       Promise.resolve({
@@ -264,6 +316,7 @@ describe('SessionsService.start', () => {
         startedAt: new Date(),
         capSeconds: 1200,
         roundSplits: [],
+        movements: [],
         status: 'in_progress',
         finishedAtSeconds: null,
         roundSplitCount: null,
@@ -282,7 +335,7 @@ describe('SessionsService.start', () => {
           Promise.resolve({
             id: 'assignment-1',
             status: 'scheduled',
-            wod: { timeCapMinutes: 20 },
+            wod: { timeCapMinutes: 20, movements: template },
           }),
         ),
         update: jest.fn(() => Promise.resolve({})),
@@ -291,13 +344,23 @@ describe('SessionsService.start', () => {
       workoutSession: { upsert },
     };
 
-    return { prisma: prisma as unknown as PrismaService, upsert };
+    const resolve = jest.fn(() => Promise.resolve(resolved));
+    const resolution = { resolve } as unknown as MovementResolutionService;
+
+    return {
+      prisma: prisma as unknown as PrismaService,
+      resolution,
+      resolve,
+      upsert,
+    };
   }
 
   it('carries the opt-out onto the session', async () => {
-    const { prisma, upsert } = prismaForStart({ autoStopAtCapEnabled: false });
+    const { prisma, resolution, upsert } = prismaForStart({
+      autoStopAtCapEnabled: false,
+    });
 
-    const session = await new SessionsService(prisma).start(
+    const session = await service(prisma, resolution).start(
       ALICE,
       'assignment-1',
     );
@@ -307,10 +370,67 @@ describe('SessionsService.start', () => {
   });
 
   it('stops at the cap for a user with no settings row yet', async () => {
-    const { prisma, upsert } = prismaForStart(null);
+    const { prisma, resolution, upsert } = prismaForStart(null);
 
-    await new SessionsService(prisma).start(ALICE, 'assignment-1');
+    await service(prisma, resolution).start(ALICE, 'assignment-1');
 
     expect(upsert.mock.calls[0][0].create.autoStopAtCap).toBe(true);
+  });
+
+  it('snapshots the resolved movements, not the template (DN-90)', async () => {
+    // What gets written is what the athlete is about to train: their rung,
+    // their swap. The template's push-up and pull-up appear nowhere.
+    const { prisma, resolution, resolve, upsert } = prismaForStart(null);
+
+    const session = await service(prisma, resolution).start(
+      ALICE,
+      'assignment-1',
+    );
+
+    expect(resolve).toHaveBeenCalledWith(ALICE, 'assignment-1', template);
+    const written = upsert.mock.calls[0][0].create.movements;
+    expect(written).toEqual([
+      {
+        wodMovementId: 'wm-push',
+        order: 0,
+        reps: 10,
+        repScheme: [],
+        isSwapped: false,
+        exercise: {
+          id: 'ex-knee',
+          name: 'Knee push-up',
+          unit: 'reps',
+          line: 'push_horizontal',
+          rung: 1,
+        },
+      },
+      {
+        wodMovementId: 'wm-pull',
+        order: 1,
+        reps: 5,
+        repScheme: [],
+        isSwapped: true,
+        exercise: {
+          id: 'ex-ring',
+          name: 'Ring row',
+          unit: 'reps',
+          line: 'pull',
+          rung: 1,
+        },
+      },
+    ]);
+    expect(session.movements).toEqual(written);
+  });
+
+  it("leaves an already-running session's snapshot alone", async () => {
+    // A second start is a no-op update: the snapshot says what the workout
+    // began with, and a swap made after the clock started must not rewrite it.
+    const { prisma, resolution, upsert } = prismaForStart(null);
+
+    await service(prisma, resolution).start(ALICE, 'assignment-1');
+
+    expect(upsert.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ update: {} }),
+    );
   });
 });

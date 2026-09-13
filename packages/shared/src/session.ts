@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { sessionStatus } from "./enums.js";
+import { exerciseUnit, progressionLine, sessionStatus } from "./enums.js";
 
 export const roundSplitSchema = z.object({
   round: z.number().int().positive(),
@@ -7,12 +7,48 @@ export const roundSplitSchema = z.object({
 });
 export type RoundSplit = z.infer<typeof roundSplitSchema>;
 
+/**
+ * One movement as it was actually trained (DN-90). A WOD is resolved at read
+ * time through several layers -- the athlete's current rung, then today's
+ * swap -- and every one of those inputs keeps moving afterwards. This is the
+ * output of that resolution, written onto the session when it starts, so
+ * history can say what was done rather than re-deriving what today's settings
+ * would have done.
+ *
+ * The exercise fields are copied, not referenced, for the same reason: a
+ * renamed exercise or a re-rung ladder must not rewrite August.
+ */
+export const sessionMovementSchema = z.object({
+  /** The WodMovement this row stood in for -- the join back to the template. */
+  wodMovementId: z.string(),
+  order: z.number().int().nonnegative(),
+  /** Total count, in the exercise's own unit; with a repScheme this is the ladder's sum. */
+  reps: z.number().int().positive(),
+  repScheme: z.array(z.number().int().positive()),
+  /** True when this is the athlete's own swap rather than the rung the app assigned. */
+  isSwapped: z.boolean(),
+  exercise: z.object({
+    id: z.string(),
+    name: z.string(),
+    unit: exerciseUnit,
+    line: progressionLine.nullable(),
+    rung: z.number().int().nonnegative().nullable(),
+  }),
+});
+export type SessionMovement = z.infer<typeof sessionMovementSchema>;
+
 export const workoutSessionSchema = z.object({
   id: z.string(),
   assignmentId: z.string(),
   startedAt: z.string().datetime(),
   capSeconds: z.number().int().positive(),
   roundSplits: z.array(roundSplitSchema),
+  /**
+   * What the athlete actually trained, resolved once when the session started
+   * (DN-90). Empty only on sessions that predate the snapshot -- a WOD always
+   * has movements -- so an empty list reads as "not recorded", never "none".
+   */
+  movements: z.array(sessionMovementSchema),
   status: sessionStatus,
   /** Elapsed time when "Finish" was tapped — the natural score for a For Time WOD. */
   finishedAtSeconds: z.number().int().nonnegative().nullable(),
