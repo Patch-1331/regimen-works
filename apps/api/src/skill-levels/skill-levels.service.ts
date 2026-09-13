@@ -55,11 +55,9 @@ export class SkillLevelsService {
       );
     }
 
-    // Clears lastChange — a choice the athlete made isn't the automatic rule's
-    // achievement to celebrate on the Stats "level up" banner (#10).
     const saved = await this.prisma.skillLevel.upsert({
       where: { userId_line: { userId, line } },
-      update: { rung, lastChange: null },
+      update: { rung },
       create: { userId, line, rung },
     });
     return toDto(saved);
@@ -71,13 +69,11 @@ function toDto(row: {
   line: string;
   rung: number;
   updatedAt: Date;
-  lastChange: string | null;
 }): SkillLevel {
   return {
     id: row.id,
     line: row.line as SkillLevel['line'],
     rung: row.rung,
     updatedAt: row.updatedAt.toISOString(),
-    lastChange: row.lastChange as SkillLevel['lastChange'],
   };
 }
