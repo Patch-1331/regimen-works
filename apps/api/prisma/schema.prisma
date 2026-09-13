@@ -13,11 +13,11 @@ datasource db {
 model User {
   id String @id
 
-  assignments  DailyAssignment[]
-  sessions     WorkoutSession[]
-  logs         WorkoutLog[]
-  skillLevels  SkillLevel[]
-  scheduleRule ScheduleRule?
+  assignments   DailyAssignment[]
+  sessions      WorkoutSession[]
+  logs          WorkoutLog[]
+  skillLevels   SkillLevel[]
+  scheduleRule  ScheduleRule?
   substitutions AssignmentSubstitution[]
 }
 
@@ -124,7 +124,7 @@ model WodMovement {
   // split anchor keep reading one number. A CHECK constraint added in this
   // field's migration holds `reps = sum(repScheme)` whenever a scheme is set —
   // the two can never drift, whatever writes the row.
-  repScheme  Int[]    @default([])
+  repScheme Int[] @default([])
 
   substitutions AssignmentSubstitution[]
 }
@@ -220,7 +220,7 @@ model WorkoutSession {
   // the same reason capSeconds is: a workout runs under the rules it began
   // with, and every read of them (the screen's clock, the finish time, the
   // past-cap round guard) then costs no extra lookup.
-  autoStopAtCap     Boolean @default(true)
+  autoStopAtCap     Boolean         @default(true)
 
   // Feature #63 — stamped when each checklist is finished; read later for stats.
   warmupCompletedAt   DateTime?
