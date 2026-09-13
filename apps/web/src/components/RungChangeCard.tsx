@@ -2,12 +2,12 @@ import type { ProposedRungChange } from "@regimen-works/shared";
 import { lineLabel } from "../lib/progressions";
 
 /**
- * The offer to make today's swap permanent (WOD-6).
+ * The offer to keep today's swap as the athlete's default (WOD-6).
  *
  * A swap applies to today only, so without this the athlete would re-swap
- * every session forever. The rung moves because of what they actually did —
- * a far better signal than an inference drawn from metcon rounds, and the
- * thing that makes the progression feel like theirs rather than assigned.
+ * every session forever. What is being remembered is their choice, not a
+ * level they reached (DN-88) — the app is asking what to put in front of them
+ * next time, not telling them what they are now capable of.
  *
  * Deliberately not a modal. The session is already logged and declining
  * changes nothing, so this must never stand between the athlete and the save
@@ -40,18 +40,18 @@ export function RungChangeCard({
         className="text-[10px] font-semibold tracking-[0.14em]"
         style={{ fontFamily: "var(--font-mono)", color: "var(--glow)" }}
       >
-        WHAT YOU TRAINED
+        WHAT YOU PICKED
       </p>
 
       {single ? (
         <p className="mt-1.5 text-sm leading-relaxed text-[var(--ink)]">
           You did <strong>{single.exerciseName.toLowerCase()}</strong> today. Make
-          that your {lineLabel(single.line).toLowerCase()} movement?
+          that your default {lineLabel(single.line).toLowerCase()} movement?
         </p>
       ) : (
         <>
           <p className="mt-1.5 text-sm leading-relaxed text-[var(--ink)]">
-            You trained these instead of what was on record. Make them yours?
+            You picked these instead of your usual. Make them your defaults?
           </p>
           <ul className="mt-2.5 flex flex-col gap-1">
             {proposals.map((p) => (
@@ -78,7 +78,7 @@ export function RungChangeCard({
           className="flex-1 py-2.5 text-xs font-bold tracking-[0.14em]"
           style={{ fontFamily: "var(--font-mono)", background: "var(--glow)", color: "var(--bg)" }}
         >
-          {proposals.length === 1 ? "YES, MAKE IT MINE" : "YES, MAKE THEM MINE"}
+          {proposals.length === 1 ? "YES, REMEMBER IT" : "YES, REMEMBER THEM"}
         </button>
         <button
           type="button"

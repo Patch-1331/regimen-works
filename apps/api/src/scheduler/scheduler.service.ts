@@ -44,7 +44,7 @@ export class SchedulerService {
               id: existing.id,
               date: existing.date,
               status: existing.status,
-              wod: await this.scaleWodToCurrentRung(
+              wod: await this.resolveWodForToday(
                 userId,
                 existing.id,
                 existing.wod,
@@ -94,7 +94,7 @@ export class SchedulerService {
       include: { wod: { include: wodInclude } },
     });
 
-    const scaledWod = await this.scaleWodToCurrentRung(
+    const scaledWod = await this.resolveWodForToday(
       userId,
       created.id,
       created.wod!,
@@ -131,12 +131,13 @@ export class SchedulerService {
   }
 
   /**
-   * The WOD as this athlete trains it today -- see MovementResolutionService.
+   * The WOD as this athlete trains it today -- their remembered choice per
+   * line, then the day's swaps. See MovementResolutionService.
    * Resolved here at read time rather than stored on the assignment, because
    * `Wod` is shared library content; the session snapshot (DN-90) is where
    * the result is finally pinned down.
    */
-  private async scaleWodToCurrentRung<
+  private async resolveWodForToday<
     W extends { movements: { id: string; exercise: Exercise }[] },
   >(userId: string, assignmentId: string, wod: W): Promise<W> {
     return {

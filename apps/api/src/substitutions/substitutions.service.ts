@@ -40,14 +40,13 @@ export class SubstitutionsService {
   }
 
   /**
-   * What this session offers to make permanent (WOD-6) — the lines trained at
-   * a rung other than the one on record.
+   * What this session offers to keep as the athlete's default (WOD-6) — the
+   * lines trained at something other than their standing choice.
    *
    * Read from the substitutions rather than from the WOD, because the WOD says
    * what was prescribed and these rows say what was chosen. A swap to an
    * off-ladder alternative (the no-equipment substitute) carries no rung, so
-   * it proposes nothing: training rows under a table says nothing about where
-   * you are on the pull ladder.
+   * there is no position on the line to remember and it proposes nothing.
    */
   async proposedRungChanges(
     userId: string,
@@ -63,6 +62,9 @@ export class SubstitutionsService {
       this.prisma.assignmentSubstitution.findMany({
         where: { userId, assignmentId },
         include: { exercise: true },
+        // Oldest first: `proposeRungChanges` breaks a tie on the same line by
+        // taking the choice made most recently (DN-88).
+        orderBy: { updatedAt: 'asc' },
       }),
       this.prisma.skillLevel.findMany({ where: { userId } }),
     ]);
@@ -133,7 +135,7 @@ export class SubstitutionsService {
    *
    * The alternative is read from every rung on the line, not just the
    * prescribed exercise, because the athlete sees the ladder as it stands
-   * after their current rung has been applied.
+   * after their remembered choice has been applied.
    */
   private async assertLegalTarget(
     movement: { exerciseId: string; exercise: { line: string | null } },

@@ -101,6 +101,7 @@ describe('snapshotMovements', () => {
     reps: 45,
     repScheme: [21, 15, 9],
     isSwapped: true,
+    prescribedName: null,
     exercise: {
       id: 'ex-ring',
       name: 'Ring row',
@@ -124,6 +125,7 @@ describe('snapshotMovements', () => {
         reps: 45,
         repScheme: [21, 15, 9],
         isSwapped: true,
+        prescribedName: null,
         exercise: {
           id: 'ex-ring',
           name: 'Ring row',
@@ -140,6 +142,19 @@ describe('snapshotMovements', () => {
     expect(
       snapshotMovements([resolved, first]).map((m) => m.wodMovementId),
     ).toEqual(['wm-0', 'wm-1']);
+  });
+
+  // DN-88: what the library prescribed, where a remembered choice replaced it.
+  // Snapshotted with the rest so history can still say what the day asked for
+  // after the athlete's standing choice has moved on.
+  it('keeps the prescription a remembered choice replaced', () => {
+    const remembered = {
+      ...resolved,
+      isSwapped: false,
+      prescribedName: 'Pull-up',
+    };
+    const [snap] = snapshotMovements([remembered]);
+    expect(snap.prescribedName).toBe('Pull-up');
   });
 
   it('copies the rep scheme rather than sharing the array', () => {

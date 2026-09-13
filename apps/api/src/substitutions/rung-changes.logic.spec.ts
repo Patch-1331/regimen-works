@@ -3,7 +3,7 @@ import { proposeRungChanges, TrainedRung } from './rung-changes.logic';
 /**
  * The offer made on the completion screen. It exists because a swap applies
  * to today only — this is what turns one day's choice into the athlete's
- * standing level, and it asks rather than assumes.
+ * standing default, and it asks rather than assumes.
  */
 
 const chinUp: TrainedRung = {
@@ -43,18 +43,20 @@ describe('proposeRungChanges', () => {
     expect(proposeRungChanges([chinUp], new Map([['pull', 2]]))).toEqual([]);
   });
 
-  it('offers a move down, because the athlete chose it', () => {
-    // Swapping down is how struggling is answered. Confirming it is the
-    // athlete's call — what the app never does is lower anyone on its own.
+  it('offers an easier movement, because the athlete chose it', () => {
+    // Swapping to something easier is a choice like any other. Confirming it
+    // is the athlete's call — what the app never does is change it on its own.
     const proposals = proposeRungChanges([negative], new Map([['pull', 3]]));
     expect(proposals).toEqual([
       expect.objectContaining({ fromRung: 3, toRung: 1 }),
     ]);
   });
 
-  it('asks once per line, taking the highest rung trained', () => {
-    // Two pull movements swapped differently. Recording the easier one would
-    // propose a demotion off a session that demonstrated the opposite.
+  // DN-88. Two pull movements swapped differently in one session. This used
+  // to take the higher rung — "someone who did both chin-ups and negatives did
+  // chin-ups" — which is an inference about ability. The app has no way to
+  // know which they meant to keep, so it takes the one they reached for last.
+  it('asks once per line, taking the choice made most recently', () => {
     const proposals = proposeRungChanges(
       [negative, chinUp],
       new Map([['pull', 0]]),
@@ -63,12 +65,13 @@ describe('proposeRungChanges', () => {
     expect(proposals[0]).toMatchObject({ toRung: 2, exerciseId: 'chin-up' });
   });
 
-  it('is not fooled by the order the movements arrive in', () => {
+  it('takes the later choice even when it is the easier movement', () => {
     const proposals = proposeRungChanges(
       [chinUp, negative],
       new Map([['pull', 0]]),
     );
-    expect(proposals[0]).toMatchObject({ toRung: 2 });
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0]).toMatchObject({ toRung: 1, exerciseId: 'negative' });
   });
 
   // DN-86. This used to propose nothing, which made sense only while everyone

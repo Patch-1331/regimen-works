@@ -82,12 +82,15 @@ export function SwapPanel({
   id,
   options,
   isSwapped,
+  prescribedName,
   onPick,
   onRevert,
 }: {
   id: string;
   options: SwapOption[];
   isSwapped: boolean;
+  /** What the library prescribed, where the athlete's remembered choice replaced it. */
+  prescribedName: string | null;
   onPick: (exerciseId: string) => void;
   onRevert: () => void;
 }) {
@@ -137,6 +140,17 @@ export function SwapPanel({
           </li>
         ))}
       </ul>
+      {/* Says what the athlete's standing choice replaced (DN-88). Only for a
+          remembered choice: a swap made today needs no explanation, and naming
+          what it overrode would argue with a decision just made. */}
+      {prescribedName && (
+        <p
+          className="mt-1 text-[11px] text-[var(--ink-faint)]"
+          style={{ fontFamily: "var(--font-mono)" }}
+        >
+          Your pick. The workout says {prescribedName.toLowerCase()}.
+        </p>
+      )}
       {isSwapped && (
         <button
           type="button"

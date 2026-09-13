@@ -12,6 +12,7 @@ export type ResolvedMovementInput = {
   reps: number;
   repScheme: number[];
   isSwapped: boolean;
+  prescribedName: string | null;
   exercise: {
     id: string;
     name: string;
@@ -42,6 +43,7 @@ export function snapshotMovements(
       reps: m.reps,
       repScheme: [...m.repScheme],
       isSwapped: m.isSwapped,
+      prescribedName: m.prescribedName,
       exercise: {
         id: m.exercise.id,
         name: m.exercise.name,
