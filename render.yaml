@@ -5,19 +5,37 @@
 # changes it. Services created by hand in the dashboard are NOT adopted by a
 # blueprint; they have to be re-created from here.
 #
+# `name` is the identity key, and it is not a label. Changing it does not
+# rename anything: the sync creates a NEW service with a new slug and leaves
+# the old one running and orphaned, still serving and still billing. Verified
+# on a throwaway blueprint — the new service appeared within seconds of the
+# push and the old one answered 200 throughout. The new service also starts
+# with none of the `sync: false` values below, so it cannot serve correctly
+# until they are set by hand. Renaming a service here is therefore a migration,
+# not an edit. Renaming it in the dashboard instead changes only the display
+# name — the slug and .onrender.com URL are fixed at creation and immutable.
+#
 # Region must match between the web service and the database, otherwise the
 # service can't reach the database over its internal connection string.
 
 databases:
-  - name: wod-engine-db
-    databaseName: wod_engine
-    user: wod_engine
+  - name: regimen-works-db
+    # databaseName and user are fixed when the database is created; Render has
+    # no way to change either afterwards. Renaming them here creates a NEW,
+    # EMPTY database — the old one is orphaned with its data intact but nothing
+    # connected to it. That is deliberate here: the rename from wod_engine was
+    # taken as a fresh start rather than a dump-and-restore. It rebuilds itself
+    # because preDeployCommand runs `prisma migrate deploy` and an idempotent
+    # seed, so schema and WOD library come back automatically; user rows and
+    # training history do not. Never change these two lines casually.
+    databaseName: regimen_works
+    user: regimen_works
     # Not free: free databases expire 30 days after creation and are deleted
     # after a 14-day grace period, taking all data with them. $6/month.
     plan: 0.1c-256mb
     region: ohio
     # Block all external connections. The allow list governs only the external
-    # URL; wod-engine-api reaches the database over the internal URL, which
+    # URL; regimen-works-api reaches the database over the internal URL, which
     # ignores it, as do Render's backups, PITR and the dashboard psql shell.
     # Render's default is 0.0.0.0/0 — open to the whole internet with only the
     # password in the way. The cost of this is that a local psql or GUI client
@@ -29,7 +47,7 @@ databases:
 
 services:
   - type: web
-    name: wod-engine-api
+    name: regimen-works-api
     runtime: node
     region: ohio
     # Free web services spin down after ~15 minutes idle, and the next request
@@ -90,16 +108,21 @@ services:
     # build emits to dist/src/ rather than flattening to dist/.
     startCommand: node apps/api/dist/src/main
     healthCheckPath: /
-    # Custom domain. Render issues and renews the certificate itself, so the
-    # Cloudflare record for this host must stay DNS-only (grey cloud) until
-    # the certificate is issued — proxying first is the usual cause of a cert
-    # that never validates, and nothing reports the proxy as the reason.
-    domains:
-      - api.regimenworks.com
+    # Custom domain deliberately absent for this step. api.regimenworks.com is
+    # still attached to the service this one replaces, and a domain cannot sit
+    # on two services at once — declaring it here would have the sync fight for
+    # a domain that is still serving traffic. It goes back once the new service
+    # is verified and the old one has released it:
+    #   domains:
+    #     - api.regimenworks.com
+    # When it returns: Render issues and renews the certificate itself, so the
+    # Cloudflare record for this host must stay DNS-only (grey cloud) until the
+    # certificate is issued — proxying first is the usual cause of a cert that
+    # never validates, and nothing reports the proxy as the reason.
     envVars:
       - key: DATABASE_URL
         fromDatabase:
-          name: wod-engine-db
+          name: regimen-works-db
           property: connectionString
       - key: NODE_VERSION
         value: "22"
@@ -112,17 +135,23 @@ services:
       # CORS allowlist, comma-separated — see apps/api/src/common/origins.ts.
       # The frontend calls this API cross-origin, so an unset value falls back
       # to the Vite dev server and the deployed site is refused.
-      # During the move to the custom domain, list both so there is no moment
-      # where CORS has to flip:
-      #   https://wod-engine-web.onrender.com,https://regimenworks.com
-      # Drop the onrender origin in a later pass, once nothing uses it.
+      # While this service is being verified its own domain is not attached
+      # yet, so the only way to reach the new frontend is its Render subdomain.
+      # Set it to that alone during verification:
+      #   https://regimen-works-web.onrender.com
+      # then to the custom domain alone once the domain has moved across:
+      #   https://regimenworks.com
+      # Listing both across the swap costs nothing and avoids a moment where
+      # CORS has to flip in step with DNS. Narrow it to the custom domain once
+      # the cutover is done — the Render subdomain is a public URL that would
+      # otherwise stay a valid origin forever.
       - key: WEB_ORIGIN
         sync: false
 
   # Static frontend. Served from Render's CDN, which is free at any scale — it
   # needs no compute plan of its own.
   - type: web
-    name: wod-engine-web
+    name: regimen-works-web
     runtime: static
     branch: main
     rootDir: .
@@ -141,12 +170,15 @@ services:
     # root postinstall, and the API is a separate service.
     buildCommand: npm ci && npm run build --workspace apps/web
     staticPublishPath: ./apps/web/dist
-    # Custom domain. Declaring the apex is enough: Render creates the www
-    # subdomain and the reciprocal redirect between the two. The matching
-    # Cloudflare DNS records still have to exist — Render creating its own
-    # domain entry does not create anyone else's DNS.
-    domains:
-      - regimenworks.com
+    # Custom domain deliberately absent for this step — see the API service
+    # above for why. It goes back once this service is verified and the old one
+    # has released it:
+    #   domains:
+    #     - regimenworks.com
+    # Declaring the apex is enough: Render creates the www subdomain and the
+    # reciprocal redirect between the two. The matching Cloudflare DNS records
+    # still have to exist — Render creating its own domain entry does not
+    # create anyone else's DNS.
     routes:
       # React Router owns the paths. Without this, a refresh or a shared link
       # to /history asks the CDN for a file that does not exist and 404s.

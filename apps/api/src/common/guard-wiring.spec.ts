@@ -91,7 +91,7 @@ describe('ClerkAuthGuard wiring', () => {
    * only way to catch that regression is to assert the option is passed.
    */
   it('constrains verification to the configured web origins', async () => {
-    process.env.WEB_ORIGIN = 'https://wod-engine-web.onrender.com';
+    process.env.WEB_ORIGIN = 'https://regimenworks.com';
     jest.mocked(verifyToken).mockClear();
 
     await request(app.getHttpServer())
@@ -102,7 +102,7 @@ describe('ClerkAuthGuard wiring', () => {
     expect(jest.mocked(verifyToken)).toHaveBeenCalledWith(
       'valid-token',
       expect.objectContaining({
-        authorizedParties: ['https://wod-engine-web.onrender.com'],
+        authorizedParties: ['https://regimenworks.com'],
       }),
     );
 

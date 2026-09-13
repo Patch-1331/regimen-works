@@ -1,8 +1,8 @@
 # Security Policy
 
 Regimen Works is a personal project with a live deployment: the API at
-<https://wod-engine-api.onrender.com> and the web app at
-<https://wod-engine-web.onrender.com>, both auto-deployed from `main`. There is
+<https://api.regimenworks.com> and the web app at
+<https://regimenworks.com>, both auto-deployed from `main`. There is
 no released version line — `main` is what is running, so security fixes reach
 production as soon as they merge.
 
