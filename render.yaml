@@ -90,6 +90,12 @@ services:
     # build emits to dist/src/ rather than flattening to dist/.
     startCommand: node apps/api/dist/src/main
     healthCheckPath: /
+    # Custom domain. Render issues and renews the certificate itself, so the
+    # Cloudflare record for this host must stay DNS-only (grey cloud) until
+    # the certificate is issued — proxying first is the usual cause of a cert
+    # that never validates, and nothing reports the proxy as the reason.
+    domains:
+      - api.regimenworks.com
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -103,9 +109,13 @@ services:
       # without it, so it can never serve unauthenticated.
       - key: CLERK_SECRET_KEY
         sync: false
-      # CORS allowlist. Set to the wod-engine-web origin once Render assigns
-      # it — the frontend calls this API cross-origin, so an unset value falls
-      # back to the Vite dev server and the deployed site is refused.
+      # CORS allowlist, comma-separated — see apps/api/src/common/origins.ts.
+      # The frontend calls this API cross-origin, so an unset value falls back
+      # to the Vite dev server and the deployed site is refused.
+      # During the move to the custom domain, list both so there is no moment
+      # where CORS has to flip:
+      #   https://wod-engine-web.onrender.com,https://regimenworks.com
+      # Drop the onrender origin in a later pass, once nothing uses it.
       - key: WEB_ORIGIN
         sync: false
 
@@ -131,6 +141,12 @@ services:
     # root postinstall, and the API is a separate service.
     buildCommand: npm ci && npm run build --workspace apps/web
     staticPublishPath: ./apps/web/dist
+    # Custom domain. Declaring the apex is enough: Render creates the www
+    # subdomain and the reciprocal redirect between the two. The matching
+    # Cloudflare DNS records still have to exist — Render creating its own
+    # domain entry does not create anyone else's DNS.
+    domains:
+      - regimenworks.com
     routes:
       # React Router owns the paths. Without this, a refresh or a shared link
       # to /history asks the CDN for a file that does not exist and 404s.
@@ -141,9 +157,12 @@ services:
       # Vite inlines these at build time, so both are baked into the bundle.
       # That is correct for a publishable key and for a public API URL; never
       # put a secret here.
-      # Set to the API's full origin, e.g. https://wod-engine-api.onrender.com
-      # — fromService could supply the host, but not the scheme, and this value
-      # is used as a URL prefix.
+      # Set to the API's full origin — https://api.regimenworks.com once that
+      # domain's certificate is issued. fromService could supply the host, but
+      # not the scheme, and this value is used as a URL prefix.
+      # Vite inlines this at build time, so changing it needs a rebuild; an env
+      # edit alone changes nothing. Unset, apps/web/src/lib/api.ts falls back
+      # to "/api", which 404s against the CDN rather than erroring loudly.
       - key: VITE_API_BASE_URL
         sync: false
       # Clerk's publishable key for the instance this frontend signs in
