@@ -18,7 +18,7 @@
     "typecheck": "npm run build --workspace packages/shared && npm run typecheck --workspaces --if-present"
   },
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=22.10.0"
   },
   "overrides": {
     "deepmerge-ts": "^8.0.2",
