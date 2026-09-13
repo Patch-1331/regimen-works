@@ -1,0 +1,13 @@
+-- DN-61: Sit-up joins the core_dynamic line at rung 0, so every rung above it
+-- shifts up by one.
+--
+-- SkillLevel stores a bare integer per line, so without this an athlete whose
+-- standing choice was rung 2 (Lying leg raise) would silently be pointed at
+-- rung 2's new occupant (V-up) -- the app changing their choice on its own,
+-- which is the one thing this project exists to stop.
+--
+-- The Exercise rows themselves are renumbered by the seed, which upserts by
+-- name on every deploy. Order matters between the two: the seed runs after
+-- this migration (preDeployCommand already does that), so both sides move
+-- together.
+UPDATE "SkillLevel" SET "rung" = "rung" + 1 WHERE "line" = 'core_dynamic';
