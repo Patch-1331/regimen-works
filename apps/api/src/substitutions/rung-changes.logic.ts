@@ -17,7 +17,8 @@ export type TrainedRung = {
 
 export type ProposedRungChange = {
   line: string;
-  fromRung: number;
+  /** Null when the line has no rung on record — see `proposeRungChanges`. */
+  fromRung: number | null;
   toRung: number;
   exerciseId: string;
   exerciseName: string;
@@ -36,6 +37,12 @@ export type ProposedRungChange = {
  * A proposal can still move a line *down*, and that is deliberate: the
  * athlete swapped down on purpose, and confirming it is their choice. What
  * the app never does is lower anyone on its own.
+ *
+ * A line with no rung on record proposes too, with `fromRung: null` (DN-86).
+ * Since provisioning stopped handing everyone rung 0, that is what a brand-new
+ * athlete's every line looks like — and their first swap is precisely the
+ * choice worth remembering, so skipping it would mean re-swapping the same
+ * movement every session forever.
  */
 export function proposeRungChanges(
   trained: TrainedRung[],
@@ -43,17 +50,13 @@ export function proposeRungChanges(
 ): ProposedRungChange[] {
   const bestByLine = new Map<string, TrainedRung>();
   for (const t of trained) {
-    // No SkillLevel row means the line isn't tracked for this athlete, so
-    // there is nothing to move.
-    if (!currentRung.has(t.line)) continue;
-
     const best = bestByLine.get(t.line);
     if (!best || t.rung > best.rung) bestByLine.set(t.line, t);
   }
 
   const proposals: ProposedRungChange[] = [];
   for (const [line, t] of bestByLine) {
-    const fromRung = currentRung.get(line)!;
+    const fromRung = currentRung.has(line) ? currentRung.get(line)! : null;
     if (fromRung === t.rung) continue; // already on record — nothing to ask
 
     proposals.push({

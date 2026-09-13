@@ -1,4 +1,3 @@
-import { progressionLine } from '@regimen-works/shared';
 import type { PrismaService } from '../prisma/prisma.service';
 import { UserProvisioningService } from './user-provisioning.service';
 
@@ -51,26 +50,31 @@ function prismaWith() {
 }
 
 describe('UserProvisioningService.ensure', () => {
-  it('creates the user, their schedule rule and one skill level per line', async () => {
+  it('creates the user and their schedule rule', async () => {
     const { service, calls } = prismaWith();
     await service.ensure(ALICE);
 
     expect(calls['user']).toHaveLength(1);
     expect(calls['scheduleRule']).toHaveLength(1);
-    expect(calls['skillLevel']).toHaveLength(1);
+  });
 
-    const skillLevels = (calls['skillLevel'][0] as { data: unknown[] }).data;
-    expect(skillLevels).toHaveLength(progressionLine.options.length);
-    expect(skillLevels).toEqual(
-      progressionLine.options.map((line) => ({ userId: ALICE, line, rung: 0 })),
-    );
+  // DN-86. Provisioning a rung is the app deciding what someone can do before
+  // it has seen them train, and rung 0 on all eight lines is the worst version
+  // of that guess. No row means `applyCurrentRung` leaves the WOD as the
+  // library wrote it, which is the honest starting point.
+  it('provisions no skill levels, so the first WOD is the library’s own prescription', async () => {
+    const { service, calls, prisma } = prismaWith();
+    await service.ensure(ALICE);
+
+    expect(calls['skillLevel']).toBeUndefined();
+    expect(prisma.skillLevel.createMany).not.toHaveBeenCalled();
   });
 
   it('skips duplicates on every write, so a concurrent insert is a no-op not a 500', async () => {
     const { service, calls } = prismaWith();
     await service.ensure(ALICE);
 
-    for (const model of ['user', 'scheduleRule', 'skillLevel']) {
+    for (const model of ['user', 'scheduleRule']) {
       expect(calls[model][0]).toMatchObject({ skipDuplicates: true });
     }
   });
@@ -90,15 +94,12 @@ describe('UserProvisioningService.ensure', () => {
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     const ops = prisma.$transaction.mock.calls[0][0];
-    expect(ops).toHaveLength(3);
-    // ScheduleRule and SkillLevel both carry a foreign key to User, so the
-    // User insert has to be built — and so run — before either of them.
+    expect(ops).toHaveLength(2);
+    // ScheduleRule carries a foreign key to User, so the User insert has to be
+    // built — and so run — before it.
     expect(prisma.user.createMany.mock.invocationCallOrder[0]).toBeLessThan(
       prisma.scheduleRule.createMany.mock.invocationCallOrder[0],
     );
-    expect(
-      prisma.scheduleRule.createMany.mock.invocationCallOrder[0],
-    ).toBeLessThan(prisma.skillLevel.createMany.mock.invocationCallOrder[0]);
   });
 
   it('goes to the database once per user, then serves the cache', async () => {

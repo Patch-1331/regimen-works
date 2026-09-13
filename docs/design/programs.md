@@ -374,23 +374,29 @@ instead of a generic "done".
 
 ### Consequences elsewhere
 
-- **No onboarding calibration.** Everyone starts at rung 0 and fixes it in
-  one tap on day one against a real workout — less setup friction than asking
-  someone to self-assess in the abstract, and a more honest answer. This is
-  also what fixes the rung-0 provisioning problem (see below).
+- **No onboarding calibration.** Everyone starts with no rung at all and
+  sets one in a tap on day one against a real workout — less setup friction
+  than asking someone to self-assess in the abstract, and a more honest
+  answer. This is also what fixed the rung-0 provisioning problem (see
+  below).
 - **`scaleWodToCurrentRung` is untouched.** It reads athlete-authored rungs
   instead of algorithm-authored ones.
 - **Programs need this either way.** A `movements` slot saying "5x3 pull" has
   to resolve to a movement, which requires persisted per-line state whatever
   design wins.
 
-### The provisioning problem this replaces
+### The provisioning problem this replaced
 
-`user-provisioning.service.ts` creates every user at rung 0 on all eight
-lines — knee push-ups, supermans, air squats, knee planks. Someone who can
-already do ten pull-ups gets weeks of wrong workouts and has to grind up
+`user-provisioning.service.ts` used to create every user at rung 0 on all
+eight lines — knee push-ups, supermans, air squats, knee planks. Someone who
+could already do ten pull-ups got weeks of wrong workouts and had to grind up
 through the 3x8 rule to escape. Cheap substitution solves this without a
 wizard: the first workout is one tap from correct.
+
+Fixed in DN-86 by deleting the provisioning writes. A new athlete now has no
+`SkillLevel` rows, `applyCurrentRung` passes every movement through unchanged,
+and the first row is written when they accept the completion screen's offer to
+keep what they just trained.
 
 ## 3. The `movements` day — where the work is
 

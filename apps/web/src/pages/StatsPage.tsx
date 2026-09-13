@@ -172,6 +172,23 @@ function ProgressionsPanel({
 }) {
   const ladders = buildLadders(exercises, skillLevels, todayIsoDate);
 
+  // One ladder per line the athlete has chosen a movement on, so a new athlete
+  // has none at all (DN-86 — nobody is provisioned onto a rung any more). The
+  // heading on its own would read like something failed to load.
+  if (ladders.length === 0) {
+    return (
+      <>
+        <SectionLabel>PROGRESSIONS</SectionLabel>
+        <Panel>
+          <p className="text-sm leading-relaxed text-[var(--ink-faint)]">
+            Nothing here yet — your workouts come as written. Swap a movement
+            before a session and the ladder you picked from shows up here.
+          </p>
+        </Panel>
+      </>
+    );
+  }
+
   return (
     <>
       <SectionLabel>PROGRESSIONS</SectionLabel>
