@@ -1,0 +1,25 @@
+-- DN-94: Hollow hold and Tucked hollow hold join the core_hold ladder.
+--
+-- Both are timed anti-extension holds, and both were seeded with no line at
+-- all -- so neither was ever reachable through the athlete's own choice, and
+-- neither had a swap control, since buildSwapOptions works off the line. Same
+-- consequence Sit-up had before DN-61.
+--
+-- They belong between the planks rather than after them, so the ladder goes
+-- from three movements to five and the two planks above them shift up:
+--
+--   0 Knee plank          0 Knee plank
+--   1 Plank hold      ->  1 Tucked hollow hold
+--   2 Long-lever plank    2 Plank hold
+--                         3 Hollow hold
+--                         4 Long-lever plank
+--
+-- An athlete's stored rung is a reference into that numbering, so it has to
+-- move with it or it silently means a different movement. Every old rung maps
+-- to twice itself, which is exactly the three values that can exist here.
+UPDATE "SkillLevel" SET "rung" = "rung" * 2 WHERE "line" = 'core_hold';
+
+-- Session.movements is deliberately not touched. It snapshots the name, line
+-- and rung as they stood on the day (see the comment on the model), so that a
+-- re-rung exercise cannot rewrite what someone already trained. Renumbering it
+-- here would do precisely the thing it exists to prevent.

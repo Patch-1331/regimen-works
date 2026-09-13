@@ -313,20 +313,39 @@ const exercises: ExerciseSeed[] = [
       "Forearms on the floor, elbows under the shoulders, knees down, body straight from knees to head. Squeeze the glutes and brace the stomach for the whole hold. Counted in seconds, not reps.",
   },
   {
+    name: "Tucked hollow hold",
+    pattern: "core",
+    line: "core_hold",
+    rung: 1,
+    unit: "seconds",
+    instructions:
+      "The hollow hold with the knees tucked toward the chest and the arms alongside them. The shorter shape makes it far easier to keep the lower back pressed into the floor, which is the point of the position.",
+  },
+  {
     name: "Plank hold",
     pattern: "core",
     alt: "Knee plank",
     line: "core_hold",
-    rung: 1,
+    rung: 2,
     unit: "seconds",
     instructions:
       "Forearms on the floor, elbows under the shoulders, legs straight, body in one line from heels to head. Brace the stomach and squeeze the glutes so the hips neither sag nor pike up. Counted in seconds, not reps.",
   },
   {
+    name: "Hollow hold",
+    pattern: "core",
+    alt: "Tucked hollow hold",
+    line: "core_hold",
+    rung: 3,
+    unit: "seconds",
+    instructions:
+      "On your back, arms overhead, legs straight. Press the lower back flat into the floor and lift the shoulders and heels a few inches, holding that dish shape. If the back lifts off the floor, tuck the knees in until it doesn't.",
+  },
+  {
     name: "Long-lever plank",
     pattern: "core",
     line: "core_hold",
-    rung: 2,
+    rung: 4,
     unit: "seconds",
     instructions:
       "A plank with the elbows placed further forward, ahead of the shoulders. The longer lever multiplies the load on the stomach, so expect a much shorter hold. Stop the moment the lower back starts to sag.",
@@ -349,21 +368,6 @@ const exercises: ExerciseSeed[] = [
     rung: 1,
     instructions:
       "On your side, elbow under the shoulder, legs straight and feet stacked. Lift the hips into one line from heels to head and keep the top hip from rolling backwards. Split the prescribed reps evenly between the two sides.",
-  },
-
-  // Core · not yet on a tracked line
-  {
-    name: "Hollow hold",
-    pattern: "core",
-    alt: "Tucked hollow hold",
-    instructions:
-      "On your back, arms overhead, legs straight. Press the lower back flat into the floor and lift the shoulders and heels a few inches, holding that dish shape. If the back lifts off the floor, tuck the knees in until it doesn't.",
-  },
-  {
-    name: "Tucked hollow hold",
-    pattern: "core",
-    instructions:
-      "The hollow hold with the knees tucked toward the chest and the arms alongside them. The shorter shape makes it far easier to keep the lower back pressed into the floor, which is the point of the position.",
   },
 
   // Cardio — not part of a progression line
