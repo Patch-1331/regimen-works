@@ -144,17 +144,17 @@ projects:
             # build emits to dist/src/ rather than flattening to dist/.
             startCommand: node apps/api/dist/src/main
             healthCheckPath: /
-            # Custom domain deliberately absent for this step. api.regimenworks.com is
-            # still attached to the service this one replaces, and a domain cannot sit
-            # on two services at once — declaring it here would have the sync fight for
-            # a domain that is still serving traffic. It goes back once the new service
-            # is verified and the old one has released it:
-            #   domains:
-            #     - api.regimenworks.com
-            # When it returns: Render issues and renews the certificate itself, so the
+            # Custom domain. Render issues and renews the certificate itself, so the
             # Cloudflare record for this host must stay DNS-only (grey cloud) until the
             # certificate is issued — proxying first is the usual cause of a cert that
             # never validates, and nothing reports the proxy as the reason.
+            # A domain cannot be attached to two services at once, so this could only
+            # be declared after the service it replaced released it. The matching
+            # Cloudflare CNAME has to name THIS service's host
+            # (regimen-works-api.onrender.com); it previously named the legacy one, and
+            # a stale target there survives the domain move silently.
+            domains:
+              - api.regimenworks.com
             envVars:
               - key: DATABASE_URL
                 fromDatabase:
@@ -206,15 +206,14 @@ projects:
             # root postinstall, and the API is a separate service.
             buildCommand: npm ci && npm run build --workspace apps/web
             staticPublishPath: ./apps/web/dist
-            # Custom domain deliberately absent for this step — see the API service
-            # above for why. It goes back once this service is verified and the old one
-            # has released it:
-            #   domains:
-            #     - regimenworks.com
-            # Declaring the apex is enough: Render creates the www subdomain and the
-            # reciprocal redirect between the two. The matching Cloudflare DNS records
-            # still have to exist — Render creating its own domain entry does not
-            # create anyone else's DNS.
+            # Custom domain. Declaring the apex is enough: Render creates the www
+            # subdomain and the reciprocal redirect between the two. The matching
+            # Cloudflare DNS records still have to exist — Render creating its own
+            # domain entry does not create anyone else's DNS, and the www CNAME must
+            # name THIS service's host (regimen-works-web.onrender.com) rather than the
+            # legacy one it pointed at before the move.
+            domains:
+              - regimenworks.com
             routes:
               # React Router owns the paths. Without this, a refresh or a shared link
               # to /history asks the CDN for a file that does not exist and 404s.
