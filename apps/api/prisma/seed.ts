@@ -239,14 +239,29 @@ const exercises: ExerciseSeed[] = [
       "From a quarter squat, swing the arms and jump forward as far as you can, landing on both feet with hips back and knees soft. Reset and turn around when you run out of room. Stick the landing before starting the next rep.",
   },
 
-  // Core · Dynamic (leg raises) — Hanging knee raise / Toes-to-bar were
-  // previously tagged `pattern: pull` since they use the bar; they're
-  // leg-raise work, not pulling, so they move to `core` here.
+  // Core · Dynamic — Hanging knee raise / Toes-to-bar were previously tagged
+  // `pattern: pull` since they use the bar; they're leg-raise work, not
+  // pulling, so they move to `core` here.
+  //
+  // Sit-up sits at the bottom (DN-61). The line was built as a leg-raise
+  // progression and left the one dynamic core movement the library actually
+  // prescribes off it entirely, so on Angie's plate it was the single row with
+  // no swap control — the athlete's one movement they were stuck with. It is
+  // the most accessible of the six: the feet stay down and only the torso
+  // moves, where a tuck-up lifts both halves off the floor at once.
+  {
+    name: "Sit-up",
+    pattern: "core",
+    line: "core_dynamic",
+    rung: 0,
+    instructions:
+      "On your back, knees bent, feet flat. Curl up until the torso is upright and reaches past the knees, then lower back down. Come up one vertebra at a time rather than yanking with the neck or throwing the arms.",
+  },
   {
     name: "Tuck-up",
     pattern: "core",
     line: "core_dynamic",
-    rung: 0,
+    rung: 1,
     instructions:
       "Lie on your back, arms overhead, legs straight. Crunch up and tuck the knees to the chest at the same time so hands and shins meet over the middle, then extend back out without letting the feet and hands rest on the floor.",
   },
@@ -255,7 +270,7 @@ const exercises: ExerciseSeed[] = [
     pattern: "core",
     alt: "Tuck-up",
     line: "core_dynamic",
-    rung: 1,
+    rung: 2,
     instructions:
       "The straight-legged tuck-up: from flat on your back with arms overhead, lift the legs and torso together into a V and reach for the toes, then lower under control. Keep the legs straight — bending them turns it back into a tuck-up.",
   },
@@ -263,7 +278,7 @@ const exercises: ExerciseSeed[] = [
     name: "Lying leg raise",
     pattern: "core",
     line: "core_dynamic",
-    rung: 2,
+    rung: 3,
     instructions:
       "On your back, hands under the hips or by your sides, legs straight. Raise the legs to vertical, then lower to just above the floor without touching down. Press the lower back into the floor the whole way — if it lifts, shorten the range.",
   },
@@ -273,7 +288,7 @@ const exercises: ExerciseSeed[] = [
     needsBar: true,
     alt: "Lying leg raise",
     line: "core_dynamic",
-    rung: 3,
+    rung: 4,
     instructions:
       "Hang from the bar with straight arms and shoulders pulled down away from the ears. Raise the knees to at least hip height, then lower under control without swinging. Stop the swing between reps rather than using it.",
   },
@@ -283,17 +298,10 @@ const exercises: ExerciseSeed[] = [
     needsBar: true,
     alt: "V-up",
     line: "core_dynamic",
-    rung: 4,
+    rung: 5,
     instructions:
       "From a hang, raise straight legs until both feet touch the bar between the hands, then lower with control. The rep counts on contact with the bar; half-height raises are hanging knee raises, not this.",
   },
-  {
-    name: "Sit-up",
-    pattern: "core",
-    instructions:
-      "On your back, knees bent, feet flat. Curl up until the torso is upright and reaches past the knees, then lower back down. Come up one vertebra at a time rather than yanking with the neck or throwing the arms.",
-  },
-
   // Core · Anti-extension — timed holds, not rep-counted.
   {
     name: "Knee plank",
