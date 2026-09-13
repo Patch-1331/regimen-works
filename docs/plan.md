@@ -62,7 +62,7 @@ regimen-works/
 
 ## Roadmap
 
-Tracked in [Linear](https://linear.app/wod-engine) — that workspace is the
+Tracked in [Linear](https://linear.app/regimen-works) — that workspace is the
 source of truth for what's shipped, in progress, and planned. This doc stays
 high-level (stack, domain model, architecture) and doesn't try to mirror it.
 
