@@ -3,11 +3,15 @@ import type { SwapOption } from "../lib/swapOptions";
 /**
  * The swap control and its panel (WOD-5).
  *
- * The app decides what you do; you decide how hard it is. Every user is
- * provisioned at rung 0 on all eight lines, so someone who can already do ten
- * pull-ups would otherwise grind up through the advancement rule to escape
- * knee push-ups. This is the escape: one tap, against a real workout, on the
- * screen they were already looking at.
+ * The app decides what you do; you decide how hard it is. This is where the
+ * second half happens: one tap, against a real workout, on the screen the
+ * athlete was already looking at.
+ *
+ * It is also the only encouragement the app offers towards a harder movement
+ * (DN-87). The panel lists the whole line in order with the current choice
+ * marked, so the next movement is visible and one tap away — which is what the
+ * deleted advancement rule was reduced to suggesting, without the app having
+ * to form a view about who is ready for it.
  *
  * It covers what the ladder never could, too — a tweaked shoulder, no bar in
  * the hotel room, dead legs. So it sits on the plate rather than in Settings,

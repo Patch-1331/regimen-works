@@ -11,11 +11,10 @@
  *    as 5 x 9.
  *
  * Where both are present the scheme wins: it is how the workout is meant to be
- * performed, so it outranks a stale manual choice. That rule lives here, in the
- * one implementation both the web client and the API's advancement math call,
- * because the alternative — the screen counting one workout while the
- * progression lines are credited another — is exactly the bug this module
- * exists to make unrepresentable.
+ * performed, so it outranks a stale manual choice. That rule lives here, in one
+ * implementation shared by the web client and the API, because the alternative
+ * — the screen counting one workout while the record credits another — is
+ * exactly the bug this module exists to make unrepresentable.
  */
 
 /** A movement as far as round arithmetic cares: a total, and possibly a ladder. */
@@ -90,7 +89,12 @@ export function repsForRound(
 
 /**
  * Reps actually performed for one movement, given how many round-taps were
- * logged — what the 3x8-to-3x5 advancement rule is measured against.
+ * logged.
+ *
+ * No production caller since DN-87 deleted the advancement rule, which was
+ * what measured itself against this. Kept because it answers "what was
+ * actually trained today", which is a question about the record rather than
+ * about the athlete, and the one Progress tracking is built on.
  *
  * A flat, unsplit movement is open-ended: an AMRAP credits every round tapped.
  * A scheme or a split is finite, so taps past the last round add nothing —
