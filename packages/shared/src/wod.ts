@@ -49,8 +49,8 @@ export const wodMovementSchema = z
     }),
   })
   // Mirrors the CHECK constraint on WodMovement. A scheme that doesn't sum to
-  // `reps` would have the screen counting one workout while the advancement
-  // math credits another, so neither layer accepts it.
+  // `reps` would have the screen counting one workout while the record credits
+  // another, so neither layer accepts it.
   .refine(
     (m) =>
       m.repScheme.length === 0 ||

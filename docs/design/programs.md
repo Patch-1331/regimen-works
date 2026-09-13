@@ -354,10 +354,10 @@ struggling is answered by swapping down. `HOLD_FLOOR`/`HOLD_FLOOR_SECONDS`
 and their branch come out.
 
 `SkillLevel.lastChange` comes out of the schema entirely. It has exactly one
-consumer (the Stats "level up" banner, `apps/web/src/lib/progressions.ts`)
-and one writer (`logs.service.ts`, from `computeRungChanges`). Once
-advancement stops writing rungs and the banner stops being about level,
-nothing reads it.
+consumer (the Stats "level up" banner, `apps/web/src/lib/progressions.ts`);
+its writer went with automatic advancement in DN-7, and the rule that fed it
+was deleted outright in DN-87. Once the banner stops being about level,
+nothing reads it — DN-8 does the removal.
 
 ### Completion is what gets celebrated
 
@@ -427,9 +427,13 @@ improvement that a total of 13 vs. 11 blurs and a flag erases. `5, 5, 3` and
 `4, 4, 4` are different sessions with the same total — one a strong start
 with fatigue, the other even pacing.
 
-It is also what the demoted advancement nudge needs: "three sessions of clean
-3x8, ready for the next rung?" depends on the sets having been clean, which a
-total can reach by accident.
+It was also going to be what the demoted advancement nudge needed: "three
+sessions of clean 3x8, ready for the next rung?" depends on the sets having
+been clean, which a total can reach by accident. DN-87 deleted the nudge
+instead of building that evidence — the swap panel already shows the next
+movement in order, so the athlete can see it without the app ranking them —
+and per-set logging stands on the first reason alone, which was always the
+stronger one.
 
 The mid-workout machinery already exists in the right shape —
 `WorkoutSession.roundSplits` is autosaved on every round tap so a locked
