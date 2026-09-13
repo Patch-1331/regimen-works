@@ -16,25 +16,45 @@ export function lineLabel(line: string): string {
   return LINE_LABELS[line] ?? line;
 }
 
-export type LadderRung = {
-  rung: number;
+export type MovementOption = {
+  id: string;
   name: string;
-  status: "done" | "current" | "locked";
+  rung: number;
+  /** The one the athlete currently has on record for this line. */
+  isChosen: boolean;
 };
 
-export type Ladder = {
+export type MovementChoice = {
   line: string;
-  rungs: LadderRung[];
-  /** True when the automatic advancement rule (#7) moved this line up today. */
-  justAdvancedToday: boolean;
+  /**
+   * The movement the athlete last picked. Null only on a data gap — a stored
+   * rung with no exercise seeded at it — where naming nothing is better than
+   * naming the wrong movement.
+   */
+  chosenName: string | null;
+  /** Every movement on the line, in the line's own order. */
+  options: MovementOption[];
 };
 
-/** One ladder per SkillLevel row, its rungs sourced from every exercise seeded on that line. */
-export function buildLadders(
+/**
+ * What the athlete has chosen, per movement group (DN-91).
+ *
+ * This replaced a ladder per line whose rungs were marked done / current /
+ * locked. Those are assessment words: `done` says you graduated past
+ * something, `locked` says you are not allowed it yet, and neither is true of
+ * a preference. What the data supports is one sentence — this is the movement
+ * you picked — plus the rest of the group to pick from instead.
+ *
+ * One entry per line the athlete has actually chosen on, and deliberately not
+ * one per line that exists. Rendering all eight with "not set yet" would turn
+ * this screen into the calibration wizard DN-86 removed: the app asking what
+ * you can do, in the abstract, before it has seen you train. A line appears
+ * here once there is something true to say about it.
+ */
+export function buildMovementChoices(
   exercises: ApiExercise[],
   skillLevels: SkillLevel[],
-  todayIsoDate: string,
-): Ladder[] {
+): MovementChoice[] {
   const exercisesByLine = new Map<string, ApiExercise[]>();
   for (const e of exercises) {
     if (!e.line || e.rung === null) continue;
@@ -45,24 +65,23 @@ export function buildLadders(
 
   return skillLevels
     .slice()
-    .sort((a, b) => a.line.localeCompare(b.line))
+    .sort((a, b) => lineLabel(a.line).localeCompare(lineLabel(b.line)))
     .map((skill) => {
       const lineExercises = (exercisesByLine.get(skill.line) ?? [])
         .slice()
         .sort((a, b) => (a.rung ?? 0) - (b.rung ?? 0));
 
-      const rungs: LadderRung[] = lineExercises.map((e) => {
-        const rung = e.rung ?? 0;
-        const status: LadderRung["status"] =
-          rung < skill.rung ? "done" : rung === skill.rung ? "current" : "locked";
-        return { rung, name: e.name, status };
-      });
+      const options: MovementOption[] = lineExercises.map((e) => ({
+        id: e.id,
+        name: e.name,
+        rung: e.rung ?? 0,
+        isChosen: (e.rung ?? 0) === skill.rung,
+      }));
 
       return {
         line: skill.line,
-        rungs,
-        justAdvancedToday:
-          skill.lastChange === "advanced" && skill.updatedAt.slice(0, 10) === todayIsoDate,
+        chosenName: options.find((o) => o.isChosen)?.name ?? null,
+        options,
       };
     });
 }
