@@ -114,6 +114,25 @@ export function isoWeekStart(isoDate: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * Training days so far in the week `todayIso` falls in, counting today (DN-8).
+ *
+ * Today is counted whether or not it appears in `dates`, because the caller is
+ * the completion screen: the session being celebrated has just happened and is
+ * not saved yet. Distinct dates, so two workouts in a day are one day trained.
+ *
+ * A count, deliberately, and not a fraction of the schedule cap — "3 of your 5"
+ * would turn a record of what happened into a score against a target.
+ */
+export function trainingDaysThisWeek(dates: string[], todayIso: string): number {
+  const weekStart = isoWeekStart(todayIso);
+  const inWeek = new Set([todayIso]);
+  for (const date of dates) {
+    if (isoWeekStart(date) === weekStart && date <= todayIso) inWeek.add(date);
+  }
+  return inWeek.size;
+}
+
 export type PatternWeekVolume = { weekStart: string; counts: Record<string, number> };
 
 /**

@@ -6,7 +6,9 @@ import { api } from "../lib/api";
 import { formatClock } from "../lib/clock";
 import { MinusIcon, PlusIcon } from "../components/StepperIcons";
 import { RungChangeCard } from "../components/RungChangeCard";
+import { CompletionCard } from "../components/CompletionCard";
 import { useRungChangeCard } from "../lib/rungChangeDismissal";
+import { trainingDaysThisWeek } from "../lib/stats";
 
 function resultTypeForWod(wodType: string): ResultType {
   return wodType === "for_time" ? "time_seconds" : "rounds_reps";
@@ -27,6 +29,10 @@ export function LogResultPage() {
     queryFn: () => api.getLog(assignmentId),
     enabled: assignmentId !== "",
   });
+  // Only for "third day you've trained this week" on the completion card. The
+  // page renders without it rather than waiting — the card is the least
+  // important thing on a screen whose job is saving a result.
+  const { data: logs } = useQuery({ queryKey: ["logs"], queryFn: api.logs });
 
   const wod = today?.assignment?.wod;
 
@@ -40,6 +46,8 @@ export function LogResultPage() {
       wod={wod}
       session={today?.assignment?.session ?? null}
       existingLog={existingLog ?? null}
+      todayIsoDate={today?.date ?? ""}
+      loggedDates={(logs ?? []).map((l) => l.date)}
     />
   );
 }
@@ -49,11 +57,15 @@ function LogResultForm({
   wod,
   session,
   existingLog,
+  todayIsoDate,
+  loggedDates,
 }: {
   assignmentId: string;
   wod: Wod;
   session: WorkoutSession | null;
   existingLog: WorkoutLog | null;
+  todayIsoDate: string;
+  loggedDates: string[];
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -127,16 +139,19 @@ function LogResultForm({
         <p className="mt-2 text-sm leading-relaxed text-[var(--ink-soft)]">{wod.description}</p>
       )}
 
-      {session && !existingLog && (
-        <div
-          className="mt-4 flex items-center gap-2 px-3 py-2 text-xs"
-          style={{ border: "1px solid var(--glow)", background: "var(--glow-tint)", color: "var(--glow)", fontFamily: "var(--font-mono)" }}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="var(--glow)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" width={14} height={14}>
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
-          Synced from your timer — review and save
-        </div>
+      {/* Marks the session on arrival, not on save: the workout is over by the
+          time this screen opens, and saving the result is bookkeeping after
+          the fact. An existing log means the athlete came back to edit
+          something, which is not a finish and gets no card.
+
+          It carries what the timer strip used to say, since that note is only
+          relevant on exactly the same screens (DN-8). */}
+      {!existingLog && todayIsoDate !== "" && (
+        <CompletionCard
+          wodName={wod.name}
+          trainingDaysThisWeek={trainingDaysThisWeek(loggedDates, todayIsoDate)}
+          fromTimer={session !== null}
+        />
       )}
 
       {resultType === "time_seconds" && session && wasCappedFinish(session) && (
