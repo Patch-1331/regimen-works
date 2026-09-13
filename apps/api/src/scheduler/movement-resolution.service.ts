@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Exercise } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { applyCurrentRung, applySubstitutions } from './scheduler.logic';
+import { applyRememberedChoice, applySubstitutions } from './scheduler.logic';
 
 /** The shape every resolver caller loads a WOD's movements in. */
 export const resolvableMovementInclude = {
@@ -16,12 +16,12 @@ export type ResolvedMovement<
     id: string;
     exercise: Exercise;
   },
-> = M & { isSwapped: boolean };
+> = M & { isSwapped: boolean; prescribedName: string | null };
 
 /**
  * Turns a WOD template into what this athlete trains today: each movement's
- * exercise replaced by the one at their current rung on that line (Feature
- * #2), then overlaid with the swaps they made for this day (WOD-5).
+ * exercise replaced by the one they last chose on that line (Feature #2),
+ * then overlaid with the swaps they made for this day (WOD-5).
  *
  * Read-time by design -- `Wod` is shared library content and must not be
  * mutated per user. The one place the result is persisted is the session
@@ -46,25 +46,49 @@ export class MovementResolutionService {
       }),
     ]);
 
-    const currentRung = new Map(skillLevels.map((s) => [s.line, s.rung]));
+    const chosenRung = new Map(skillLevels.map((s) => [s.line, s.rung]));
     const exerciseAtRung = new Map(
       linedExercises.map((e) => [`${e.line}:${e.rung}`, e]),
     );
 
-    // The rung is what the app assigned; the swap is what the athlete chose.
-    // The athlete wins, so their layer goes on last (WOD-5).
-    const atRung = applyCurrentRung(movements, currentRung, exerciseAtRung);
+    // The remembered choice is what they picked some time ago; the swap is
+    // what they want today. Today wins, so it goes on last (WOD-5).
+    const remembered = applyRememberedChoice(
+      movements,
+      chosenRung,
+      exerciseAtRung,
+    );
     const swapped = applySubstitutions(
-      atRung,
+      remembered,
       new Map(substitutions.map((s) => [s.wodMovementId, s.exerciseId])),
       new Map(substitutions.map((s) => [s.exerciseId, s.exercise])),
     );
 
     // Flagged rather than inferred: once a swap has been applied there is
-    // nothing left in the movement to tell it from a plain rung scaling, and
+    // nothing left in the movement to tell it from a remembered choice, and
     // the plate needs to know which rows the athlete chose themselves.
     const swappedIds = new Set(substitutions.map((s) => s.wodMovementId));
 
-    return swapped.map((m) => ({ ...m, isSwapped: swappedIds.has(m.id) }));
+    // What the library actually prescribed, carried only where a remembered
+    // choice replaced it (DN-88). The substitution used to happen silently,
+    // which is defensible for a swap the athlete just made and much less so
+    // for a default applied from weeks ago — so the plate can say what it did.
+    //
+    // Deliberately null on a row the athlete swapped today: they chose what
+    // they see, and naming what they overrode would argue with them.
+    const prescribedById = new Map(movements.map((m) => [m.id, m.exercise]));
+
+    return swapped.map((m) => {
+      const isSwapped = swappedIds.has(m.id);
+      const prescribed = prescribedById.get(m.id);
+      return {
+        ...m,
+        isSwapped,
+        prescribedName:
+          !isSwapped && prescribed && prescribed.id !== m.exercise.id
+            ? prescribed.name
+            : null,
+      };
+    });
   }
 }

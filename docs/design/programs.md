@@ -379,8 +379,9 @@ instead of a generic "done".
   than asking someone to self-assess in the abstract, and a more honest
   answer. This is also what fixed the rung-0 provisioning problem (see
   below).
-- **`scaleWodToCurrentRung` is untouched.** It reads athlete-authored rungs
-  instead of algorithm-authored ones.
+- **The resolver is untouched** (`resolveWodForToday`, renamed from
+  `scaleWodToCurrentRung` in DN-88). It reads athlete-authored choices instead
+  of algorithm-authored ones.
 - **Programs need this either way.** A `movements` slot saying "5x3 pull" has
   to resolve to a movement, which requires persisted per-line state whatever
   design wins.

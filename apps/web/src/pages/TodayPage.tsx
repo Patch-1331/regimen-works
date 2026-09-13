@@ -150,9 +150,24 @@ export function TodayPage() {
             const canSwap = swapOptions.length > 0;
 
             const name = (
-              <span className="truncate font-semibold tracking-wide text-[var(--ink-soft)]" style={{ fontFamily: "var(--font-mono)" }}>
-                {m.exercise.name.toUpperCase()}
-              </span>
+              <>
+                <span className="truncate font-semibold tracking-wide text-[var(--ink-soft)]" style={{ fontFamily: "var(--font-mono)" }}>
+                  {m.exercise.name.toUpperCase()}
+                </span>
+                {/* A remembered choice used to be applied silently, so the
+                    plate showed a movement the library never prescribed with
+                    nothing to say it had been changed (DN-88). Quiet on
+                    purpose: it marks the row without arguing about it, and
+                    the swap panel carries what was prescribed. */}
+                {m.prescribedName && (
+                  <span
+                    className="shrink-0 text-[10px] tracking-[0.1em] text-[var(--ink-faint)]"
+                    style={{ fontFamily: "var(--font-mono)" }}
+                  >
+                    YOUR PICK
+                  </span>
+                )}
+              </>
             );
             const count = (
               <span
@@ -221,6 +236,7 @@ export function TodayPage() {
                     id={swapPanelId}
                     options={swapOptions}
                     isSwapped={m.isSwapped}
+                    prescribedName={m.prescribedName}
                     onPick={(exerciseId) => void handleSwap(m.id, exerciseId)}
                     onRevert={() => void handleRevert(m.id)}
                   />

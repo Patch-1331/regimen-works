@@ -25,8 +25,15 @@ export const sessionMovementSchema = z.object({
   /** Total count, in the exercise's own unit; with a repScheme this is the ladder's sum. */
   reps: z.number().int().positive(),
   repScheme: z.array(z.number().int().positive()),
-  /** True when this is the athlete's own swap rather than the rung the app assigned. */
+  /** True when this is the athlete's own swap for the day rather than their standing choice. */
   isSwapped: z.boolean(),
+  /**
+   * What the library prescribed, where the athlete's remembered choice
+   * replaced it (DN-88). Defaults to null so sessions snapshotted before the
+   * field existed still parse — they predate it, and there is no honest way
+   * to fill it in after the fact.
+   */
+  prescribedName: z.string().nullable().default(null),
   exercise: z.object({
     id: z.string(),
     name: z.string(),

@@ -17,6 +17,15 @@ export const wodMovementSchema = z
     // prescribed movement isn't carried alongside it: the athlete chose what
     // they see, and showing what they overrode would argue with them.
     isSwapped: z.boolean().default(false),
+    // What the library prescribed, set only where the athlete's remembered
+    // choice on this line replaced it (DN-88) — which is also what marks the
+    // row as a remembered choice rather than the day's prescription.
+    //
+    // Null on a row swapped today, for the reason above, and null when
+    // nothing was replaced. A default applied automatically from weeks ago is
+    // the case the silence was wrong for: the athlete never asked for the
+    // substitution and was never told it happened.
+    prescribedName: z.string().nullable().default(null),
     exercise: z.object({
       id: z.string(),
       name: z.string(),

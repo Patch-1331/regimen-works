@@ -188,6 +188,11 @@ model AssignmentSubstitution {
   exerciseId    String
   exercise      Exercise        @relation(fields: [exerciseId], references: [id])
   createdAt     DateTime        @default(now())
+  // Moves when the swap is corrected, which createdAt doesn't — the upsert
+  // below keeps the original row. It is what orders two swaps on the same
+  // line, so the completion screen can offer the one chosen most recently
+  // (DN-88).
+  updatedAt     DateTime        @updatedAt
 
   // One swap per movement per day: swapping twice corrects the choice, it
   // doesn't stack. The write is an upsert on this key.

@@ -113,30 +113,37 @@ export type ExerciseWithLine = {
 };
 
 /**
- * Swaps each movement's exercise for the one at the user's current rung on
- * that movement's line, so a generated WOD reflects the user's actual level
- * instead of always Rx (Feature #2). Reps are left untouched — only the
- * exercise identity changes, matching "preserve function" (source 01 in the
- * design doc): same rep scheme, movement scaled within its own pattern.
+ * Swaps each movement's exercise for the one the athlete last chose on that
+ * movement's line, so they do not re-pick the same movement every session
+ * (Feature #2).
+ *
+ * This applies a remembered preference, not a verdict (DN-88). The app holds
+ * no view about what anyone is capable of: the stored rung is the last thing
+ * they picked, and the ladder it sits on is a grouping and a sort order, not a
+ * scale they are being measured against.
+ *
+ * Reps are left untouched — only the exercise identity changes, matching
+ * "preserve function" (source 01 in the design doc): same rep scheme, movement
+ * substituted within its own pattern.
  *
  * Movements whose exercise isn't on a tracked line (`line === null`, e.g.
- * cardio) pass through unchanged, as does any movement where no rung is on
- * record or no exercise exists at that line+rung — a curated WOD should
- * never end up with a hole in its movement list because of a data gap.
+ * cardio) pass through unchanged, as does any movement where the athlete has
+ * chosen nothing or no exercise exists at that line+rung — a curated WOD
+ * should never end up with a hole in its movement list because of a data gap.
  */
-export function applyCurrentRung<
+export function applyRememberedChoice<
   M extends { exercise: E },
   E extends ExerciseWithLine,
 >(
   movements: M[],
-  currentRung: Map<string, number>,
+  chosenRung: Map<string, number>,
   exerciseAtRung: Map<string, E>, // key: `${line}:${rung}`
 ): M[] {
   return movements.map((m) => {
     const line = m.exercise.line;
     if (!line) return m;
 
-    const rung = currentRung.get(line);
+    const rung = chosenRung.get(line);
     if (rung === undefined) return m;
 
     const substitute = exerciseAtRung.get(`${line}:${rung}`);
@@ -147,9 +154,10 @@ export function applyCurrentRung<
 }
 
 /**
- * Overlays the athlete's own swaps for this day on top of the current-rung
- * substitution (WOD-5). Runs last, and deliberately so: the rung is what the
- * app assigned, the swap is what the athlete chose, and the athlete wins.
+ * Overlays the athlete's own swaps for this day on top of the remembered
+ * choice (WOD-5). Runs last, and deliberately so: the remembered choice is
+ * what they picked some time ago, the swap is what they want today, and today
+ * wins.
  *
  * Keyed by WodMovement id rather than by exercise or line, so a WOD naming
  * the same line twice moves only the row that was tapped.

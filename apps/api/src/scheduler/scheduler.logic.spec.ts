@@ -1,5 +1,5 @@
 import {
-  applyCurrentRung,
+  applyRememberedChoice,
   applySubstitutions,
   ExerciseWithLine,
   getWeekRange,
@@ -128,7 +128,7 @@ describe('isRestDay', () => {
   });
 });
 
-describe('applyCurrentRung', () => {
+describe('applyRememberedChoice', () => {
   type FakeExercise = ExerciseWithLine & { name: string };
   const kneePushUp: FakeExercise = {
     name: 'Knee push-up',
@@ -154,7 +154,11 @@ describe('applyCurrentRung', () => {
   it('substitutes a movement for the exercise at the current rung on its line', () => {
     const movements = [{ reps: 10, exercise: pushUp }];
     const currentRung = new Map([['push_horizontal', 0]]);
-    const result = applyCurrentRung(movements, currentRung, exerciseAtRung);
+    const result = applyRememberedChoice(
+      movements,
+      currentRung,
+      exerciseAtRung,
+    );
     expect(result[0].exercise).toBe(kneePushUp);
     expect(result[0].reps).toBe(10); // reps untouched — only the exercise changes
   });
@@ -162,21 +166,33 @@ describe('applyCurrentRung', () => {
   it('leaves a movement unchanged when its exercise has no tracked line', () => {
     const movements = [{ reps: 15, exercise: burpee }];
     const currentRung = new Map([['push_horizontal', 2]]);
-    const result = applyCurrentRung(movements, currentRung, exerciseAtRung);
+    const result = applyRememberedChoice(
+      movements,
+      currentRung,
+      exerciseAtRung,
+    );
     expect(result[0].exercise).toBe(burpee);
   });
 
   it('leaves a movement unchanged when its line has no recorded rung', () => {
     const movements = [{ reps: 5, exercise: pistolSquat }];
     const currentRung = new Map<string, number>(); // no squat entry at all
-    const result = applyCurrentRung(movements, currentRung, exerciseAtRung);
+    const result = applyRememberedChoice(
+      movements,
+      currentRung,
+      exerciseAtRung,
+    );
     expect(result[0].exercise).toBe(pistolSquat);
   });
 
   it('leaves a movement unchanged when no exercise exists at that line+rung', () => {
     const movements = [{ reps: 5, exercise: airSquat }];
     const currentRung = new Map([['squat', 99]]); // no exercise seeded at squat:99
-    const result = applyCurrentRung(movements, currentRung, exerciseAtRung);
+    const result = applyRememberedChoice(
+      movements,
+      currentRung,
+      exerciseAtRung,
+    );
     expect(result[0].exercise).toBe(airSquat);
   });
 
@@ -189,7 +205,11 @@ describe('applyCurrentRung', () => {
       ['push_horizontal', 2],
       ['squat', 3],
     ]);
-    const result = applyCurrentRung(movements, currentRung, exerciseAtRung);
+    const result = applyRememberedChoice(
+      movements,
+      currentRung,
+      exerciseAtRung,
+    );
     expect(result[0].exercise).toBe(diamondPushUp);
     expect(result[1].exercise).toBe(pistolSquat);
   });
