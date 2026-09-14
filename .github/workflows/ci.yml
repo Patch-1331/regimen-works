@@ -62,3 +62,10 @@ jobs:
       # e2e stub was (DN-48).
       - name: Database tests
         run: npm run test:db --workspace apps/api
+
+      # Reports coverage for all three workspaces and fails if any has dropped
+      # below its ratchet (DN-54). The api run re-runs both suites together
+      # because a service covered only by its *.db-spec.ts would otherwise
+      # report as untested.
+      - name: Coverage
+        run: npm run test:cov

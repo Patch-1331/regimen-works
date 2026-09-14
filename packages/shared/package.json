@@ -16,12 +16,14 @@
     "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.esm.json && node ./scripts/write-format-markers.mjs",
     "dev": "tsc -p tsconfig.build.json --watch",
     "test": "vitest run",
+    "test:cov": "vitest run --coverage",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "zod": "^4.6.1"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^5.0.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.0"
   }

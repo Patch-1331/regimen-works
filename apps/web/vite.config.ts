@@ -17,6 +17,32 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    coverage: {
+      provider: 'v8',
+      // Every source file, not only the ones a test happened to import --
+      // otherwise an untested module is invisible and the percentage measures
+      // the tests rather than the app.
+      all: true,
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: [
+        'src/**/*.spec.{ts,tsx}',
+        // Test scaffolding, and the entry point, which only mounts the tree.
+        'src/test/**',
+        'src/main.tsx',
+      ],
+      reporter: ['text', 'text-summary', 'json-summary'],
+      // RATCHET, NEVER TARGET. These sit just under the coverage measured
+      // when they were set (DN-54): they exist so it cannot silently regress,
+      // not as a goal. Raise them in the PR that raises coverage. Lowering one
+      // is a decision to state in the PR description, never a quiet edit to
+      // make CI pass.
+      thresholds: {
+        statements: 60,
+        branches: 49,
+        functions: 51,
+        lines: 62,
+      },
+    },
   },
   server: {
     proxy: {
