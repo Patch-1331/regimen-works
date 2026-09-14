@@ -1,0 +1,13 @@
+{
+  "//": "The API through HTTP (DN-53). Separate from jest-db.json so a failure says whether the query or the request path broke, and from the default config so `npm run test` stays fast and needs no Postgres. Needs a database, and shares DN-99's setup: same throwaway Postgres, same truncate between tests.",
+  "rootDir": "src",
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "testRegex": ".*\\.e2e-spec\\.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "testEnvironment": "node",
+  "globalSetup": "<rootDir>/test-support/global-setup.ts",
+  "setupFilesAfterEnv": ["<rootDir>/test-support/setup-after-env.ts"],
+  "maxWorkers": 1
+}
