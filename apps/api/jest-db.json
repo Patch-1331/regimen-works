@@ -1,0 +1,13 @@
+{
+  "//": "DB-backed suites (*.db-spec.ts), run by `npm run test:db`. Separate from the default config so `npm run test` stays fast and needs no Postgres. maxWorkers 1 because all suites share one database and one truncate between tests; if this gets slow, give each worker its own database from a migrated template rather than raising it. See src/test-support/database.ts.",
+  "rootDir": "src",
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "testRegex": ".*\\.db-spec\\.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "testEnvironment": "node",
+  "globalSetup": "<rootDir>/test-support/global-setup.ts",
+  "setupFilesAfterEnv": ["<rootDir>/test-support/setup-after-env.ts"],
+  "maxWorkers": 1
+}
