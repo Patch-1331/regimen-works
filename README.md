@@ -191,3 +191,55 @@ The floors set on 2026-09-14, against the coverage on that day:
 The API's weakest column is functions, and it is concentrated in the
 controllers — nothing drives them over HTTP yet. That is what DN-53's e2e suite
 is for, and it should move that column sharply.
+
+## Browser end-to-end testing
+
+The browser suite itself is not built yet (DN-72). What exists today is the
+athlete it will sign in as, and the data it will open on.
+
+### The test user
+
+A user in Clerk whose email uses the `+clerk_test` pattern, which Clerk
+recognises as a test address: no mail is sent, and `424242` is the
+verification code that works for it. That is what makes an automated sign-in
+possible without a real inbox.
+
+There is no auth bypass, deliberately. The alternative was a dev-only switch
+that skipped the guard, which would put bypass code next to production auth
+forever to save a key in CI. The cost of not doing that is real and worth
+stating plainly: **anything that signs in needs Clerk keys present** —
+`CLERK_SECRET_KEY` for the API, `VITE_CLERK_PUBLISHABLE_KEY` for the web
+build. There are no Clerk secrets in this repo's GitHub Actions secrets today,
+so they have to be added before a browser suite can run in CI.
+
+The API's own e2e suite needs none of this — it stubs Clerk's JWT verification
+and leaves the guard running (`apps/api/src/app.e2e-spec.ts`).
+
+### Seeding that athlete
+
+```bash
+E2E_USER_ID="user_2ab..." npm run seed:e2e --workspace apps/api
+```
+
+Gives the test user seven completed days spread over two weeks, with sessions,
+logged results in both result shapes, and a standing movement choice on a
+couple of lines — enough for History, Stats, the streak and the progressions
+panel to have something to show.
+
+It **leaves today empty on purpose**: the first thing worth testing is starting
+a workout, and an assignment already sitting there would take that path away.
+
+Run it after `npm run prisma:seed`, which seeds the shared exercise and WOD
+catalogue; this script seeds one athlete, not the library, and fails with a
+clear message if the library is missing.
+
+It is idempotent — every row is keyed on something natural, so running it again
+converges rather than stacking. That is what lets it sit in front of a suite
+that runs repeatedly without a database reset.
+
+### Still to come (DN-72)
+
+`@clerk/testing` and Playwright. `@clerk/testing` supplies the Testing Token
+that stops automated sign-in tripping Clerk's bot detection, but its helpers
+take a Playwright `page` — so it lands with the suite that has one, rather than
+sitting in `package.json` as a dependency nothing imports and nothing can run.
