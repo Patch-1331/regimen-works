@@ -19,10 +19,9 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     coverage: {
       provider: 'v8',
-      // Every source file, not only the ones a test happened to import --
-      // otherwise an untested module is invisible and the percentage measures
-      // the tests rather than the app.
-      all: true,
+      // `include` is what makes this every source file rather than only the
+      // ones a test happened to import -- without it an untested module is
+      // invisible and the percentage measures the tests rather than the app.
       include: ['src/**/*.{ts,tsx}'],
       exclude: [
         'src/**/*.spec.{ts,tsx}',

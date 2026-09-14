@@ -4,10 +4,9 @@ export default defineConfig({
   test: {
     coverage: {
       provider: 'v8',
-      // Every source file, not only the ones a test happened to import --
-      // otherwise an untested module is invisible and the percentage measures
-      // the tests rather than the package.
-      all: true,
+      // `include` is what makes this every source file rather than only the
+      // ones a test happened to import -- without it an untested module is
+      // invisible and the percentage measures the tests rather than the package.
       include: ['src/**/*.ts'],
       exclude: ['src/**/*.spec.ts', 'src/index.ts'],
       reporter: ['text', 'text-summary', 'json-summary'],
