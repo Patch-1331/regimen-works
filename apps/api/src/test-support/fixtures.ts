@@ -109,3 +109,43 @@ export async function createLog(
     },
   });
 }
+
+export async function createSkillLevel(
+  userId: string,
+  line: string,
+  rung: number,
+) {
+  return testPrisma().skillLevel.create({ data: { userId, line, rung } });
+}
+
+/**
+ * A progression line as the athlete sees it: rungs 0..n-1 of one line, each
+ * with an optional no-equipment alternative off the line entirely.
+ */
+export async function createLadder(
+  line: string,
+  names: string[],
+  options: { altFor?: number } = {},
+) {
+  const alt =
+    options.altFor === undefined
+      ? null
+      : await createExercise({
+          name: unique('Row under table'),
+          line: null,
+          rung: null,
+        });
+
+  const rungs: Awaited<ReturnType<typeof createExercise>>[] = [];
+  for (const [index, name] of names.entries()) {
+    rungs.push(
+      await createExercise({
+        name: unique(name),
+        line,
+        rung: index,
+        altExerciseId: index === options.altFor ? alt!.id : null,
+      }),
+    );
+  }
+  return { rungs, alt };
+}
