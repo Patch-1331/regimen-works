@@ -138,6 +138,19 @@ Set `TEST_DATABASE_URL` if your Postgres does not match `docker-compose.yml`
 Fixtures and the reset live in `apps/api/src/test-support/`;
 `database.db-spec.ts` there shows the shape.
 
+The API's e2e suite sits on the same database and runs separately, so a
+failure says whether the request path or the query broke:
+
+```bash
+npm run test:e2e --workspace apps/api
+```
+
+It drives the real app through HTTP — `src/app.e2e-spec.ts` — with Clerk's JWT
+verification stubbed and the guard itself left alone, so auth is exercised
+rather than routed around. `createE2eApp` mirrors `main.ts`'s global wiring;
+anything added to `bootstrap()` belongs there too, or the suite quietly tests a
+different application than the one that ships.
+
 ## Coverage, and the ratchet
 
 ```bash
