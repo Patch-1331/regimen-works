@@ -106,3 +106,34 @@ asserted on with Testing Library — see
 `src/components/MovementChoicesPanel.spec.tsx` for the shape: mock
 `src/lib/api`, wrap in a `QueryClientProvider`, and query through the
 accessibility tree (`getByRole`) rather than by class or test id.
+
+## Database-backed tests
+
+`npm run test` covers every workspace and needs no database — it is the fast
+suite, and CI runs it first.
+
+The API's DB-backed suites are separate. They are named `*.db-spec.ts`, live
+next to the code they test, and run against a real throwaway Postgres:
+
+```bash
+docker compose up -d                     # if it isn't already running
+npm run test:db --workspace apps/api
+```
+
+The run drops and recreates a `regimen_works_test` database on that same
+server, applies the migrations, and empties every table between tests. Your
+development database is never touched, and a stale schema left by another
+branch cannot survive into a run.
+
+A real database rather than a mocked Prisma client, deliberately: a mocked
+client mostly proves a mock was called with certain arguments, and keeps
+passing while the query is subtly wrong — bad `where`, missing `include`,
+wrong ordering — which is the class of bug these tests exist to catch.
+
+Set `TEST_DATABASE_URL` if your Postgres does not match `docker-compose.yml`
+(an instance created before the rename above, for instance, still has the
+`wod_engine` user). It defaults to the compose credentials with the
+`regimen_works_test` database name.
+
+Fixtures and the reset live in `apps/api/src/test-support/`;
+`database.db-spec.ts` there shows the shape.

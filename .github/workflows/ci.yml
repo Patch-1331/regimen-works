@@ -11,6 +11,26 @@ permissions:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+
+    # The DB-backed suites (DN-99) need a real Postgres. Credentials and image
+    # match docker-compose.yml, which is also what TEST_DATABASE_URL defaults
+    # to in apps/api/src/test-support/database.ts -- change one and the step
+    # below fails loudly rather than testing something else.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: regimen_works
+          POSTGRES_PASSWORD: regimen_works
+          POSTGRES_DB: regimen_works
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U regimen_works"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -36,3 +56,9 @@ jobs:
 
       - name: Test
         run: npm run test
+
+      # Separate from `npm run test`, which stays fast and needs no database.
+      # Invoked explicitly so it cannot be silently skipped the way the old
+      # e2e stub was (DN-48).
+      - name: Database tests
+        run: npm run test:db --workspace apps/api
