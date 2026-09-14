@@ -1,0 +1,43 @@
+{
+  "//": "Coverage across BOTH api suites in one run, so a service covered only by its *.db-spec.ts is not reported as untested (DN-54). Needs Postgres, like `npm run test:db`. Two projects rather than two runs: Jest merges the coverage natively, which avoids reconciling two reports. On coverageThreshold below -- RATCHET, NEVER TARGET: those numbers sit just under the coverage measured when they were set, so it cannot silently regress; they are not a goal. Raise them in the PR that raises coverage. Lowering one is a decision to state in the PR description, never a quiet edit to make CI pass.",
+  "rootDir": "src",
+  "maxWorkers": 1,
+  "projects": [
+    {
+      "displayName": "unit",
+      "rootDir": "src",
+      "moduleFileExtensions": ["js", "json", "ts"],
+      "testRegex": ".*\\.spec\\.ts$",
+      "transform": { "^.+\\.(t|j)s$": "ts-jest" },
+      "testEnvironment": "node"
+    },
+    {
+      "displayName": "db",
+      "rootDir": "src",
+      "moduleFileExtensions": ["js", "json", "ts"],
+      "testRegex": ".*\\.db-spec\\.ts$",
+      "transform": { "^.+\\.(t|j)s$": "ts-jest" },
+      "testEnvironment": "node",
+      "globalSetup": "<rootDir>/test-support/global-setup.ts",
+      "setupFilesAfterEnv": ["<rootDir>/test-support/setup-after-env.ts"]
+    }
+  ],
+  "collectCoverageFrom": [
+    "**/*.ts",
+    "!**/*.spec.ts",
+    "!**/*.db-spec.ts",
+    "!test-support/**",
+    "!main.ts",
+    "!**/*.module.ts"
+  ],
+  "coverageDirectory": "../coverage",
+  "coverageReporters": ["text", "text-summary", "json-summary"],
+  "coverageThreshold": {
+    "global": {
+      "statements": 84,
+      "branches": 74,
+      "functions": 70,
+      "lines": 82
+    }
+  }
+}

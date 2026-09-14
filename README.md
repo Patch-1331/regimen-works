@@ -137,3 +137,44 @@ Set `TEST_DATABASE_URL` if your Postgres does not match `docker-compose.yml`
 
 Fixtures and the reset live in `apps/api/src/test-support/`;
 `database.db-spec.ts` there shows the shape.
+
+## Coverage, and the ratchet
+
+```bash
+npm run test:cov
+```
+
+Reports coverage for all three workspaces and fails if any has dropped below
+its floor. CI runs it on every pull request. It needs Postgres for the same
+reason `test:db` does — the API's number comes from running both its suites
+together, because a service covered only by its `*.db-spec.ts` would otherwise
+report as untested.
+
+Where the floors live: `apps/api/jest-cov.json`, `apps/web/vite.config.ts`,
+`packages/shared/vitest.config.ts`.
+
+**Ratchet, never target.** The floors sit just under the coverage measured when
+they were set. They exist so coverage cannot silently regress — they are not a
+goal, and there is deliberately no target number anywhere in this repo. A
+percentage is a poor measure of whether the thing that matters is tested: the
+scheduler fully exercised at 40% overall beats a padded 80%.
+
+So:
+
+* When a PR raises coverage, **raise its floor in the same PR**. A ratchet
+  nobody tightens is just a number that used to be true.
+* Lowering a floor is a decision to **state in the PR description**, never a
+  quiet edit to make CI pass. Deleting tests and dropping the floor to match
+  should be as visible as deleting the tests.
+
+The floors set on 2026-09-14, against the coverage on that day:
+
+| Workspace | Statements | Branches | Functions | Lines |
+| -- | -- | -- | -- | -- |
+| `apps/api` | 84 (85.4) | 74 (75.5) | 70 (71.1) | 82 (83.5) |
+| `apps/web` | 60 (61.9) | 49 (50.3) | 51 (52.6) | 62 (63.1) |
+| `packages/shared` | 97 (98.7) | 99 (100) | 99 (100) | 97 (98.6) |
+
+The API's weakest column is functions, and it is concentrated in the
+controllers — nothing drives them over HTTP yet. That is what DN-53's e2e suite
+is for, and it should move that column sharply.
