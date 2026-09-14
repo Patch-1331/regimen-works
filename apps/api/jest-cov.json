@@ -1,5 +1,5 @@
 {
-  "//": "Coverage across BOTH api suites in one run, so a service covered only by its *.db-spec.ts is not reported as untested (DN-54). Needs Postgres, like `npm run test:db`. Two projects rather than two runs: Jest merges the coverage natively, which avoids reconciling two reports. On coverageThreshold below -- RATCHET, NEVER TARGET: those numbers sit just under the coverage measured when they were set, so it cannot silently regress; they are not a goal. Raise them in the PR that raises coverage. Lowering one is a decision to state in the PR description, never a quiet edit to make CI pass.",
+  "//": "Coverage across ALL THREE api suites in one run, so a service covered only by its *.db-spec.ts, or a controller covered only by app.e2e-spec.ts, is not reported as untested (DN-54). Needs Postgres, like `npm run test:db`. Two projects rather than two runs: Jest merges the coverage natively, which avoids reconciling two reports. On coverageThreshold below -- RATCHET, NEVER TARGET: those numbers sit just under the coverage measured when they were set, so it cannot silently regress; they are not a goal. Raise them in the PR that raises coverage. Lowering one is a decision to state in the PR description, never a quiet edit to make CI pass.",
   "rootDir": "src",
   "maxWorkers": 1,
   "projects": [
@@ -10,6 +10,16 @@
       "testRegex": ".*\\.spec\\.ts$",
       "transform": { "^.+\\.(t|j)s$": "ts-jest" },
       "testEnvironment": "node"
+    },
+    {
+      "displayName": "e2e",
+      "rootDir": "src",
+      "moduleFileExtensions": ["js", "json", "ts"],
+      "testRegex": ".*\\.e2e-spec\\.ts$",
+      "transform": { "^.+\\.(t|j)s$": "ts-jest" },
+      "testEnvironment": "node",
+      "globalSetup": "<rootDir>/test-support/global-setup.ts",
+      "setupFilesAfterEnv": ["<rootDir>/test-support/setup-after-env.ts"]
     },
     {
       "displayName": "db",
@@ -25,6 +35,7 @@
   "collectCoverageFrom": [
     "**/*.ts",
     "!**/*.spec.ts",
+    "!**/*.e2e-spec.ts",
     "!**/*.db-spec.ts",
     "!test-support/**",
     "!main.ts",
@@ -34,10 +45,10 @@
   "coverageReporters": ["text", "text-summary", "json-summary"],
   "coverageThreshold": {
     "global": {
-      "statements": 84,
-      "branches": 74,
-      "functions": 70,
-      "lines": 82
+      "statements": 94,
+      "branches": 82,
+      "functions": 89,
+      "lines": 94
     }
   }
 }

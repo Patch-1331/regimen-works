@@ -63,6 +63,13 @@ jobs:
       - name: Database tests
         run: npm run test:db --workspace apps/api
 
+      # The API through HTTP (DN-53). Its own step so a failure says whether
+      # the request path or the query broke, and invoked explicitly for the
+      # reason the last e2e suite died: one that nothing runs is one nobody
+      # notices is dead (DN-48).
+      - name: API e2e
+        run: npm run test:e2e --workspace apps/api
+
       # Reports coverage for all three workspaces and fails if any has dropped
       # below its ratchet (DN-54). The api run re-runs both suites together
       # because a service covered only by its *.db-spec.ts would otherwise
