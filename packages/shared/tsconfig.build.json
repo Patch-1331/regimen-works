@@ -1,0 +1,8 @@
+{
+  // What ships. Extends the base so the compiler settings stay in one place,
+  // and drops the specs -- they exist to be run, not to be published into
+  // dist/ and re-exported to consumers. `typecheck` still uses the base, so
+  // the specs are type-checked even though they are never emitted.
+  "extends": "./tsconfig.json",
+  "exclude": ["src/**/*.spec.ts"]
+}

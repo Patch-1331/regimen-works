@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { capStateAt, finishSecondsAt, wasCappedFinish } from "@regimen-works/shared";
+import { capStateAt, finishSecondsAt, wasCappedFinish } from "./cap.js";
 
 // A 12-minute cap, the shortest in the seeded library.
 const CAP = 12 * 60;

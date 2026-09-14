@@ -1,8 +1,8 @@
 {
-  // ESM twin of tsconfig.json, consumed by Vite. Same sources, same
+  // ESM twin of tsconfig.build.json, consumed by Vite. Same sources, same
   // settings, different module format and output dir -- see the `exports`
   // map in package.json for which consumer gets which.
-  "extends": "./tsconfig.json",
+  "extends": "./tsconfig.build.json",
   "compilerOptions": {
     "module": "ES2022",
     "outDir": "dist/esm"
