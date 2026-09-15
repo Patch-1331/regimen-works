@@ -24,7 +24,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "ts-node prisma/seed.ts",
-    "seed:e2e": "ts-node src/test-support/seed-e2e-user.ts"
+    "seed:e2e": "ts-node src/test-support/seed-e2e-user.ts",
+    "e2e:db:reset": "ts-node src/test-support/reset-e2e-database.ts"
   },
   "dependencies": {
     "@clerk/backend": "^3.17.1",

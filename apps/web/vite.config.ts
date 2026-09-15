@@ -17,6 +17,10 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // e2e/ is Playwright's (DN-72). Its specs import @playwright/test, which
+    // throws under Vitest, and vitest's default glob would otherwise claim
+    // them.
+    exclude: ['node_modules/**', 'dist/**', 'e2e/**'],
     coverage: {
       provider: 'v8',
       // `include` is what makes this every source file rather than only the

@@ -194,52 +194,73 @@ is for, and it should move that column sharply.
 
 ## Browser end-to-end testing
 
-The browser suite itself is not built yet (DN-72). What exists today is the
-athlete it will sign in as, and the data it will open on.
+A real Chromium driving the real web client against the real API, signed in
+through Clerk (DN-72).
+
+```bash
+npm run test:e2e --workspace apps/web
+```
+
+Playwright starts both dev servers itself, on ports of their own (5273 and
+3101) so your dev stack can stay up while it runs, and resets its own database
+first. Four specs: sign in and land on Today, the core loop from Today through
+a workout to History, a deep link cold-loaded while signed in, and the
+signed-out gate.
+
+### What it needs
+
+| Variable | Why |
+| -- | -- |
+| `CLERK_SECRET_KEY` | The API verifies every request against it, and `@clerk/testing` mints the sign-in ticket with it |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Without it the web app throws at startup rather than rendering a sign-in form |
+| `E2E_USER_EMAIL` | The Clerk test user to sign in as |
+| `E2E_DATABASE_URL` | Optional; defaults to `regimen_works_e2e` on the compose Postgres |
 
 ### The test user
 
 A user in Clerk whose email uses the `+clerk_test` pattern, which Clerk
-recognises as a test address: no mail is sent, and `424242` is the
-verification code that works for it. That is what makes an automated sign-in
-possible without a real inbox.
+recognises as a test address: no mail is sent, and `424242` is the verification
+code that works for it. `@clerk/testing` also supplies the Testing Token that
+stops an automated sign-in tripping Clerk's bot detection with "Bot traffic
+detected".
 
 There is no auth bypass, deliberately. The alternative was a dev-only switch
 that skipped the guard, which would put bypass code next to production auth
 forever to save a key in CI. The cost of not doing that is real and worth
-stating plainly: **anything that signs in needs Clerk keys present** —
-`CLERK_SECRET_KEY` for the API, `VITE_CLERK_PUBLISHABLE_KEY` for the web
-build. There are no Clerk secrets in this repo's GitHub Actions secrets today,
-so they have to be added before a browser suite can run in CI.
+stating plainly: **anything that signs in needs Clerk keys present.**
 
 The API's own e2e suite needs none of this — it stubs Clerk's JWT verification
 and leaves the guard running (`apps/api/src/app.e2e-spec.ts`).
 
-### Seeding that athlete
+### Its own database, and local only
+
+The suite gets `regimen_works_e2e`, dropped and recreated from migrations on
+every run. Never your development database: the core loop starts a workout,
+finishes it and logs a result, so pointing it at the database you work against
+would leave fabricated history in it.
+
+**Local only, deliberately.** Production is the only deployed environment, so
+"against the deployed app" would mean writing that same fabricated history into
+live data — and a failure could not be diagnosed without deploying a fix first.
+A read-only smoke test against production is a different and much narrower
+thing, worth its own issue if it is wanted.
+
+### Seeding history
+
+The suite above creates what it needs. For anything that wants an athlete with
+a past — Stats, the streak, the progressions panel — there is a separate seed:
 
 ```bash
 E2E_USER_ID="user_2ab..." npm run seed:e2e --workspace apps/api
 ```
 
-Gives the test user seven completed days spread over two weeks, with sessions,
-logged results in both result shapes, and a standing movement choice on a
-couple of lines — enough for History, Stats, the streak and the progressions
-panel to have something to show.
+Seven completed days over two weeks, with sessions and results in both shapes.
+It leaves **today** empty on purpose, so starting a workout is still testable.
+Idempotent, so it can run in front of a suite repeatedly without a reset.
 
-It **leaves today empty on purpose**: the first thing worth testing is starting
-a workout, and an assignment already sitting there would take that path away.
+### CI
 
-Run it after `npm run prisma:seed`, which seeds the shared exercise and WOD
-catalogue; this script seeds one athlete, not the library, and fails with a
-clear message if the library is missing.
-
-It is idempotent — every row is keyed on something natural, so running it again
-converges rather than stacking. That is what lets it sit in front of a suite
-that runs repeatedly without a database reset.
-
-### Still to come (DN-72)
-
-`@clerk/testing` and Playwright. `@clerk/testing` supplies the Testing Token
-that stops automated sign-in tripping Clerk's bot detection, but its helpers
-take a Playwright `page` — so it lands with the suite that has one, rather than
-sitting in `package.json` as a dependency nothing imports and nothing can run.
+Not wired in yet, and it needs a decision first: there are no Clerk secrets in
+this repo's GitHub Actions secrets. `CLERK_SECRET_KEY` and
+`VITE_CLERK_PUBLISHABLE_KEY` both have to be added before this suite can run
+there.
