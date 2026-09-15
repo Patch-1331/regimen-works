@@ -27,8 +27,8 @@ export type EquipmentInfo = {
  *
  * Ordered most to least likely to already be in a garage or a doorway, so the
  * list reads as an easy yes, yes, no rather than a shopping list. `bar` leads
- * because it is the one piece the app has always assumed (see
- * `Exercise.needsBar`, which the equipment tags replace).
+ * because it is the one piece the app has always assumed -- it was the whole
+ * of equipment, as `Exercise.needsBar`, until these tags replaced it (DN-31).
  *
  * This array is the settings list. There is no separate "selectable" subset to
  * keep in step with it — the reason `bodyweight` is not in the enum at all.

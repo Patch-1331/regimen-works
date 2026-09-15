@@ -1,12 +1,20 @@
 import { z } from "zod";
-import { exercisePhase, exerciseUnit, movementPattern, progressionLine } from "./enums.js";
+import {
+  equipment,
+  exercisePhase,
+  exerciseUnit,
+  movementPattern,
+  progressionLine,
+} from "./enums.js";
 
 export const exerciseSchema = z.object({
   id: z.string(),
   name: z.string(),
   // Null only for general warm-up/cool-down filler not tied to a pattern.
   pattern: movementPattern.nullable(),
-  needsBar: z.boolean(),
+  // What the movement needs beyond the athlete's own body. Empty is the
+  // baseline: bodyweight is the absence of a tag rather than a tag of its own.
+  equipment: z.array(equipment),
   scalable: z.boolean(),
   unit: exerciseUnit,
   // How the movement is performed, in prose. Null on rows added outside the

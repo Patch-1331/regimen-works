@@ -18,7 +18,11 @@ type ExerciseSeed = {
   // Null only for general warm-up/cool-down filler not tied to a pattern
   // (e.g. light jogging, deep breathing).
   pattern: string | null;
-  needsBar?: boolean;
+  // What the movement needs beyond the athlete's own body (DN-31), from the
+  // shared catalog: bar | jump_rope | box | dumbbell | kettlebell. Omitted
+  // for the bodyweight baseline, which is most of the pool -- an exercise
+  // needing nothing carries no tags rather than a "bodyweight" one.
+  equipment?: string[];
   scalable?: boolean;
   alt?: string; // name of the no-equipment substitute
   // Progression tracking (Feature #2) — line groups exercises into an
@@ -120,7 +124,7 @@ const exercises: ExerciseSeed[] = [
   {
     name: "Negative pull-up",
     pattern: "pull",
-    needsBar: true,
+    equipment: ["bar"],
     alt: "Supermans + reverse snow angels",
     line: "pull",
     rung: 1,
@@ -130,7 +134,7 @@ const exercises: ExerciseSeed[] = [
   {
     name: "Chin-up",
     pattern: "pull",
-    needsBar: true,
+    equipment: ["bar"],
     alt: "Supermans + reverse snow angels",
     line: "pull",
     rung: 2,
@@ -140,7 +144,7 @@ const exercises: ExerciseSeed[] = [
   {
     name: "Pull-up",
     pattern: "pull",
-    needsBar: true,
+    equipment: ["bar"],
     alt: "Supermans + reverse snow angels",
     line: "pull",
     rung: 3,
@@ -285,7 +289,7 @@ const exercises: ExerciseSeed[] = [
   {
     name: "Hanging knee raise",
     pattern: "core",
-    needsBar: true,
+    equipment: ["bar"],
     alt: "Lying leg raise",
     line: "core_dynamic",
     rung: 4,
@@ -295,7 +299,7 @@ const exercises: ExerciseSeed[] = [
   {
     name: "Toes-to-bar",
     pattern: "core",
-    needsBar: true,
+    equipment: ["bar"],
     alt: "V-up",
     line: "core_dynamic",
     rung: 5,
@@ -725,7 +729,7 @@ async function main() {
       where: { name: e.name },
       update: {
         pattern: e.pattern,
-        needsBar: e.needsBar ?? false,
+        equipment: e.equipment ?? [],
         scalable: e.scalable ?? false,
         unit: e.unit ?? "reps",
         line: e.line ?? null,
@@ -736,7 +740,7 @@ async function main() {
       create: {
         name: e.name,
         pattern: e.pattern,
-        needsBar: e.needsBar ?? false,
+        equipment: e.equipment ?? [],
         scalable: e.scalable ?? false,
         unit: e.unit ?? "reps",
         line: e.line ?? null,

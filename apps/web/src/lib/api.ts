@@ -77,7 +77,7 @@ export type ApiExercise = {
   id: string;
   name: string;
   pattern: string;
-  needsBar: boolean;
+  equipment: string[];
   scalable: boolean;
   unit: "reps" | "seconds";
   line: string | null;

@@ -27,9 +27,19 @@ model Exercise {
   // Null only for general warm-up/cool-down filler not tied to a pattern
   // (Feature #63, e.g. light jogging, deep breathing).
   pattern  String? // push | pull | squat | hinge | core | cardio | null
-  needsBar Boolean @default(false)
   scalable Boolean @default(false)
   unit     String  @default("reps") // reps | seconds — seconds for timed holds (e.g. plank family)
+
+  // What the movement needs beyond the athlete's own body, drawn from the
+  // shared catalog (DN-77): bar | jump_rope | box | dumbbell | kettlebell.
+  // Empty is the baseline and by far the common case — bodyweight is not a
+  // tag, it is the absence of one.
+  //
+  // A String[] rather than a join table: the set is tiny, it is read on every
+  // scheduler pass alongside the exercise row itself, and a join buys nothing.
+  // Validated in the application (`equipment` in packages/shared) rather than
+  // by the database, the same way `pattern` and `line` are.
+  equipment String[] @default([])
 
   // How the movement is performed, in prose — the setup, the rep, and the
   // one or two cues that decide whether it's the movement at all. Every
