@@ -103,3 +103,34 @@ export async function truncateAll(): Promise<void> {
     `TRUNCATE TABLE ${quoted} RESTART IDENTITY CASCADE`,
   );
 }
+
+/**
+ * Runs `use` against `count` clients on `count` separate connections, then
+ * disconnects them.
+ *
+ * For the tests that have to be genuinely concurrent (DN-105). Calls made
+ * through the shared client above serialise on its single connection, so a
+ * race that only appears across connections — which is what two HTTP requests
+ * are — passes there while failing in production.
+ */
+export async function withSeparateConnections<T>(
+  count: number,
+  use: (clients: PrismaClient[]) => Promise<T>,
+): Promise<T> {
+  const clients = Array.from(
+    { length: count },
+    () =>
+      new PrismaClient({
+        adapter: new PrismaPg({ connectionString: TEST_DATABASE_URL }),
+      }),
+  );
+  try {
+    // Connected up front so the callers actually overlap: a lazily connecting
+    // client spends its first round trip on the handshake, which is long
+    // enough for a rival to have finished writing.
+    await Promise.all(clients.map((client) => client.$connect()));
+    return await use(clients);
+  } finally {
+    await Promise.all(clients.map((client) => client.$disconnect()));
+  }
+}

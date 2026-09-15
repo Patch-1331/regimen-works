@@ -1,6 +1,7 @@
-import { testPrisma } from '../test-support/database';
+import { testPrisma, withSeparateConnections } from '../test-support/database';
 import { createUser } from '../test-support/fixtures';
 import { SettingsService } from './settings.service';
+import type { PrismaClient } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -13,8 +14,8 @@ import type { PrismaService } from '../prisma/prisma.service';
  * the row that was stored or an echo of the patch.
  */
 
-function service(): SettingsService {
-  return new SettingsService(testPrisma() as unknown as PrismaService);
+function service(client: PrismaClient = testPrisma()): SettingsService {
+  return new SettingsService(client as unknown as PrismaService);
 }
 
 function storedRule(userId: string) {
@@ -211,5 +212,31 @@ describe('SettingsService.update', () => {
     });
 
     expect(await service().get(user.id)).toEqual(written);
+  });
+});
+
+describe('SettingsService.update under concurrency', () => {
+  it('settles rather than 500ing when two toggles arrive at once', async () => {
+    // An athlete with no rule row yet, so every call takes the create leg.
+    // This one is safe and was never broken: Prisma compiles it to
+    // INSERT ... ON CONFLICT DO UPDATE, unlike the session start that lost
+    // that compilation to an empty update leg (DN-105). The test pins it
+    // there -- a change that costs this upsert its ON CONFLICT fails here
+    // rather than in production. Separate connections because calls on the
+    // shared client serialise and would prove nothing.
+    const user = await createUser();
+
+    const outcomes = await withSeparateConnections(4, (clients) =>
+      Promise.allSettled(
+        clients.map((client) =>
+          service(client).update(user.id, { warmupCooldownEnabled: true }),
+        ),
+      ),
+    );
+
+    const rejected = outcomes.filter((o) => o.status === 'rejected');
+    expect(rejected.map((o) => String(o.reason))).toEqual([]);
+    expect(await testPrisma().scheduleRule.count()).toBe(1);
+    expect((await storedRule(user.id))?.warmupCooldownEnabled).toBe(true);
   });
 });
