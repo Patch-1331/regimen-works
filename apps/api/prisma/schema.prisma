@@ -148,6 +148,22 @@ model ScheduleRule {
   // themselves. Snapshotted onto each WorkoutSession at start, so flipping it
   // never changes the rules under a workout already in progress.
   autoStopAtCapEnabled  Boolean @default(true)
+
+  // What the athlete owns, from the shared catalog (DN-77) — the standing
+  // fact the scheduler resolves a WOD against, as opposed to the per-day
+  // swap, which is an AssignmentSubstitution.
+  //
+  // Lives here rather than in a join table or a model of its own because
+  // ScheduleRule is already the one-row-per-user home of every athlete
+  // preference, already @unique on userId, and already upserted by
+  // SettingsService. A join would add a second read on the scheduler's hot
+  // path to express a set of at most five short strings.
+  //
+  // The default is the baseline the app has always assumed: bodyweight, which
+  // is no tag at all, plus the bar. It is the only default that changes no
+  // existing athlete's workouts (DN-81), and it must stay in step with
+  // SettingsService.DEFAULTS.
+  equipment             String[] @default(["bar"])
 }
 
 model DailyAssignment {

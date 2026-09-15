@@ -160,6 +160,7 @@ export function settings(overrides: Partial<Settings> = {}): Settings {
   return {
     warmupCooldownEnabled: true,
     autoStopAtCapEnabled: true,
+    equipment: ["bar"],
     ...overrides,
   };
 }
