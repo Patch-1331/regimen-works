@@ -185,7 +185,7 @@ The floors set on 2026-09-14, against the coverage on that day:
 | Workspace | Statements | Branches | Functions | Lines |
 | -- | -- | -- | -- | -- |
 | `apps/api` | 84 (85.4) | 74 (75.5) | 70 (71.1) | 82 (83.5) |
-| `apps/web` | 60 (61.9) | 49 (50.3) | 51 (52.6) | 62 (63.1) |
+| `apps/web` | 70 (71.1) | 62 (63.2) | 57 (58.4) | 71 (72.3) |
 | `packages/shared` | 97 (98.7) | 99 (100) | 99 (100) | 97 (98.6) |
 
 The API's weakest column is functions, and it is concentrated in the

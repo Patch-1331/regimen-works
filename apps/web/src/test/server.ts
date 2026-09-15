@@ -33,6 +33,13 @@ export const handlers = [
   http.get(api(`/assignments/:assignmentId/substitutions/rung-changes`), () => HttpResponse.json([])),
 
   http.post(api(`/assignments/:assignmentId/session`), () => HttpResponse.json(fixtures.session())),
+  http.post(api(`/assignments/:assignmentId/session/interval`), () =>
+    HttpResponse.json(fixtures.session({ intervalIndex: 0, intervalStartedAtSeconds: 0 })),
+  ),
+  http.post(api(`/assignments/:assignmentId/session/rounds`), () => HttpResponse.json(fixtures.session())),
+  http.post(api(`/assignments/:assignmentId/session/finish`), () =>
+    HttpResponse.json(fixtures.session({ status: 'completed', finishedAtSeconds: 300 })),
+  ),
   http.post(api(`/assignments/:assignmentId/session/warmup-complete`), () =>
     HttpResponse.json(fixtures.session({ warmupCompletedAt: "2026-09-16T10:01:00.000Z" })),
   ),
