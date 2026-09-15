@@ -26,7 +26,7 @@ function exercise(overrides: Record<string, unknown> = {}) {
     id: "exercise-1",
     name: "Push-up",
     pattern: "push",
-    needsBar: false,
+    equipment: [],
     unit: "reps",
     instructions: null,
     line: "push_horizontal",
@@ -415,7 +415,7 @@ describe("exerciseSchema", () => {
     id: "e-1",
     name: "Push-up",
     pattern: "push",
-    needsBar: false,
+    equipment: [],
     scalable: true,
     unit: "reps",
     instructions: null,
@@ -441,6 +441,16 @@ describe("exerciseSchema", () => {
 
   it("rejects a unit that is neither reps nor seconds", () => {
     expect(exerciseSchema.safeParse(libraryExercise({ unit: "metres" })).success).toBe(false);
+  });
+
+  it("accepts a movement tagged with what it needs", () => {
+    expect(exerciseSchema.safeParse(libraryExercise({ equipment: ["bar"] })).success).toBe(true);
+  });
+
+  it("rejects a tag outside the equipment catalog", () => {
+    // The column is a bare String[] -- this schema is the only thing standing
+    // between a typo in the seed and a tag no ownership check will ever match.
+    expect(exerciseSchema.safeParse(libraryExercise({ equipment: ["barbell"] })).success).toBe(false);
   });
 
   it("drops the id for a create payload", () => {

@@ -13,7 +13,7 @@ function exercise(partial: Partial<ApiExercise> & { id: string }): ApiExercise {
   return {
     name: partial.id,
     pattern: "pull",
-    needsBar: false,
+    equipment: [],
     scalable: true,
     unit: "reps",
     line: "pull",

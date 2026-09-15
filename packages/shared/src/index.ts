@@ -1,5 +1,6 @@
 export * from "./checklist.js";
 export * from "./enums.js";
+export * from "./equipment.js";
 export * from "./exercise.js";
 export * from "./wod.js";
 export * from "./interval.js";

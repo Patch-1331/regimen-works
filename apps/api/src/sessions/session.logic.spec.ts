@@ -112,7 +112,7 @@ describe('snapshotMovements', () => {
       // must not end up in the snapshot -- it describes the exercise in
       // general, not this day's training.
       instructions: 'Lean back, pull the rings to the chest.',
-      needsBar: false,
+      equipment: [],
       altExerciseId: 'ex-table',
     },
   };

@@ -16,7 +16,7 @@ function exercise(
   return {
     name: partial.id,
     pattern: "pull",
-    needsBar: false,
+    equipment: [],
     scalable: true,
     unit: "reps",
     line: "pull",

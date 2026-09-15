@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { exerciseUnit, movementPattern, progressionLine, wodType } from "./enums.js";
+import {
+  equipment,
+  exerciseUnit,
+  movementPattern,
+  progressionLine,
+  wodType,
+} from "./enums.js";
 
 export const wodMovementSchema = z
   .object({
@@ -30,7 +36,11 @@ export const wodMovementSchema = z
       id: z.string(),
       name: z.string(),
       pattern: movementPattern,
-      needsBar: z.boolean(),
+      // What performing it needs, in the place `needsBar` held: carried on
+      // every movement the client is handed, so a screen can mark one the
+      // athlete has no equipment for without a second request. Empty for the
+      // bodyweight baseline, which is most of the pool.
+      equipment: z.array(equipment),
       unit: exerciseUnit,
       // How the movement is performed, in prose — carried on the movement so
       // every screen that lists a WOD can offer it without a second request.
