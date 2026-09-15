@@ -9,7 +9,9 @@
       "mcp__Linear__get_project",
       "mcp__Linear__list_issues",
       "mcp__Linear__list_projects",
-      "mcp__Linear__list_issue_statuses"
+      "mcp__Linear__list_issue_statuses",
+      "mcp__Linear__save_issue",
+      "mcp__Linear__save_comment"
     ]
   }
 }
