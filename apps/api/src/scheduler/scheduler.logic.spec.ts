@@ -1,6 +1,8 @@
 import {
+  applyEquipmentAvailability,
   applyRememberedChoice,
   applySubstitutions,
+  ExerciseWithEquipment,
   ExerciseWithLine,
   getWeekRange,
   isRestDay,
@@ -212,6 +214,248 @@ describe('applyRememberedChoice', () => {
     );
     expect(result[0].exercise).toBe(diamondPushUp);
     expect(result[1].exercise).toBe(pistolSquat);
+  });
+});
+
+describe('applyEquipmentAvailability', () => {
+  type FakeExercise = ExerciseWithEquipment & { name: string };
+
+  const supermans: FakeExercise = {
+    name: 'Supermans + reverse snow angels',
+    equipment: [],
+    altExerciseId: null,
+  };
+  const pullUp: FakeExercise = {
+    name: 'Pull-up',
+    equipment: ['bar'],
+    altExerciseId: 'supermans',
+  };
+  const highKnees: FakeExercise = {
+    name: 'High knees',
+    equipment: [],
+    altExerciseId: null,
+  };
+  const doubleUnder: FakeExercise = {
+    name: 'Double-under',
+    equipment: ['jump_rope'],
+    altExerciseId: 'high-knees',
+  };
+  const orphan: FakeExercise = {
+    name: 'Box jump',
+    equipment: ['box'],
+    altExerciseId: null,
+  };
+  const danglingAlt: FakeExercise = {
+    name: 'Kettlebell swing',
+    equipment: ['kettlebell'],
+    altExerciseId: 'deleted-exercise',
+  };
+  const loaded: FakeExercise = {
+    name: 'Dumbbell thruster',
+    equipment: ['dumbbell', 'box'],
+    altExerciseId: 'high-knees',
+  };
+
+  const exerciseById = new Map<string, FakeExercise>([
+    ['supermans', supermans],
+    ['high-knees', highKnees],
+  ]);
+
+  const owns = (...pieces: string[]) => new Set(pieces);
+
+  it('leaves a movement alone when the athlete owns what it needs', () => {
+    const movements = [{ reps: 10, exercise: pullUp }];
+    const result = applyEquipmentAvailability(
+      movements,
+      owns('bar'),
+      exerciseById,
+    );
+    expect(result[0].exercise).toBe(pullUp);
+    expect(result[0].reps).toBe(10); // reps untouched, as in the layers either side
+  });
+
+  it('falls to the substitute when the athlete owns nothing for it', () => {
+    const movements = [{ reps: 10, exercise: pullUp }];
+    const result = applyEquipmentAvailability(movements, owns(), exerciseById);
+    expect(result[0].exercise).toBe(supermans);
+  });
+
+  it('leaves an untagged movement alone, since bodyweight is the baseline', () => {
+    // No tags is not "needs nothing recorded" -- it is the baseline, and an
+    // athlete who owns nothing at all can still do it.
+    const movements = [{ reps: 30, exercise: highKnees }];
+    const result = applyEquipmentAvailability(movements, owns(), exerciseById);
+    expect(result[0].exercise).toBe(highKnees);
+  });
+
+  it('needs every piece a movement is tagged with, not just one', () => {
+    const movements = [{ reps: 12, exercise: loaded }];
+    const result = applyEquipmentAvailability(
+      movements,
+      owns('dumbbell'),
+      exerciseById,
+    );
+    expect(result[0].exercise).toBe(highKnees);
+  });
+
+  it('passes an unperformable movement through when it has no substitute', () => {
+    // A data gap must not leave a hole in the movement list -- the athlete is
+    // about to train. DN-83 is what stops the gap existing in the seed.
+    const movements = [{ reps: 20, exercise: orphan }];
+    const result = applyEquipmentAvailability(movements, owns(), exerciseById);
+    expect(result[0].exercise).toBe(orphan);
+  });
+
+  it('passes through when the substitute it names is missing', () => {
+    const movements = [{ reps: 20, exercise: danglingAlt }];
+    const result = applyEquipmentAvailability(movements, owns(), exerciseById);
+    expect(result[0].exercise).toBe(danglingAlt);
+  });
+
+  it('takes one step down the chain rather than walking it', () => {
+    // supermans is itself untagged, so nothing here proves a second hop did
+    // not happen -- what this pins is that the substitute is taken as given.
+    const movements = [{ reps: 10, exercise: pullUp }];
+    const result = applyEquipmentAvailability(movements, owns(), exerciseById);
+    expect(result[0].exercise).toBe(supermans);
+    expect(result[0].exercise.altExerciseId).toBeNull();
+  });
+
+  it('resolves each movement independently', () => {
+    const movements = [
+      { reps: 10, exercise: pullUp },
+      { reps: 50, exercise: doubleUnder },
+    ];
+    const result = applyEquipmentAvailability(
+      movements,
+      owns('bar'),
+      exerciseById,
+    );
+    expect(result[0].exercise).toBe(pullUp);
+    expect(result[1].exercise).toBe(highKnees);
+  });
+
+  it('returns the same movements untouched when everything is owned', () => {
+    const movements = [
+      { reps: 10, exercise: pullUp },
+      { reps: 50, exercise: doubleUnder },
+    ];
+    const result = applyEquipmentAvailability(
+      movements,
+      owns('bar', 'jump_rope'),
+      exerciseById,
+    );
+    expect(result).toEqual(movements);
+  });
+});
+
+describe('the three resolution layers together', () => {
+  type FakeExercise = ExerciseWithLine &
+    ExerciseWithEquipment & { id: string; name: string };
+
+  const kneePushUp: FakeExercise = {
+    id: 'knee',
+    name: 'Knee push-up',
+    line: 'push_horizontal',
+    equipment: [],
+    altExerciseId: null,
+  };
+  const supermans: FakeExercise = {
+    id: 'supermans',
+    name: 'Supermans + reverse snow angels',
+    line: 'pull',
+    equipment: [],
+    altExerciseId: null,
+  };
+  const pullUp: FakeExercise = {
+    id: 'pull-up',
+    name: 'Pull-up',
+    line: 'pull',
+    equipment: ['bar'],
+    altExerciseId: 'supermans',
+  };
+  const negative: FakeExercise = {
+    id: 'negative',
+    name: 'Negative pull-up',
+    line: 'pull',
+    equipment: ['bar'],
+    altExerciseId: 'supermans',
+  };
+
+  const exerciseAtRung = new Map<string, FakeExercise>([
+    ['pull:0', supermans],
+    ['pull:1', negative],
+    ['pull:3', pullUp],
+  ]);
+  const exerciseById = new Map<string, FakeExercise>([
+    ['supermans', supermans],
+    ['pull-up', pullUp],
+    ['negative', negative],
+    ['knee', kneePushUp],
+  ]);
+
+  function resolve(
+    movements: { id: string; exercise: FakeExercise }[],
+    chosenRung: Map<string, number>,
+    owned: Set<string>,
+    swaps: Map<string, string>,
+  ) {
+    return applySubstitutions(
+      applyEquipmentAvailability(
+        applyRememberedChoice(movements, chosenRung, exerciseAtRung),
+        owned,
+        exerciseById,
+      ),
+      swaps,
+      exerciseById,
+    );
+  }
+
+  it('checks equipment against the remembered choice, not the prescription', () => {
+    // The WOD prescribes a movement the athlete owns the kit for; their own
+    // standing choice is the one that needs a bar. Checking the prescription
+    // would miss it.
+    const result = resolve(
+      [{ id: 'wm-1', exercise: supermans }],
+      new Map([['pull', 3]]),
+      new Set(),
+      new Map(),
+    );
+    expect(result[0].exercise).toBe(supermans);
+  });
+
+  it("lets today's swap win over what the athlete owns", () => {
+    // The case DN-79 calls out: the rung resolves to a bar movement, the
+    // athlete owns no bar, and they have swapped that movement anyway. No
+    // rope in the house is not the same as no rope in the hotel gym -- the
+    // ownership setting must not argue with what they just tapped.
+    const result = resolve(
+      [{ id: 'wm-1', exercise: supermans }],
+      new Map([['pull', 1]]),
+      new Set(),
+      new Map([['wm-1', 'pull-up']]),
+    );
+    expect(result[0].exercise).toBe(pullUp);
+  });
+
+  it('degrades the remembered choice when no swap overrides it', () => {
+    const result = resolve(
+      [{ id: 'wm-1', exercise: kneePushUp }],
+      new Map([['pull', 1]]),
+      new Set(),
+      new Map(),
+    );
+    expect(result[0].exercise).toBe(kneePushUp); // push line, untouched by the pull rung
+  });
+
+  it('leaves the whole chain alone for an athlete who owns the bar', () => {
+    const result = resolve(
+      [{ id: 'wm-1', exercise: supermans }],
+      new Map([['pull', 1]]),
+      new Set(['bar']),
+      new Map(),
+    );
+    expect(result[0].exercise).toBe(negative);
   });
 });
 

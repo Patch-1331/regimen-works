@@ -153,6 +153,63 @@ export function applyRememberedChoice<
   });
 }
 
+export type ExerciseWithEquipment = {
+  equipment: string[];
+  altExerciseId: string | null;
+};
+
+/**
+ * Falls a movement the athlete has no equipment for back to its substitute
+ * (DN-79) — what they can actually perform, given what they own.
+ *
+ * Runs between the remembered choice and the day's swaps, and both sides of
+ * that are deliberate:
+ *
+ * *After* the remembered choice, because the choice itself can land on an
+ * exercise needing equipment — the pull group's harder variants all want a
+ * bar — so this has to see the resolved exercise rather than the prescribed
+ * one.
+ *
+ * *Before* the swap, because the athlete wins. Someone who owns no rope and
+ * taps into double-unders anyway has said something the ownership setting
+ * should not argue with.
+ *
+ * Ownership is a standing fact (`ScheduleRule.equipment`), where the swap is a
+ * fact about today. That is the whole division between the two.
+ *
+ * A movement needs every piece it is tagged with; an untagged exercise is the
+ * bodyweight baseline and always passes. As in the layers either side, a data
+ * gap passes the movement through unchanged rather than throwing: an athlete
+ * about to train must not find a hole in their movement list because a
+ * substitute is missing. DN-83 is the seed-time assertion that stops that gap
+ * existing at all.
+ *
+ * One step down the chain, not a walk: the substitute is taken as given rather
+ * than re-checked, matching what the swap panel offers. That makes
+ * "the substitute is performable on the baseline" a property the seed owes
+ * (DN-83), not something resolved at read time for every athlete, every day.
+ */
+export function applyEquipmentAvailability<
+  M extends { exercise: E },
+  E extends ExerciseWithEquipment,
+>(
+  movements: M[],
+  owned: ReadonlySet<string>,
+  exerciseById: ReadonlyMap<string, E>,
+): M[] {
+  return movements.map((m) => {
+    if (m.exercise.equipment.every((piece) => owned.has(piece))) return m;
+
+    const altId = m.exercise.altExerciseId;
+    if (!altId) return m;
+
+    const substitute = exerciseById.get(altId);
+    if (!substitute) return m;
+
+    return { ...m, exercise: substitute };
+  });
+}
+
 /**
  * Overlays the athlete's own swaps for this day on top of the remembered
  * choice (WOD-5). Runs last, and deliberately so: the remembered choice is

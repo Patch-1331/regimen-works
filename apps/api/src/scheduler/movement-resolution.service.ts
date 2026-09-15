@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import type { Exercise } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { applyRememberedChoice, applySubstitutions } from './scheduler.logic';
+import {
+  applyEquipmentAvailability,
+  applyRememberedChoice,
+  applySubstitutions,
+} from './scheduler.logic';
 
 /** The shape every resolver caller loads a WOD's movements in. */
 export const resolvableMovementInclude = {
@@ -19,8 +23,18 @@ export type ResolvedMovement<
 > = M & { isSwapped: boolean; prescribedName: string | null };
 
 /**
+ * What an athlete with no ScheduleRule row owns, mirroring the column default
+ * and SettingsService.DEFAULTS (DN-81). Provisioning writes a row on first
+ * sign-in, so this is the same belt-and-braces the rest of the scheduler keeps
+ * for a user whose row is somehow absent -- and it has to agree with them, or
+ * a missing row would quietly cost an athlete their bar movements.
+ */
+const DEFAULT_EQUIPMENT = ['bar'];
+
+/**
  * Turns a WOD template into what this athlete trains today: each movement's
  * exercise replaced by the one they last chose on that line (Feature #2),
+ * then dropped to a substitute where they have no equipment for it (DN-79),
  * then overlaid with the swaps they made for this day (WOD-5).
  *
  * Read-time by design -- `Wod` is shared library content and must not be
@@ -32,19 +46,51 @@ export type ResolvedMovement<
 export class MovementResolutionService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * The substitutes the equipment layer will actually reach for: the alts of
+   * the movements this athlete cannot perform, and nothing else.
+   *
+   * Usually that is none -- the baseline owns the bar and most of the pool is
+   * bodyweight -- and then no query runs at all. It cannot join the batch
+   * above either way: which movements are unavailable depends on what the
+   * remembered choice resolved to, which is not known until that layer has
+   * run.
+   */
+  private async substitutesFor(
+    movements: { exercise: Exercise }[],
+    owned: ReadonlySet<string>,
+  ) {
+    const altIds = [
+      ...new Set(
+        movements
+          .filter((m) => !m.exercise.equipment.every((p) => owned.has(p)))
+          .map((m) => m.exercise.altExerciseId)
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+    if (altIds.length === 0) return new Map<string, Exercise>();
+
+    const alts = await this.prisma.exercise.findMany({
+      where: { id: { in: altIds } },
+    });
+    return new Map(alts.map((e) => [e.id, e]));
+  }
+
   async resolve<M extends { id: string; exercise: Exercise }>(
     userId: string,
     assignmentId: string,
     movements: M[],
   ): Promise<ResolvedMovement<M>[]> {
-    const [skillLevels, linedExercises, substitutions] = await Promise.all([
-      this.prisma.skillLevel.findMany({ where: { userId } }),
-      this.prisma.exercise.findMany({ where: { line: { not: null } } }),
-      this.prisma.assignmentSubstitution.findMany({
-        where: { userId, assignmentId },
-        include: { exercise: true },
-      }),
-    ]);
+    const [skillLevels, linedExercises, substitutions, rule] =
+      await Promise.all([
+        this.prisma.skillLevel.findMany({ where: { userId } }),
+        this.prisma.exercise.findMany({ where: { line: { not: null } } }),
+        this.prisma.assignmentSubstitution.findMany({
+          where: { userId, assignmentId },
+          include: { exercise: true },
+        }),
+        this.prisma.scheduleRule.findUnique({ where: { userId } }),
+      ]);
 
     const chosenRung = new Map(skillLevels.map((s) => [s.line, s.rung]));
     const exerciseAtRung = new Map(
@@ -58,8 +104,14 @@ export class MovementResolutionService {
       chosenRung,
       exerciseAtRung,
     );
-    const swapped = applySubstitutions(
+    const owned = new Set(rule?.equipment ?? DEFAULT_EQUIPMENT);
+    const performable = applyEquipmentAvailability(
       remembered,
+      owned,
+      await this.substitutesFor(remembered, owned),
+    );
+    const swapped = applySubstitutions(
+      performable,
       new Map(substitutions.map((s) => [s.wodMovementId, s.exerciseId])),
       new Map(substitutions.map((s) => [s.exerciseId, s.exercise])),
     );
