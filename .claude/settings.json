@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run typecheck)",
+      "Bash(npm run typecheck *)",
+      "Bash(npm run test)",
+      "Bash(npm run test *)",
+      "mcp__Linear__get_issue",
+      "mcp__Linear__get_project",
+      "mcp__Linear__list_issues",
+      "mcp__Linear__list_projects",
+      "mcp__Linear__list_issue_statuses"
+    ]
+  }
+}
