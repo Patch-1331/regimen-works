@@ -153,6 +153,95 @@ export function applyRememberedChoice<
   });
 }
 
+export type ExerciseWithEquipment = {
+  equipment: string[];
+  altExerciseId: string | null;
+};
+
+/**
+ * Whether the athlete can perform the movement at all, given what they own.
+ *
+ * A movement needs *every* piece it is tagged with. An untagged exercise is
+ * the baseline and always passes: bodyweight is the absence of a tag rather
+ * than a member of the catalog (DN-77), so "needs nothing" and "owns nothing"
+ * meet at the empty set.
+ */
+function isPerformable(
+  exercise: ExerciseWithEquipment,
+  owned: ReadonlySet<string>,
+): boolean {
+  return exercise.equipment.every((piece) => owned.has(piece));
+}
+
+/**
+ * The substitutes `applyEquipmentAvailability` would reach for, so a caller
+ * can load exactly those rows and no others.
+ *
+ * Split out rather than folded into the layer below because the two run
+ * either side of a database read, and this keeps "what counts as performable"
+ * written once. The common day -- an athlete on the baseline, a WOD that is
+ * mostly bodyweight -- returns nothing here, which is what lets the resolver
+ * skip the query entirely.
+ */
+export function unperformableSubstituteIds<E extends ExerciseWithEquipment>(
+  movements: { exercise: E }[],
+  owned: ReadonlySet<string>,
+): string[] {
+  return [
+    ...new Set(
+      movements
+        .filter((m) => !isPerformable(m.exercise, owned))
+        .map((m) => m.exercise.altExerciseId)
+        .filter((id): id is string => id !== null),
+    ),
+  ];
+}
+
+/**
+ * Falls each movement the athlete has no equipment for back to its
+ * `altExerciseId` — the layer that turns "what they chose" into "what they
+ * can actually perform" (DN-79).
+ *
+ * Runs *after* the remembered choice, because the choice itself lands on
+ * equipment: the pull group's harder variants all want a bar, so checking the
+ * prescription rather than the resolved exercise would hand an athlete a
+ * movement their own standing choice had already made impossible.
+ *
+ * Runs *before* the day's swap, because the athlete wins. Someone who owns no
+ * rope and taps into double-unders anyway has said something ownership should
+ * not argue with — no rope at home is not no rope in a hotel gym.
+ *
+ * **One step down the chain, not a walk.** The substitute is taken as given
+ * rather than re-checked against what the athlete owns, which makes "every
+ * alternative is performable on the baseline" a property the seed owes
+ * (DN-83) rather than something recomputed per athlete, per day.
+ *
+ * A movement with no substitute, or one whose substitute is missing from
+ * `substituteById`, passes through unchanged rather than throwing — the same
+ * discipline the layers either side keep. The athlete is about to train, and
+ * a data gap must not leave a hole in the movement list.
+ */
+export function applyEquipmentAvailability<
+  M extends { exercise: E },
+  E extends ExerciseWithEquipment,
+>(
+  movements: M[],
+  owned: ReadonlySet<string>,
+  substituteById: ReadonlyMap<string, E>,
+): M[] {
+  return movements.map((m) => {
+    if (isPerformable(m.exercise, owned)) return m;
+
+    const altId = m.exercise.altExerciseId;
+    if (altId === null) return m;
+
+    const substitute = substituteById.get(altId);
+    if (!substitute) return m;
+
+    return { ...m, exercise: substitute };
+  });
+}
+
 /**
  * Overlays the athlete's own swaps for this day on top of the remembered
  * choice (WOD-5). Runs last, and deliberately so: the remembered choice is

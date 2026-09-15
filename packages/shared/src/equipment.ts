@@ -65,6 +65,24 @@ export const EQUIPMENT_CATALOG: readonly EquipmentInfo[] = [
   },
 ];
 
+/**
+ * What an athlete owns before they have said anything (DN-81): bodyweight,
+ * which is no tag at all, plus the bar.
+ *
+ * The baseline the app assumed for its whole life before these tags existed,
+ * and so the only default that changes no existing athlete's workouts.
+ * Owning nothing would silently drop the whole pull ladder to its substitutes
+ * for everyone who never opens the Settings screen; owning everything would
+ * make the setting opt-in-by-discovery.
+ *
+ * It lives here so the two readers that need it -- `SettingsService`, for an
+ * athlete with no `ScheduleRule` row, and the resolver, for the same athlete
+ * on the scheduling path -- cannot drift from each other. It still has to
+ * match the column default in `schema.prisma`, which nothing links to this;
+ * that pairing is what the db-specs assert.
+ */
+export const DEFAULT_EQUIPMENT: readonly Equipment[] = ["bar"];
+
 const BY_VALUE: Record<Equipment, EquipmentInfo> = Object.fromEntries(
   EQUIPMENT_CATALOG.map((info) => [info.value, info]),
 ) as Record<Equipment, EquipmentInfo>;
