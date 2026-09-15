@@ -55,6 +55,23 @@ export const equipment = z.enum([
 ]);
 export type Equipment = z.infer<typeof equipment>;
 
+/**
+ * Why a movement on the plate is not the one the library prescribed — read
+ * alongside `prescribedName`, which carries what it replaced.
+ *
+ * Two automatic substitutions, and the difference matters to the athlete:
+ * `remembered_choice` is a decision they made themselves once and the app is
+ * still honouring (DN-88), while `equipment` is the app standing down from a
+ * movement they have no gear for (DN-79). A screen that calls the second one
+ * their pick is telling them something untrue.
+ *
+ * The day's own swap is not a member. It is marked by `isSwapped` and carries
+ * no prescription at all: the athlete chose what they are looking at, and
+ * naming what they overrode would argue with them.
+ */
+export const substitutionReason = z.enum(["remembered_choice", "equipment"]);
+export type SubstitutionReason = z.infer<typeof substitutionReason>;
+
 /** What an Exercise's `reps` count actually measures — most movements count reps, but a hold (e.g. plank) is timed. */
 export const exerciseUnit = z.enum(["reps", "seconds"]);
 export type ExerciseUnit = z.infer<typeof exerciseUnit>;

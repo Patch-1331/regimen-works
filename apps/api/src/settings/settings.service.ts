@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { equipment as equipmentPiece } from '@regimen-works/shared';
+import {
+  DEFAULT_EQUIPMENT,
+  equipment as equipmentPiece,
+} from '@regimen-works/shared';
 import type {
   Equipment,
   Settings,
@@ -34,7 +37,7 @@ function ownedEquipment(stored: string[]): Equipment[] {
 const DEFAULTS: Settings = {
   warmupCooldownEnabled: false,
   autoStopAtCapEnabled: true,
-  equipment: ['bar'],
+  equipment: [...DEFAULT_EQUIPMENT],
 };
 
 function toSettings(rule: ScheduleRule | null): Settings {

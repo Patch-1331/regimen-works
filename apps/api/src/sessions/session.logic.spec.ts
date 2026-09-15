@@ -102,6 +102,7 @@ describe('snapshotMovements', () => {
     repScheme: [21, 15, 9],
     isSwapped: true,
     prescribedName: null,
+    prescribedReason: null,
     exercise: {
       id: 'ex-ring',
       name: 'Ring row',
@@ -126,6 +127,7 @@ describe('snapshotMovements', () => {
         repScheme: [21, 15, 9],
         isSwapped: true,
         prescribedName: null,
+        prescribedReason: null,
         exercise: {
           id: 'ex-ring',
           name: 'Ring row',
@@ -152,9 +154,25 @@ describe('snapshotMovements', () => {
       ...resolved,
       isSwapped: false,
       prescribedName: 'Pull-up',
+      prescribedReason: 'remembered_choice' as const,
     };
     const [snap] = snapshotMovements([remembered]);
     expect(snap.prescribedName).toBe('Pull-up');
+    expect(snap.prescribedReason).toBe('remembered_choice');
+  });
+
+  // DN-79: and why, which history needs for the same reason the plate does --
+  // "your pick" is a lie about a movement the app dropped for want of a bar.
+  it('keeps why the equipment fallback replaced a movement', () => {
+    const dropped = {
+      ...resolved,
+      isSwapped: false,
+      prescribedName: 'Pull-up',
+      prescribedReason: 'equipment' as const,
+    };
+    const [snap] = snapshotMovements([dropped]);
+    expect(snap.prescribedName).toBe('Pull-up');
+    expect(snap.prescribedReason).toBe('equipment');
   });
 
   it('copies the rep scheme rather than sharing the array', () => {

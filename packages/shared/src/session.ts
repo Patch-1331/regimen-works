@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { exerciseUnit, progressionLine, sessionStatus } from "./enums.js";
+import {
+  exerciseUnit,
+  progressionLine,
+  sessionStatus,
+  substitutionReason,
+} from "./enums.js";
 
 export const roundSplitSchema = z.object({
   round: z.number().int().positive(),
@@ -29,11 +34,19 @@ export const sessionMovementSchema = z.object({
   isSwapped: z.boolean(),
   /**
    * What the library prescribed, where the athlete's remembered choice
-   * replaced it (DN-88). Defaults to null so sessions snapshotted before the
-   * field existed still parse — they predate it, and there is no honest way
-   * to fill it in after the fact.
+   * (DN-88) or their equipment (DN-79) replaced it. Defaults to null so
+   * sessions snapshotted before the field existed still parse — they predate
+   * it, and there is no honest way to fill it in after the fact.
    */
   prescribedName: z.string().nullable().default(null),
+  /**
+   * Why it was replaced. Null for the same reasons `prescribedName` is, and
+   * additionally on a session snapshotted between DN-88 and DN-79, where the
+   * name was recorded and the reason was not — every such row was a
+   * remembered choice, but guessing that here would bake an assumption into
+   * history rather than leave the gap visible.
+   */
+  prescribedReason: substitutionReason.nullable().default(null),
   exercise: z.object({
     id: z.string(),
     name: z.string(),

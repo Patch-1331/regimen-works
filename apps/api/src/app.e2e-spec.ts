@@ -14,6 +14,7 @@ import { asUser, createE2eApp } from './test-support/e2e-app';
 import { testPrisma } from './test-support/database';
 import {
   createAssignment,
+  createExercise,
   createLadder,
   createWod,
 } from './test-support/fixtures';
@@ -225,6 +226,49 @@ describe('GET /today', () => {
 
     expect(second).toBe(first);
     expect(await testPrisma().dailyAssignment.count()).toBe(1);
+  });
+
+  it('serves the equipment an athlete owns, over HTTP (DN-79)', async () => {
+    // The resolution layers are covered in scheduler.service.db-spec.ts; what
+    // this adds is that the answer survives the controller and the response
+    // schema -- a field the API resolves and the DTO drops would pass there
+    // and fail here.
+    const row = await createExercise({
+      name: 'Row under table',
+      pattern: 'pull',
+      line: null,
+      rung: null,
+    });
+    const pullUp = await createExercise({
+      name: 'Pull-up',
+      pattern: 'pull',
+      line: 'pull',
+      rung: 0,
+      equipment: ['bar'],
+      altExerciseId: row.id,
+    });
+    await createWod({
+      dominantPattern: 'pull',
+      movements: [{ exerciseId: pullUp.id, reps: 30, order: 0 }],
+    });
+    await http()
+      .patch('/settings')
+      .set(...asUser(ALICE))
+      .send({ equipment: [] })
+      .expect(200);
+
+    const today = parsed(
+      todayResponseSchema,
+      await http()
+        .get('/today')
+        .set(...asUser(ALICE))
+        .expect(200),
+    );
+
+    const movement = today.assignment!.wod.movements[0];
+    expect(movement.exercise.name).toBe('Row under table');
+    expect(movement.prescribedName).toBe('Pull-up');
+    expect(movement.prescribedReason).toBe('equipment');
   });
 });
 
