@@ -1,7 +1,8 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import type { PrismaClient } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
 import { MovementResolutionService } from '../scheduler/movement-resolution.service';
-import { testPrisma } from '../test-support/database';
+import { testPrisma, withSeparateConnections } from '../test-support/database';
 import {
   createAssignment,
   createLadder,
@@ -23,8 +24,8 @@ import { SessionsService } from './sessions.service';
  * in for the resolution the snapshot exists to pin down.
  */
 
-function service(): SessionsService {
-  const prisma = testPrisma() as unknown as PrismaService;
+function service(client: PrismaClient = testPrisma()): SessionsService {
+  const prisma = client as unknown as PrismaService;
   return new SessionsService(prisma, new MovementResolutionService(prisma));
 }
 
@@ -112,6 +113,30 @@ describe('SessionsService.start', () => {
     const second = await service().start(user.id, assignment.id);
 
     expect(second.id).toBe(first.id);
+    expect(await testPrisma().workoutSession.count()).toBe(1);
+  });
+
+  it('survives starts arriving together on separate connections', async () => {
+    // The test above cannot catch this: both its calls go through the one
+    // shared client, so they serialise on its connection. Two HTTP requests
+    // do not (DN-105) -- two tabs, a retry, a reconnect -- and the upsert this
+    // replaced compiled to SELECT-then-INSERT, so all four found nothing and
+    // all four inserted.
+    const { user, assignment } = await pullDay();
+
+    const outcomes = await withSeparateConnections(4, (clients) =>
+      Promise.allSettled(
+        clients.map((client) => service(client).start(user.id, assignment.id)),
+      ),
+    );
+
+    const rejected = outcomes.filter((o) => o.status === 'rejected');
+    expect(rejected.map((o) => String(o.reason))).toEqual([]);
+    // Every caller gets the one session, not four rows and three 500s.
+    const ids = outcomes.flatMap((o) =>
+      o.status === 'fulfilled' ? [o.value.id] : [],
+    );
+    expect(new Set(ids).size).toBe(1);
     expect(await testPrisma().workoutSession.count()).toBe(1);
   });
 

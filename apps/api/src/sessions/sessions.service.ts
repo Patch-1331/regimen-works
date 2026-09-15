@@ -34,9 +34,21 @@ export class SessionsService {
   ) {}
 
   /**
-   * Idempotent: an upsert with a no-op update, not a check-then-create — two
-   * concurrent calls (e.g. React's dev-mode double effect invocation) would
-   * otherwise race and the second lose to a unique-constraint error.
+   * Idempotent: a create-if-absent, so two concurrent calls (React's dev-mode
+   * double effect, two tabs, a retried request) both end up on the one
+   * session rather than the loser taking a unique-constraint error.
+   *
+   * `createMany({ skipDuplicates: true })` and a read, not the `upsert` this
+   * used to be. Prisma normally compiles an upsert to INSERT ... ON CONFLICT,
+   * which is safe -- but not when the update leg is empty, and this one's was
+   * `update: {}`. That fell back to SELECT-then-INSERT, so under READ
+   * COMMITTED both callers found nothing, both inserted, and the loser took a
+   * unique violation on `WorkoutSession_assignmentId_key` (DN-105): a 500 on
+   * the athlete's first tap of START WORKOUT.
+   *
+   * This compiles to INSERT ... ON CONFLICT DO NOTHING, where the loser is a
+   * no-op, which is also what was meant -- `update: {}` was never an update.
+   * Same reasoning, same shape as `UserProvisioningService.ensure`.
    */
   async start(userId: string, assignmentId: string): Promise<WorkoutSession> {
     // Scoped by userId so another user's assignment id reads as not found.
@@ -69,21 +81,26 @@ export class SessionsService {
       ),
     );
 
-    const session = await this.prisma.workoutSession.upsert({
+    await this.prisma.workoutSession.createMany({
+      data: [
+        {
+          assignmentId,
+          userId,
+          capSeconds: assignment.wod.timeCapMinutes * 60,
+          autoStopAtCap: rule?.autoStopAtCapEnabled ?? true,
+          roundSplits: [],
+          movements,
+          status: 'in_progress',
+        },
+      ],
+      skipDuplicates: true,
+    });
+
+    // A second start (a double effect, a reload) reads the session already
+    // running and leaves it be -- including its snapshot, which must say what
+    // the workout began with, not what a later swap would have made it.
+    const session = await this.prisma.workoutSession.findUniqueOrThrow({
       where: { assignmentId },
-      // A second start (a double effect, a reload) finds the session already
-      // running and leaves it be -- including its snapshot, which must say
-      // what the workout began with, not what a later swap would have made it.
-      update: {},
-      create: {
-        assignmentId,
-        userId,
-        capSeconds: assignment.wod.timeCapMinutes * 60,
-        autoStopAtCap: rule?.autoStopAtCapEnabled ?? true,
-        roundSplits: [],
-        movements,
-        status: 'in_progress',
-      },
     });
 
     if (assignment.status === 'scheduled') {
