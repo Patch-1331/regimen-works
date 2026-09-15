@@ -314,14 +314,19 @@ describe("workoutLogListItemSchema", () => {
 });
 
 describe("settingsSchema", () => {
-  it("requires both toggles", () => {
+  const settings = (overrides: Record<string, unknown> = {}) => ({
+    warmupCooldownEnabled: true,
+    autoStopAtCapEnabled: true,
+    equipment: ["bar"],
+    ...overrides,
+  });
+
+  it("requires every field", () => {
     expect(settingsSchema.safeParse({ warmupCooldownEnabled: true }).success).toBe(false);
   });
 
   it("rejects a string standing in for a boolean", () => {
-    expect(
-      settingsSchema.safeParse({ warmupCooldownEnabled: "true", autoStopAtCapEnabled: true }).success,
-    ).toBe(false);
+    expect(settingsSchema.safeParse(settings({ warmupCooldownEnabled: "true" })).success).toBe(false);
   });
 
   it("lets a PATCH carry one toggle, so two switches never restate each other", () => {
@@ -331,6 +336,22 @@ describe("settingsSchema", () => {
 
   it("lets a PATCH carry nothing at all", () => {
     expect(updateSettingsSchema.safeParse({}).success).toBe(true);
+  });
+
+  it("accepts owning nothing, which is a real answer rather than an omission", () => {
+    expect(settingsSchema.safeParse(settings({ equipment: [] })).success).toBe(true);
+    expect(updateSettingsSchema.safeParse({ equipment: [] }).success).toBe(true);
+  });
+
+  it("rejects a piece the catalog does not have", () => {
+    // Prisma will not check a String[], so this is what keeps an unknown
+    // string out of the column.
+    expect(settingsSchema.safeParse(settings({ equipment: ["sandbag"] })).success).toBe(false);
+    expect(updateSettingsSchema.safeParse({ equipment: ["sandbag"] }).success).toBe(false);
+  });
+
+  it("rejects a bare string where the set belongs", () => {
+    expect(settingsSchema.safeParse(settings({ equipment: "bar" })).success).toBe(false);
   });
 });
 

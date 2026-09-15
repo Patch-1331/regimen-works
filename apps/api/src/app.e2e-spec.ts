@@ -359,6 +359,7 @@ describe('settings and skill levels', () => {
     expect(res).toEqual({
       warmupCooldownEnabled: false,
       autoStopAtCapEnabled: true,
+      equipment: ['bar'],
     });
   });
 
@@ -381,6 +382,7 @@ describe('settings and skill levels', () => {
     expect(res).toEqual({
       warmupCooldownEnabled: true,
       autoStopAtCapEnabled: false,
+      equipment: ['bar'],
     });
   });
 
@@ -399,6 +401,35 @@ describe('settings and skill levels', () => {
         .expect(200),
     );
     expect(res.warmupCooldownEnabled).toBe(false);
+  });
+
+  it('replaces the whole equipment set over HTTP', async () => {
+    await http()
+      .patch('/settings')
+      .set(...asUser(ALICE))
+      .send({ equipment: ['jump_rope', 'box'] })
+      .expect(200);
+
+    const res = parsed(
+      settingsSchema,
+      await http()
+        .patch('/settings')
+        .set(...asUser(ALICE))
+        .send({ equipment: ['box'] })
+        .expect(200),
+    );
+
+    expect(res.equipment).toEqual(['box']);
+  });
+
+  it('refuses a piece the catalog does not have', async () => {
+    // The column is a bare String[]; validateBody is what stands between a
+    // typo in a client and a tag no ownership check will ever match.
+    await http()
+      .patch('/settings')
+      .set(...asUser(ALICE))
+      .send({ equipment: ['sandbag'] })
+      .expect(400);
   });
 
   it('starts with no skill levels, since nothing has been chosen yet', async () => {

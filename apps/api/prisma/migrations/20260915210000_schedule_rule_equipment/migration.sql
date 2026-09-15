@@ -1,0 +1,16 @@
+-- DN-78: what the athlete owns, alongside their other standing preferences.
+--
+-- ScheduleRule rather than a join table or a model of its own: it is already
+-- the one-row-per-user home of every athlete preference, already unique on
+-- userId, and already upserted by SettingsService. A join would add a second
+-- read on the scheduler's hot path to express a set of at most five short
+-- strings.
+--
+-- The default is the baseline the app has always assumed -- bodyweight, which
+-- is no tag at all, plus the bar (DN-81). Postgres fills existing rows with it
+-- on ADD COLUMN, so every athlete with a rule row today keeps exactly the
+-- library they have: the bar movements stay reachable, and rope, box, dumbbell
+-- and kettlebell start off for everyone until they say otherwise.
+--
+-- Nothing reads this for scheduling yet; that is DN-79.
+ALTER TABLE "ScheduleRule" ADD COLUMN "equipment" TEXT[] DEFAULT ARRAY['bar']::TEXT[];
