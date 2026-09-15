@@ -1,0 +1,85 @@
+name: Browser e2e
+
+# Its own workflow rather than a step on ci.yml (DN-103). That job takes about
+# two minutes; this one adds a Postgres service, a ~95MB Chromium download and
+# two dev servers, so folding it in would put a browser run in front of every
+# one-line change. The cost is two ticks to read instead of one.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-e2e:
+    runs-on: ubuntu-latest
+
+    # This repository is public, and GitHub does not pass secrets to a
+    # pull_request run from a fork. Without CLERK_SECRET_KEY the suite cannot
+    # sign in, so a fork PR would fail on a missing key rather than on
+    # anything the contributor did. Skipped there deliberately; same-repo
+    # branches, which is how this repo is worked, still run it.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+
+    # Credentials and image match docker-compose.yml, which is also what
+    # E2E_DATABASE_URL defaults to in apps/web/e2e/config.ts. Change one and
+    # this fails loudly rather than testing something else.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: regimen_works
+          POSTGRES_PASSWORD: regimen_works
+          POSTGRES_DB: regimen_works
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U regimen_works"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          # Matches ci.yml and NODE_VERSION in render.yaml.
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The e2e database reset runs through ts-node and imports the client, so
+      # it has to exist before Playwright's global setup.
+      - name: Generate Prisma client
+        run: npx prisma generate
+        working-directory: apps/api
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+
+      - name: Browser e2e
+        run: npm run test:e2e --workspace apps/web
+        env:
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          # Not secrets: the publishable key is inlined into the browser bundle
+          # by design, and the test user's address is on example.com, which
+          # reaches no inbox.
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
+          E2E_USER_EMAIL: ${{ vars.E2E_USER_EMAIL }}
+
+      # A browser failure is hard to read from a log alone. The report carries
+      # the trace and the screenshot Playwright already captures on failure.
+      - name: Upload the report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
