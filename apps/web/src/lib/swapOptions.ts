@@ -23,16 +23,20 @@ export type SwapOption = {
  * in order, then the current exercise's no-equipment alternative if it has
  * one and it isn't already a rung.
  *
- * Returns an empty list when the movement isn't on a tracked line — cardio
- * has no ladder to climb, so the row gets no swap control at all rather than
- * a control that opens onto nothing.
+ * Off a tracked line there is no ladder, but there can still be somewhere to
+ * go: cardio movements carry `line: null` and an `altExercise` all the same,
+ * and a rope the athlete doesn't have today is exactly the case the swap
+ * exists for (DN-80). So the pair is offered instead of nothing.
+ *
+ * Still empty when there is no line *and* no alternative — that really is a
+ * control that opens onto nothing.
  */
 export function buildSwapOptions(
   exercises: ApiExercise[],
   line: string | null,
   currentExerciseId: string,
 ): SwapOption[] {
-  if (!line) return [];
+  if (!line) return offLadderOptions(exercises, currentExerciseId);
 
   const rungs = exercises
     .filter((e) => e.line === line && e.rung !== null)
@@ -59,4 +63,50 @@ export function buildSwapOptions(
   }
 
   return options;
+}
+
+/**
+ * What a movement off any progression line can be swapped to: itself and its
+ * no-equipment alternative, or nothing at all.
+ *
+ * The line gate used to refuse these rows outright, and that was right while
+ * equipment meant the bar — cardio had no ladder to climb, so the row got no
+ * control rather than one that opened onto nothing. Equipment made it wrong:
+ * once a WOD can name a jump rope, an athlete can be handed a movement they
+ * own nothing for, on a row that is the one row in the app with no way out.
+ *
+ * The current exercise is listed alongside the alternative rather than the
+ * alternative being offered alone, for the reason the ladder lists every rung
+ * with the current one marked: a single unmarked row reads as an instruction,
+ * not as a choice between two things.
+ *
+ * Nothing is offered in the other direction — from the alternative back to the
+ * movement it stands in for. That is what the panel's revert is for on a row
+ * the athlete swapped themselves, and on a row the equipment layer moved it
+ * needs the prescribed exercise's id, which the payload does not carry (DN-110).
+ */
+function offLadderOptions(
+  exercises: ApiExercise[],
+  currentExerciseId: string,
+): SwapOption[] {
+  const current = exercises.find((e) => e.id === currentExerciseId);
+  const alt = current?.altExercise;
+  if (!current || !alt) return [];
+
+  return [
+    {
+      exerciseId: current.id,
+      name: current.name,
+      rung: null,
+      isCurrent: true,
+      isAlternative: false,
+    },
+    {
+      exerciseId: alt.id,
+      name: alt.name,
+      rung: null,
+      isCurrent: false,
+      isAlternative: true,
+    },
+  ];
 }
