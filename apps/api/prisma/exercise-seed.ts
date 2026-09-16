@@ -499,6 +499,27 @@ export const exercises: ExerciseSeed[] = [
     instructions:
       "Run on the spot lifting each knee to at least hip height, landing on the balls of the feet with a tall torso. Each knee lift is a rep. Pump the arms in time with the legs.",
   },
+  // Jump rope (DN-32) — off any progression line, like the rest of cardio.
+  // Single- and double-unders are a real pair in difficulty, but a rope is
+  // not a ladder anyone climbs by rung: an athlete picks the one they can
+  // turn. Both fall to high knees, which keeps the feet moving at the same
+  // cadence and needs nothing.
+  {
+    name: "Single-unders",
+    pattern: "cardio",
+    equipment: ["jump_rope"],
+    alt: "High knees",
+    instructions:
+      "Turn the rope with the wrists, not the arms, and hop just high enough to clear it — one pass under the feet is a rep. Elbows stay close to the ribs; big arm circles make the rope slower and the jump higher than it needs to be.",
+  },
+  {
+    name: "Double-unders",
+    pattern: "cardio",
+    equipment: ["jump_rope"],
+    alt: "High knees",
+    instructions:
+      "One jump, two passes of the rope. Jump a little higher than a single-under and turn the wrists faster rather than pulling the knees up — tucking the legs is what turns a set into a string of misses. Trip the rope and you start the next rep, not the set again.",
+  },
 
   // Warm-up (Feature #63) — tagged with the pattern they best prep, so a
   // WOD's dominantPattern can pull in relevant moves.
