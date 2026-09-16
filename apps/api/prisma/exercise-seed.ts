@@ -186,6 +186,51 @@ export const exercises: ExerciseSeed[] = [
     instructions:
       "A full one-legged squat: stand on one leg, extend the other in front, and lower under control until the hamstring meets the calf, then stand back up without touching down. Arms out in front for a counterweight; the heel of the standing foot stays flat.",
   },
+  // Squat · Loaded (DN-84) — its own line rather than rungs appended to
+  // `squat`, for two reasons. A goblet squat is not harder than a pistol, so
+  // it cannot honestly sit above one; and inserting it mid-ladder would
+  // renumber every rung above it, silently changing what each athlete's
+  // stored `SkillLevel.rung` refers to.
+  //
+  // The ladder is made of variations, never of weight: a 20 lb goblet squat
+  // and a 40 lb one are the same exercise at the same rung, and nothing in
+  // the schema can tell them apart (DN-85). What rises here is where the load
+  // sits and how much of the body has to hold it there.
+  //
+  // Every rung carries its own bodyweight `alt`, not just the top one — the
+  // remembered choice is applied before equipment is, so an athlete can be
+  // resolved onto any rung of this line and then need a way down from it.
+  {
+    name: "Goblet squat",
+    pattern: "squat",
+    equipment: ["dumbbell"],
+    line: "squat_loaded",
+    rung: 0,
+    alt: "Air squat",
+    instructions:
+      "Hold one dumbbell vertically against the chest, elbows tucked under it. Squat between your knees until the hips are below parallel, then stand. The weight at the chest is what keeps the torso upright — let it pull you forward and it becomes a different movement.",
+  },
+  {
+    name: "Dumbbell front squat",
+    pattern: "squat",
+    equipment: ["dumbbell"],
+    line: "squat_loaded",
+    rung: 1,
+    alt: "Air squat",
+    instructions:
+      "A dumbbell resting on each shoulder, elbows pointed forward and up. Squat to depth and stand, keeping both elbows high the whole way. Two weights split across the shoulders sit further from the midline than one at the chest, so the trunk works harder to stay upright.",
+  },
+  {
+    name: "Dumbbell thruster",
+    pattern: "squat",
+    equipment: ["dumbbell"],
+    line: "squat_loaded",
+    rung: 2,
+    alt: "Jump squat",
+    instructions:
+      "Front squat into an overhead press in one movement: stand out of the bottom and let that drive send the dumbbells straight overhead, arms locked. Lower them back to the shoulders and go again. One rep is the whole thing — the pause between squat and press is what makes it two exercises instead of this one.",
+  },
+
   // Siblings kept in the pool but not on the main squat line
   {
     name: "Jump squat",
@@ -199,6 +244,22 @@ export const exercises: ExerciseSeed[] = [
     pattern: "squat",
     instructions:
       "Step forward and lower until the back knee grazes the floor, then drive through the front heel and step the back foot straight through into the next lunge. Torso stays upright; each step is a rep.",
+  },
+  {
+    name: "Box step-up",
+    pattern: "squat",
+    equipment: ["box"],
+    alt: "Reverse lunge",
+    instructions:
+      "Place one whole foot on the box, drive through that heel until the leg is straight, then lower under control and step down. Alternate legs; each step up is a rep. Push through the top foot rather than bouncing off the bottom one — a box around knee height is plenty.",
+  },
+  {
+    name: "Box jump",
+    pattern: "squat",
+    equipment: ["box"],
+    alt: "Jump squat",
+    instructions:
+      "From a quarter squat, swing the arms and jump onto the box, landing on the whole foot with knees soft and hips back. Stand up fully on top, then step down — one foot at a time, every rep. Pick a height you can land on, not the one you can barely clear.",
   },
 
   // Hinge
@@ -235,6 +296,45 @@ export const exercises: ExerciseSeed[] = [
     instructions:
       "A superman lifting one arm and the opposite leg, holding briefly before switching. Working diagonally makes the back and glutes resist rotation as well as extend, which is what puts it above the two-sided version.",
   },
+  // Hinge · Loaded (DN-84) — a separate line from `hinge` for the same reason
+  // the loaded squats are: the bodyweight hinge ladder ends at a single-leg
+  // superman, which a Romanian deadlift is neither harder nor easier than.
+  //
+  // The swing is the one movement here that genuinely wants a kettlebell
+  // rather than a dumbbell, which is what earns it its own row in the
+  // catalog. The two deadlifts are tagged `dumbbell`, the piece more people
+  // own, and read the same held in either hand.
+  {
+    name: "Romanian deadlift",
+    pattern: "hinge",
+    equipment: ["dumbbell"],
+    line: "hinge_loaded",
+    rung: 0,
+    alt: "Glute bridge",
+    instructions:
+      "Dumbbells in front of the thighs, knees softly bent and fixed there. Push the hips straight back, letting the weights track down the legs until you feel the hamstrings load, then drive the hips forward to stand. The back stays flat throughout — this is a hinge, not a squat and not a round-backed reach for the floor.",
+  },
+  {
+    name: "Single-leg Romanian deadlift",
+    pattern: "hinge",
+    equipment: ["dumbbell"],
+    line: "hinge_loaded",
+    rung: 1,
+    alt: "Single-leg glute bridge",
+    instructions:
+      "One dumbbell, standing on one leg. Hinge at the hip and let the free leg travel straight back as a counterweight, body forming one line from head to heel, then stand tall. Do all the reps on one side before switching. The hips stay square to the floor — letting the free hip open up turns it into a twist.",
+  },
+  {
+    name: "Kettlebell swing",
+    pattern: "hinge",
+    equipment: ["kettlebell"],
+    line: "hinge_loaded",
+    rung: 2,
+    alt: "Broad jump",
+    instructions:
+      "Hike the kettlebell back between the legs, then snap the hips forward to float it to chest height — the arms only steer it. Let it fall back into the next hinge. It is a hip snap, not a front raise: if the shoulders are lifting the bell, it is too heavy or the hips are too quiet.",
+  },
+
   {
     name: "Broad jump",
     pattern: "hinge",

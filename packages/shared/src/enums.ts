@@ -20,7 +20,13 @@ export const progressionLine = z.enum([
   "push_vertical",
   "pull",
   "squat",
+  // The loaded ladders (DN-84) are their own lines rather than rungs appended
+  // to `squat` and `hinge`: a goblet squat is not harder than a pistol, and
+  // inserting one mid-ladder would renumber every rung above it, silently
+  // changing what each athlete's stored `SkillLevel.rung` refers to.
+  "squat_loaded",
   "hinge",
+  "hinge_loaded",
   "core_dynamic",
   "core_hold",
   "core_side",
