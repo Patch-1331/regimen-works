@@ -3,6 +3,8 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 
+import { assertSubstitutesReachable } from "../src/seed/substitute-guard";
+
 // Prisma 7 requires a driver adapter — a bare `new PrismaClient()` throws at
 // construction. Run directly by ts-node rather than through the Prisma CLI,
 // so .env is loaded here too instead of being inherited from it.
@@ -721,6 +723,13 @@ const wods: WodSeed[] = [
 ];
 
 async function main() {
+  // Before anything is written: every movement needing equipment must have a
+  // one-step fall to a movement needing none (DN-83). Nothing at runtime can
+  // report this -- the resolver passes a gap through rather than throwing, so
+  // the athlete just gets a movement they cannot do -- and a half-written
+  // seed is worse than a refused one.
+  assertSubstitutesReachable(exercises);
+
   console.log("Seeding exercises...");
   const idByName = new Map<string, string>();
 
