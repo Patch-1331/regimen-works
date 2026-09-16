@@ -41,7 +41,7 @@ export default defineConfig({
       // make CI pass.
       thresholds: {
         statements: 71,
-        branches: 64,
+        branches: 66,
         functions: 59,
         lines: 72,
       },
