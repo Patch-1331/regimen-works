@@ -1,4 +1,5 @@
 import {
+  applyEquipmentAvailability,
   applyRememberedChoice,
   applySubstitutions,
   ExerciseWithLine,
@@ -6,6 +7,7 @@ import {
   isRestDay,
   pickWod,
   RecentAssignment,
+  unperformableSubstituteIds,
   WodCandidate,
 } from './scheduler.logic';
 
@@ -212,6 +214,195 @@ describe('applyRememberedChoice', () => {
     );
     expect(result[0].exercise).toBe(diamondPushUp);
     expect(result[1].exercise).toBe(pistolSquat);
+  });
+});
+
+describe('applyEquipmentAvailability', () => {
+  type FakeExercise = {
+    id: string;
+    name: string;
+    equipment: string[];
+    altExerciseId: string | null;
+  };
+
+  const rowUnderTable: FakeExercise = {
+    id: 'row',
+    name: 'Row under table',
+    equipment: [],
+    altExerciseId: null,
+  };
+  const pullUp: FakeExercise = {
+    id: 'pull-up',
+    name: 'Pull-up',
+    equipment: ['bar'],
+    altExerciseId: 'row',
+  };
+  const burpee: FakeExercise = {
+    id: 'burpee',
+    name: 'Burpee',
+    equipment: [],
+    altExerciseId: null,
+  };
+  const barMuscleUp: FakeExercise = {
+    id: 'muscle-up',
+    name: 'Bar muscle-up',
+    equipment: ['bar'],
+    altExerciseId: null, // the data gap DN-83 exists to stop
+  };
+  const boxStepUp: FakeExercise = {
+    id: 'step-up',
+    name: 'Box step-up',
+    equipment: ['box'],
+    altExerciseId: 'lunge',
+  };
+  const weightedStepUp: FakeExercise = {
+    id: 'weighted-step-up',
+    name: 'Weighted box step-up',
+    equipment: ['box', 'dumbbell'],
+    altExerciseId: 'step-up',
+  };
+  const lunge: FakeExercise = {
+    id: 'lunge',
+    name: 'Lunge',
+    equipment: [],
+    altExerciseId: null,
+  };
+
+  const substituteById = new Map<string, FakeExercise>([
+    ['row', rowUnderTable],
+    ['lunge', lunge],
+    ['step-up', boxStepUp],
+  ]);
+
+  const owning = (...pieces: string[]) => new Set(pieces);
+
+  it('leaves a movement alone when the athlete owns what it needs', () => {
+    const movements = [{ reps: 10, exercise: pullUp }];
+    const result = applyEquipmentAvailability(
+      movements,
+      owning('bar'),
+      substituteById,
+    );
+    expect(result[0].exercise).toBe(pullUp);
+  });
+
+  it('falls to the alternative when the athlete owns nothing for it', () => {
+    const movements = [{ reps: 10, exercise: pullUp }];
+    const result = applyEquipmentAvailability(
+      movements,
+      owning('jump_rope'),
+      substituteById,
+    );
+    expect(result[0].exercise).toBe(rowUnderTable);
+    expect(result[0].reps).toBe(10); // reps untouched — only the exercise changes
+  });
+
+  it('passes an untagged movement through for an athlete who owns nothing', () => {
+    // Bodyweight is the absence of a tag rather than a piece of the catalog
+    // (DN-77), so "needs nothing" has to survive "owns nothing".
+    const movements = [{ reps: 15, exercise: burpee }];
+    const result = applyEquipmentAvailability(
+      movements,
+      owning(),
+      substituteById,
+    );
+    expect(result[0].exercise).toBe(burpee);
+  });
+
+  it('requires every piece a movement is tagged with, not just one', () => {
+    const movements = [{ reps: 12, exercise: weightedStepUp }];
+    const result = applyEquipmentAvailability(
+      movements,
+      owning('box'),
+      substituteById,
+    );
+    expect(result[0].exercise).toBe(boxStepUp);
+  });
+
+  it('takes the substitute as given rather than walking the chain again', () => {
+    // One step, not a walk: this athlete owns no box either, and the step-up
+    // still stands. "Every alternative is performable on the baseline" is a
+    // property the seed owes (DN-83), not one recomputed per athlete per day.
+    const movements = [{ reps: 12, exercise: weightedStepUp }];
+    const result = applyEquipmentAvailability(
+      movements,
+      owning(),
+      substituteById,
+    );
+    expect(result[0].exercise).toBe(boxStepUp);
+  });
+
+  it('leaves a movement unchanged when it has no alternative at all', () => {
+    // A hole in the movement list is worse than a movement the athlete has to
+    // sort out themselves, so the gap passes through rather than throwing.
+    const movements = [{ reps: 5, exercise: barMuscleUp }];
+    const result = applyEquipmentAvailability(
+      movements,
+      owning(),
+      substituteById,
+    );
+    expect(result[0].exercise).toBe(barMuscleUp);
+  });
+
+  it('leaves a movement unchanged when its alternative is missing from the map', () => {
+    const movements = [{ reps: 5, exercise: pullUp }];
+    const result = applyEquipmentAvailability(
+      movements,
+      owning(),
+      new Map<string, FakeExercise>(),
+    );
+    expect(result[0].exercise).toBe(pullUp);
+  });
+
+  it('drops several movements independently', () => {
+    const movements = [
+      { reps: 10, exercise: pullUp },
+      { reps: 20, exercise: burpee },
+      { reps: 12, exercise: boxStepUp },
+    ];
+    const result = applyEquipmentAvailability(
+      movements,
+      owning('bar'),
+      substituteById,
+    );
+    expect(result[0].exercise).toBe(pullUp);
+    expect(result[1].exercise).toBe(burpee);
+    expect(result[2].exercise).toBe(lunge);
+  });
+});
+
+describe('unperformableSubstituteIds', () => {
+  type Tagged = { equipment: string[]; altExerciseId: string | null };
+  const pullUp: Tagged = { equipment: ['bar'], altExerciseId: 'row' };
+  const chinUp: Tagged = { equipment: ['bar'], altExerciseId: 'row' };
+  const burpee: Tagged = { equipment: [], altExerciseId: null };
+  const muscleUp: Tagged = { equipment: ['bar'], altExerciseId: null };
+  const doubleUnder: Tagged = {
+    equipment: ['jump_rope'],
+    altExerciseId: 'high-knees',
+  };
+
+  it('asks for nothing when the athlete owns what the WOD needs', () => {
+    // The common day, and the reason the resolver can skip its second query.
+    const movements = [{ exercise: pullUp }, { exercise: burpee }];
+    expect(unperformableSubstituteIds(movements, new Set(['bar']))).toEqual([]);
+  });
+
+  it('asks only for the movements the athlete cannot perform', () => {
+    const movements = [{ exercise: pullUp }, { exercise: doubleUnder }];
+    expect(unperformableSubstituteIds(movements, new Set(['bar']))).toEqual([
+      'high-knees',
+    ]);
+  });
+
+  it('asks for one row when two movements share an alternative', () => {
+    const movements = [{ exercise: pullUp }, { exercise: chinUp }];
+    expect(unperformableSubstituteIds(movements, new Set())).toEqual(['row']);
+  });
+
+  it('skips a movement with no alternative to ask for', () => {
+    const movements = [{ exercise: muscleUp }];
+    expect(unperformableSubstituteIds(movements, new Set())).toEqual([]);
   });
 });
 

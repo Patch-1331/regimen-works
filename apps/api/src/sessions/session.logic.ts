@@ -3,6 +3,7 @@ import type {
   ProgressionLine,
   RoundSplit,
   SessionMovement,
+  SubstitutionReason,
 } from '@regimen-works/shared';
 
 /** The resolved movement as the scheduler hands it over -- see MovementResolutionService. */
@@ -13,6 +14,7 @@ export type ResolvedMovementInput = {
   repScheme: number[];
   isSwapped: boolean;
   prescribedName: string | null;
+  prescribedReason: SubstitutionReason | null;
   exercise: {
     id: string;
     name: string;
@@ -44,6 +46,7 @@ export function snapshotMovements(
       repScheme: [...m.repScheme],
       isSwapped: m.isSwapped,
       prescribedName: m.prescribedName,
+      prescribedReason: m.prescribedReason,
       exercise: {
         id: m.exercise.id,
         name: m.exercise.name,

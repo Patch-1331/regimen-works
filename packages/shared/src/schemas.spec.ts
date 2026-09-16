@@ -69,6 +69,25 @@ describe("wodMovementSchema", () => {
     expect(parsed.repScheme).toEqual([]);
     expect(parsed.isSwapped).toBe(false);
     expect(parsed.prescribedName).toBeNull();
+    expect(parsed.prescribedReason).toBeNull();
+  });
+
+  it("carries why a movement was replaced, not just what it replaced", () => {
+    // The screen says different words for the two (DN-79), so a payload that
+    // named the prescription without saying which layer set it would leave
+    // the client guessing.
+    const parsed = wodMovementSchema.parse(
+      movement({ prescribedName: "Pull-up", prescribedReason: "equipment" }),
+    );
+    expect(parsed.prescribedReason).toBe("equipment");
+  });
+
+  it("rejects a reason outside the two automatic substitutions", () => {
+    // The day's own swap is not one of them — it is `isSwapped`, and carries
+    // no prescription at all.
+    expect(
+      wodMovementSchema.safeParse(movement({ prescribedReason: "swapped" })).success,
+    ).toBe(false);
   });
 
   it("rejects a rep count of zero, which is not a movement", () => {

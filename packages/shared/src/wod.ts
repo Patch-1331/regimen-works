@@ -4,6 +4,7 @@ import {
   exerciseUnit,
   movementPattern,
   progressionLine,
+  substitutionReason,
   wodType,
 } from "./enums.js";
 
@@ -23,15 +24,24 @@ export const wodMovementSchema = z
     // prescribed movement isn't carried alongside it: the athlete chose what
     // they see, and showing what they overrode would argue with them.
     isSwapped: z.boolean().default(false),
-    // What the library prescribed, set only where the athlete's remembered
-    // choice on this line replaced it (DN-88) — which is also what marks the
-    // row as a remembered choice rather than the day's prescription.
+    // What the library prescribed, set only where something other than the
+    // athlete's own tap for today replaced it — their remembered choice on
+    // this line (DN-88), or the equipment they own (DN-79).
     //
     // Null on a row swapped today, for the reason above, and null when
-    // nothing was replaced. A default applied automatically from weeks ago is
-    // the case the silence was wrong for: the athlete never asked for the
-    // substitution and was never told it happened.
+    // nothing was replaced. A substitution applied automatically is the case
+    // the silence was wrong for: the athlete never asked for it and was never
+    // told it happened.
     prescribedName: z.string().nullable().default(null),
+    // Why it was replaced, so the screen can say so without guessing. Non-null
+    // exactly when `prescribedName` is, and the two are read together: the
+    // copy for a standing choice ("your pick") is a lie about a movement the
+    // app dropped for want of a pull-up bar, which is not the athlete's pick
+    // at all.
+    //
+    // Defaulted rather than required for the same reason `prescribedName` is:
+    // a client reading an older payload should degrade to silence, not fail.
+    prescribedReason: substitutionReason.nullable().default(null),
     exercise: z.object({
       id: z.string(),
       name: z.string(),

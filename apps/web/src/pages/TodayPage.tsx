@@ -154,17 +154,21 @@ export function TodayPage() {
                 <span className="truncate font-semibold tracking-wide text-[var(--ink-soft)]" style={{ fontFamily: "var(--font-mono)" }}>
                   {m.exercise.name.toUpperCase()}
                 </span>
-                {/* A remembered choice used to be applied silently, so the
-                    plate showed a movement the library never prescribed with
-                    nothing to say it had been changed (DN-88). Quiet on
+                {/* An automatic substitution used to be applied silently, so
+                    the plate showed a movement the library never prescribed
+                    with nothing to say it had been changed (DN-88). Quiet on
                     purpose: it marks the row without arguing about it, and
-                    the swap panel carries what was prescribed. */}
+                    the swap panel carries what was prescribed and why.
+
+                    Two different things wear this badge, and they get two
+                    different words: the athlete's own standing choice, and a
+                    movement dropped for equipment they do not own (DN-79). */}
                 {m.prescribedName && (
                   <span
                     className="shrink-0 text-[10px] tracking-[0.1em] text-[var(--ink-faint)]"
                     style={{ fontFamily: "var(--font-mono)" }}
                   >
-                    YOUR PICK
+                    {m.prescribedReason === "equipment" ? "NO KIT" : "YOUR PICK"}
                   </span>
                 )}
               </>
@@ -237,6 +241,7 @@ export function TodayPage() {
                     options={swapOptions}
                     isSwapped={m.isSwapped}
                     prescribedName={m.prescribedName}
+                    prescribedReason={m.prescribedReason}
                     onPick={(exerciseId) => void handleSwap(m.id, exerciseId)}
                     onRevert={() => void handleRevert(m.id)}
                   />

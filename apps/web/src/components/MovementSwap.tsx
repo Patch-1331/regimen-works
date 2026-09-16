@@ -1,3 +1,4 @@
+import type { SubstitutionReason } from "@regimen-works/shared";
 import type { SwapOption } from "../lib/swapOptions";
 
 /**
@@ -87,14 +88,17 @@ export function SwapPanel({
   options,
   isSwapped,
   prescribedName,
+  prescribedReason,
   onPick,
   onRevert,
 }: {
   id: string;
   options: SwapOption[];
   isSwapped: boolean;
-  /** What the library prescribed, where the athlete's remembered choice replaced it. */
+  /** What the library prescribed, where something other than today's tap replaced it. */
   prescribedName: string | null;
+  /** Which of the two automatic substitutions replaced it — they read differently. */
+  prescribedReason: SubstitutionReason | null;
   onPick: (exerciseId: string) => void;
   onRevert: () => void;
 }) {
@@ -144,15 +148,24 @@ export function SwapPanel({
           </li>
         ))}
       </ul>
-      {/* Says what the athlete's standing choice replaced (DN-88). Only for a
-          remembered choice: a swap made today needs no explanation, and naming
-          what it overrode would argue with a decision just made. */}
+      {/* Says what was replaced, and by which of the two automatic layers
+          (DN-88, DN-79). Never for a swap made today: that needs no
+          explanation, and naming what it overrode would argue with a decision
+          just made.
+
+          The two readings are not interchangeable. A remembered choice is the
+          athlete's own, made once and still honoured; the equipment fallback
+          is the app standing down from a movement they have no gear for.
+          Calling the second one their pick would be untrue, and would send
+          someone looking for a setting they never touched. */}
       {prescribedName && (
         <p
           className="mt-1 text-[11px] text-[var(--ink-faint)]"
           style={{ fontFamily: "var(--font-mono)" }}
         >
-          Your pick. The workout says {prescribedName.toLowerCase()}.
+          {prescribedReason === "equipment"
+            ? `Not in your equipment. The workout says ${prescribedName.toLowerCase()}.`
+            : `Your pick. The workout says ${prescribedName.toLowerCase()}.`}
         </p>
       )}
       {isSwapped && (

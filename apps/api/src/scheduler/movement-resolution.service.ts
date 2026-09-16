@@ -1,7 +1,14 @@
 import { Injectable } from '@nestjs/common';
+import { DEFAULT_EQUIPMENT } from '@regimen-works/shared';
+import type { SubstitutionReason } from '@regimen-works/shared';
 import type { Exercise } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { applyRememberedChoice, applySubstitutions } from './scheduler.logic';
+import {
+  applyEquipmentAvailability,
+  applyRememberedChoice,
+  applySubstitutions,
+  unperformableSubstituteIds,
+} from './scheduler.logic';
 
 /** The shape every resolver caller loads a WOD's movements in. */
 export const resolvableMovementInclude = {
@@ -16,12 +23,17 @@ export type ResolvedMovement<
     id: string;
     exercise: Exercise;
   },
-> = M & { isSwapped: boolean; prescribedName: string | null };
+> = M & {
+  isSwapped: boolean;
+  prescribedName: string | null;
+  prescribedReason: SubstitutionReason | null;
+};
 
 /**
  * Turns a WOD template into what this athlete trains today: each movement's
  * exercise replaced by the one they last chose on that line (Feature #2),
- * then overlaid with the swaps they made for this day (WOD-5).
+ * then dropped to its alternative where they own no equipment for it
+ * (DN-79), then overlaid with the swaps they made for this day (WOD-5).
  *
  * Read-time by design -- `Wod` is shared library content and must not be
  * mutated per user. The one place the result is persisted is the session
@@ -37,14 +49,19 @@ export class MovementResolutionService {
     assignmentId: string,
     movements: M[],
   ): Promise<ResolvedMovement<M>[]> {
-    const [skillLevels, linedExercises, substitutions] = await Promise.all([
-      this.prisma.skillLevel.findMany({ where: { userId } }),
-      this.prisma.exercise.findMany({ where: { line: { not: null } } }),
-      this.prisma.assignmentSubstitution.findMany({
-        where: { userId, assignmentId },
-        include: { exercise: true },
-      }),
-    ]);
+    const [skillLevels, linedExercises, substitutions, rule] =
+      await Promise.all([
+        this.prisma.skillLevel.findMany({ where: { userId } }),
+        this.prisma.exercise.findMany({ where: { line: { not: null } } }),
+        this.prisma.assignmentSubstitution.findMany({
+          where: { userId, assignmentId },
+          include: { exercise: true },
+        }),
+        this.prisma.scheduleRule.findUnique({
+          where: { userId },
+          select: { equipment: true },
+        }),
+      ]);
 
     const chosenRung = new Map(skillLevels.map((s) => [s.line, s.rung]));
     const exerciseAtRung = new Map(
@@ -58,8 +75,19 @@ export class MovementResolutionService {
       chosenRung,
       exerciseAtRung,
     );
-    const swapped = applySubstitutions(
+    // Equipment sits between the two: after the choice, because the choice
+    // itself can land on a bar movement; before the swap, because an athlete
+    // who taps into a movement has overruled what they own (DN-79).
+    //
+    // An athlete with no rule row reads as the baseline rather than as owning
+    // nothing -- read the other way, a missing row would quietly cost them
+    // every bar movement in the library.
+    const available = await this.applyOwnership(
       remembered,
+      rule?.equipment ?? DEFAULT_EQUIPMENT,
+    );
+    const swapped = applySubstitutions(
+      available,
       new Map(substitutions.map((s) => [s.wodMovementId, s.exerciseId])),
       new Map(substitutions.map((s) => [s.exerciseId, s.exercise])),
     );
@@ -69,26 +97,93 @@ export class MovementResolutionService {
     // the plate needs to know which rows the athlete chose themselves.
     const swappedIds = new Set(substitutions.map((s) => s.wodMovementId));
 
-    // What the library actually prescribed, carried only where a remembered
-    // choice replaced it (DN-88). The substitution used to happen silently,
-    // which is defensible for a swap the athlete just made and much less so
-    // for a default applied from weeks ago — so the plate can say what it did.
+    // What the library prescribed and which layer replaced it (DN-88, DN-79),
+    // carried only where an automatic layer did. The substitution used to
+    // happen silently, which is defensible for a swap the athlete just made
+    // and much less so for a default applied from weeks ago, or for a piece
+    // of gear they told the app about once — so the plate can say what it did
+    // and why.
     //
-    // Deliberately null on a row the athlete swapped today: they chose what
+    // Deliberately absent on a row the athlete swapped today: they chose what
     // they see, and naming what they overrode would argue with them.
-    const prescribedById = new Map(movements.map((m) => [m.id, m.exercise]));
+    const replacements = describeReplacements(movements, remembered, available);
 
     return swapped.map((m) => {
       const isSwapped = swappedIds.has(m.id);
-      const prescribed = prescribedById.get(m.id);
+      const replacement = isSwapped ? undefined : replacements.get(m.id);
       return {
         ...m,
         isSwapped,
-        prescribedName:
-          !isSwapped && prescribed && prescribed.id !== m.exercise.id
-            ? prescribed.name
-            : null,
+        prescribedName: replacement?.name ?? null,
+        prescribedReason: replacement?.reason ?? null,
       };
     });
   }
+
+  /**
+   * Drops every movement the athlete owns no equipment for to its
+   * alternative.
+   *
+   * Its own read rather than part of the batch above, because *which*
+   * substitutes are wanted depends on what the choice layer resolved to —
+   * a rung the athlete last picked can need a bar the prescription did not.
+   * Only the rows actually reached for are loaded, so the common day (the
+   * baseline owns the bar, most of the pool needs nothing) runs no second
+   * query at all.
+   */
+  private async applyOwnership<M extends { exercise: Exercise }>(
+    movements: M[],
+    equipment: readonly string[],
+  ): Promise<M[]> {
+    const owned = new Set(equipment);
+    const substituteIds = unperformableSubstituteIds(movements, owned);
+    if (substituteIds.length === 0) return movements;
+
+    const substitutes = await this.prisma.exercise.findMany({
+      where: { id: { in: substituteIds } },
+    });
+
+    return applyEquipmentAvailability(
+      movements,
+      owned,
+      new Map(substitutes.map((e) => [e.id, e])),
+    );
+  }
+}
+
+/**
+ * For each movement an automatic layer replaced: what the library prescribed,
+ * and which layer did it.
+ *
+ * Read off the three stages rather than inferred from the final exercise,
+ * because the end state cannot tell them apart — a remembered choice and an
+ * equipment fallback both leave a movement the library did not prescribe, and
+ * the screen says different words for them.
+ *
+ * Equipment wins where both moved a row, because it is the later word and the
+ * one the athlete is looking at: their standing choice landed on a bar they do
+ * not own, and "your pick" would be a strange thing to call what replaced it.
+ * Every layer maps its input one-for-one, so the three arrays line up by index.
+ */
+function describeReplacements<
+  M extends { id: string; exercise: { id: string; name: string } },
+>(
+  prescribed: M[],
+  remembered: M[],
+  available: M[],
+): Map<string, { name: string; reason: SubstitutionReason }> {
+  const replacements = new Map<
+    string,
+    { name: string; reason: SubstitutionReason }
+  >();
+  prescribed.forEach((m, i) => {
+    const reason: SubstitutionReason | null =
+      available[i].exercise.id !== remembered[i].exercise.id
+        ? 'equipment'
+        : remembered[i].exercise.id !== m.exercise.id
+          ? 'remembered_choice'
+          : null;
+    if (reason) replacements.set(m.id, { name: m.exercise.name, reason });
+  });
+  return replacements;
 }

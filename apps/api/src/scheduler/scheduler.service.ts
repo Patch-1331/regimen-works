@@ -6,6 +6,7 @@ import { WodsService } from '../wods/wods.service';
 import {
   MovementResolutionService,
   resolvableMovementInclude,
+  type ResolvedMovement,
 } from './movement-resolution.service';
 import {
   getWeekRange,
@@ -139,7 +140,15 @@ export class SchedulerService {
    */
   private async resolveWodForToday<
     W extends { movements: { id: string; exercise: Exercise }[] },
-  >(userId: string, assignmentId: string, wod: W): Promise<W> {
+  >(
+    userId: string,
+    assignmentId: string,
+    wod: W,
+  ): Promise<
+    Omit<W, 'movements'> & {
+      movements: ResolvedMovement<W['movements'][number]>[];
+    }
+  > {
     return {
       ...wod,
       movements: await this.resolution.resolve(
