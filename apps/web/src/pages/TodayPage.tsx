@@ -140,14 +140,19 @@ export function TodayPage() {
             const panelId = `movement-instructions-${m.id}`;
             const swapPanelId = `movement-swap-${m.id}`;
             const isSwapOpen = swapMovementId === m.id;
-            // Empty off a tracked line — cardio has no ladder, so that row
-            // gets no swap control rather than one that opens onto nothing.
+            // Empty only where there is nothing to offer: no ladder and no
+            // no-equipment alternative either (DN-80).
             const swapOptions = buildSwapOptions(
               exercises ?? [],
               m.exercise.line,
               m.exercise.id,
             );
-            const canSwap = swapOptions.length > 0;
+            // A swapped row keeps its control even when the movement it now
+            // holds offers nothing further — the alternative sits off every
+            // line, so the ladder that led here is gone from under it and
+            // revert is the only way back. Without this the swap is a
+            // one-way door.
+            const canSwap = swapOptions.length > 0 || m.isSwapped;
 
             const name = (
               <>

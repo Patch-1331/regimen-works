@@ -136,17 +136,27 @@ export class SubstitutionsService {
    * The alternative is read from every rung on the line, not just the
    * prescribed exercise, because the athlete sees the ladder as it stands
    * after their remembered choice has been applied.
+   *
+   * Off a line there is no ladder to move along, but the alternative is still
+   * a legal target (DN-80): cardio carries `line: null` and an alternative
+   * both, and refusing it left an athlete holding a movement they own no
+   * equipment for with nowhere to go. Nothing else is legal there — with no
+   * line, the alternative is the entire set of movements this one scales to.
    */
   private async assertLegalTarget(
-    movement: { exerciseId: string; exercise: { line: string | null } },
+    movement: {
+      exerciseId: string;
+      exercise: { line: string | null; altExerciseId: string | null };
+    },
     exerciseId: string,
   ) {
     if (exerciseId === movement.exerciseId) return;
 
     const line = movement.exercise.line;
     if (!line) {
+      if (exerciseId === movement.exercise.altExerciseId) return;
       throw new BadRequestException(
-        'This movement is not on a progression line, so it cannot be swapped',
+        'This movement is not on a progression line, so it can only be swapped for its alternative',
       );
     }
 

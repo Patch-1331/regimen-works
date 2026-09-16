@@ -116,19 +116,71 @@ describe('SubstitutionsService.set', () => {
     expect(await storedSwaps(assignment.id)).toHaveLength(0);
   });
 
-  it('refuses a movement that is not on a progression line', async () => {
+  /**
+   * A cardio movement: off every line, and standing in front of its own
+   * no-equipment alternative (DN-80). The pair the line gate used to refuse
+   * outright.
+   */
+  async function cardioDay(options: { withAlternative?: boolean } = {}) {
     const user = await createUser();
-    const { rungs } = await createLadder('pull', ['Chin-up']);
-    const offLadder = await testPrisma().exercise.create({
-      data: { name: 'Row erg', pattern: 'cardio', line: null, rung: null },
+    const highKnees = await testPrisma().exercise.create({
+      data: { name: 'High knees', pattern: 'cardio', line: null, rung: null },
+    });
+    const doubleUnders = await testPrisma().exercise.create({
+      data: {
+        name: 'Double-unders',
+        pattern: 'cardio',
+        line: null,
+        rung: null,
+        equipment: ['jump_rope'],
+        ...(options.withAlternative === false
+          ? {}
+          : { altExerciseId: highKnees.id }),
+      },
     });
     const wod = await createWod({
-      movements: [{ exerciseId: offLadder.id, reps: 500, order: 0 }],
+      dominantPattern: 'cardio',
+      movements: [{ exerciseId: doubleUnders.id, reps: 100, order: 0 }],
     });
     const assignment = await createAssignment(user.id, { wodId: wod.id });
+    return {
+      user,
+      highKnees,
+      doubleUnders,
+      assignment,
+      movement: wod.movements[0],
+    };
+  }
+
+  it('allows the alternative of a movement that is off every line', async () => {
+    const { user, highKnees, assignment, movement } = await cardioDay();
+
+    await service().set(user.id, assignment.id, movement.id, highKnees.id);
+
+    // The case the line gate used to refuse: no ladder to move along, but a
+    // rope the athlete doesn't have today and somewhere real to go.
+    expect((await storedSwaps(assignment.id))[0].exerciseId).toBe(highKnees.id);
+  });
+
+  it('refuses an unrelated target on a movement that is off every line', async () => {
+    const { user, assignment, movement } = await cardioDay();
+    const { rungs } = await createLadder('pull', ['Chin-up']);
+
+    // With no line, the alternative is the whole of what this movement scales
+    // to — everything else is a different workout at the prescribed reps.
+    await expect(
+      service().set(user.id, assignment.id, movement.id, rungs[0].id),
+    ).rejects.toThrow(BadRequestException);
+    expect(await storedSwaps(assignment.id)).toHaveLength(0);
+  });
+
+  it('refuses any swap on an off-line movement with no alternative', async () => {
+    const { user, highKnees, assignment, movement } = await cardioDay({
+      withAlternative: false,
+    });
 
     await expect(
-      service().set(user.id, assignment.id, wod.movements[0].id, rungs[0].id),
+      service().set(user.id, assignment.id, movement.id, highKnees.id),
     ).rejects.toThrow(BadRequestException);
   });
 

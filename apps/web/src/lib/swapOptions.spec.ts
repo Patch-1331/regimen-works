@@ -33,8 +33,26 @@ const chinUp = exercise({
 const pullUp = exercise({ id: "pull-up", name: "Pull-up", rung: 2 });
 const row = exercise({ id: "row", name: "Row under table", line: null, rung: null });
 const burpee = exercise({ id: "burpee", name: "Burpee", line: null, rung: null, pattern: "cardio" });
+const highKnees = exercise({
+  id: "high-knees",
+  name: "High knees",
+  line: null,
+  rung: null,
+  pattern: "cardio",
+});
+// The rope movement and what it falls to: off every line, and the pair the
+// equipment work made swappable (DN-80).
+const doubleUnders = exercise({
+  id: "double-unders",
+  name: "Double-unders",
+  line: null,
+  rung: null,
+  pattern: "cardio",
+  equipment: ["jump_rope"],
+  altExercise: { id: "high-knees", name: "High knees" },
+});
 
-const library = [pullUp, negative, chinUp, row, burpee];
+const library = [pullUp, negative, chinUp, row, burpee, doubleUnders, highKnees];
 
 describe("buildSwapOptions", () => {
   it("lists the line's rungs in order, whatever order the library came in", () => {
@@ -87,8 +105,51 @@ describe("buildSwapOptions", () => {
     expect(options.map((o) => o.exerciseId)).toEqual(["row", "chin-up"]);
   });
 
-  it("returns nothing for a movement that is not on a tracked line", () => {
+  it("returns nothing for an off-ladder movement with no alternative", () => {
+    // A burpee needs nothing and stands in for nothing — this is the row the
+    // control really would open onto nothing for.
     expect(buildSwapOptions(library, null, "burpee")).toEqual([]);
+  });
+
+  /**
+   * Off-ladder movements used to be refused a control outright, which was
+   * right while equipment meant the bar. Once a WOD can name a jump rope, the
+   * row with no ladder is the row most likely to need a way out (DN-80).
+   */
+  it("offers an off-ladder movement its alternative, labelled and last", () => {
+    const options = buildSwapOptions(library, null, "double-unders");
+    expect(options).toEqual([
+      {
+        exerciseId: "double-unders",
+        name: "Double-unders",
+        rung: null,
+        isCurrent: true,
+        isAlternative: false,
+      },
+      {
+        exerciseId: "high-knees",
+        name: "High knees",
+        rung: null,
+        isCurrent: false,
+        isAlternative: true,
+      },
+    ]);
+  });
+
+  it("marks where the athlete is, rather than offering the alternative alone", () => {
+    // One unmarked row reads as an instruction. The pair reads as a choice —
+    // the same reason the ladder lists every rung instead of the next one.
+    const options = buildSwapOptions(library, null, "double-unders");
+    expect(options.filter((o) => o.isCurrent).map((o) => o.name)).toEqual([
+      "Double-unders",
+    ]);
+  });
+
+  it("offers nothing further once the athlete is on the alternative", () => {
+    // High knees stand in for the rope and need nothing themselves, so there
+    // is no third movement to go to. Getting back is revert's job, not a swap
+    // target's — see DN-110 for the equipment-resolved case.
+    expect(buildSwapOptions(library, null, "high-knees")).toEqual([]);
   });
 
   it("returns nothing when the line has no seeded rungs", () => {
