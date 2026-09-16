@@ -68,7 +68,13 @@ export function session(overrides: Partial<WorkoutSession> = {}): WorkoutSession
   return {
     id: "session-1",
     assignmentId: ASSIGNMENT_ID,
-    startedAt: "2026-09-16T10:00:00.000Z",
+    // Relative to now, not a fixed instant: the runners derive their state
+    // from `Date.now() - startedAt`, so a pinned timestamp is a session that
+    // silently ages past its own time cap. This one was pinned to
+    // 2026-09-16T10:00Z and the round-tap tests passed only while that moment
+    // was still in the future — at 10:12Z real time crossed the 12-minute cap
+    // and both began rendering the finish view instead (DN-111).
+    startedAt: new Date(Date.now() - 5_000).toISOString(),
     capSeconds: 12 * 60,
     roundSplits: [],
     movements: [],
