@@ -5,6 +5,7 @@ import { MovementResolutionService } from '../scheduler/movement-resolution.serv
 import { testPrisma, withSeparateConnections } from '../test-support/database';
 import {
   createAssignment,
+  createExercise,
   createLadder,
   createSkillLevel,
   createUser,
@@ -193,8 +194,77 @@ describe('SessionsService.start', () => {
     expect(session.movements[0]).toMatchObject({
       exercise: { id: rungs[1].id },
       isSwapped: true,
-      // Null on a row swapped today: they chose what they see.
+      // Null because nothing replaced it before they swapped -- no standing
+      // choice, no equipment fallback. A swap on its own does not erase the
+      // prescription any more; see the case below (DN-116).
       prescribedName: null,
+    });
+  });
+
+  /**
+   * The day both layers moved the same row (DN-116).
+   *
+   * Equipment resolution runs before the swap, so until this was recorded the
+   * fallback underneath left no trace anywhere: the plate stayed quiet by
+   * design, and the snapshot -- the only thing that outlives the day -- copied
+   * that silence. A session is written once, so what it fails to record is
+   * gone for good.
+   */
+  async function barlessDaySwappedAway() {
+    const user = await createUser();
+    const floor = await createExercise({
+      name: 'Supermans',
+      pattern: 'pull',
+      line: null,
+      rung: null,
+    });
+    const pullUp = await createExercise({
+      name: 'Pull-up',
+      pattern: 'pull',
+      line: 'pull',
+      rung: 0,
+      equipment: ['bar'],
+      altExerciseId: floor.id,
+    });
+    const ringRow = await createExercise({
+      name: 'Ring row',
+      pattern: 'pull',
+      line: 'pull',
+      rung: 1,
+    });
+    const wod = await createWod({
+      dominantPattern: 'pull',
+      movements: [{ exerciseId: pullUp.id, reps: 30, order: 0 }],
+    });
+    const assignment = await createAssignment(user.id, { wodId: wod.id });
+    // Owns nothing, so the pull-up falls to the floor movement...
+    await testPrisma().scheduleRule.create({
+      data: { userId: user.id, equipment: [] },
+    });
+    // ...and then they swap into the ring row themselves.
+    await testPrisma().assignmentSubstitution.create({
+      data: {
+        userId: user.id,
+        assignmentId: assignment.id,
+        wodMovementId: wod.movements[0].id,
+        exerciseId: ringRow.id,
+      },
+    });
+    return { user, assignment, ringRow, pullUp };
+  }
+
+  it('records the equipment fallback a same-day swap used to hide', async () => {
+    const { user, assignment, ringRow, pullUp } = await barlessDaySwappedAway();
+
+    const session = await service().start(user.id, assignment.id);
+
+    expect(session.movements[0]).toMatchObject({
+      exercise: { id: ringRow.id },
+      // Both facts, which are not the same fact: the app stood down from a
+      // movement they own no bar for, and then they chose this instead.
+      isSwapped: true,
+      prescribedName: pullUp.name,
+      prescribedReason: 'equipment',
     });
   });
 

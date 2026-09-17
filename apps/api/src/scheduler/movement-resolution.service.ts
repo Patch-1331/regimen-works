@@ -25,11 +25,44 @@ export type ResolvedMovement<
   },
 > = M & {
   isSwapped: boolean;
+  /**
+   * What the library prescribed, wherever an automatic layer replaced it --
+   * including on a row the athlete then swapped (DN-116). Callers rendering
+   * this to the athlete hide it on a swapped row; callers recording it keep
+   * it.
+   */
   prescribedName: string | null;
   /** The prescribed exercise's id, so the screen can offer it back (DN-110). */
   prescribedId: string | null;
   prescribedReason: SubstitutionReason | null;
 };
+
+/**
+ * The resolved list as the athlete should *see* it (DN-116).
+ *
+ * A swap is today's tap, and the plate does not tell someone what they just
+ * overrode. The fact stays in the resolver's own output, where the session
+ * snapshot reads it — one resolution, two audiences.
+ */
+export function hideOverriddenPrescriptions<
+  M extends {
+    isSwapped: boolean;
+    prescribedName: string | null;
+    prescribedId: string | null;
+    prescribedReason: SubstitutionReason | null;
+  },
+>(movements: M[]): M[] {
+  return movements.map((m) =>
+    m.isSwapped
+      ? {
+          ...m,
+          prescribedName: null,
+          prescribedId: null,
+          prescribedReason: null,
+        }
+      : m,
+  );
+}
 
 /**
  * Turns a WOD template into what this athlete trains today: each movement's
@@ -100,22 +133,25 @@ export class MovementResolutionService {
     const swappedIds = new Set(substitutions.map((s) => s.wodMovementId));
 
     // What the library prescribed and which layer replaced it (DN-88, DN-79),
-    // carried only where an automatic layer did. The substitution used to
-    // happen silently, which is defensible for a swap the athlete just made
-    // and much less so for a default applied from weeks ago, or for a piece
-    // of gear they told the app about once — so the plate can say what it did
-    // and why.
+    // carried wherever an automatic layer did. The substitution used to happen
+    // silently, which is defensible for a swap the athlete just made and much
+    // less so for a default applied from weeks ago, or for a piece of gear
+    // they told the app about once — so the plate can say what it did and why.
     //
-    // Deliberately absent on a row the athlete swapped today: they chose what
-    // they see, and naming what they overrode would argue with them.
+    // Recorded on a row the athlete swapped, too (DN-116). The plate stays
+    // silent there — naming what a swap overrode would argue with a decision
+    // just made — but that silence is a *rendering* decision, and it belongs
+    // where the payload is built rather than here. Equipment resolution runs
+    // before the swap, so nulling it at the source lost the fallback
+    // underneath on every day both moved the same row, and a session snapshot
+    // (DN-90) is written once: what it fails to record is gone.
     const replacements = describeReplacements(movements, remembered, available);
 
     return swapped.map((m) => {
-      const isSwapped = swappedIds.has(m.id);
-      const replacement = isSwapped ? undefined : replacements.get(m.id);
+      const replacement = replacements.get(m.id);
       return {
         ...m,
-        isSwapped,
+        isSwapped: swappedIds.has(m.id),
         prescribedName: replacement?.name ?? null,
         prescribedId: replacement?.id ?? null,
         prescribedReason: replacement?.reason ?? null,

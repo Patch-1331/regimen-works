@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { toSessionDto } from '../sessions/session.mapper';
 import { WodsService } from '../wods/wods.service';
 import {
+  hideOverriddenPrescriptions,
   MovementResolutionService,
   resolvableMovementInclude,
   type ResolvedMovement,
@@ -160,10 +161,12 @@ export class SchedulerService {
   > {
     return {
       ...wod,
-      movements: await this.resolution.resolve(
-        userId,
-        assignmentId,
-        wod.movements,
+      // The resolver records what an automatic layer replaced even on a row
+      // the athlete swapped (DN-116); the plate does not show it there. This
+      // is the only place the payload is built, so it is the only place that
+      // has to say so.
+      movements: hideOverriddenPrescriptions(
+        await this.resolution.resolve(userId, assignmentId, wod.movements),
       ),
     };
   }
