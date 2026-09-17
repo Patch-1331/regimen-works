@@ -136,6 +136,97 @@ describe("the swap control on an off-ladder movement", () => {
 });
 
 /**
+ * The rope pair, once it is a progression line (DN-115).
+ *
+ * Both movements need the rope, so before the line the panel could only offer
+ * the way *off* it: an athlete who owned a rope and could not yet turn doubles
+ * was shown high knees, which is the app taking away gear they have.
+ */
+describe("a line where every rung needs the same equipment", () => {
+  const singleUnders = fixtures.apiExercise({
+    id: "single-unders",
+    name: "Single-unders",
+    pattern: "cardio",
+    equipment: ROPE,
+    line: "cardio_rope",
+    rung: 0,
+    altExercise: { id: "high-knees", name: "High knees" },
+  });
+  const linedDoubleUnders = fixtures.apiExercise({
+    ...doubleUnders,
+    line: "cardio_rope",
+    rung: 1,
+  });
+
+  /** Rope Trick as an athlete who owns a rope is served it. */
+  function ropeDay() {
+    server.use(
+      http.get("/api/exercises", () =>
+        HttpResponse.json([singleUnders, linedDoubleUnders, highKnees]),
+      ),
+      http.get("/api/today", () =>
+        HttpResponse.json(
+          fixtures.today({
+            assignment: {
+              ...fixtures.today().assignment!,
+              wod: fixtures.wod({
+                dominantPattern: "cardio",
+                movements: [
+                  fixtures.movement({
+                    exercise: {
+                      id: "double-unders",
+                      name: "Double-unders",
+                      pattern: "cardio",
+                      equipment: ROPE,
+                      unit: "reps",
+                      instructions: null,
+                      line: "cardio_rope",
+                      rung: 1,
+                      altExerciseId: "high-knees",
+                    },
+                  }),
+                ],
+              }),
+            },
+          }),
+        ),
+      ),
+    );
+  }
+
+  it("offers the easier rung instead of only the way off the rope", async () => {
+    ropeDay();
+    renderRoute("/");
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /swap double-unders/i }),
+    );
+
+    // The whole line in order with the current rung marked, then the
+    // bodyweight alternative last — the shape every other line already has.
+    expect(screen.getByRole("button", { name: /^single-unders/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^double-unders/i })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+  });
+
+  it("still offers the way off the rope entirely", async () => {
+    // The line is a movement they own the kit for; high knees is for the day
+    // the rope is in the other bag. Adding the first must not cost the second.
+    ropeDay();
+    renderRoute("/");
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /swap double-unders/i }),
+    );
+
+    expect(screen.getByRole("button", { name: /^high knees/i })).toBeInTheDocument();
+    expect(screen.getByText("NO KIT")).toBeInTheDocument();
+  });
+});
+
+/**
  * Taking back the prescribed movement after the equipment layer dropped it
  * (DN-110).
  *
