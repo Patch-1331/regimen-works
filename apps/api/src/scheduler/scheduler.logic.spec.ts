@@ -1,14 +1,16 @@
 import {
+  ExerciseWithLine,
+  RecentAssignment,
+  WodCandidate,
   applyEquipmentAvailability,
+  applyEquipmentFloor,
   applyRememberedChoice,
   applySubstitutions,
-  ExerciseWithLine,
+  dominantMovement,
   getWeekRange,
   isRestDay,
   pickWod,
-  RecentAssignment,
   unperformableSubstituteIds,
-  WodCandidate,
 } from './scheduler.logic';
 
 const cindy: WodCandidate = {
@@ -478,5 +480,65 @@ describe('applySubstitutions', () => {
     );
     expect(result[0].exercise).toBe(chinUp);
     expect(result[1].exercise).toBe(rowUnderTable);
+  });
+});
+
+describe('applyEquipmentFloor', () => {
+  const rope = { name: 'Rope Trick', dominantEquipment: ['jump_rope'] };
+  const bell = { name: 'Swing Shift', dominantEquipment: ['kettlebell'] };
+  const bodyweight = { name: 'Squat Sixty', dominantEquipment: [] };
+
+  it('keeps a WOD whose identifying movement needs nothing', () => {
+    expect(applyEquipmentFloor([bodyweight], new Set())).toEqual([bodyweight]);
+  });
+
+  it('drops one the athlete owns nothing for', () => {
+    expect(applyEquipmentFloor([rope, bodyweight], new Set())).toEqual([
+      bodyweight,
+    ]);
+  });
+
+  it('keeps it once they own the piece', () => {
+    expect(
+      applyEquipmentFloor([rope, bodyweight], new Set(['jump_rope'])),
+    ).toEqual([rope, bodyweight]);
+  });
+
+  it('needs every piece the movement is tagged with, not any', () => {
+    const both = { name: 'Odd One', dominantEquipment: ['dumbbell', 'box'] };
+    expect(
+      applyEquipmentFloor([both, bodyweight], new Set(['dumbbell'])),
+    ).toEqual([bodyweight]);
+  });
+
+  it('hands back the unfiltered pool rather than emptying it', () => {
+    // The rule that makes this safe above `pickWod`'s relaxation ladder. An
+    // athlete who owns nothing and a library that needs everything still get
+    // a workout — a degraded one, carried by per-movement substitution.
+    expect(applyEquipmentFloor([rope, bell], new Set())).toEqual([rope, bell]);
+  });
+
+  it('leaves an empty library empty rather than inventing a pool', () => {
+    // `pickWod` throws on an empty candidate list; that is its business, and
+    // the floor must not turn "no library" into something else on the way.
+    expect(applyEquipmentFloor([], new Set())).toEqual([]);
+  });
+});
+
+describe('dominantMovement', () => {
+  const movements = [
+    { exercise: { pattern: 'cardio', name: 'Double-unders' } },
+    { exercise: { pattern: 'push', name: 'Push-up' } },
+    { exercise: { pattern: 'cardio', name: 'Burpee' } },
+  ];
+
+  it('takes the first movement in the pattern the WOD claims', () => {
+    expect(dominantMovement(movements, 'cardio')?.exercise.name).toBe(
+      'Double-unders',
+    );
+  });
+
+  it('finds nothing when no movement carries the claim', () => {
+    expect(dominantMovement(movements, 'hinge')).toBeUndefined();
   });
 });
