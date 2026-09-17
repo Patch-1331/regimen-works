@@ -1,7 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import type { SkillLevel } from "@regimen-works/shared";
+import type { MovementHistory, SkillLevel } from "@regimen-works/shared";
 import { api, type ApiExercise } from "../lib/api";
+import {
+  buildLineRuns,
+  describeLineHistory,
+  shortDate,
+  type MovementRun,
+} from "../lib/movementHistory";
 import {
   buildMovementChoices,
   lineLabel,
@@ -24,9 +30,17 @@ import { Panel, SectionLabel } from "./Panel";
 export function MovementChoicesPanel({
   exercises,
   skillLevels,
+  history = [],
 }: {
   exercises: ApiExercise[];
   skillLevels: SkillLevel[];
+  /**
+   * What has actually been trained (DN-89). Defaults to empty so the panel
+   * renders the moment the choices land, rather than holding the whole card
+   * back for a second request -- the history is an addition to this card, not
+   * the reason it exists.
+   */
+  history?: MovementHistory[];
 }) {
   const queryClient = useQueryClient();
   const [openLine, setOpenLine] = useState<string | null>(null);
@@ -69,6 +83,7 @@ export function MovementChoicesPanel({
           <MovementChoiceCard
             key={choice.line}
             choice={choice}
+            runs={buildLineRuns(history, choice.line)}
             open={openLine === choice.line}
             isSaving={choose.isPending}
             onToggle={() =>
@@ -84,12 +99,14 @@ export function MovementChoicesPanel({
 
 function MovementChoiceCard({
   choice,
+  runs,
   open,
   isSaving,
   onToggle,
   onPick,
 }: {
   choice: MovementChoice;
+  runs: MovementRun[];
   open: boolean;
   isSaving: boolean;
   onToggle: () => void;
@@ -97,6 +114,7 @@ function MovementChoiceCard({
 }) {
   const panelId = `movement-choice-${choice.line}`;
   const label = lineLabel(choice.line);
+  const summary = describeLineHistory(runs);
 
   return (
     <div className="p-4" style={{ background: "var(--panel)", border: "1px solid var(--border)" }}>
@@ -119,6 +137,15 @@ function MovementChoiceCard({
                 it. Saying so beats naming the wrong movement. */}
             {choice.chosenName ?? "Not on the current library"}
           </span>
+          {/* What has actually been happening, under what was chosen (DN-96).
+              Absent rather than "0 sessions" on a line never trained: a count
+              of nothing reads as a mark against the athlete for a movement
+              group they may simply not have met yet. */}
+          {summary && (
+            <span className="mt-1 block truncate text-[11px] text-[var(--ink-faint)]">
+              {summary}
+            </span>
+          )}
         </span>
         <span
           className="shrink-0 text-[10px] tracking-[0.1em] text-[var(--ink-faint)]"
@@ -154,6 +181,49 @@ function MovementChoiceCard({
           ))}
         </ul>
       )}
+
+      {open && runs.length > 0 && <MovementRuns runs={runs} />}
+    </div>
+  );
+}
+
+/**
+ * The line's training, newest first: which movement, how many sessions, and
+ * over what stretch of days.
+ *
+ * Runs rather than every session listed out, because the interesting thing is
+ * when the movement changed. And a report rather than a judgement -- no
+ * target, no streak to keep, nothing that says whether this was enough. The
+ * ladder this panel replaced made all three of those claims.
+ */
+function MovementRuns({ runs }: { runs: MovementRun[] }) {
+  return (
+    <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--border)" }}>
+      <p
+        className="text-[10px] font-semibold tracking-[0.12em] text-[var(--ink-faint)]"
+        style={{ fontFamily: "var(--font-mono)" }}
+      >
+        TRAINED
+      </p>
+      <ul className="mt-1.5 flex flex-col gap-1">
+        {runs.map((run) => (
+          <li
+            key={`${run.exerciseId}-${run.to}`}
+            className="flex items-baseline justify-between gap-3 text-[11px]"
+          >
+            <span className="min-w-0 truncate text-[var(--ink-soft)]">{run.name}</span>
+            <span
+              className="shrink-0 text-[var(--ink-faint)]"
+              style={{ fontFamily: "var(--font-mono)" }}
+            >
+              {run.sessions}× ·{" "}
+              {run.from === run.to
+                ? shortDate(run.to)
+                : `${shortDate(run.from)}–${shortDate(run.to)}`}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
