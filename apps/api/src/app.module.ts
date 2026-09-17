@@ -12,6 +12,7 @@ import { WodsModule } from './wods/wods.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { SessionsModule } from './sessions/sessions.module';
 import { SubstitutionsModule } from './substitutions/substitutions.module';
+import { HistoryModule } from './history/history.module';
 import { LogsModule } from './logs/logs.module';
 import { SkillLevelsModule } from './skill-levels/skill-levels.module';
 import { SettingsModule } from './settings/settings.module';
@@ -39,6 +40,7 @@ import { SettingsModule } from './settings/settings.module';
     SessionsModule,
     SubstitutionsModule,
     LogsModule,
+    HistoryModule,
     SkillLevelsModule,
     SettingsModule,
   ],

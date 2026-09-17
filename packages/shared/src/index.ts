@@ -16,3 +16,4 @@ export * from "./skill-level.js";
 export * from "./round-split.js";
 export * from "./substitution.js";
 export * from "./rung-change.js";
+export * from "./history.js";

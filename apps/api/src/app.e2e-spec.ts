@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import {
+  movementHistorySchema,
   settingsSchema,
   skillLevelSchema,
   todayResponseSchema,
@@ -342,6 +343,20 @@ describe('the workout, end to end', () => {
     );
     expect(history).toHaveLength(1);
     expect(history[0]).toMatchObject({ resultValue: '305' });
+
+    // And the same day, read as movements rather than as a result (DN-89).
+    // It comes from the session snapshot, so it exists because the workout was
+    // started and finished — not because anything was swapped.
+    const movements = parsed(
+      z.array(movementHistorySchema),
+      await http()
+        .get('/movement-history')
+        .set(...asUser(ALICE))
+        .expect(200),
+    );
+    expect(movements.length).toBeGreaterThan(0);
+    expect(movements[0]).toMatchObject({ sessions: 1 });
+    expect(movements[0].days[0]).toMatchObject({ isSwapped: false });
   });
 
   it('cancels a session and hands the day back', async () => {
