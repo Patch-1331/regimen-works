@@ -24,6 +24,9 @@ export const handlers = [
   http.get(api("/logs"), () => HttpResponse.json([fixtures.workoutLog()])),
   http.get(api("/exercises"), () => HttpResponse.json([fixtures.apiExercise()])),
   http.get(api("/skill-levels"), () => HttpResponse.json([fixtures.skillLevel()])),
+  // Empty by default: a movement history is something an athlete accrues, and
+  // most route tests are about a day rather than about months of them.
+  http.get(api("/movement-history"), () => HttpResponse.json([])),
   http.get(api("/schedule-rule"), () => HttpResponse.json({ maxDaysPerWeek: 5 })),
   http.get(api("/settings"), () => HttpResponse.json(fixtures.settings())),
 

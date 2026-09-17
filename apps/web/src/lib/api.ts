@@ -1,6 +1,7 @@
 import type {
   AdvanceInterval,
   LogResultRequest,
+  MovementHistory,
   RoundSplit,
   ScheduleCap,
   SetRoundSplitRequest,
@@ -140,6 +141,8 @@ export const api = {
   getLog: (assignmentId: string) =>
     requestOptional<WorkoutLog>(`/assignments/${assignmentId}/log`),
   logs: () => request<WorkoutLogListItem[]>("/logs"),
+  /** What has actually been trained, movement by movement (DN-89). */
+  movementHistory: () => request<MovementHistory[]>("/movement-history"),
 
   skillLevels: () => request<SkillLevel[]>("/skill-levels"),
   setSkillLevel: (line: string, body: SetSkillLevelRequest) =>

@@ -34,13 +34,18 @@ export function StatsPage() {
   const { data: skillLevels } = useQuery({ queryKey: ["skillLevels"], queryFn: api.skillLevels });
   const { data: exercises } = useQuery({ queryKey: ["exercises"], queryFn: api.exercises });
   const { data: scheduleRule } = useQuery({ queryKey: ["scheduleRule"], queryFn: api.scheduleRule });
+  const { data: movementHistory } = useQuery({ queryKey: ["movementHistory"], queryFn: api.movementHistory });
 
   if (logsLoading) return <p className="p-6 text-[var(--ink-faint)]">Loading stats…</p>;
   if (error) return <p className="p-6 text-[var(--danger)]">Couldn't reach the API — is it running on :3001?</p>;
 
   const progressions =
     skillLevels && exercises ? (
-      <MovementChoicesPanel exercises={exercises} skillLevels={skillLevels} />
+      <MovementChoicesPanel
+        exercises={exercises}
+        skillLevels={skillLevels}
+        history={movementHistory}
+      />
     ) : null;
 
   if (!logs || logs.length === 0) {
