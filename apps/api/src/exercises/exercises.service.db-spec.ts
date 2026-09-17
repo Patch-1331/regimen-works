@@ -14,13 +14,22 @@ function service(): ExercisesService {
   return new ExercisesService(testPrisma() as unknown as PrismaService);
 }
 
+/**
+ * An athlete who owns no library content of their own, which is every athlete
+ * until DN-25/DN-26 ship the write endpoints. Every row these tests create is
+ * global, so the reads below see exactly what they saw before ownership
+ * existed — the scoping's own behaviour is proved separately, at the bottom
+ * of the file.
+ */
+const ANY_ATHLETE = 'athlete-reading-the-library';
+
 describe('ExercisesService.findAll', () => {
   it('lists the library alphabetically', async () => {
     await createExercise({ name: 'Thruster' });
     await createExercise({ name: 'Air squat' });
     await createExercise({ name: 'Pull-up' });
 
-    expect((await service().findAll()).map((e) => e.name)).toEqual([
+    expect((await service().findAll(ANY_ATHLETE)).map((e) => e.name)).toEqual([
       'Air squat',
       'Pull-up',
       'Thruster',
@@ -34,7 +43,7 @@ describe('ExercisesService.findAll', () => {
       altFor: 0,
     });
 
-    const listed = (await service().findAll()).find(
+    const listed = (await service().findAll(ANY_ATHLETE)).find(
       (e) => e.id === rungs[0].id,
     );
 
@@ -47,7 +56,7 @@ describe('ExercisesService.findAll', () => {
   it('leaves altExercise null on a movement that needs no substitute', async () => {
     const exercise = await createExercise({ name: 'Air squat' });
 
-    const listed = (await service().findAll()).find(
+    const listed = (await service().findAll(ANY_ATHLETE)).find(
       (e) => e.id === exercise.id,
     );
 
@@ -55,6 +64,6 @@ describe('ExercisesService.findAll', () => {
   });
 
   it('is empty before anything is seeded', async () => {
-    expect(await service().findAll()).toEqual([]);
+    expect(await service().findAll(ANY_ATHLETE)).toEqual([]);
   });
 });

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { progressionLine, type SkillLevel } from '@regimen-works/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { libraryVisibleTo } from '../library/visible-to';
 
 @Injectable()
 export class SkillLevelsService {
@@ -45,7 +46,7 @@ export class SkillLevelsService {
     }
 
     const maxRung = await this.prisma.exercise.aggregate({
-      where: { line },
+      where: { ...libraryVisibleTo(userId), line },
       _max: { rung: true },
     });
     const ceiling = maxRung._max.rung ?? 0;

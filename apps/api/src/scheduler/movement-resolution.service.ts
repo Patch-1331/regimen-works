@@ -3,6 +3,7 @@ import { DEFAULT_EQUIPMENT } from '@regimen-works/shared';
 import type { SubstitutionReason } from '@regimen-works/shared';
 import type { Exercise } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { libraryVisibleTo } from '../library/visible-to';
 import {
   applyEquipmentAvailability,
   applyRememberedChoice,
@@ -87,7 +88,9 @@ export class MovementResolutionService {
     const [skillLevels, linedExercises, substitutions, rule] =
       await Promise.all([
         this.prisma.skillLevel.findMany({ where: { userId } }),
-        this.prisma.exercise.findMany({ where: { line: { not: null } } }),
+        this.prisma.exercise.findMany({
+          where: { ...libraryVisibleTo(userId), line: { not: null } },
+        }),
         this.prisma.assignmentSubstitution.findMany({
           where: { userId, assignmentId },
           include: { exercise: true },
@@ -118,6 +121,7 @@ export class MovementResolutionService {
     // nothing -- read the other way, a missing row would quietly cost them
     // every bar movement in the library.
     const available = await this.applyOwnership(
+      userId,
       remembered,
       rule?.equipment ?? DEFAULT_EQUIPMENT,
     );
@@ -171,6 +175,7 @@ export class MovementResolutionService {
    * query at all.
    */
   private async applyOwnership<M extends { exercise: Exercise }>(
+    userId: string,
     movements: M[],
     equipment: readonly string[],
   ): Promise<M[]> {
@@ -179,7 +184,7 @@ export class MovementResolutionService {
     if (substituteIds.length === 0) return movements;
 
     const substitutes = await this.prisma.exercise.findMany({
-      where: { id: { in: substituteIds } },
+      where: { ...libraryVisibleTo(userId), id: { in: substituteIds } },
     });
 
     return applyEquipmentAvailability(

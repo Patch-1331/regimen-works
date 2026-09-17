@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { libraryVisibleTo } from '../library/visible-to';
 import {
   proposeRungChanges,
   type ProposedRungChange,
@@ -28,7 +29,7 @@ export class SubstitutionsService {
       assignmentId,
       wodMovementId,
     );
-    await this.assertLegalTarget(movement, exerciseId);
+    await this.assertLegalTarget(userId, movement, exerciseId);
 
     return this.prisma.assignmentSubstitution.upsert({
       where: {
@@ -144,6 +145,7 @@ export class SubstitutionsService {
    * line, the alternative is the entire set of movements this one scales to.
    */
   private async assertLegalTarget(
+    userId: string,
     movement: {
       exerciseId: string;
       exercise: { line: string | null; altExerciseId: string | null };
@@ -161,7 +163,7 @@ export class SubstitutionsService {
     }
 
     const onLine = await this.prisma.exercise.findMany({
-      where: { line },
+      where: { ...libraryVisibleTo(userId), line },
       select: { id: true, altExerciseId: true },
     });
 

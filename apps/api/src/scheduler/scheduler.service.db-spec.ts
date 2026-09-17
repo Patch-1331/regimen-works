@@ -646,7 +646,7 @@ describe('SchedulerService equipment floor', () => {
 
   it('offers it once they own the piece', async () => {
     const { ropeWod, doubleUnders } = await library();
-    await testPrisma().wod.delete({ where: { name: 'Squat Sixty' } });
+    await testPrisma().wod.deleteMany({ where: { name: 'Squat Sixty' } });
     const user = await athleteOwning(['jump_rope']);
 
     const today = await service().getToday(user.id, TODAY);
@@ -664,7 +664,7 @@ describe('SchedulerService equipment floor', () => {
     // per-movement substitution carries the day. A degraded workout beats no
     // workout, and `pickWod` throws on an empty list.
     const { ropeWod, highKnees } = await library();
-    await testPrisma().wod.delete({ where: { name: 'Squat Sixty' } });
+    await testPrisma().wod.deleteMany({ where: { name: 'Squat Sixty' } });
     const user = await athleteOwning([]);
 
     const today = await service().getToday(user.id, TODAY);
@@ -683,8 +683,8 @@ describe('SchedulerService equipment floor', () => {
     // a choice they already made.
     const { negative, pullUp } = await pullLadder();
     await library();
-    await testPrisma().wod.delete({ where: { name: 'Squat Sixty' } });
-    await testPrisma().wod.update({
+    await testPrisma().wod.deleteMany({ where: { name: 'Squat Sixty' } });
+    await testPrisma().wod.updateMany({
       where: { name: 'Rope Trick' },
       data: { name: 'Alpha Rope' },
     });
