@@ -7,11 +7,13 @@ const LINE_LABELS: Record<string, string> = {
   pull: "Pull",
   squat: "Squat",
   squat_loaded: "Squat · Loaded",
+  squat_box: "Squat · Box",
   hinge: "Hinge",
   hinge_loaded: "Hinge · Loaded",
   core_dynamic: "Core · Dynamic",
   core_hold: "Core · Anti-extension",
   core_side: "Core · Anti-rotation",
+  cardio_rope: "Rope",
 };
 
 export function lineLabel(line: string): string {

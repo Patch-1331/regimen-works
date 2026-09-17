@@ -25,11 +25,18 @@ export const progressionLine = z.enum([
   // inserting one mid-ladder would renumber every rung above it, silently
   // changing what each athlete's stored `SkillLevel.rung` refers to.
   "squat_loaded",
+  // The two lines where every rung needs equipment (DN-115). They exist so
+  // the swap panel can offer both movements in a pair that share a piece of
+  // kit: off a line the panel offers only the bodyweight alternative, so an
+  // athlete who owns a rope but cannot yet turn double-unders was handed high
+  // knees -- the app taking away gear they actually have.
+  "squat_box",
   "hinge",
   "hinge_loaded",
   "core_dynamic",
   "core_hold",
   "core_side",
+  "cardio_rope",
 ]);
 export type ProgressionLine = z.infer<typeof progressionLine>;
 

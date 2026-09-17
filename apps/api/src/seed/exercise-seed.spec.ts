@@ -86,6 +86,54 @@ describe('the seeded exercise library', () => {
    * one silently changes what every athlete above the insertion point has
    * chosen.
    */
+  /**
+   * The two pairs that share a piece of kit (DN-115). A line is what lets the
+   * swap panel put both in front of an athlete who owns the piece — off a
+   * line it can only offer the bodyweight alternative, which is the app
+   * taking away gear they have.
+   */
+  describe('the lines where every rung needs equipment', () => {
+    const pairs = [
+      { line: 'cardio_rope', piece: 'jump_rope' },
+      { line: 'squat_box', piece: 'box' },
+    ];
+
+    it.each(pairs)('puts both $piece movements on $line', ({ line }) => {
+      const rungs = exercises
+        .filter((e) => e.line === line)
+        .sort((a, b) => (a.rung ?? 0) - (b.rung ?? 0));
+      expect(rungs.map((e) => e.rung)).toEqual([0, 1]);
+    });
+
+    it.each(pairs)('needs $piece on every rung of $line', ({ line, piece }) => {
+      // What makes these lines different from every other one: there is no
+      // rung an athlete without the piece can climb to. The way out is the
+      // alternative, not a lower rung, which is the case below.
+      const rungs = exercises.filter((e) => e.line === line);
+      expect(rungs.map((e) => e.equipment)).toEqual([[piece], [piece]]);
+    });
+
+    it.each(pairs)(
+      'keeps a bodyweight way off $line on both rungs',
+      ({ line }) => {
+        // `unreachableSubstitutes` already says this across the whole library.
+        // Said again here because it is the property that makes the lines safe
+        // to add: an athlete who owns neither piece is no worse off than before.
+        const byName = new Map(exercises.map((e) => [e.name, e]));
+        const stranded = exercises
+          .filter((e) => e.line === line)
+          .filter((e) => {
+            const alt = e.alt ? byName.get(e.alt) : undefined;
+            return (
+              !alt || (alt.equipment ?? []).length > 0 || alt.line === line
+            );
+          })
+          .map((e) => e.name);
+        expect(stranded).toEqual([]);
+      },
+    );
+  });
+
   describe('the loaded pulling, pressing and carries', () => {
     const added = [
       'Dumbbell row',

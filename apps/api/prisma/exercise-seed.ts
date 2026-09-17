@@ -273,10 +273,21 @@ export const exercises: ExerciseSeed[] = [
     instructions:
       "Step forward and lower until the back knee grazes the floor, then drive through the front heel and step the back foot straight through into the next lunge. Torso stays upright; each step is a rep.",
   },
+  // Box (DN-33, lined in DN-115) — its own line rather than rungs appended to
+  // `squat`, for the reason the loaded squats are: a box jump is not a step
+  // above a pistol, it is a different question, and appending would renumber
+  // rungs athletes have already chosen.
+  //
+  // A line at all because the two are a real pair in difficulty that share a
+  // piece of kit. Off a line the swap panel offers only the bodyweight
+  // alternative, so a box jump was a movement nobody was ever shown, and an
+  // athlete on step-ups had no way up that kept the box.
   {
     name: "Box step-up",
     pattern: "squat",
     equipment: ["box"],
+    line: "squat_box",
+    rung: 0,
     alt: "Reverse lunge",
     instructions:
       "Place one whole foot on the box, drive through that heel until the leg is straight, then lower under control and step down. Alternate legs; each step up is a rep. Push through the top foot rather than bouncing off the bottom one — a box around knee height is plenty.",
@@ -285,6 +296,8 @@ export const exercises: ExerciseSeed[] = [
     name: "Box jump",
     pattern: "squat",
     equipment: ["box"],
+    line: "squat_box",
+    rung: 1,
     alt: "Jump squat",
     instructions:
       "From a quarter squat, swing the arms and jump onto the box, landing on the whole foot with knees soft and hips back. Stand up fully on top, then step down — one foot at a time, every rep. Pick a height you can land on, not the one you can barely clear.",
@@ -557,15 +570,26 @@ export const exercises: ExerciseSeed[] = [
     instructions:
       "Run on the spot lifting each knee to at least hip height, landing on the balls of the feet with a tall torso. Each knee lift is a rep. Pump the arms in time with the legs.",
   },
-  // Jump rope (DN-32) — off any progression line, like the rest of cardio.
-  // Single- and double-unders are a real pair in difficulty, but a rope is
-  // not a ladder anyone climbs by rung: an athlete picks the one they can
-  // turn. Both fall to high knees, which keeps the feet moving at the same
+  // Jump rope (DN-32) — the one line in `cardio`, added in DN-115.
+  //
+  // DN-32 put these off any line, and its reasoning was that a rope is not a
+  // ladder anyone climbs by rung: an athlete picks the one they can turn.
+  // The premise holds and the conclusion does not follow. The swap panel is
+  // *how* an athlete picks, and off a line it offers only the bodyweight
+  // alternative — so someone who owned a rope and could not yet turn doubles
+  // was offered high knees, which is the app taking away gear they have.
+  //
+  // The line is not a claim that everyone should work single → double. It is
+  // the only way the app can put both in front of them.
+  //
+  // Both still fall to high knees, which keeps the feet moving at the same
   // cadence and needs nothing.
   {
     name: "Single-unders",
     pattern: "cardio",
     equipment: ["jump_rope"],
+    line: "cardio_rope",
+    rung: 0,
     alt: "High knees",
     instructions:
       "Turn the rope with the wrists, not the arms, and hop just high enough to clear it — one pass under the feet is a rep. Elbows stay close to the ribs; big arm circles make the rope slower and the jump higher than it needs to be.",
@@ -574,6 +598,8 @@ export const exercises: ExerciseSeed[] = [
     name: "Double-unders",
     pattern: "cardio",
     equipment: ["jump_rope"],
+    line: "cardio_rope",
+    rung: 1,
     alt: "High knees",
     instructions:
       "One jump, two passes of the rope. Jump a little higher than a single-under and turn the wrists faster rather than pulling the knees up — tucking the legs is what turns a set into a string of misses. Trip the rope and you start the next rep, not the set again.",

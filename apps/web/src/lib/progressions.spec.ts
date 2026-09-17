@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SkillLevel } from "@regimen-works/shared";
+import { progressionLine, type SkillLevel } from "@regimen-works/shared";
 import type { ApiExercise } from "./api";
 import { buildMovementChoices, lineLabel } from "./progressions";
 
@@ -104,5 +104,28 @@ describe("buildMovementChoices", () => {
       [skill("squat", 0), skill("pull", 1)],
     );
     expect(choices.map((c) => lineLabel(c.line))).toEqual(["Pull", "Squat"]);
+  });
+});
+
+/**
+ * The gap DN-115 found while adding two lines: `exercise-seed.spec.ts` catches
+ * a line the enum does not know, and nothing caught a line the *labels* do not
+ * know. `lineLabel` falls through to the raw slug, so the omission ships as
+ * "cardio_rope" printed at an athlete in the Stats panel rather than as a
+ * failure anywhere.
+ */
+describe("lineLabel", () => {
+  it("has a label for every line the app can store", () => {
+    const unlabelled = progressionLine.options.filter(
+      (line) => lineLabel(line) === line,
+    );
+    expect(unlabelled).toEqual([]);
+  });
+
+  it("falls through to the slug for a line it does not know", () => {
+    // The fallback is deliberate — a line added to the enum and not here
+    // should still render something — and the test above is what keeps it
+    // from being how the app actually behaves.
+    expect(lineLabel("not_a_line")).toBe("not_a_line");
   });
 });

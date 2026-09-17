@@ -109,6 +109,71 @@ async function servedMovement(userId: string) {
   return today.assignment!.wod.movements[0];
 }
 
+/**
+ * A line where *every* rung needs the same piece of equipment (DN-115) — the
+ * rope and box pairs. Every other line in the library has a bodyweight rung,
+ * so this is the first shape where the athlete's remembered choice cannot
+ * itself be the way out.
+ */
+async function ropeLadder() {
+  const highKnees = await createExercise({
+    name: 'High knees',
+    pattern: 'cardio',
+    line: null,
+    rung: null,
+  });
+  const single = await createExercise({
+    name: 'Single-unders',
+    pattern: 'cardio',
+    line: 'cardio_rope',
+    rung: 0,
+    equipment: ['jump_rope'],
+    altExerciseId: highKnees.id,
+  });
+  const double = await createExercise({
+    name: 'Double-unders',
+    pattern: 'cardio',
+    line: 'cardio_rope',
+    rung: 1,
+    equipment: ['jump_rope'],
+    altExerciseId: highKnees.id,
+  });
+  return { highKnees, single, double };
+}
+
+describe('SchedulerService on a line where every rung needs the kit', () => {
+  it('honours the remembered choice for an athlete who owns the rope', async () => {
+    const { single, double } = await ropeLadder();
+    const { user } = await assignedDay(double.id, {
+      equipment: ['jump_rope'],
+    });
+    await createSkillLevel(user.id, 'cardio_rope', 0);
+
+    const movement = await servedMovement(user.id);
+
+    // The case the line was added for: they own a rope and cannot yet turn
+    // doubles, so they get singles rather than having the rope taken off them.
+    expect(movement.exercise.name).toBe(single.name);
+    expect(movement.prescribedName).toBe(double.name);
+    expect(movement.prescribedReason).toBe('remembered_choice');
+  });
+
+  it('falls to the alternative, not to a lower rung, for an athlete with no rope', async () => {
+    const { highKnees, double } = await ropeLadder();
+    const { user } = await assignedDay(double.id, { equipment: [] });
+    await createSkillLevel(user.id, 'cardio_rope', 0);
+
+    const movement = await servedMovement(user.id);
+
+    // Their remembered rung needs the rope too, so the choice layer moves
+    // them to a movement they still cannot do and the equipment layer has to
+    // catch it. On every other line rung 0 needs nothing, which is why this
+    // composition was never exercised before.
+    expect(movement.exercise.name).toBe(highKnees.name);
+    expect(movement.prescribedReason).toBe('equipment');
+  });
+});
+
 describe('SchedulerService equipment resolution', () => {
   it('serves the prescribed movement to an athlete who owns the bar', async () => {
     const { pullUp } = await pullLadder();
