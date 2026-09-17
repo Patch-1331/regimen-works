@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { Exercise } from '@prisma/client';
 import { DEFAULT_EQUIPMENT } from '@regimen-works/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { libraryVisibleTo } from '../library/visible-to';
 import { toSessionDto } from '../sessions/session.mapper';
 import { WodsService } from '../wods/wods.service';
 import {
@@ -64,6 +65,7 @@ export class SchedulerService {
         assignment,
         warmupCooldownEnabled,
         ...(await this.getChecklistsFor(
+          userId,
           warmupCooldownEnabled,
           assignment?.wod.dominantPattern,
         )),
@@ -124,6 +126,7 @@ export class SchedulerService {
       },
       warmupCooldownEnabled,
       ...(await this.getChecklistsFor(
+        userId,
         warmupCooldownEnabled,
         scaledWod.dominantPattern,
       )),
@@ -132,13 +135,14 @@ export class SchedulerService {
 
   /** Null lists when the setting is off or there's no WOD to build a checklist for. */
   private async getChecklistsFor(
+    userId: string,
     warmupCooldownEnabled: boolean,
     dominantPattern: string | undefined,
   ) {
     if (!warmupCooldownEnabled || !dominantPattern) {
       return { warmup: null, cooldown: null };
     }
-    return this.wodsService.getChecklists(dominantPattern);
+    return this.wodsService.getChecklists(userId, dominantPattern);
   }
 
   /**
@@ -208,6 +212,9 @@ export class SchedulerService {
     const [wods, recentAssignments, skillLevels, linedExercises] =
       await Promise.all([
         this.prisma.wod.findMany({
+          // The global library plus this athlete's own WODs (DN-93). Nobody
+          // else's personal content can be picked for them.
+          where: libraryVisibleTo(userId),
           // Ordered so the candidate pool is the same list every time. Without
           // it the pick depends on whatever order Postgres returns rows in,
           // which makes "the same athlete, the same day, the same library"
@@ -253,7 +260,9 @@ export class SchedulerService {
         // prescribed: someone with no bar whose pull movement is already
         // Supermans is having nothing substituted for equipment.
         this.prisma.skillLevel.findMany({ where: { userId } }),
-        this.prisma.exercise.findMany({ where: { line: { not: null } } }),
+        this.prisma.exercise.findMany({
+          where: { ...libraryVisibleTo(userId), line: { not: null } },
+        }),
       ]);
 
     // status filter above guarantees wodId (and so `wod`) is set on every row here,

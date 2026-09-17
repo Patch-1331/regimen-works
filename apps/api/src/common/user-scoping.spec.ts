@@ -1,9 +1,11 @@
+import { ExercisesService } from '../exercises/exercises.service';
 import { LogsService } from '../logs/logs.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { SettingsService } from '../settings/settings.service';
 import { SkillLevelsService } from '../skill-levels/skill-levels.service';
 import { SchedulerService } from '../scheduler/scheduler.service';
 import { MovementResolutionService } from '../scheduler/movement-resolution.service';
+import { WodsService } from '../wods/wods.service';
 import type { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -57,8 +59,29 @@ function recordingPrisma() {
         return Promise.resolve(0);
       }),
     },
-    exercise: { findMany: jest.fn(() => Promise.resolve([])) },
-    wod: { findMany: jest.fn(() => Promise.resolve([])) },
+    assignmentSubstitution: {
+      findMany: jest.fn((args: unknown) => {
+        (calls['assignmentSubstitution.findMany'] ??= []).push(args);
+        return Promise.resolve([]);
+      }),
+    },
+    skillLevelUpsert: record('skillLevel.upsert'),
+    exercise: {
+      findMany: jest.fn((args: unknown) => {
+        (calls['exercise.findMany'] ??= []).push(args);
+        return Promise.resolve([]);
+      }),
+      aggregate: jest.fn((args: unknown) => {
+        (calls['exercise.aggregate'] ??= []).push(args);
+        return Promise.resolve({ _max: { rung: 9 } });
+      }),
+    },
+    wod: {
+      findMany: jest.fn((args: unknown) => {
+        (calls['wod.findMany'] ??= []).push(args);
+        return Promise.resolve([]);
+      }),
+    },
   };
   return prisma as typeof prisma & PrismaService;
 }
@@ -68,6 +91,18 @@ function whereOf(prisma: ReturnType<typeof recordingPrisma>, key: string) {
   const args = (prisma.calls[key] ?? []) as { where?: unknown }[];
   expect(args.length).toBeGreaterThan(0);
   return args.map((a) => JSON.stringify(a.where ?? {}));
+}
+
+/**
+ * The library's two tiers, asserted together (DN-93): the caller's own rows
+ * *and* the global ones. Checking only for the caller's id would pass a read
+ * scoped to `{ ownerId: userId }`, which compiles, reads correctly in a test
+ * about an athlete's own content, and silently costs them the entire shared
+ * library.
+ */
+function expectLibraryScope(where: string) {
+  expect(where).toContain('"ownerId":null');
+  expect(where).toContain(ALICE);
 }
 
 describe('per-user query scoping', () => {
@@ -143,6 +178,99 @@ describe('per-user query scoping', () => {
     // As must the weekly cap count.
     for (const where of whereOf(prisma, 'dailyAssignment.count')) {
       expect(where).toContain(ALICE);
+    }
+  });
+});
+
+/**
+ * The library is the one place a read can be wrong in two directions. Every
+ * other model is the caller's alone, so a missing `userId` is the only
+ * failure; `Exercise` and `Wod` hold global rows everyone reads plus personal
+ * rows only their owner may see, and a read can lose either half.
+ */
+describe('library ownership scoping', () => {
+  it('scopes the exercise list to the global library plus the caller', async () => {
+    const prisma = recordingPrisma();
+    await new ExercisesService(prisma).findAll(ALICE);
+    for (const where of whereOf(prisma, 'exercise.findMany')) {
+      expectLibraryScope(where);
+    }
+  });
+
+  it('scopes the WOD list', async () => {
+    const prisma = recordingPrisma();
+    await new WodsService(prisma).findAll(ALICE);
+    for (const where of whereOf(prisma, 'wod.findMany')) {
+      expectLibraryScope(where);
+    }
+  });
+
+  it('scopes the warm-up/cool-down pool', async () => {
+    // Pulled by `phase` rather than by id, so an unscoped read here hands the
+    // athlete somebody else's movement inside a checklist they did not author.
+    const prisma = recordingPrisma();
+    await new WodsService(prisma).getChecklists(ALICE, 'push');
+    for (const where of whereOf(prisma, 'exercise.findMany')) {
+      expectLibraryScope(where);
+    }
+  });
+
+  it('scopes the candidate WOD pool and the rung lookup behind it', async () => {
+    const prisma = recordingPrisma();
+    const wods = {
+      getChecklists: jest.fn(),
+    } as unknown as ConstructorParameters<typeof SchedulerService>[1];
+    await new SchedulerService(
+      prisma,
+      wods,
+      new MovementResolutionService(prisma),
+    )
+      .getToday(ALICE, '2026-09-07')
+      .catch(() => undefined);
+
+    for (const where of whereOf(prisma, 'wod.findMany')) {
+      expectLibraryScope(where);
+    }
+    for (const where of whereOf(prisma, 'exercise.findMany')) {
+      expectLibraryScope(where);
+    }
+  });
+
+  it('scopes both reads behind movement resolution', async () => {
+    // A movement needing a dumbbell against the default kit, so the second,
+    // conditional read — the one that loads the equipment fallback — is
+    // actually issued rather than skipped.
+    const prisma = recordingPrisma();
+    await new MovementResolutionService(prisma).resolve(ALICE, 'assignment-1', [
+      {
+        id: 'wm-1',
+        exercise: {
+          id: 'ex-1',
+          equipment: ['dumbbell'],
+          altExerciseId: 'ex-2',
+          line: null,
+          rung: null,
+        },
+      },
+    ] as unknown as Parameters<MovementResolutionService['resolve']>[2]);
+
+    const wheres = whereOf(prisma, 'exercise.findMany');
+    expect(wheres).toHaveLength(2);
+    for (const where of wheres) {
+      expectLibraryScope(where);
+    }
+  });
+
+  it('scopes the rung ceiling a skill level is checked against', async () => {
+    // Off the library, this reads the ceiling from every athlete's rows at
+    // once: one athlete authoring a rung-9 movement would raise what everyone
+    // else is allowed to set.
+    const prisma = recordingPrisma();
+    await new SkillLevelsService(prisma)
+      .setRung(ALICE, 'push_horizontal', 1)
+      .catch(() => undefined);
+    for (const where of whereOf(prisma, 'exercise.aggregate')) {
+      expectLibraryScope(where);
     }
   });
 });

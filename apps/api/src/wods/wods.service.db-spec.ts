@@ -24,17 +24,24 @@ function createPhaseExercise(
   return createExercise({ phase, ...overrides });
 }
 
+/**
+ * An athlete who owns no library content of their own, which is every athlete
+ * until DN-25/DN-26 ship the write endpoints. Every row these tests create is
+ * global, so the reads below see exactly what they saw before ownership
+ * existed — the scoping's own behaviour is proved separately, at the bottom
+ * of the file.
+ */
+const ANY_ATHLETE = 'athlete-reading-the-library';
+
 describe('WodsService.findAll', () => {
   it('lists the library alphabetically', async () => {
     await createWod({ name: 'Fran' });
     await createWod({ name: 'Angie' });
     await createWod({ name: 'Cindy' });
 
-    expect((await service().findAll()).map((wod) => wod.name)).toEqual([
-      'Angie',
-      'Cindy',
-      'Fran',
-    ]);
+    expect(
+      (await service().findAll(ANY_ATHLETE)).map((wod) => wod.name),
+    ).toEqual(['Angie', 'Cindy', 'Fran']);
   });
 
   it("puts each WOD's movements in the order they are performed", async () => {
@@ -54,7 +61,7 @@ describe('WodsService.findAll', () => {
       ],
     });
 
-    const [wod] = await service().findAll();
+    const [wod] = await service().findAll(ANY_ATHLETE);
 
     expect(wod.movements.map((m) => m.order)).toEqual([0, 1, 2]);
     expect(wod.movements.map((m) => m.exercise.name)).toEqual([
@@ -72,7 +79,7 @@ describe('WodsService.findAll', () => {
       movements: [{ exerciseId: exercise.id, reps: 20, order: 0 }],
     });
 
-    const [wod] = await service().findAll();
+    const [wod] = await service().findAll(ANY_ATHLETE);
 
     expect(wod.movements[0].exercise).toMatchObject({
       id: exercise.id,
@@ -81,7 +88,7 @@ describe('WodsService.findAll', () => {
   });
 
   it('is empty before anything is seeded', async () => {
-    expect(await service().findAll()).toEqual([]);
+    expect(await service().findAll(ANY_ATHLETE)).toEqual([]);
   });
 });
 
@@ -90,7 +97,10 @@ describe('WodsService.getChecklists', () => {
     await createPhaseExercise('warmup', { name: 'Arm circles' });
     await createPhaseExercise('cooldown', { name: 'Couch stretch' });
 
-    const { warmup, cooldown } = await service().getChecklists('push');
+    const { warmup, cooldown } = await service().getChecklists(
+      ANY_ATHLETE,
+      'push',
+    );
 
     expect(warmup.map((e) => e.name)).toEqual(['Arm circles']);
     expect(cooldown.map((e) => e.name)).toEqual(['Couch stretch']);
@@ -109,7 +119,10 @@ describe('WodsService.getChecklists', () => {
     await createExercise({ name: 'Thruster' });
     await createPhaseExercise('warmup', { name: 'Arm circles' });
 
-    const { warmup, cooldown } = await service().getChecklists('push');
+    const { warmup, cooldown } = await service().getChecklists(
+      ANY_ATHLETE,
+      'push',
+    );
 
     expect([...warmup, ...cooldown].map((e) => e.name)).toEqual([
       'Arm circles',
@@ -124,7 +137,7 @@ describe('WodsService.getChecklists', () => {
       instructions: 'Ten each way, slowly.',
     });
 
-    const [move] = (await service().getChecklists('push')).warmup;
+    const [move] = (await service().getChecklists(ANY_ATHLETE, 'push')).warmup;
 
     expect(move).toEqual({
       id: stored.id,
@@ -144,13 +157,13 @@ describe('WodsService.getChecklists', () => {
       pattern: 'pull',
     });
 
-    const { warmup } = await service().getChecklists('pull');
+    const { warmup } = await service().getChecklists(ANY_ATHLETE, 'pull');
 
     expect(warmup.map((e) => e.name)).toEqual(['Pull specific', 'Generic']);
   });
 
   it('answers with empty lists when nothing is tagged', async () => {
-    expect(await service().getChecklists('push')).toEqual({
+    expect(await service().getChecklists(ANY_ATHLETE, 'push')).toEqual({
       warmup: [],
       cooldown: [],
     });

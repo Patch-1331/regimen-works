@@ -3,6 +3,7 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 
+import { GLOBAL_LIBRARY } from "../src/library/visible-to";
 import {
   assertSubstitutesReachable,
   assertSubstituteUnitsMatch,
@@ -70,30 +71,37 @@ async function main() {
   const idByName = new Map<string, string>();
 
   for (const e of exercises) {
-    const row = await prisma.exercise.upsert({
-      where: { name: e.name },
-      update: {
-        pattern: e.pattern,
-        equipment: e.equipment ?? [],
-        scalable: e.scalable ?? false,
-        unit: e.unit ?? "reps",
-        line: e.line ?? null,
-        rung: e.rung ?? null,
-        phase: e.phase ?? null,
-        instructions: e.instructions,
-      },
-      create: {
-        name: e.name,
-        pattern: e.pattern,
-        equipment: e.equipment ?? [],
-        scalable: e.scalable ?? false,
-        unit: e.unit ?? "reps",
-        line: e.line ?? null,
-        rung: e.rung ?? null,
-        phase: e.phase ?? null,
-        instructions: e.instructions,
-      },
+    const fields = {
+      pattern: e.pattern,
+      equipment: e.equipment ?? [],
+      scalable: e.scalable ?? false,
+      unit: e.unit ?? "reps",
+      line: e.line ?? null,
+      rung: e.rung ?? null,
+      phase: e.phase ?? null,
+      instructions: e.instructions,
+    };
+
+    // Not an upsert any more (DN-93). `name` is no longer unique on its own,
+    // and Prisma types the `ownerId_name` compound key's `ownerId` as a plain
+    // string -- there is no way to say "the row named X with no owner" in a
+    // unique `where` at all. So the global row is found by hand, and the
+    // uniqueness this relied on is enforced by the partial unique index in
+    // the migration instead of by this lookup.
+    //
+    // The `ownerId: null` here is load-bearing beyond the lookup: it is what
+    // stops the seed resolving a name to an athlete's own exercise and then
+    // wiring a global row's `altExerciseId` to it, which would let one
+    // athlete's delete break everyone's scheduler.
+    const existing = await prisma.exercise.findFirst({
+      where: { ...GLOBAL_LIBRARY, name: e.name },
+      select: { id: true },
     });
+
+    const row = existing
+      ? await prisma.exercise.update({ where: { id: existing.id }, data: fields })
+      : await prisma.exercise.create({ data: { name: e.name, ...fields } });
+
     idByName.set(e.name, row.id);
   }
 
@@ -116,39 +124,32 @@ async function main() {
       exercise: { connect: { id: idByName.get(m.exercise)! } },
     }));
 
-    const existing = await prisma.wod.findUnique({ where: { name: w.name } });
+    const fields = {
+      type: w.type,
+      timeCapMinutes: w.timeCapMinutes,
+      rounds: w.rounds,
+      workSeconds: w.workSeconds ?? null,
+      restSeconds: w.restSeconds ?? null,
+      intervalCount: w.intervalCount ?? null,
+      isNamed: w.isNamed,
+      dominantPattern: w.dominantPattern,
+      description: w.description ?? null,
+      movements: { create: movements },
+    };
+
+    // Scoped to the global tier for the same reason the exercise loop is
+    // (DN-93): re-seeding must not reach into an athlete's own library.
+    const existing = await prisma.wod.findFirst({
+      where: { ...GLOBAL_LIBRARY, name: w.name },
+      select: { id: true },
+    });
+
     if (existing) {
       await prisma.wodMovement.deleteMany({ where: { wodId: existing.id } });
+      await prisma.wod.update({ where: { id: existing.id }, data: fields });
+    } else {
+      await prisma.wod.create({ data: { name: w.name, ...fields } });
     }
-
-    await prisma.wod.upsert({
-      where: { name: w.name },
-      update: {
-        type: w.type,
-        timeCapMinutes: w.timeCapMinutes,
-        rounds: w.rounds,
-        workSeconds: w.workSeconds ?? null,
-        restSeconds: w.restSeconds ?? null,
-        intervalCount: w.intervalCount ?? null,
-        isNamed: w.isNamed,
-        dominantPattern: w.dominantPattern,
-        description: w.description ?? null,
-        movements: { create: movements },
-      },
-      create: {
-        name: w.name,
-        type: w.type,
-        timeCapMinutes: w.timeCapMinutes,
-        rounds: w.rounds,
-        workSeconds: w.workSeconds ?? null,
-        restSeconds: w.restSeconds ?? null,
-        intervalCount: w.intervalCount ?? null,
-        isNamed: w.isNamed,
-        dominantPattern: w.dominantPattern,
-        description: w.description ?? null,
-        movements: { create: movements },
-      },
-    });
   }
 
   // ScheduleRule and SkillLevel rows used to be seeded here, when they were

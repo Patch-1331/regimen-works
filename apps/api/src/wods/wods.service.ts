@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { libraryVisibleTo } from '../library/visible-to';
 import {
   buildCooldownChecklist,
   buildWarmupChecklist,
@@ -9,8 +10,10 @@ import {
 export class WodsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
+  /** The global library plus this athlete's own WODs (DN-93). */
+  findAll(userId: string) {
     return this.prisma.wod.findMany({
+      where: libraryVisibleTo(userId),
       include: {
         movements: { include: { exercise: true }, orderBy: { order: 'asc' } },
       },
@@ -19,9 +22,9 @@ export class WodsService {
   }
 
   /** Warm-up/cool-down checklists for a WOD's dominant pattern (Feature #63). */
-  async getChecklists(dominantPattern: string) {
+  async getChecklists(userId: string, dominantPattern: string) {
     const pool = await this.prisma.exercise.findMany({
-      where: { phase: { not: null } },
+      where: { ...libraryVisibleTo(userId), phase: { not: null } },
       select: {
         id: true,
         name: true,

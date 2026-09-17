@@ -3,6 +3,7 @@ import type { PrismaService } from '../prisma/prisma.service';
 import { testPrisma } from '../test-support/database';
 import {
   createAssignment,
+  createExercise,
   createLadder,
   createSkillLevel,
   createUser,
@@ -112,6 +113,27 @@ describe('SubstitutionsService.set', () => {
 
     await expect(
       service().set(user.id, assignment.id, movement.id, squats[0].id),
+    ).rejects.toThrow(BadRequestException);
+    expect(await storedSwaps(assignment.id)).toHaveLength(0);
+  });
+
+  it('refuses another athlete’s movement, even sitting on the same line', async () => {
+    // The ladder is built from a query, so an unscoped one makes every
+    // athlete's private movements legal swap targets for everyone else
+    // (DN-93). On the same line and at a free rung, so nothing but the
+    // ownership scope refuses it.
+    const { user, assignment, movement } = await pullDay();
+    const stranger = await createUser();
+    const theirs = await createExercise({
+      name: 'Ring row',
+      pattern: 'pull',
+      line: 'pull',
+      rung: 7,
+      ownerId: stranger.id,
+    });
+
+    await expect(
+      service().set(user.id, assignment.id, movement.id, theirs.id),
     ).rejects.toThrow(BadRequestException);
     expect(await storedSwaps(assignment.id)).toHaveLength(0);
   });

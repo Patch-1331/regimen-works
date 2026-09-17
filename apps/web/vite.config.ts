@@ -42,7 +42,12 @@ export default defineConfig({
       thresholds: {
         statements: 74,
         branches: 68,
-        functions: 65,
+        // 64, not 65. DN-96 raised this to 65 off a 65.06 reading that the
+        // suite does not actually reproduce -- it measures 64.75 -- so the
+        // floor landed above measured and turned main red the moment it
+        // merged. Floors sit just *under* measured (DN-54); this one is back
+        // under it.
+        functions: 64,
         lines: 75,
       },
     },

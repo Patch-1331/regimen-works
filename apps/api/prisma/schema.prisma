@@ -19,11 +19,16 @@ model User {
   skillLevels   SkillLevel[]
   scheduleRule  ScheduleRule?
   substitutions AssignmentSubstitution[]
+
+  // Library content this athlete authored (DN-93). Global rows carry no
+  // owner and appear in nobody's list here.
+  ownExercises Exercise[]
+  ownWods      Wod[]
 }
 
 model Exercise {
   id       String  @id @default(cuid())
-  name     String  @unique
+  name     String
   // Null only for general warm-up/cool-down filler not tied to a pattern
   // (Feature #63, e.g. light jogging, deep breathing).
   pattern  String? // push | pull | squat | hinge | core | cardio | null
@@ -66,27 +71,51 @@ model Exercise {
   altExercise   Exercise?  @relation("ExerciseAlt", fields: [altExerciseId], references: [id])
   substitutes   Exercise[] @relation("ExerciseAlt")
 
+  // Which tier of the library this row belongs to (DN-93).
+  //
+  //   null -- global content. Seeded, admin-curated, readable by everyone.
+  //   set  -- that athlete's own. Readable and writable only by them.
+  //
+  // Nullable rather than a sentinel id so the global tier needs no fake user
+  // row, and so the foreign key can cascade: deleting an athlete takes their
+  // library with them and leaves the shared one alone.
+  ownerId String?
+  owner   User?   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
   wodMovements  WodMovement[]
   substitutedIn AssignmentSubstitution[]
+
+  // Scoped to the owner so two athletes may both write "Push-up" (DN-93). A
+  // personal name is allowed to shadow a global one -- the alternative
+  // reserves every global name forever, and an admin seeding a name an
+  // athlete already used would make the athlete's own row unwritable.
+  //
+  // NOT the whole constraint. Postgres treats NULLs as distinct, so this
+  // alone permits two *global* rows of the same name -- exactly the guarantee
+  // the seed's upsert depends on. A partial unique index over `name` WHERE
+  // "ownerId" IS NULL closes that, and it lives only in the migration:
+  // Prisma cannot express a partial index, so `prisma migrate dev` will offer
+  // to drop it on the next model change. Keep it.
+  @@unique([ownerId, name])
 }
 
 // Current rung per progression line — one row per line, v1 single-user (see
 // User). Read by the scheduler when generating a WOD and advanced/dropped
 // by the 3x8-to-3x5 rule after a result is logged (Feature #2).
 model SkillLevel {
-  id         String   @id @default(cuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  line       String // push_horizontal | push_vertical | pull | squat | hinge | core_dynamic | core_hold | core_side
-  rung       Int      @default(0)
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  line      String // push_horizontal | push_vertical | pull | squat | hinge | core_dynamic | core_hold | core_side
+  rung      Int      @default(0)
+  updatedAt DateTime @updatedAt
 
   @@unique([userId, line])
 }
 
 model Wod {
   id              String  @id @default(cuid())
-  name            String  @unique
+  name            String
   type            String // amrap | for_time | emom | tabata
   timeCapMinutes  Int
   rounds          Int?
@@ -106,8 +135,32 @@ model Wod {
   isNamed         Boolean @default(false)
   dominantPattern String // push | pull | squat | hinge | core | cardio
 
+  // Which tier of the library this row belongs to (DN-93).
+  //
+  //   null -- global content. Seeded, admin-curated, readable by everyone.
+  //   set  -- that athlete's own. Readable and writable only by them.
+  //
+  // Nullable rather than a sentinel id so the global tier needs no fake user
+  // row, and so the foreign key can cascade: deleting an athlete takes their
+  // library with them and leaves the shared one alone.
+  ownerId String?
+  owner   User?   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
   movements   WodMovement[]
   assignments DailyAssignment[]
+
+  // Scoped to the owner so two athletes may both write "Push-up" (DN-93). A
+  // personal name is allowed to shadow a global one -- the alternative
+  // reserves every global name forever, and an admin seeding a name an
+  // athlete already used would make the athlete's own row unwritable.
+  //
+  // NOT the whole constraint. Postgres treats NULLs as distinct, so this
+  // alone permits two *global* rows of the same name -- exactly the guarantee
+  // the seed's upsert depends on. A partial unique index over `name` WHERE
+  // "ownerId" IS NULL closes that, and it lives only in the migration:
+  // Prisma cannot express a partial index, so `prisma migrate dev` will offer
+  // to drop it on the next model change. Keep it.
+  @@unique([ownerId, name])
 }
 
 model WodMovement {
@@ -163,7 +216,7 @@ model ScheduleRule {
   // is no tag at all, plus the bar. It is the only default that changes no
   // existing athlete's workouts (DN-81), and it must stay in step with
   // SettingsService.DEFAULTS.
-  equipment             String[] @default(["bar"])
+  equipment String[] @default(["bar"])
 }
 
 model DailyAssignment {
