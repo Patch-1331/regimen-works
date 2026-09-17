@@ -40,10 +40,10 @@ export default defineConfig({
       // is a decision to state in the PR description, never a quiet edit to
       // make CI pass.
       thresholds: {
-        statements: 71,
+        statements: 72,
         branches: 66,
-        functions: 59,
-        lines: 72,
+        functions: 61,
+        lines: 73,
       },
     },
   },
