@@ -20,11 +20,13 @@
  * `seed.ts`. That is DN-112.
  */
 
-/** The fields of a seeded exercise this check reads. */
+/** The fields of a seeded exercise these checks read. */
 export type SubstitutableSeed = {
   name: string;
   equipment?: string[];
   alt?: string;
+  /** Defaults to reps, as it does in the seed itself. */
+  unit?: 'reps' | 'seconds';
 };
 
 /**
@@ -89,6 +91,40 @@ export function unreachableSubstitutes(
 }
 
 /**
+ * Every equipment fallback that would arrive counted in the wrong unit
+ * (DN-113).
+ *
+ * `applyEquipmentAvailability` replaces the exercise and leaves
+ * `WodMovement.reps` exactly as prescribed -- deliberately, since the count
+ * is the workout's and not the movement's. That makes the count meaningless
+ * the moment the substitute is measured differently: a forty-second farmer
+ * carry handed to an athlete with no dumbbells becomes forty side planks,
+ * and nothing anywhere says so. It is the reachability gap again in a form
+ * the first check cannot see, because the way out exists -- it just lies.
+ *
+ * Carries are what made this reachable at all: until DN-113 no
+ * equipment movement was timed, so every fallback matched by accident.
+ */
+export function mismatchedSubstituteUnits(
+  exercises: readonly SubstitutableSeed[],
+): string[] {
+  const byName = new Map(exercises.map((e) => [e.name, e]));
+  const unitOf = (e: SubstitutableSeed) => e.unit ?? 'reps';
+
+  return exercises.flatMap((exercise) => {
+    if (requirements(exercise).length === 0 || !exercise.alt) return [];
+
+    const alt = byName.get(exercise.alt);
+    // A missing alternative is the other check's to report, in its words.
+    if (!alt || unitOf(alt) === unitOf(exercise)) return [];
+
+    return [
+      `"${exercise.name}" is counted in ${unitOf(exercise)} and falls back to "${alt.name}", counted in ${unitOf(alt)} — the prescribed count carries over unchanged, so it would arrive meaning something else.`,
+    ];
+  });
+}
+
+/**
  * Fails the seed, loudly and before anything is written, when any equipment
  * movement has no way down to bodyweight.
  */
@@ -101,6 +137,26 @@ export function assertSubstitutesReachable(
   throw new Error(
     [
       `Seed refused: ${problems.length} equipment movement(s) have no bodyweight way out.`,
+      ...problems.map((p) => `  - ${p}`),
+    ].join('\n'),
+  );
+}
+
+/**
+ * Fails the seed when a fallback would change what the prescribed count
+ * means (DN-113). Its own assertion rather than part of the one above,
+ * because it is a different fault with a different fix: the way down exists,
+ * and it is the wrong shape.
+ */
+export function assertSubstituteUnitsMatch(
+  exercises: readonly SubstitutableSeed[],
+): void {
+  const problems = mismatchedSubstituteUnits(exercises);
+  if (problems.length === 0) return;
+
+  throw new Error(
+    [
+      `Seed refused: ${problems.length} equipment movement(s) fall back to a different unit.`,
       ...problems.map((p) => `  - ${p}`),
     ].join('\n'),
   );

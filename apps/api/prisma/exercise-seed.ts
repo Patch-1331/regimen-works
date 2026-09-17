@@ -81,6 +81,22 @@ export const exercises: ExerciseSeed[] = [
       "Hands wider than a push-up. Lower toward one hand while the other arm straightens out along the floor, then press up and alternate sides. The working arm does the pressing; the straight arm is a kickstand, not a second presser.",
   },
 
+  // Loaded pressing (DN-113) — off the line, not appended to it.
+  //
+  // `push_horizontal` is a bodyweight ladder ordered by how much of your own
+  // weight you press, and a floor press is ordered by what you loaded onto
+  // the dumbbell. It is not harder than an archer push-up; it is a different
+  // question. Appending it would also renumber nothing today and everything
+  // later, since a stored `SkillLevel.rung` is an index into this list.
+  {
+    name: "Dumbbell floor press",
+    pattern: "push",
+    equipment: ["dumbbell"],
+    alt: "Push-up",
+    instructions:
+      "On your back, knees bent, a dumbbell in each hand at chest height with the elbows on the floor at about 45°. Press until the arms are straight, then lower until the upper arms touch down again and pause there. The floor is the depth stop, which is what makes this kinder on the shoulders than a bench press.",
+  },
+
   // Push · Vertical
   {
     name: "Incline pike push-up",
@@ -149,6 +165,18 @@ export const exercises: ExerciseSeed[] = [
     rung: 3,
     instructions:
       "Hang from the bar with palms facing away, hands just outside the shoulders. Pull the chest toward the bar until the chin clears it, then lower all the way to straight arms. Start each rep from a dead hang rather than bouncing out of the bottom.",
+  },
+
+  // Loaded pulling (DN-113) — off the line, for the reason the floor press is.
+  // A dumbbell row is not a step above a pull-up; it is the horizontal pull
+  // the library otherwise has nothing for, at whatever load you own.
+  {
+    name: "Dumbbell row",
+    pattern: "pull",
+    equipment: ["dumbbell"],
+    alt: "Supermans + reverse snow angels",
+    instructions:
+      "Hinge at the hips with a flat back, one hand braced on a knee or a chair, the dumbbell hanging at arm's length. Pull it to the ribs by driving the elbow back, then lower to a full stretch. Alternate sides; each pull is a rep. The torso stays still — if it twists to help, the weight is winning.",
   },
 
   // Squat
@@ -471,6 +499,36 @@ export const exercises: ExerciseSeed[] = [
     rung: 1,
     instructions:
       "On your side, elbow under the shoulder, legs straight and feet stacked. Lift the hips into one line from heels to head and keep the top hip from rolling backwards. Split the prescribed reps evenly between the two sides.",
+  },
+
+  // Core · Carries (DN-113) — counted in seconds, like the holds above.
+  //
+  // A carry is really measured in distance, which `Exercise.unit` has no word
+  // for. Seconds is the honest half of it rather than a compromise: "carry
+  // these for forty seconds" is a real prescription, where a carry counted in
+  // reps is not a carry at all.
+  //
+  // Both fall to a plank rather than to a side plank or a hold matching their
+  // own bracing direction, because the fallback has to keep the unit: the
+  // `core_side` movements are rep-counted, so a forty-second carry handed to
+  // an athlete without dumbbells would arrive as forty side planks.
+  {
+    name: "Farmer carry",
+    pattern: "core",
+    equipment: ["dumbbell"],
+    alt: "Plank hold",
+    unit: "seconds",
+    instructions:
+      "A dumbbell in each hand at your sides, shoulders back and down, ribs stacked over the hips. Walk at a steady pace — turning where you run out of room — without leaning back or letting the weights swing. Counted in seconds, not reps or lengths.",
+  },
+  {
+    name: "Suitcase carry",
+    pattern: "core",
+    equipment: ["dumbbell"],
+    alt: "Plank hold",
+    unit: "seconds",
+    instructions:
+      "The farmer carry with one dumbbell instead of two, held at one side. The load pulls you sideways and the job is to stay upright — both shoulders level, no leaning away from the weight. Split the prescribed time evenly between the two sides.",
   },
 
   // Cardio — not part of a progression line

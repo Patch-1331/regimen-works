@@ -1,6 +1,9 @@
 import { progressionLine } from '@regimen-works/shared';
 import { exercises } from '../../prisma/exercise-seed';
-import { unreachableSubstitutes } from './substitute-guard';
+import {
+  mismatchedSubstituteUnits,
+  unreachableSubstitutes,
+} from './substitute-guard';
 
 /**
  * The guard (DN-83) run against the library that actually ships, rather than
@@ -17,6 +20,13 @@ describe('the seeded exercise library', () => {
     // Failure prints the offenders, so the message is the fix: which movement,
     // what it needs, and where its fallback stops short.
     expect(unreachableSubstitutes(exercises)).toEqual([]);
+  });
+
+  it('gives every equipment movement a fall counted in its own unit', () => {
+    // The carries (DN-113) are the first timed movements that need equipment,
+    // so this is the first seed where the fallback could arrive meaning
+    // something else: the prescribed count carries over unchanged.
+    expect(mismatchedSubstituteUnits(exercises)).toEqual([]);
   });
 
   it('puts every movement on a line the rest of the app knows', () => {
@@ -57,5 +67,61 @@ describe('the seeded exercise library', () => {
     // asserts nothing about anything.
     expect(exercises.length).toBeGreaterThan(40);
     expect(exercises.some((e) => (e.equipment ?? []).length > 0)).toBe(true);
+    // And that a timed equipment movement is in there at all, which is what
+    // gives the unit check above something to be wrong about (DN-113).
+    expect(
+      exercises.some(
+        (e) => (e.equipment ?? []).length > 0 && e.unit === 'seconds',
+      ),
+    ).toBe(true);
+  });
+
+  /**
+   * What DN-113 added, as properties rather than as a list to eyeball.
+   *
+   * The loaded upper-body movements are deliberately off every progression
+   * line: `pull` and `push_horizontal` are ordered by how much of your own
+   * weight you move, and a dumbbell row is ordered by what you loaded. A
+   * stored `SkillLevel.rung` is an index into those lines, so appending to
+   * one silently changes what every athlete above the insertion point has
+   * chosen.
+   */
+  describe('the loaded pulling, pressing and carries', () => {
+    const added = [
+      'Dumbbell row',
+      'Dumbbell floor press',
+      'Farmer carry',
+      'Suitcase carry',
+    ];
+
+    it('seeds all four', () => {
+      const names = new Set(exercises.map((e) => e.name));
+      expect(added.filter((name) => !names.has(name))).toEqual([]);
+    });
+
+    it('keeps them off every progression line', () => {
+      const onALine = exercises
+        .filter((e) => added.includes(e.name) && e.line)
+        .map((e) => `${e.name} on ${e.line}`);
+      expect(onALine).toEqual([]);
+    });
+
+    it('tags each with one piece of equipment, not two', () => {
+      // `isPerformable` requires *every* tag, so ['dumbbell', 'kettlebell']
+      // reads as "needs both" — an athlete owning one of the two would be
+      // refused a movement they can do.
+      const overTagged = exercises
+        .filter((e) => added.includes(e.name) && (e.equipment ?? []).length > 1)
+        .map((e) => e.name);
+      expect(overTagged).toEqual([]);
+    });
+
+    it('counts the carries in seconds', () => {
+      // A carry is really measured in distance, which `Exercise.unit` has no
+      // word for. Seconds is the honest half; reps would not be a carry.
+      const carries = exercises.filter((e) => e.name.endsWith('carry'));
+      expect(carries).toHaveLength(2);
+      expect(carries.every((e) => e.unit === 'seconds')).toBe(true);
+    });
   });
 });

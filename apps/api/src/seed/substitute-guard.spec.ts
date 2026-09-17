@@ -1,5 +1,7 @@
 import {
   assertSubstitutesReachable,
+  assertSubstituteUnitsMatch,
+  mismatchedSubstituteUnits,
   unreachableSubstitutes,
   type SubstitutableSeed,
 } from './substitute-guard';
@@ -97,5 +99,112 @@ describe('assertSubstitutesReachable', () => {
         { name: 'Box jump', equipment: ['box'] },
       ]),
     ).toThrow(/2 equipment movement\(s\)[\s\S]*Double-unders[\s\S]*Box jump/);
+  });
+});
+
+/**
+ * The second way a fallback fails while looking fine (DN-113): it exists, it
+ * needs nothing, and it is counted in the other unit. `WodMovement.reps`
+ * carries over unchanged, so the substitution silently rewrites what the
+ * number means.
+ */
+describe('mismatchedSubstituteUnits', () => {
+  const plank: SubstitutableSeed = { name: 'Plank hold', unit: 'seconds' };
+
+  it('passes a timed movement that falls to a timed one', () => {
+    const seeds = [
+      plank,
+      {
+        name: 'Farmer carry',
+        equipment: ['dumbbell'],
+        alt: 'Plank hold',
+        unit: 'seconds' as const,
+      },
+    ];
+    expect(mismatchedSubstituteUnits(seeds)).toEqual([]);
+  });
+
+  it('catches a timed movement falling to a rep-counted one', () => {
+    const problems = mismatchedSubstituteUnits([
+      { name: 'Side plank' },
+      {
+        name: 'Suitcase carry',
+        equipment: ['dumbbell'],
+        alt: 'Side plank',
+        unit: 'seconds',
+      },
+    ]);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('"Suitcase carry"');
+    expect(problems[0]).toContain('seconds');
+    expect(problems[0]).toContain('reps');
+  });
+
+  it('catches the mismatch in the other direction too', () => {
+    const problems = mismatchedSubstituteUnits([
+      plank,
+      { name: 'Dumbbell row', equipment: ['dumbbell'], alt: 'Plank hold' },
+    ]);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('"Dumbbell row"');
+  });
+
+  it('reads an unset unit as reps, the way the seed does', () => {
+    // Most of the library omits the field entirely, so the two spellings of
+    // "reps" have to compare equal or every untimed movement is an offender.
+    const seeds = [
+      { name: 'Push-up' },
+      {
+        name: 'Dumbbell floor press',
+        equipment: ['dumbbell'],
+        alt: 'Push-up',
+        unit: 'reps' as const,
+      },
+    ];
+    expect(mismatchedSubstituteUnits(seeds)).toEqual([]);
+  });
+
+  it('leaves a missing alternative to the check that words it properly', () => {
+    // Both faults at once on the same movement would otherwise be reported
+    // twice, in two vocabularies, for one fix.
+    const seeds: SubstitutableSeed[] = [
+      { name: 'Farmer carry', equipment: ['dumbbell'], unit: 'seconds' },
+      {
+        name: 'Suitcase carry',
+        equipment: ['dumbbell'],
+        alt: 'Nothing seeded',
+        unit: 'seconds',
+      },
+    ];
+    expect(mismatchedSubstituteUnits(seeds)).toEqual([]);
+    expect(unreachableSubstitutes(seeds)).toHaveLength(2);
+  });
+
+  it('refuses the seed rather than writing a count that means something else', () => {
+    expect(() =>
+      assertSubstituteUnitsMatch([
+        { name: 'Side plank' },
+        {
+          name: 'Suitcase carry',
+          equipment: ['dumbbell'],
+          alt: 'Side plank',
+          unit: 'seconds',
+        },
+      ]),
+    ).toThrow(/different unit/);
+  });
+
+  it('lets a seed whose units line up through', () => {
+    expect(() =>
+      assertSubstituteUnitsMatch([
+        plank,
+        {
+          name: 'Farmer carry',
+          equipment: ['dumbbell'],
+          alt: 'Plank hold',
+          unit: 'seconds',
+        },
+      ]),
+    ).not.toThrow();
   });
 });
