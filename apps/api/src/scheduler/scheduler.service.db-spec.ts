@@ -481,3 +481,141 @@ describe('SchedulerService.getScheduleCap', () => {
     });
   });
 });
+
+/**
+ * The floor under per-movement substitution (DN-82).
+ *
+ * Substituting movement by movement is the right default and it has a limit:
+ * a rope workout handed to someone with no rope becomes entirely high knees,
+ * which is a workout but no longer *that* workout — and the cooldown rule is
+ * then tracking it under a name describing none of what was trained.
+ *
+ * These go through `getToday`'s generating leg rather than an assigned day,
+ * because what is under test is which WODs `pickWod` was allowed to see.
+ */
+describe('SchedulerService equipment floor', () => {
+  /** A rope WOD, a bodyweight WOD, and the high knees the rope falls to. */
+  async function library() {
+    const highKnees = await createExercise({
+      name: 'High knees',
+      pattern: 'cardio',
+      line: null,
+      rung: null,
+    });
+    const doubleUnders = await createExercise({
+      name: 'Double-unders',
+      pattern: 'cardio',
+      line: null,
+      rung: null,
+      equipment: ['jump_rope'],
+      altExerciseId: highKnees.id,
+    });
+    const airSquat = await createExercise({
+      name: 'Air squat',
+      pattern: 'squat',
+      line: 'squat',
+      rung: 0,
+    });
+
+    const ropeWod = await createWod({
+      name: 'Rope Trick',
+      dominantPattern: 'cardio',
+      movements: [{ exerciseId: doubleUnders.id, reps: 30, order: 0 }],
+    });
+    const squatWod = await createWod({
+      name: 'Squat Sixty',
+      dominantPattern: 'squat',
+      movements: [{ exerciseId: airSquat.id, reps: 20, order: 0 }],
+    });
+    return { highKnees, doubleUnders, airSquat, ropeWod, squatWod };
+  }
+
+  async function athleteOwning(equipment: string[]) {
+    const user = await createUser();
+    await testPrisma().scheduleRule.create({
+      data: { userId: user.id, equipment },
+    });
+    return user;
+  }
+
+  it('does not offer a WOD whose identifying movement needs kit they lack', async () => {
+    const { squatWod } = await library();
+    const user = await athleteOwning([]);
+
+    const today = await service().getToday(user.id, TODAY);
+
+    // Only one candidate survives the floor, so this holds whatever `pickWod`
+    // would otherwise have rolled.
+    expect(today.assignment!.wod.name).toBe(squatWod.name);
+  });
+
+  it('offers it once they own the piece', async () => {
+    const { ropeWod, doubleUnders } = await library();
+    await testPrisma().wod.delete({ where: { name: 'Squat Sixty' } });
+    const user = await athleteOwning(['jump_rope']);
+
+    const today = await service().getToday(user.id, TODAY);
+
+    expect(today.assignment!.wod.name).toBe(ropeWod.name);
+    // And nothing is substituted away from them.
+    expect(today.assignment!.wod.movements[0].exercise.name).toBe(
+      doubleUnders.name,
+    );
+  });
+
+  it('still hands over a workout when nothing in the library is performable', async () => {
+    // The rule that keeps this safe above `pickWod`'s relaxation ladder: the
+    // filter hands back the unfiltered pool rather than emptying it, and
+    // per-movement substitution carries the day. A degraded workout beats no
+    // workout, and `pickWod` throws on an empty list.
+    const { ropeWod, highKnees } = await library();
+    await testPrisma().wod.delete({ where: { name: 'Squat Sixty' } });
+    const user = await athleteOwning([]);
+
+    const today = await service().getToday(user.id, TODAY);
+
+    expect(today.assignment!.wod.name).toBe(ropeWod.name);
+    expect(today.assignment!.wod.movements[0].exercise.name).toBe(
+      highKnees.name,
+    );
+  });
+
+  it('keeps a WOD whose pattern the athlete already trains on bodyweight', async () => {
+    // The case that makes the floor read the *remembered choice* rather than
+    // the prescription. This athlete owns no bar and settled on the ladder's
+    // bodyweight rung weeks ago, so nothing of theirs is being substituted
+    // for equipment — dropping their pull WODs would be the app arguing with
+    // a choice they already made.
+    const { negative, pullUp } = await pullLadder();
+    await library();
+    await testPrisma().wod.delete({ where: { name: 'Squat Sixty' } });
+    await testPrisma().wod.update({
+      where: { name: 'Rope Trick' },
+      data: { name: 'Alpha Rope' },
+    });
+    // Named to sort first, and the roll pinned to the front of the pool: read
+    // the prescription instead of the remembered choice and the pull WOD is
+    // dropped, the floor hands back both, and this lands on the rope WOD
+    // instead. Without both pins the broken path can pass on candidate order
+    // alone.
+    const pullWod = await createWod({
+      name: 'Zulu Pull',
+      dominantPattern: 'pull',
+      movements: [{ exerciseId: pullUp.id, reps: 30, order: 0 }],
+    });
+
+    const user = await athleteOwning([]);
+    await createSkillLevel(user.id, 'pull', 0);
+
+    const random = jest.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      const today = await service().getToday(user.id, TODAY);
+      expect(today.assignment!.wod.name).toBe(pullWod.name);
+      expect(today.assignment!.wod.movements[0].exercise.name).toBe(
+        negative.name,
+      );
+    } finally {
+      random.mockRestore();
+    }
+  });
+});

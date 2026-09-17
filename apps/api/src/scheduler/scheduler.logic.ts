@@ -32,7 +32,62 @@ export type RecentAssignment = {
  *
  * `history` does not need to be pre-filtered — this function does its
  * own date-window filtering — but must be sorted most-recent-first.
+ *
+ * `candidates` is expected to have been through `applyEquipmentFloor`
+ * already (DN-82). That filter deliberately sits outside this function,
+ * above the relaxation ladder rather than inside it: every step below is
+ * about a pool that is too small, and a filter applied between them could
+ * leave an athlete with no workout at all.
  */
+/**
+ * The movement a WOD is identified by: the first one in its dominant pattern.
+ *
+ * `Wod.dominantPattern` is already what the app treats as a WOD's identity —
+ * `pickWod` uses it for the cooldown rule, so two WODs sharing it are treated
+ * as the same kind of day. This resolves that claim down to the movement
+ * actually carrying it, which is what the equipment floor below has to look
+ * at. `wod-seed.spec.ts` holds every seeded WOD to having one.
+ */
+export function dominantMovement<
+  M extends { exercise: { pattern: string | null } },
+>(movements: M[], dominantPattern: string): M | undefined {
+  return movements.find((m) => m.exercise.pattern === dominantPattern);
+}
+
+/**
+ * Drops WODs whose identifying movement the athlete owns nothing for (DN-82).
+ *
+ * Substituting movement by movement is the right default and it has a floor.
+ * A cardio WOD built on double-unders, handed to someone with no rope,
+ * becomes entirely high knees — technically a workout, but no longer the
+ * workout it was, and the cooldown rule is now tracking it under a name that
+ * describes none of what was trained.
+ *
+ * **This sits above `pickWod`'s relaxation ladder, never inside it.** The
+ * library is small and that ladder exists because the pool empties fast; a
+ * filter applied underneath it could leave an athlete with no workout at all.
+ * So when the filter empties the pool it hands back the unfiltered list and
+ * lets per-movement substitution carry the day: a degraded workout beats no
+ * workout, and it is the obvious reading of "filter by equipment" that breaks
+ * this.
+ *
+ * `dominantEquipment` is what the identifying movement needs *after* the
+ * athlete's remembered choice has been applied, not what the library
+ * prescribed. An athlete who owns no bar and has settled on Supermans as
+ * their pull movement is not having anything substituted for equipment, and
+ * dropping their pull WODs would be the app arguing with a choice they
+ * already made.
+ */
+export function applyEquipmentFloor<C extends { dominantEquipment: string[] }>(
+  candidates: C[],
+  owned: ReadonlySet<string>,
+): C[] {
+  const performable = candidates.filter((c) =>
+    c.dominantEquipment.every((piece) => owned.has(piece)),
+  );
+  return performable.length > 0 ? performable : candidates;
+}
+
 export function pickWod(
   candidates: WodCandidate[],
   history: RecentAssignment[],

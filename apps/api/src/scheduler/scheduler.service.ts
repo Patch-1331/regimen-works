@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Exercise } from '@prisma/client';
+import { DEFAULT_EQUIPMENT } from '@regimen-works/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { toSessionDto } from '../sessions/session.mapper';
 import { WodsService } from '../wods/wods.service';
@@ -9,6 +10,9 @@ import {
   type ResolvedMovement,
 } from './movement-resolution.service';
 import {
+  applyEquipmentFloor,
+  applyRememberedChoice,
+  dominantMovement,
   getWeekRange,
   isRestDay,
   pickWod,
@@ -88,7 +92,12 @@ export class SchedulerService {
       };
     }
 
-    const wod = await this.generateWodForDate(userId, today, cooldownDays);
+    const wod = await this.generateWodForDate(
+      userId,
+      today,
+      cooldownDays,
+      rule?.equipment ?? [...DEFAULT_EQUIPMENT],
+    );
 
     const created = await this.prisma.dailyAssignment.create({
       data: { userId, date: today, wodId: wod.id, status: 'scheduled' },
@@ -191,27 +200,58 @@ export class SchedulerService {
     userId: string,
     today: string,
     cooldownDays: number,
+    equipment: string[],
   ) {
-    const [wods, recentAssignments] = await Promise.all([
-      this.prisma.wod.findMany({
-        select: { id: true, name: true, type: true, dominantPattern: true },
-      }),
-      this.prisma.dailyAssignment.findMany({
-        where: {
-          userId,
-          date: { lt: today },
-          status: { in: ['scheduled', 'in_progress', 'completed'] },
-        },
-        orderBy: { date: 'desc' },
-        take: 30,
-        select: {
-          date: true,
-          wod: {
-            select: { id: true, name: true, type: true, dominantPattern: true },
+    const [wods, recentAssignments, skillLevels, linedExercises] =
+      await Promise.all([
+        this.prisma.wod.findMany({
+          // Ordered so the candidate pool is the same list every time. Without
+          // it the pick depends on whatever order Postgres returns rows in,
+          // which makes "the same athlete, the same day, the same library"
+          // reproducible only by luck.
+          orderBy: { name: 'asc' },
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            dominantPattern: true,
+            // The movements come along so the equipment floor can find the one
+            // the WOD is identified by (DN-82). Ordered, because "the first
+            // movement in the dominant pattern" is only meaningful in the
+            // order the athlete meets them.
+            movements: {
+              orderBy: { order: 'asc' },
+              select: { exercise: true },
+            },
           },
-        },
-      }),
-    ]);
+        }),
+        this.prisma.dailyAssignment.findMany({
+          where: {
+            userId,
+            date: { lt: today },
+            status: { in: ['scheduled', 'in_progress', 'completed'] },
+          },
+          orderBy: { date: 'desc' },
+          take: 30,
+          select: {
+            date: true,
+            wod: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+                dominantPattern: true,
+              },
+            },
+          },
+        }),
+        // The remembered choice, because the floor has to judge what the
+        // athlete will actually be given rather than what the library
+        // prescribed: someone with no bar whose pull movement is already
+        // Supermans is having nothing substituted for equipment.
+        this.prisma.skillLevel.findMany({ where: { userId } }),
+        this.prisma.exercise.findMany({ where: { line: { not: null } } }),
+      ]);
 
     // status filter above guarantees wodId (and so `wod`) is set on every row here,
     // but wodId is nullable at the schema level (for skipped days), so narrow explicitly.
@@ -221,6 +261,37 @@ export class SchedulerService {
           a.wod !== null,
       )
       .map((a) => ({ date: a.date, wod: a.wod }));
-    return pickWod(wods, history, today, cooldownDays, Math.random);
+    const chosenRung = new Map(skillLevels.map((l) => [l.line, l.rung]));
+    const exerciseAtRung = new Map(
+      linedExercises.map((e) => [`${e.line}:${e.rung}`, e]),
+    );
+    const owned = new Set(equipment);
+
+    const candidates = wods.map((wod) => {
+      const resolved = applyRememberedChoice(
+        wod.movements,
+        chosenRung,
+        exerciseAtRung,
+      );
+      const identifying = dominantMovement(resolved, wod.dominantPattern);
+      return {
+        id: wod.id,
+        name: wod.name,
+        type: wod.type,
+        dominantPattern: wod.dominantPattern,
+        // A WOD whose claimed pattern no movement carries has no identity to
+        // judge, so it stays in the pool rather than being dropped on a data
+        // gap — the discipline every resolution layer here keeps.
+        dominantEquipment: identifying?.exercise.equipment ?? [],
+      };
+    });
+
+    return pickWod(
+      applyEquipmentFloor(candidates, owned),
+      history,
+      today,
+      cooldownDays,
+      Math.random,
+    );
   }
 }
