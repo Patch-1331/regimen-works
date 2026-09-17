@@ -3,7 +3,10 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 
-import { assertSubstitutesReachable } from "../src/seed/substitute-guard";
+import {
+  assertSubstitutesReachable,
+  assertSubstituteUnitsMatch,
+} from "../src/seed/substitute-guard";
 import { exercises } from "./exercise-seed";
 import { wods, type WodMovementSeed, type WodSeed } from "./wod-seed";
 
@@ -61,6 +64,7 @@ async function main() {
   // the athlete just gets a movement they cannot do -- and a half-written
   // seed is worse than a refused one.
   assertSubstitutesReachable(exercises);
+  assertSubstituteUnitsMatch(exercises);
 
   console.log("Seeding exercises...");
   const idByName = new Map<string, string>();
