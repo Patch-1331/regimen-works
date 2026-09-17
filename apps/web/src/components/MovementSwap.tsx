@@ -102,6 +102,10 @@ export function SwapPanel({
   onPick: (exerciseId: string) => void;
   onRevert: () => void;
 }) {
+  // Derived from the list rather than passed in, so the sentence and the rows
+  // can never disagree about whether the prescription is on offer.
+  const offersPrescribed = options.some((o) => o.isPrescribed);
+
   return (
     <div id={id} className="px-4 pb-3.5 pt-1" style={{ background: "var(--panel-2)" }}>
       <p
@@ -144,6 +148,19 @@ export function SwapPanel({
                   NO KIT
                 </span>
               )}
+              {/* The movement the workout named, back on the list where an
+                  automatic layer took it off (DN-110). Marked rather than
+                  left to the sentence below, because in the off-ladder case
+                  it is one of two near-identical rows and which is which
+                  decides the tap. */}
+              {option.isPrescribed && (
+                <span
+                  className="shrink-0 text-[10px] tracking-[0.1em] text-[var(--ink-faint)]"
+                  style={{ fontFamily: "var(--font-mono)" }}
+                >
+                  PRESCRIBED
+                </span>
+              )}
             </button>
           </li>
         ))}
@@ -157,15 +174,25 @@ export function SwapPanel({
           athlete's own, made once and still honoured; the equipment fallback
           is the app standing down from a movement they have no gear for.
           Calling the second one their pick would be untrue, and would send
-          someone looking for a setting they never touched. */}
+          someone looking for a setting they never touched.
+
+          It stops naming the prescribed movement once the list offers it
+          (DN-110): saying "the workout says double-unders" above a row that
+          reads DOUBLE-UNDERS is the app talking to itself, and the sentence
+          as written — a statement of fact about equipment the athlete lacks —
+          reads as final next to a control that is now anything but. */}
       {prescribedName && (
         <p
           className="mt-1 text-[11px] text-[var(--ink-faint)]"
           style={{ fontFamily: "var(--font-mono)" }}
         >
-          {prescribedReason === "equipment"
-            ? `Not in your equipment. The workout says ${prescribedName.toLowerCase()}.`
-            : `Your pick. The workout says ${prescribedName.toLowerCase()}.`}
+          {offersPrescribed
+            ? prescribedReason === "equipment"
+              ? "Not in your equipment — take it anyway if you have one today."
+              : "Your standing pick — the workout's own is marked."
+            : prescribedReason === "equipment"
+              ? `Not in your equipment. The workout says ${prescribedName.toLowerCase()}.`
+              : `Your pick. The workout says ${prescribedName.toLowerCase()}.`}
         </p>
       )}
       {isSwapped && (

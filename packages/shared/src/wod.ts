@@ -33,6 +33,20 @@ export const wodMovementSchema = z
     // the silence was wrong for: the athlete never asked for it and was never
     // told it happened.
     prescribedName: z.string().nullable().default(null),
+    // The same movement's id, so the screen can offer it back rather than
+    // only naming it (DN-110). An athlete handed high knees for want of a
+    // rope, standing in a gym that has one, could read what the workout
+    // asked for and had no way to take it.
+    //
+    // Carried rather than derived on the client: the alternative is shared
+    // between movements -- high knees stands in for several rope movements --
+    // so working backwards from it is ambiguous exactly where the library is
+    // growing, and every wrong guess is a 400 from the swap endpoint.
+    //
+    // Non-null exactly when `prescribedName` is, and defaulted for the same
+    // reason: an older payload degrades to a panel that explains without
+    // offering, not to a parse error.
+    prescribedId: z.string().nullable().default(null),
     // Why it was replaced, so the screen can say so without guessing. Non-null
     // exactly when `prescribedName` is, and the two are read together: the
     // copy for a standing choice ("your pick") is a lie about a movement the

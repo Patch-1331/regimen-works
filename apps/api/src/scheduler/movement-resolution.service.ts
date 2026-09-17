@@ -26,6 +26,8 @@ export type ResolvedMovement<
 > = M & {
   isSwapped: boolean;
   prescribedName: string | null;
+  /** The prescribed exercise's id, so the screen can offer it back (DN-110). */
+  prescribedId: string | null;
   prescribedReason: SubstitutionReason | null;
 };
 
@@ -115,6 +117,7 @@ export class MovementResolutionService {
         ...m,
         isSwapped,
         prescribedName: replacement?.name ?? null,
+        prescribedId: replacement?.id ?? null,
         prescribedReason: replacement?.reason ?? null,
       };
     });
@@ -171,10 +174,10 @@ function describeReplacements<
   prescribed: M[],
   remembered: M[],
   available: M[],
-): Map<string, { name: string; reason: SubstitutionReason }> {
+): Map<string, { id: string; name: string; reason: SubstitutionReason }> {
   const replacements = new Map<
     string,
-    { name: string; reason: SubstitutionReason }
+    { id: string; name: string; reason: SubstitutionReason }
   >();
   prescribed.forEach((m, i) => {
     const reason: SubstitutionReason | null =
@@ -183,7 +186,12 @@ function describeReplacements<
         : remembered[i].exercise.id !== m.exercise.id
           ? 'remembered_choice'
           : null;
-    if (reason) replacements.set(m.id, { name: m.exercise.name, reason });
+    if (reason)
+      replacements.set(m.id, {
+        id: m.exercise.id,
+        name: m.exercise.name,
+        reason,
+      });
   });
   return replacements;
 }

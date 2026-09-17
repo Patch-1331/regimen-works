@@ -24,6 +24,20 @@ const options: SwapOption[] = [
     rung: null,
     isCurrent: true,
     isAlternative: true,
+    isPrescribed: false,
+  },
+];
+
+/** The same list with the prescribed movement back on it (DN-110). */
+const withPrescribed: SwapOption[] = [
+  ...options,
+  {
+    exerciseId: "pull-up",
+    name: "Pull-up",
+    rung: null,
+    isCurrent: false,
+    isAlternative: false,
+    isPrescribed: true,
   },
 ];
 
@@ -63,6 +77,45 @@ describe("SwapPanel prescription note", () => {
       screen.getByText("Not in your equipment. The workout says pull-up."),
     ).toBeInTheDocument();
     expect(screen.queryByText(/your pick/i)).not.toBeInTheDocument();
+  });
+
+  it("stops naming the prescribed movement once it is on the list", () => {
+    // The note exists because the movement was unreachable. Once it is a row
+    // in the list above, repeating its name is the app talking to itself —
+    // and the sentence's flat statement of fact reads as final next to a
+    // control that now offers a way out of it.
+    panel({
+      options: withPrescribed,
+      prescribedName: "Pull-up",
+      prescribedReason: "equipment",
+    });
+
+    expect(screen.queryByText(/the workout says/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Not in your equipment — take it anyway if you have one today."),
+    ).toBeInTheDocument();
+  });
+
+  it("still tells a remembered choice apart from an equipment fallback when both are offered", () => {
+    // The shorter wording must not collapse the two readings the note exists
+    // to keep apart: a standing choice is the athlete's own.
+    panel({
+      options: withPrescribed,
+      prescribedName: "Pull-up",
+      prescribedReason: "remembered_choice",
+    });
+
+    expect(
+      screen.getByText("Your standing pick — the workout's own is marked."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/not in your equipment/i)).not.toBeInTheDocument();
+  });
+
+  it("marks which row the workout asked for", () => {
+    // Off the ladder the two rows are near-identical movements, and which is
+    // which decides the tap.
+    panel({ options: withPrescribed, prescribedName: "Pull-up", prescribedReason: "equipment" });
+    expect(screen.getByText("PRESCRIBED")).toBeInTheDocument();
   });
 
   it("falls back to the athlete's own wording on a payload with no reason", () => {

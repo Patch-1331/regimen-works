@@ -140,6 +140,28 @@ describe('SchedulerService equipment resolution', () => {
     expect(movement.isSwapped).toBe(false);
   });
 
+  it('carries the prescribed exercise id, not only its name', async () => {
+    // A name is something to read; the id is something to offer back
+    // (DN-110). Without it the screen can tell an athlete standing in a gym
+    // what the workout asked for and give them no way to take it, because
+    // the alternative is shared between movements and cannot be read
+    // backwards.
+    const { pullUp } = await pullLadder();
+    const { user } = await assignedDay(pullUp.id, { equipment: [] });
+
+    expect((await servedMovement(user.id)).prescribedId).toBe(pullUp.id);
+  });
+
+  it('carries the id of what the choice layer replaced, too', async () => {
+    const { chinUp } = await pullLadder();
+    const { user } = await assignedDay(chinUp.id, { equipment: ['bar'] });
+    await createSkillLevel(user.id, 'pull', 0);
+
+    // The library's movement, not the rung they chose: it is the one thing
+    // on this row they have no other way back to.
+    expect((await servedMovement(user.id)).prescribedId).toBe(chinUp.id);
+  });
+
   it('tells an equipment substitution apart from a remembered choice', async () => {
     // The two arrive through the same field and the screen says different
     // words for them, so the field has to distinguish them. Here the choice
@@ -178,6 +200,7 @@ describe('SchedulerService equipment resolution', () => {
     const movement = await servedMovement(user.id);
 
     expect(movement.prescribedName).toBeNull();
+    expect(movement.prescribedId).toBeNull();
     expect(movement.prescribedReason).toBeNull();
   });
 
@@ -287,6 +310,9 @@ describe('SchedulerService resolution ordering', () => {
     const served = await servedMovement(user.id);
     expect(served.prescribedName).toBeNull();
     expect(served.prescribedReason).toBeNull();
+    // And no id either, so the panel offers the prescription once -- through
+    // revert, which clears the substitution -- rather than twice (DN-110).
+    expect(served.prescribedId).toBeNull();
   });
 
   it('resolves one athlete equipment without reaching for another', async () => {
