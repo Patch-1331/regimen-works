@@ -358,6 +358,10 @@ describe('SchedulerService resolution ordering', () => {
     expect(served.isSwapped).toBe(true);
   });
 
+  // Equipment moved this row and then the athlete swapped it -- the day
+  // DN-116 is about. The plate still says nothing, but the silence now lives
+  // in the payload rather than in the resolver, and the session snapshot
+  // keeps the fallback underneath.
   it('does not name a prescription on a row the athlete swapped themselves', async () => {
     const { chinUp, pullUp } = await pullLadder();
     const { user, assignment, movement } = await assignedDay(pullUp.id, {

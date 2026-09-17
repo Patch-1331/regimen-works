@@ -37,6 +37,12 @@ export const sessionMovementSchema = z.object({
    * (DN-88) or their equipment (DN-79) replaced it. Defaults to null so
    * sessions snapshotted before the field existed still parse — they predate
    * it, and there is no honest way to fill it in after the fact.
+   *
+   * Recorded on a row the athlete swapped, too (DN-116) — the Today plate
+   * hides it there, history keeps it. So on a session written before that
+   * change, a null beside `isSwapped: true` means *not recorded* rather than
+   * "nothing replaced it", and reading it as the latter would invent a fact
+   * about a day nobody can go back to.
    */
   prescribedName: z.string().nullable().default(null),
   /**
