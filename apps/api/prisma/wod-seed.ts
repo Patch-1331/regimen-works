@@ -332,4 +332,107 @@ export const wods: WodSeed[] = [
       { exercise: "Air squat", reps: 15 },
     ],
   },
+  // ---------------------------------------------------------------------
+  // Bodyweight (DN-114) — first, for the reason DN-34's batch put them first
+  //
+  // DN-82 drops a WOD whose dominant-pattern movement the athlete cannot
+  // perform, so the three dumbbell WODs below are ones a bodyweight athlete
+  // is never offered. Added alone they would grow the equipped library and
+  // leave everyone else exactly where they were.
+  //
+  // "Floor Pull" also closes a hole that predates the equipment work
+  // entirely: all six pull-dominant WODs are led by the pull-up, so an
+  // athlete with no bar had never once been given a workout *about* pulling.
+  // Their pull ladder starts on the floor; the library had no WOD that did.
+  {
+    name: "Floor Pull",
+    type: "amrap",
+    timeCapMinutes: 12,
+    rounds: null,
+    isNamed: false,
+    dominantPattern: "pull",
+    description:
+      "As many rounds as possible in 12 minutes: 12 supermans with reverse snow angels, 10 push-ups, 15 sit-ups. Pulling work for a day with no bar — the arms stay off the floor for the whole set of twelve.",
+    movements: [
+      { exercise: "Supermans + reverse snow angels", reps: 12 },
+      { exercise: "Push-up", reps: 10 },
+      { exercise: "Sit-up", reps: 15 },
+    ],
+  },
+  {
+    name: "Hold Fast",
+    type: "amrap",
+    timeCapMinutes: 10,
+    rounds: null,
+    isNamed: false,
+    dominantPattern: "core",
+    description:
+      "As many rounds as possible in 10 minutes: 30 seconds of plank, 15 sit-ups, 20 seconds of hollow hold. Bracing work — the counts on the holds are seconds, and they are the whole point of the round.",
+    movements: [
+      { exercise: "Plank hold", reps: 30 },
+      { exercise: "Sit-up", reps: 15 },
+      { exercise: "Hollow hold", reps: 20 },
+    ],
+  },
+
+  // ---------------------------------------------------------------------
+  // Dumbbell (DN-114) — homes for the movements DN-113 seeded
+  //
+  // Each is led by the loaded movement deliberately, which is what makes
+  // DN-82 drop it for an athlete without dumbbells rather than hand them a
+  // version of it built from press-ups. Substitution still covers the
+  // non-dominant rows.
+  {
+    name: "Row Call",
+    type: "amrap",
+    timeCapMinutes: 12,
+    rounds: null,
+    isNamed: false,
+    dominantPattern: "pull",
+    description:
+      "As many rounds as possible in 12 minutes: 10 dumbbell rows, 10 push-ups, 15 air squats. Rows alternate sides, so ten is five each. The horizontal pull the library had no loaded workout for.",
+    movements: [
+      { exercise: "Dumbbell row", reps: 10 },
+      { exercise: "Push-up", reps: 10 },
+      { exercise: "Air squat", reps: 15 },
+    ],
+  },
+  {
+    name: "Floor Work",
+    type: "for_time",
+    timeCapMinutes: 16,
+    rounds: 5,
+    isNamed: false,
+    dominantPattern: "push",
+    description:
+      "Five rounds for time: 10 dumbbell floor presses, 15 sit-ups, 20 walking lunge steps. The floor stops the press at depth, so pick a weight you can keep honest for all five rounds.",
+    movements: [
+      { exercise: "Dumbbell floor press", reps: 10 },
+      { exercise: "Sit-up", reps: 15 },
+      { exercise: "Walking lunge", reps: 20 },
+    ],
+  },
+  {
+    name: "Carry On",
+    type: "emom",
+    timeCapMinutes: 10,
+    rounds: 10,
+    workSeconds: 60,
+    restSeconds: 0,
+    intervalCount: 10,
+    isNamed: false,
+    dominantPattern: "core",
+    // An EMOM rather than a for-time, which is the open question DN-114
+    // carried. A carry is counted in seconds, and a for-time workout asks the
+    // athlete to race a clock while one of its movements *is* a clock -- two
+    // timers, one of which the app does not run. An interval already is a
+    // duration the app counts down, so twenty seconds of carrying inside a
+    // sixty-second minute needs nothing the timer does not already do.
+    description:
+      "Every minute on the minute for ten: 20 seconds of farmer carry, then 20 seconds of suitcase carry — 10 seconds a side. Whatever is left of the minute is your rest. Set the weights down between minutes, not during them.",
+    movements: [
+      { exercise: "Farmer carry", reps: 20 },
+      { exercise: "Suitcase carry", reps: 20 },
+    ],
+  },
 ];
