@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { dailyAssignmentSchema } from "./assignment.js";
 import { movementPattern, progressionLine, resultType, wodType } from "./enums.js";
 import { exerciseSchema, createExerciseSchema } from "./exercise.js";
+import { movementHistorySchema } from "./history.js";
 import { logResultRequestSchema, workoutLogListItemSchema } from "./log.js";
 import { proposedRungChangeSchema } from "./rung-change.js";
 import { scheduleCapSchema, scheduleRuleSchema } from "./schedule.js";
@@ -607,5 +608,102 @@ describe("enums", () => {
     expect(movementPattern.safeParse("core").success).toBe(true);
     expect(progressionLine.safeParse("core").success).toBe(false);
     expect(progressionLine.safeParse("core_dynamic").success).toBe(true);
+  });
+});
+
+/**
+ * Per-movement history (DN-89). The client reads this to say what has been
+ * trained, so what the schema refuses matters as much as what it accepts: a
+ * movement with no days, or a session count of zero, would render as a
+ * movement the athlete has trained and never trained at once.
+ */
+describe("movementHistorySchema", () => {
+  function history(overrides: Record<string, unknown> = {}) {
+    return {
+      exerciseId: "chin-up",
+      name: "Chin-up",
+      line: "pull",
+      unit: "reps",
+      sessions: 2,
+      total: 50,
+      firstTrained: "2026-09-10",
+      lastTrained: "2026-09-14",
+      days: [
+        {
+          date: "2026-09-14",
+          wodName: "Cindy",
+          reps: 30,
+          isSwapped: false,
+          prescribedName: null,
+          prescribedReason: null,
+        },
+      ],
+      ...overrides,
+    };
+  }
+
+  it("parses a movement the athlete has trained", () => {
+    const parsed = movementHistorySchema.parse(history());
+    expect(parsed).toMatchObject({ sessions: 2, total: 50, unit: "reps" });
+    expect(parsed.days[0].wodName).toBe("Cindy");
+  });
+
+  it("accepts a movement that sits off every progression line", () => {
+    // Cardio and the loaded movements carry no line, and they are trained like
+    // anything else.
+    expect(movementHistorySchema.parse(history({ line: null })).line).toBeNull();
+  });
+
+  it("refuses a history of no sessions", () => {
+    // `sessions` counts the days behind it, so zero is not a movement with an
+    // empty history — it is a row that should not have been built.
+    expect(movementHistorySchema.safeParse(history({ sessions: 0 })).success).toBe(false);
+  });
+
+  it("carries which layer replaced the prescribed movement", () => {
+    // The three causes read differently (DN-79), so history keeps them apart
+    // rather than recording "something changed".
+    const parsed = movementHistorySchema.parse(
+      history({
+        days: [
+          {
+            date: "2026-09-14",
+            wodName: "Rope Trick",
+            reps: 100,
+            isSwapped: false,
+            prescribedName: "Double-unders",
+            prescribedReason: "equipment",
+          },
+        ],
+      }),
+    );
+    expect(parsed.days[0].prescribedReason).toBe("equipment");
+  });
+
+  it("refuses a reason outside the two automatic substitutions", () => {
+    const parsed = movementHistorySchema.safeParse(
+      history({
+        days: [
+          {
+            date: "2026-09-14",
+            wodName: "Cindy",
+            reps: 30,
+            isSwapped: true,
+            prescribedName: null,
+            prescribedReason: "swapped",
+          },
+        ],
+      }),
+    );
+    // A swap is `isSwapped`, not a reason — the same line substitutionReason
+    // holds everywhere else.
+    expect(parsed.success).toBe(false);
+  });
+
+  it("counts a timed movement in seconds without converting it", () => {
+    const parsed = movementHistorySchema.parse(
+      history({ unit: "seconds", total: 300, line: "core_hold" }),
+    );
+    expect(parsed).toMatchObject({ unit: "seconds", total: 300 });
   });
 });
