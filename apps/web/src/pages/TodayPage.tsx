@@ -146,6 +146,10 @@ export function TodayPage() {
               exercises ?? [],
               m.exercise.line,
               m.exercise.id,
+              // What the library asked for, where an automatic layer replaced
+              // it — the one movement the athlete could read but not pick
+              // until now (DN-110).
+              m.prescribedId,
             );
             // A swapped row keeps its control even when the movement it now
             // holds offers nothing further — the alternative sits off every

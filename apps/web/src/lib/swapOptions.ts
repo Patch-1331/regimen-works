@@ -16,6 +16,12 @@ export type SwapOption = {
   isCurrent: boolean;
   /** The alternative is offered for equipment, not difficulty — labelled, not ranked. */
   isAlternative: boolean;
+  /**
+   * What the library asked for, where an automatic layer replaced it (DN-110).
+   * Labelled for the same reason the alternative is: the athlete is choosing
+   * between movements, and which one the workout named is part of the choice.
+   */
+  isPrescribed: boolean;
 };
 
 /**
@@ -28,16 +34,33 @@ export type SwapOption = {
  * and a rope the athlete doesn't have today is exactly the case the swap
  * exists for (DN-80). So the pair is offered instead of nothing.
  *
- * Still empty when there is no line *and* no alternative — that really is a
- * control that opens onto nothing.
+ * Whatever the ladder yields, the movement the library prescribed is added
+ * back if an automatic layer replaced it and it isn't already listed (DN-110):
+ * an athlete handed high knees for want of a rope, in a gym that has one,
+ * should be able to take the workout as written.
+ *
+ * Still empty when a single option is all there is — one unmarked row reads as
+ * an instruction, not a choice, and a control that opens onto the movement
+ * already showing is worse than no control.
  */
 export function buildSwapOptions(
   exercises: ApiExercise[],
   line: string | null,
   currentExerciseId: string,
+  prescribedId: string | null = null,
 ): SwapOption[] {
-  if (!line) return offLadderOptions(exercises, currentExerciseId);
+  const options = line
+    ? ladderOptions(exercises, line, currentExerciseId)
+    : offLadderOptions(exercises, currentExerciseId);
+  const withPrescribed = addPrescribed(options, exercises, prescribedId);
+  return withPrescribed.length > 1 ? withPrescribed : [];
+}
 
+function ladderOptions(
+  exercises: ApiExercise[],
+  line: string,
+  currentExerciseId: string,
+): SwapOption[] {
   const rungs = exercises
     .filter((e) => e.line === line && e.rung !== null)
     .sort((a, b) => (a.rung ?? 0) - (b.rung ?? 0));
@@ -49,6 +72,7 @@ export function buildSwapOptions(
     rung: e.rung,
     isCurrent: e.id === currentExerciseId,
     isAlternative: false,
+    isPrescribed: false,
   }));
 
   const alt = exercises.find((e) => e.id === currentExerciseId)?.altExercise;
@@ -59,6 +83,7 @@ export function buildSwapOptions(
       rung: null,
       isCurrent: alt.id === currentExerciseId,
       isAlternative: true,
+      isPrescribed: false,
     });
   }
 
@@ -80,33 +105,85 @@ export function buildSwapOptions(
  * with the current one marked: a single unmarked row reads as an instruction,
  * not as a choice between two things.
  *
- * Nothing is offered in the other direction — from the alternative back to the
- * movement it stands in for. That is what the panel's revert is for on a row
- * the athlete swapped themselves, and on a row the equipment layer moved it
- * needs the prescribed exercise's id, which the payload does not carry (DN-110).
+ * The other direction — from the alternative back to the movement it stands in
+ * for — is `addPrescribed`'s job rather than this one's. It cannot be derived
+ * here: an alternative is shared between movements (high knees stands in for
+ * several rope movements), so reading backwards from one is ambiguous.
+ *
+ * The current exercise alone is returned where there is no alternative, and
+ * dropped by the caller unless the prescribed movement joins it.
  */
 function offLadderOptions(
   exercises: ApiExercise[],
   currentExerciseId: string,
 ): SwapOption[] {
   const current = exercises.find((e) => e.id === currentExerciseId);
-  const alt = current?.altExercise;
-  if (!current || !alt) return [];
+  if (!current) return [];
 
-  return [
+  const options: SwapOption[] = [
     {
       exerciseId: current.id,
       name: current.name,
       rung: null,
       isCurrent: true,
       isAlternative: false,
+      isPrescribed: false,
     },
-    {
-      exerciseId: alt.id,
-      name: alt.name,
+  ];
+  if (current.altExercise) {
+    options.push({
+      exerciseId: current.altExercise.id,
+      name: current.altExercise.name,
       rung: null,
       isCurrent: false,
       isAlternative: true,
+      isPrescribed: false,
+    });
+  }
+  return options;
+}
+
+/**
+ * Marks the movement the library prescribed, adding it to the list if the
+ * ladder doesn't already hold it (DN-110).
+ *
+ * `prescribedId` is non-null only where an automatic layer replaced the
+ * movement — the athlete's remembered choice on this line, or equipment they
+ * don't own. It is null on a row they swapped themselves: putting the
+ * prescription back there is what the panel's revert does, and offering it
+ * twice, once as a swap that leaves the substitution in place, would be two
+ * controls for one intention.
+ *
+ * A prescribed id the library doesn't hold is passed over rather than
+ * offered — the same quiet degrading the resolution layers do, and the
+ * alternative is a swap the athlete taps and the API rejects.
+ */
+function addPrescribed(
+  options: SwapOption[],
+  exercises: ApiExercise[],
+  prescribedId: string | null,
+): SwapOption[] {
+  if (!prescribedId) return options;
+
+  const listed = options.some((o) => o.exerciseId === prescribedId);
+  if (listed) {
+    return options.map((o) =>
+      o.exerciseId === prescribedId ? { ...o, isPrescribed: true } : o,
+    );
+  }
+
+  const prescribed = exercises.find((e) => e.id === prescribedId);
+  if (!prescribed) return options;
+
+  return [
+    ...options,
+    {
+      exerciseId: prescribed.id,
+      name: prescribed.name,
+      rung: prescribed.rung,
+      isCurrent: false,
+      isAlternative: false,
+      isPrescribed: true,
     },
   ];
 }

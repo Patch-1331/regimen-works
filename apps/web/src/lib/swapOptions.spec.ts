@@ -125,6 +125,7 @@ describe("buildSwapOptions", () => {
         rung: null,
         isCurrent: true,
         isAlternative: false,
+        isPrescribed: false,
       },
       {
         exerciseId: "high-knees",
@@ -132,6 +133,7 @@ describe("buildSwapOptions", () => {
         rung: null,
         isCurrent: false,
         isAlternative: true,
+        isPrescribed: false,
       },
     ]);
   });
@@ -145,11 +147,73 @@ describe("buildSwapOptions", () => {
     ]);
   });
 
-  it("offers nothing further once the athlete is on the alternative", () => {
+  it("offers nothing further once the athlete swapped to the alternative themselves", () => {
     // High knees stand in for the rope and need nothing themselves, so there
-    // is no third movement to go to. Getting back is revert's job, not a swap
-    // target's — see DN-110 for the equipment-resolved case.
+    // is no third movement to go to. On a row the athlete swapped, getting
+    // back is revert's job — which is why no prescribed id is passed here.
     expect(buildSwapOptions(library, null, "high-knees")).toEqual([]);
+  });
+
+  /**
+   * The equipment layer moves a row silently, with no substitution behind it,
+   * so revert does not apply (DN-110). Without this the one movement the
+   * athlete has actually acquired the gear for is the one they cannot pick.
+   */
+  it("offers the prescribed movement back on a row an automatic layer moved", () => {
+    const options = buildSwapOptions(
+      library,
+      null,
+      "high-knees",
+      "double-unders",
+    );
+    expect(options).toEqual([
+      {
+        exerciseId: "high-knees",
+        name: "High knees",
+        rung: null,
+        isCurrent: true,
+        isAlternative: false,
+        isPrescribed: false,
+      },
+      {
+        exerciseId: "double-unders",
+        name: "Double-unders",
+        rung: null,
+        isCurrent: false,
+        isAlternative: false,
+        isPrescribed: true,
+      },
+    ]);
+  });
+
+  it("marks the prescribed rung on the ladder rather than listing it twice", () => {
+    // The remembered choice moved this row, and the movement it moved from is
+    // a rung the ladder already carries. Appending it would offer the same
+    // exercise on two lines of the same list.
+    const options = buildSwapOptions(library, "pull", "negative", "pull-up");
+    expect(options.map((o) => o.exerciseId)).toEqual([
+      "negative",
+      "chin-up",
+      "pull-up",
+    ]);
+    expect(options.filter((o) => o.isPrescribed).map((o) => o.name)).toEqual([
+      "Pull-up",
+    ]);
+  });
+
+  it("passes over a prescribed movement the library does not hold", () => {
+    // Degrades to the list as it was rather than offering a swap the API
+    // would reject — the discipline every resolution layer keeps.
+    expect(
+      buildSwapOptions(library, null, "double-unders", "retired-exercise"),
+    ).toEqual(buildSwapOptions(library, null, "double-unders"));
+  });
+
+  it("still offers nothing when the prescribed movement is the one showing", () => {
+    // A control that opens onto a single row reads as an instruction, not a
+    // choice. Burpees have no alternative, so there is nothing to pair it
+    // with even if something upstream named one.
+    expect(buildSwapOptions(library, null, "burpee", "burpee")).toEqual([]);
   });
 
   it("returns nothing when the line has no seeded rungs", () => {

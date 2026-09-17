@@ -29,6 +29,7 @@ export function movement(overrides: Partial<WodMovement> = {}): WodMovement {
     repScheme: [21, 15, 9],
     isSwapped: false,
     prescribedName: null,
+    prescribedId: null,
     prescribedReason: null,
     ...overrides,
     exercise: {

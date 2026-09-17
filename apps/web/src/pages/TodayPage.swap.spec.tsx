@@ -48,7 +48,12 @@ const highKnees = fixtures.apiExercise({
 /** A plate whose single movement is the given cardio exercise. */
 function plateShowing(
   exercise: typeof doubleUnders,
-  movementOverrides: { isSwapped?: boolean } = {},
+  movementOverrides: {
+    isSwapped?: boolean;
+    prescribedName?: string | null;
+    prescribedId?: string | null;
+    prescribedReason?: "equipment" | "remembered_choice" | null;
+  } = {},
 ) {
   server.use(
     http.get("/api/exercises", () =>
@@ -124,6 +129,108 @@ describe("the swap control on an off-ladder movement", () => {
     await userEvent.click(
       await screen.findByRole("button", { name: /swap high knees/i }),
     );
+    expect(
+      screen.getByRole("button", { name: /use what's prescribed/i }),
+    ).toBeInTheDocument();
+  });
+});
+
+/**
+ * Taking back the prescribed movement after the equipment layer dropped it
+ * (DN-110).
+ *
+ * The athlete owns no rope, so the plate shows high knees where the workout
+ * said double-unders. Today they are somewhere that has one. Revert does not
+ * apply — there is no substitution behind this row, the equipment layer moved
+ * it during resolution — so until now the one movement they had actually
+ * found the gear for was the one they could not pick.
+ */
+describe("the prescribed movement after an equipment fallback", () => {
+  /** High knees, standing in for the double-unders the athlete owns no rope for. */
+  function equipmentResolvedPlate() {
+    plateShowing(highKnees, {
+      prescribedName: "Double-unders",
+      prescribedId: "double-unders",
+      prescribedReason: "equipment",
+    });
+  }
+
+  it("gives the row a control it would otherwise not have", async () => {
+    equipmentResolvedPlate();
+    renderRoute("/");
+
+    // High knees have no ladder and no alternative of their own: without the
+    // prescription there is nothing to offer, which is the case above.
+    expect(
+      await screen.findByRole("button", { name: /swap high knees/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers the movement the workout asked for, marked as such", async () => {
+    equipmentResolvedPlate();
+    renderRoute("/");
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /swap high knees/i }),
+    );
+
+    const prescribed = screen.getByRole("button", { name: /^double-unders/i });
+    expect(prescribed).toBeInTheDocument();
+    expect(prescribed).toHaveAttribute("aria-current", "false");
+    expect(screen.getByText("PRESCRIBED")).toBeInTheDocument();
+  });
+
+  it("swaps to it, rather than reverting a substitution that isn't there", async () => {
+    const swaps: unknown[] = [];
+    equipmentResolvedPlate();
+    server.use(
+      http.post("/api/assignments/:assignmentId/substitutions", async ({ request }) => {
+        swaps.push(await request.json());
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    renderRoute("/");
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /swap high knees/i }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: /^double-unders/i }));
+
+    expect(swaps).toEqual([
+      { wodMovementId: "wod-movement-1", exerciseId: "double-unders" },
+    ]);
+  });
+
+  it("stops telling the athlete what the workout says once it offers it", async () => {
+    equipmentResolvedPlate();
+    renderRoute("/");
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /swap high knees/i }),
+    );
+
+    // The sentence explained a movement they could not have. Above a row that
+    // reads DOUBLE-UNDERS it is the app talking to itself, and its wording is
+    // final where the control no longer is.
+    expect(screen.queryByText(/the workout says/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Not in your equipment — take it anyway if you have one today."),
+    ).toBeInTheDocument();
+  });
+
+  it("offers nothing on a row the athlete swapped themselves", async () => {
+    // Same movement showing, but the athlete chose it: the payload carries no
+    // prescription, and putting it back is what revert is for. Two controls
+    // for one intention would be one too many.
+    plateShowing(highKnees, { isSwapped: true });
+    renderRoute("/");
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /swap high knees/i }),
+    );
+    expect(
+      screen.queryByRole("button", { name: /^double-unders/i }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /use what's prescribed/i }),
     ).toBeInTheDocument();

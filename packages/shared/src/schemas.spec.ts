@@ -69,6 +69,7 @@ describe("wodMovementSchema", () => {
     expect(parsed.repScheme).toEqual([]);
     expect(parsed.isSwapped).toBe(false);
     expect(parsed.prescribedName).toBeNull();
+    expect(parsed.prescribedId).toBeNull();
     expect(parsed.prescribedReason).toBeNull();
   });
 
@@ -80,6 +81,20 @@ describe("wodMovementSchema", () => {
       movement({ prescribedName: "Pull-up", prescribedReason: "equipment" }),
     );
     expect(parsed.prescribedReason).toBe("equipment");
+  });
+
+  it("carries the prescribed movement's id so the client can offer it back", () => {
+    // The name is for reading and the id is for tapping (DN-110). A client
+    // cannot work the id out for itself: one alternative stands in for
+    // several movements, so reading backwards from it is ambiguous.
+    const parsed = wodMovementSchema.parse(
+      movement({
+        prescribedName: "Double-unders",
+        prescribedId: "exercise-double-unders",
+        prescribedReason: "equipment",
+      }),
+    );
+    expect(parsed.prescribedId).toBe("exercise-double-unders");
   });
 
   it("rejects a reason outside the two automatic substitutions", () => {

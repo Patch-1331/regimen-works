@@ -152,6 +152,22 @@ describe('SubstitutionsService.set', () => {
     };
   }
 
+  it('allows the movement the equipment layer replaced, off every line', async () => {
+    // The row the athlete is looking at says high knees; the workout said
+    // double-unders, and today they have a rope (DN-110). There is no
+    // substitution to clear -- the equipment layer moved this row during
+    // resolution -- so taking the prescription back is a swap to the
+    // movement's own exercise, and the service has to accept it on a
+    // movement with no line to check it against.
+    const { user, doubleUnders, assignment, movement } = await cardioDay();
+
+    await service().set(user.id, assignment.id, movement.id, doubleUnders.id);
+
+    expect((await storedSwaps(assignment.id))[0].exerciseId).toBe(
+      doubleUnders.id,
+    );
+  });
+
   it('allows the alternative of a movement that is off every line', async () => {
     const { user, highKnees, assignment, movement } = await cardioDay();
 
