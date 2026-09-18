@@ -1,4 +1,4 @@
-import { equipment, type Equipment } from "./enums.js";
+import type { Equipment } from "./enums.js";
 
 /**
  * A piece of equipment as the athlete meets it: the word on the Settings row,
