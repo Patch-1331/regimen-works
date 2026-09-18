@@ -180,10 +180,6 @@ describe('per-user query scoping', () => {
     for (const where of whereOf(prisma, 'dailyAssignment.findMany')) {
       expect(where).toContain(ALICE);
     }
-    // As must the weekly cap count.
-    for (const where of whereOf(prisma, 'dailyAssignment.count')) {
-      expect(where).toContain(ALICE);
-    }
   });
 });
 

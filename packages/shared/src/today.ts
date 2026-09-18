@@ -16,8 +16,10 @@ export type TodayAssignment = z.infer<typeof todayAssignmentSchema>;
 
 /**
  * `assignment` is null exactly when `isRestDay` is true and no WOD has
- * been generated for today — the week's day cap (ScheduleRule.maxDaysPerWeek)
- * has already been reached.
+ * been generated for today — today's weekday is not one the athlete trains on
+ * (ScheduleRule.trainingDays). This used to mean the week's day quota had been
+ * used up, which made rest days depend on the order the week was trained in;
+ * since DN-12 it is a property of the date alone.
  */
 export const todayResponseSchema = z.object({
   date: z.string(),

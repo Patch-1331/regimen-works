@@ -211,7 +211,17 @@ model ScheduleRule {
   id                    String  @id @default(cuid())
   userId                String  @unique
   user                  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  maxDaysPerWeek        Int     @default(5)
+  // Which weekdays this athlete trains on, 0 = Sunday … 6 = Saturday — the
+  // numbering `Date.getUTCDay()` uses, stated in full on `trainingDaysSchema`
+  // in packages/shared. The scheduler's rest-day check is a lookup in here.
+  //
+  // This replaced `maxDaysPerWeek`, a pure quota that knew how many days but
+  // never which (DN-12). "Days per week" is now the length of this array and
+  // never a column of its own, so the two can no longer disagree.
+  //
+  // The default is Mon–Fri, which is the spread the old `@default(5)` quota
+  // backfilled to, and must stay in step with DEFAULT_TRAINING_DAYS.
+  trainingDays          Int[]   @default([1, 2, 3, 4, 5])
   patternCooldownDays   Int     @default(5)
   warmupCooldownEnabled Boolean @default(false) // Feature #63 opt-in
   // Whether reaching a WOD's time cap stops the clock and ends the session.

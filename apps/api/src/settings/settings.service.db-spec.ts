@@ -30,6 +30,7 @@ describe('SettingsService.get', () => {
       warmupCooldownEnabled: false,
       autoStopAtCapEnabled: true,
       equipment: ['bar'],
+      trainingDays: [1, 2, 3, 4, 5],
     });
   });
 
@@ -47,6 +48,7 @@ describe('SettingsService.get', () => {
       warmupCooldownEnabled: true,
       autoStopAtCapEnabled: false,
       equipment: ['bar'],
+      trainingDays: [1, 2, 3, 4, 5],
     });
   });
 
@@ -65,6 +67,7 @@ describe('SettingsService.get', () => {
       warmupCooldownEnabled: false,
       autoStopAtCapEnabled: true,
       equipment: ['bar'],
+      trainingDays: [1, 2, 3, 4, 5],
     });
   });
 
@@ -130,6 +133,7 @@ describe('SettingsService.update', () => {
       warmupCooldownEnabled: false,
       autoStopAtCapEnabled: false,
       equipment: ['bar'],
+      trainingDays: [1, 2, 3, 4, 5],
     });
   });
 
@@ -147,6 +151,7 @@ describe('SettingsService.update', () => {
       warmupCooldownEnabled: true,
       autoStopAtCapEnabled: false,
       equipment: ['bar'],
+      trainingDays: [1, 2, 3, 4, 5],
     });
   });
 
@@ -158,6 +163,7 @@ describe('SettingsService.update', () => {
       warmupCooldownEnabled: true,
       autoStopAtCapEnabled: true,
       equipment: ['bar'],
+      trainingDays: [1, 2, 3, 4, 5],
     });
   });
 
@@ -168,6 +174,7 @@ describe('SettingsService.update', () => {
       warmupCooldownEnabled: false,
       autoStopAtCapEnabled: true,
       equipment: ['bar'],
+      trainingDays: [1, 2, 3, 4, 5],
     });
     expect(await storedRule(user.id)).not.toBeNull();
   });
@@ -182,17 +189,55 @@ describe('SettingsService.update', () => {
   });
 
   it('leaves the scheduling fields alone, which this endpoint does not expose', async () => {
-    // ScheduleRule also carries maxDaysPerWeek and patternCooldownDays; the
-    // settings patch must not reset them on its way past.
+    // ScheduleRule still carries patternCooldownDays, which this endpoint does
+    // not expose (DN-27's, once Programs has reshaped it); the settings patch
+    // must not reset it on its way past.
     const user = await createUser();
     await testPrisma().scheduleRule.create({
-      data: { userId: user.id, maxDaysPerWeek: 3, patternCooldownDays: 7 },
+      data: { userId: user.id, patternCooldownDays: 7 },
     });
 
     await service().update(user.id, { warmupCooldownEnabled: true });
 
     const rule = await storedRule(user.id);
-    expect(rule).toMatchObject({ maxDaysPerWeek: 3, patternCooldownDays: 7 });
+    expect(rule).toMatchObject({ patternCooldownDays: 7 });
+  });
+
+  it('reads back the training days it stored', async () => {
+    const user = await createUser();
+
+    await service().update(user.id, { trainingDays: [1, 3, 5] });
+
+    expect((await service().get(user.id)).trainingDays).toEqual([1, 3, 5]);
+    expect((await storedRule(user.id))?.trainingDays).toEqual([1, 3, 5]);
+  });
+
+  it('replaces the whole set of training days rather than merging', async () => {
+    // Same whole-set rule as equipment: a week strip sends the days that are
+    // lit, so dropping from five days to two has to remove three.
+    const user = await createUser();
+    await service().update(user.id, { trainingDays: [1, 2, 3, 4, 5] });
+
+    await service().update(user.id, { trainingDays: [2, 6] });
+
+    expect((await service().get(user.id)).trainingDays).toEqual([2, 6]);
+  });
+
+  it('leaves the training days alone when the patch does not mention them', async () => {
+    const user = await createUser();
+    await service().update(user.id, { trainingDays: [0, 6] });
+
+    await service().update(user.id, { autoStopAtCapEnabled: false });
+
+    expect((await service().get(user.id)).trainingDays).toEqual([0, 6]);
+  });
+
+  it('starts an athlete with no rule row on Mon-Fri', async () => {
+    const user = await createUser();
+
+    expect((await service().get(user.id)).trainingDays).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
   });
 
   it('writes only this athlete row', async () => {
@@ -209,6 +254,7 @@ describe('SettingsService.update', () => {
       warmupCooldownEnabled: true,
       autoStopAtCapEnabled: false,
       equipment: ['bar'],
+      trainingDays: [1, 2, 3, 4, 5],
     });
   });
 

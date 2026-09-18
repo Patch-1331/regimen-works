@@ -119,16 +119,52 @@ describe('getWeekRange', () => {
 });
 
 describe('isRestDay', () => {
-  it('is false while under the weekly cap', () => {
-    expect(isRestDay(4, 5)).toBe(false);
+  // 2026-08-17 is a Monday, so these seven run Mon(1) through Sun(0).
+  const MONDAY = '2026-08-17';
+  const week = [
+    ['2026-08-17', 1, 'Monday'],
+    ['2026-08-18', 2, 'Tuesday'],
+    ['2026-08-19', 3, 'Wednesday'],
+    ['2026-08-20', 4, 'Thursday'],
+    ['2026-08-21', 5, 'Friday'],
+    ['2026-08-22', 6, 'Saturday'],
+    ['2026-08-23', 0, 'Sunday'],
+  ] as const;
+
+  // The numbering is the whole contract of the column, and an off-by-one here
+  // is invisible at every other layer: a schedule simply shifts by a day.
+  it.each(week)('numbers %s as %i (%s), matching getUTCDay', (date, day) => {
+    expect(new Date(`${date}T00:00:00Z`).getUTCDay()).toBe(day);
   });
 
-  it('is true once the weekly cap is reached', () => {
-    expect(isRestDay(5, 5)).toBe(true);
+  it.each(week)('trains on %s when %i is picked', (date, day) => {
+    expect(isRestDay(date, [day])).toBe(false);
   });
 
-  it('is true if somehow over the cap', () => {
-    expect(isRestDay(6, 5)).toBe(true);
+  it.each(week)('rests on %s when %i is not picked', (date, day) => {
+    const everyOtherDay = week.map(([, d]) => d).filter((d) => d !== day);
+    expect(isRestDay(date, everyOtherDay)).toBe(true);
+  });
+
+  it('rests on the days between a Mon/Wed/Fri week', () => {
+    const monWedFri = [1, 3, 5];
+    expect(isRestDay('2026-08-17', monWedFri)).toBe(false); // Mon
+    expect(isRestDay('2026-08-18', monWedFri)).toBe(true); // Tue
+    expect(isRestDay('2026-08-19', monWedFri)).toBe(false); // Wed
+    expect(isRestDay('2026-08-22', monWedFri)).toBe(true); // Sat
+  });
+
+  it('does not care how much of the week has already been trained', () => {
+    // The whole point of the change: a Monday is a training day whether it is
+    // the first session of the week or the fifth. The quota this replaced
+    // would have called this a rest day.
+    expect(isRestDay(MONDAY, [0, 1, 2, 3, 4, 5, 6])).toBe(false);
+  });
+
+  it('rests every day when no day is picked', () => {
+    // Not reachable through the schema, which requires at least one day, but
+    // this is the answer that degrades safely rather than training always.
+    expect(isRestDay(MONDAY, [])).toBe(true);
   });
 });
 

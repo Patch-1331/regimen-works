@@ -419,6 +419,7 @@ describe('settings and skill levels', () => {
       warmupCooldownEnabled: false,
       autoStopAtCapEnabled: true,
       equipment: ['bar'],
+      trainingDays: [1, 2, 3, 4, 5],
     });
   });
 
@@ -442,6 +443,7 @@ describe('settings and skill levels', () => {
       warmupCooldownEnabled: true,
       autoStopAtCapEnabled: false,
       equipment: ['bar'],
+      trainingDays: [1, 2, 3, 4, 5],
     });
   });
 
@@ -479,6 +481,37 @@ describe('settings and skill levels', () => {
     );
 
     expect(res.equipment).toEqual(['box']);
+  });
+
+  it('replaces the training days over HTTP, in order (DN-12)', async () => {
+    const res = parsed(
+      settingsSchema,
+      await http()
+        .patch('/settings')
+        .set(...asUser(ALICE))
+        .send({ trainingDays: [6, 2, 0] })
+        .expect(200),
+    );
+
+    // Sorted on the way in, so what comes back is comparable to any other
+    // stored set and a picker's tap order never reaches the database.
+    expect(res.trainingDays).toEqual([0, 2, 6]);
+  });
+
+  it('refuses a weekday outside 0-6, and an empty week', async () => {
+    await http()
+      .patch('/settings')
+      .set(...asUser(ALICE))
+      .send({ trainingDays: [7] })
+      .expect(400);
+
+    // An athlete who trains on no days has no app to open; "I'm taking a
+    // break" is answered by not opening it, not by emptying this.
+    await http()
+      .patch('/settings')
+      .set(...asUser(ALICE))
+      .send({ trainingDays: [] })
+      .expect(400);
   });
 
   it('refuses a piece the catalog does not have', async () => {

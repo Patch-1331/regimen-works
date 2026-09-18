@@ -136,7 +136,16 @@ function addDays(isoDate: string, days: number): string {
   return toIsoDate(d);
 }
 
-/** Monday–Sunday range (inclusive) containing the given ISO date. */
+/**
+ * Monday–Sunday range (inclusive) containing the given ISO date.
+ *
+ * No production caller since DN-12 turned the rest-day check into a weekday
+ * lookup. Kept rather than deleted because it is the written-down statement
+ * that a week here runs Monday to Sunday — `docs/design/programs.md` aligns
+ * program weeks to it by name, and DN-11 and DN-17 both resolve against it.
+ * Deleting it to re-add the same function next issue would be churn, not
+ * hygiene.
+ */
 export function getWeekRange(isoDate: string): { start: string; end: string } {
   const d = new Date(`${isoDate}T00:00:00Z`);
   const day = d.getUTCDay(); // 0 = Sunday
@@ -155,12 +164,27 @@ function toIsoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** True once the week already has `maxDaysPerWeek` workout-day assignments. */
-export function isRestDay(
-  assignedDaysThisWeek: number,
-  maxDaysPerWeek: number,
-): boolean {
-  return assignedDaysThisWeek >= maxDaysPerWeek;
+/**
+ * True when this date is not one of the athlete's training days (DN-12).
+ *
+ * This used to be `isRestDay(assignedDaysThisWeek, maxDaysPerWeek)` — a quota
+ * check that knew how many days a week the athlete trained but never which
+ * ones, so a rest day was simply whichever day the allowance ran out on. It is
+ * now a calendar: the athlete says Mon/Wed/Fri, and Tuesday is a rest day
+ * because it is Tuesday.
+ *
+ * `trainingDays` uses `getUTCDay()`'s numbering (0 = Sunday), which is why
+ * there is no conversion here; see `trainingDaysSchema` in packages/shared.
+ *
+ * Note what this deliberately no longer knows: whether the week is short. A
+ * missed Wednesday does not make Thursday a training day, and the athlete is
+ * not told they are behind. Offering to make it up is DN-17's, and it belongs
+ * at the point of offering rather than buried in a predicate that other
+ * callers read as "is today scheduled".
+ */
+export function isRestDay(isoDate: string, trainingDays: number[]): boolean {
+  const weekday = new Date(`${isoDate}T00:00:00Z`).getUTCDay();
+  return !trainingDays.includes(weekday);
 }
 
 export type ExerciseWithLine = {
