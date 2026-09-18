@@ -8,38 +8,11 @@ import {
 import type { CreateExercise, UpdateExercise } from '@regimen-works/shared';
 import type { Exercise } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { libraryVisibleTo } from '../library/visible-to';
-
-/**
- * Who is writing, and therefore which tier the row lands in (DN-25).
- *
- * `ownerId: null` is an admin curating global content; a string is an athlete
- * writing their own. It comes from *which controller was called* — the admin
- * routes live behind `@AdminOnly()` — and never from a request body, so there
- * is no path by which a caller names a tier they are not entitled to.
- */
-export type LibraryWriter = { ownerId: string | null };
-
-/**
- * What a writer's `altExerciseId` may point at.
- *
- * This one function carries three of the rules at once, which is why it is a
- * function and not three checks in a row:
- *
- *   - An admin writing global content sees only global content, so the
- *     one-way reference rule (DN-93) holds by construction rather than by a
- *     comparison someone can forget. A global row that fell back to an
- *     athlete's own would let one athlete's delete break everyone's scheduler.
- *   - An athlete sees the global library plus their own, so an id lifted from
- *     another athlete's library is simply not found.
- *   - Neither sees archived rows, so a live fallback cannot be pointed at a
- *     movement the pool has stopped offering.
- */
-function referenceableBy(writer: LibraryWriter) {
-  return writer.ownerId === null
-    ? { ownerId: null, archivedAt: null }
-    : libraryVisibleTo(writer.ownerId);
-}
+import {
+  libraryVisibleTo,
+  referenceableBy,
+  type LibraryWriter,
+} from '../library/visible-to';
 
 /** The row as it will be once a PATCH is applied — what the rules judge. */
 function merged(existing: Exercise, patch: UpdateExercise) {

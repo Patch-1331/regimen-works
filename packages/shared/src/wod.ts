@@ -130,3 +130,101 @@ export const wodSchema = z.object({
     },
   );
 export type Wod = z.infer<typeof wodSchema>;
+
+/**
+ * One movement as a library write states it (DN-26).
+ *
+ * Spelled out rather than derived from `wodMovementSchema`, which is a read
+ * shape: it carries `isSwapped`, `prescribedName`, `prescribedId` and
+ * `prescribedReason`, all of which describe what happened to a movement in
+ * one athlete's session and none of which mean anything in the library. Left
+ * to inheritance, every field that shape grows would arrive here too.
+ *
+ * Two fields it deliberately does not have:
+ *
+ *   - `order`, which comes from this array's own indices. Accepted as a
+ *     field, it could arrive duplicated or gapped, and `orderBy: { order }`
+ *     would hand back a sequence nobody wrote.
+ *   - `id`, because the movement list is written whole. See `updateWodSchema`.
+ */
+export const createWodMovementSchema = z
+  .object({
+    exerciseId: z.string().min(1),
+    // Exactly one of these, which is the point — see the refinement. `reps`
+    // is the flat case ("15 burpees every round"); `repScheme` is a ladder
+    // ([21, 15, 9]), whose total is derived rather than restated.
+    reps: z.number().int().positive().nullable().default(null),
+    repScheme: z.array(z.number().int().positive()).default([]),
+  })
+  .refine((m) => (m.reps === null) !== (m.repScheme.length === 0), {
+    message:
+      "a movement is either a flat rep count or a ladder — give reps or repScheme, not both and not neither",
+    path: ["reps"],
+  });
+export type CreateWodMovement = z.infer<typeof createWodMovementSchema>;
+
+/**
+ * The ordered movement list, with the one rule that spans it.
+ *
+ * At least one movement: a WOD with none parses, schedules, and hands the
+ * athlete an empty screen at the moment they meant to train.
+ */
+const writeMovements = z
+  .array(createWodMovementSchema)
+  .min(1, "a WOD needs at least one movement")
+  // The same rule `wodSchema` holds on the read side: a ladder is one shape
+  // for the whole workout, so schemes of differing lengths leave no single
+  // answer to "what round is this?".
+  .refine(
+    (movements) => {
+      const lengths = movements
+        .map((m) => m.repScheme.length)
+        .filter((n) => n > 0);
+      return new Set(lengths).size <= 1;
+    },
+    { message: "every repScheme in a WOD must have the same length" },
+  );
+
+/**
+ * The fields a WOD write may set.
+ *
+ * No `ownerId` and no `archivedAt`. The tier is decided by which route was
+ * called — `/wods` writes the caller's own, `admin/wods` writes global — and
+ * archiving is its own endpoint, so neither is something a body can ask for.
+ *
+ * The interval fields are accepted as given and left null when they are not.
+ * `resolveIntervalConfig` fills in the format's classic structure for the
+ * nulls, and writing those defaults out explicitly would freeze today's EMOM
+ * into rows that should keep following the helper. Whether they belong on
+ * this WOD's `type` at all is a cross-field question the service settles,
+ * because a PATCH need not restate `type`.
+ */
+const wodWriteFields = z.object({
+  name: z.string().min(1),
+  type: wodType,
+  timeCapMinutes: z.number().int().positive(),
+  rounds: z.number().int().positive().nullable(),
+  workSeconds: z.number().int().positive().nullable(),
+  restSeconds: z.number().int().nonnegative().nullable(),
+  intervalCount: z.number().int().positive().nullable(),
+  isNamed: z.boolean(),
+  dominantPattern: movementPattern,
+  description: z.string().nullable(),
+  movements: writeMovements,
+});
+
+export const createWodSchema = wodWriteFields;
+export type CreateWod = z.infer<typeof createWodSchema>;
+
+/**
+ * A PATCH carries only what is changing — the same reasoning as
+ * `updateExerciseSchema`.
+ *
+ * `movements`, when present, replaces the list entirely rather than merging
+ * into it. There are no per-movement routes: a `WodMovement` carries no
+ * `ownerId`, so it is only ever authorized through the `Wod` that owns it,
+ * and writing the list through its parent is what makes that true by
+ * construction rather than by a check. Absent, the list is untouched.
+ */
+export const updateWodSchema = wodWriteFields.partial();
+export type UpdateWod = z.infer<typeof updateWodSchema>;
