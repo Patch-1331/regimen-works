@@ -1,6 +1,7 @@
 import type {
   AdvanceInterval,
   LogResultRequest,
+  Me,
   MovementHistory,
   RoundSplit,
   ScheduleCap,
@@ -147,6 +148,13 @@ export const api = {
   skillLevels: () => request<SkillLevel[]>("/skill-levels"),
   setSkillLevel: (line: string, body: SetSkillLevelRequest) =>
     patchJson<SkillLevel>(`/skill-levels/${line}`, body),
+
+  /**
+   * Who the API thinks the caller is (DN-92). Read for `isAdmin`, which says
+   * whether to render an admin surface at all — never as the access check
+   * itself, which the API makes on its own for every admin route.
+   */
+  me: () => request<Me>("/me"),
 
   settings: () => request<Settings>("/settings"),
   updateSettings: (body: UpdateSettings) =>

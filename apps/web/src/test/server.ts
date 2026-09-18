@@ -29,6 +29,9 @@ export const handlers = [
   http.get(api("/movement-history"), () => HttpResponse.json([])),
   http.get(api("/schedule-rule"), () => HttpResponse.json({ maxDaysPerWeek: 5 })),
   http.get(api("/settings"), () => HttpResponse.json(fixtures.settings())),
+  // Not an admin by default: the admin is one hand-set flag on one account,
+  // so an athlete is what a test should get unless it says otherwise.
+  http.get(api("/me"), () => HttpResponse.json({ id: "user_alice", isAdmin: false })),
 
   // 204 is how the API says "no log yet" — api.ts turns the empty body into null.
   http.get(api(`/assignments/:assignmentId/log`), () => new HttpResponse(null, { status: 204 })),

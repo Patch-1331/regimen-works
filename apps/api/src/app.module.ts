@@ -4,6 +4,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ClerkAuthGuard } from './auth/clerk-auth.guard';
+import { AdminGuard } from './auth/admin.guard';
 import { ProxyAwareThrottlerGuard } from './common/proxy-aware-throttler.guard';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -16,6 +17,7 @@ import { HistoryModule } from './history/history.module';
 import { LogsModule } from './logs/logs.module';
 import { SkillLevelsModule } from './skill-levels/skill-levels.module';
 import { SettingsModule } from './settings/settings.module';
+import { MeModule } from './me/me.module';
 
 @Module({
   imports: [
@@ -43,6 +45,7 @@ import { SettingsModule } from './settings/settings.module';
     HistoryModule,
     SkillLevelsModule,
     SettingsModule,
+    MeModule,
   ],
   controllers: [AppController],
   providers: [
@@ -52,6 +55,12 @@ import { SettingsModule } from './settings/settings.module';
     // expensive half of an unauthenticated request.
     { provide: APP_GUARD, useClass: ProxyAwareThrottlerGuard },
     { provide: APP_GUARD, useClass: ClerkAuthGuard },
+    // Last, and it depends on that: it judges the admin flag ClerkAuthGuard
+    // stashes, so running it earlier would have it read an empty request.
+    // Global rather than @UseGuards on the admin controllers, so closing a
+    // route takes one decorator and forgetting the guard is not a thing that
+    // can happen (DN-92).
+    { provide: APP_GUARD, useClass: AdminGuard },
   ],
 })
 export class AppModule {}

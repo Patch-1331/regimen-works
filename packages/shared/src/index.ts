@@ -12,6 +12,7 @@ export * from "./cap.js";
 export * from "./settings.js";
 export * from "./log.js";
 export * from "./user.js";
+export * from "./me.js";
 export * from "./skill-level.js";
 export * from "./round-split.js";
 export * from "./substitution.js";

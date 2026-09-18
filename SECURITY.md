@@ -40,6 +40,16 @@ with no formal response-time or disclosure commitment.
   small; open registration would let any passer-by provision rows. This is a
   Clerk dashboard setting, so it leaves no trace in this repository — it is
   recorded here because nothing in the code will reveal it.
+- **Admin is one Clerk flag, and it fails closed.** Routes marked
+  `@AdminOnly()` are open only to a caller whose session token carries
+  `isAdmin: true` — a custom claim the Clerk JWT template fills from
+  `publicMetadata.isAdmin`. Two pieces of dashboard config, invisible here like
+  the setting above: the claim must be in the template
+  (`{"isAdmin": "{{user.public_metadata.isAdmin}}"}`), and the flag must be set
+  on the account. If either is missing the claim is absent, which reads as *not*
+  an admin — drift can lock an admin out of an admin route, it cannot let an
+  athlete into one. Removing the flag takes effect at the caller's next token
+  refresh (Clerk session tokens last about a minute) rather than instantly.
 
 ## Running the checks yourself
 
