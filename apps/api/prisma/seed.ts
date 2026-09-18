@@ -1,21 +1,21 @@
-import "dotenv/config";
+import 'dotenv/config';
 
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient } from '@prisma/client';
 
-import { GLOBAL_LIBRARY } from "../src/library/visible-to";
+import { GLOBAL_LIBRARY } from '../src/library/visible-to';
 import {
   assertSubstitutesReachable,
   assertSubstituteUnitsMatch,
-} from "../src/seed/substitute-guard";
-import { exercises } from "./exercise-seed";
-import { wods, type WodMovementSeed, type WodSeed } from "./wod-seed";
+} from '../src/seed/substitute-guard';
+import { exercises } from './exercise-seed';
+import { wods, type WodMovementSeed, type WodSeed } from './wod-seed';
 
 // Prisma 7 requires a driver adapter — a bare `new PrismaClient()` throws at
 // construction. Run directly by ts-node rather than through the Prisma CLI,
 // so .env is loaded here too instead of being inherited from it.
 const connectionString = process.env.DATABASE_URL;
-if (!connectionString) throw new Error("DATABASE_URL is not set");
+if (!connectionString) throw new Error('DATABASE_URL is not set');
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString }),
@@ -57,7 +57,6 @@ function assertUniformSchemes(w: WodSeed): void {
   }
 }
 
-
 async function main() {
   // Before anything is written: every movement needing equipment must have a
   // one-step fall to a movement needing none (DN-83). Nothing at runtime can
@@ -67,7 +66,7 @@ async function main() {
   assertSubstitutesReachable(exercises);
   assertSubstituteUnitsMatch(exercises);
 
-  console.log("Seeding exercises...");
+  console.log('Seeding exercises...');
   const idByName = new Map<string, string>();
 
   for (const e of exercises) {
@@ -75,7 +74,7 @@ async function main() {
       pattern: e.pattern,
       equipment: e.equipment ?? [],
       scalable: e.scalable ?? false,
-      unit: e.unit ?? "reps",
+      unit: e.unit ?? 'reps',
       line: e.line ?? null,
       rung: e.rung ?? null,
       phase: e.phase ?? null,
@@ -104,7 +103,10 @@ async function main() {
     });
 
     const row = existing
-      ? await prisma.exercise.update({ where: { id: existing.id }, data: fields })
+      ? await prisma.exercise.update({
+          where: { id: existing.id },
+          data: fields,
+        })
       : await prisma.exercise.create({ data: { name: e.name, ...fields } });
 
     idByName.set(e.name, row.id);
@@ -113,14 +115,15 @@ async function main() {
   for (const e of exercises) {
     if (!e.alt) continue;
     const altId = idByName.get(e.alt);
-    if (!altId) throw new Error(`Unknown alt exercise "${e.alt}" for "${e.name}"`);
+    if (!altId)
+      throw new Error(`Unknown alt exercise "${e.alt}" for "${e.name}"`);
     await prisma.exercise.update({
       where: { id: idByName.get(e.name)! },
       data: { altExerciseId: altId },
     });
   }
 
-  console.log("Seeding WOD library...");
+  console.log('Seeding WOD library...');
   for (const w of wods) {
     assertUniformSchemes(w);
     const movements = w.movements.map((m, i) => ({
