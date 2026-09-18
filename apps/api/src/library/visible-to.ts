@@ -1,5 +1,6 @@
 /**
- * The ownership half of every `Exercise` and `Wod` read (DN-93).
+ * The ownership and liveness half of every `Exercise` and `Wod` read
+ * (DN-93, DN-25).
  *
  * The library has two tiers: rows with no owner are global content, seeded
  * and admin-curated, and every athlete reads them; rows with an owner belong
@@ -13,6 +14,20 @@
  * an athlete's own rows, and quietly costs that athlete the entire shared
  * library.
  *
+ * Archived rows are excluded here for the same reason (DN-25). Every caller
+ * is a pool or a picker -- the exercise list, the WOD pool, the checklist
+ * content, the rung ladder, the equipment fallback, the swap ladder, the
+ * skill-level aggregate -- and not one of them wants to offer a movement the
+ * library has retired. Folding it in rather than adding a second helper or an
+ * eighth hand-written `archivedAt: null`: two names differing by one clause
+ * would be the original problem back again, one call site at a time.
+ *
+ * What this does *not* hide is the point of a soft delete. A row already
+ * named by a `WodMovement` or an `AssignmentSubstitution` still loads, because
+ * those come through the relation rather than through here -- so an archived
+ * movement keeps its name in the history of the workout it was part of, and
+ * only stops being offered for new ones.
+ *
  * Spread into a `where` alongside the read's own filters:
  *
  *     where: { ...libraryVisibleTo(userId), line: { not: null } }
@@ -22,17 +37,24 @@
  */
 export function libraryVisibleTo(userId: string): {
   OR: [{ ownerId: null }, { ownerId: string }];
+  archivedAt: null;
 } {
-  return { OR: [{ ownerId: null }, { ownerId: userId }] };
+  return { OR: [{ ownerId: null }, { ownerId: userId }], archivedAt: null };
 }
 
 /**
  * The global tier alone: what an athlete may build on but not edit.
  *
- * Distinct from `libraryVisibleTo` on purpose. The seed writes global content
- * and resolves names against it, and a name lookup that could land on an
- * athlete's row would let a personal exercise become the target of a global
- * one — the one direction the ownership boundary does not allow, because then
- * one athlete's delete breaks everyone's scheduler.
+ * Distinct from `libraryVisibleTo` on purpose, twice over. The seed writes
+ * global content and resolves names against it, and a name lookup that could
+ * land on an athlete's row would let a personal exercise become the target of
+ * a global one — the one direction the ownership boundary does not allow,
+ * because then one athlete's delete breaks everyone's scheduler.
+ *
+ * It also carries no `archivedAt` filter, and must not grow one (DN-25).
+ * Archiving does not free a name: a seed that skipped archived rows would try
+ * to create a name the unique index still holds and fail the deploy. Finding
+ * the archived row and writing `archivedAt: null` over it is the correct
+ * outcome — re-seeding a retired global movement brings it back.
  */
 export const GLOBAL_LIBRARY = { ownerId: null } as const;

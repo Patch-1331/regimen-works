@@ -26,25 +26,17 @@ jest.mock('@clerk/backend', () => ({
 }));
 
 /**
- * Stands in for the library write routes DN-25 and DN-26 will add. No route in
- * the app is @AdminOnly() yet — the guard shipped ahead of the endpoints it
- * exists for — so without a fixture there would be nothing to point the
- * wiring proof at, and "the guard is registered" would rest on reading
- * app.module.ts.
+ * All that is left of the fixture the guard shipped with (DN-92).
+ *
+ * The guard arrived before any route it could protect, so every case below was
+ * once pointed here. DN-25 added the real ones, and the cases that can be made
+ * against `/admin/exercises` now are. This pairing survives because no real
+ * route has it and none should: a route cannot be both open to everyone and
+ * closed to all but admins, and what that does is worth pinning rather than
+ * leaving to be discovered the first time someone writes it by accident.
  */
 @Controller('test-admin')
 class AdminFixtureController {
-  @Get()
-  @AdminOnly()
-  read() {
-    return { ok: true };
-  }
-
-  /**
-   * The contradictory pairing, here so its behaviour is pinned rather than
-   * discovered. There is no verified caller on a public route, so there is
-   * nothing for the guard to judge.
-   */
   @Get('public')
   @Public()
   @AdminOnly()
@@ -52,6 +44,20 @@ class AdminFixtureController {
     return { ok: true };
   }
 }
+
+/** A complete exercise body, so a write that gets through the guard succeeds. */
+const BODY = {
+  name: 'Air squat',
+  pattern: 'squat',
+  equipment: [],
+  scalable: false,
+  unit: 'reps',
+  instructions: null,
+  line: null,
+  rung: null,
+  altExerciseId: null,
+  phase: null,
+};
 
 /**
  * Proves AdminGuard is registered globally and acts only where it's marked.
@@ -74,7 +80,12 @@ describe('AdminGuard wiring', () => {
       .useValue({
         $connect: jest.fn(),
         $disconnect: jest.fn(),
-        exercise: { findMany: jest.fn().mockResolvedValue([]) },
+        exercise: {
+          findMany: jest.fn().mockResolvedValue([]),
+          // The name-collision check, answering "nothing is called that".
+          findFirst: jest.fn().mockResolvedValue(null),
+          create: jest.fn().mockResolvedValue({ id: 'ex-1', ...BODY }),
+        },
       })
       .overrideProvider(UserProvisioningService)
       .useValue({ ensure: jest.fn().mockResolvedValue(undefined) })
@@ -87,30 +98,45 @@ describe('AdminGuard wiring', () => {
     await app.close();
   });
 
-  it('lets an admin through an @AdminOnly() route', () => {
+  it('lets an admin write the shared library', () => {
     return request(app.getHttpServer())
-      .get('/test-admin')
+      .post('/admin/exercises')
       .set('Authorization', 'Bearer admin-token')
-      .expect(200);
+      .send(BODY)
+      .expect(201);
   });
 
   it('refuses a signed-in athlete', () => {
     return request(app.getHttpServer())
-      .get('/test-admin')
+      .post('/admin/exercises')
       .set('Authorization', 'Bearer athlete-token')
+      .send(BODY)
       .expect(403);
   });
 
   it('refuses an unauthenticated caller before it ever asks about admin', () => {
-    return request(app.getHttpServer()).get('/test-admin').expect(401);
+    return request(app.getHttpServer())
+      .post('/admin/exercises')
+      .send(BODY)
+      .expect(401);
   });
 
   // A template emitting "true" as a string is the realistic misconfiguration,
   // and truthiness would read it as admin.
   it('refuses a claim that is not the boolean true', () => {
     return request(app.getHttpServer())
-      .get('/test-admin')
+      .post('/admin/exercises')
       .set('Authorization', 'Bearer stale-token')
+      .send(BODY)
+      .expect(403);
+  });
+
+  // @AdminOnly() sits on the controller class, so the routes it covers are
+  // whatever the class holds — including ones added after it was written.
+  it('closes every route on the admin controller, not just the one', () => {
+    return request(app.getHttpServer())
+      .post('/admin/exercises/ex-1/archive')
+      .set('Authorization', 'Bearer athlete-token')
       .expect(403);
   });
 
