@@ -62,6 +62,17 @@ function parsed<T>(schema: z.ZodType<T>, res: request.Response): T {
   return schema.parse(res.body);
 }
 
+/**
+ * The id of an exercise a request just returned.
+ *
+ * Through the schema rather than off `res.body`, which supertest types `any`:
+ * a response that stopped carrying an id would otherwise read as `undefined`
+ * and fail several requests later, pointing at the wrong thing.
+ */
+function idOf(res: request.Response): string {
+  return parsed(exerciseSchema, res).id;
+}
+
 function body(overrides: Record<string, unknown> = {}) {
   return {
     name: 'Ring row',
@@ -113,7 +124,7 @@ describe('an athlete writing their own library', () => {
     const updated = parsed(
       exerciseSchema,
       await http()
-        .patch(`/exercises/${created.body.id}`)
+        .patch(`/exercises/${idOf(created)}`)
         .set(...asUser(ALICE))
         .send({ scalable: true })
         .expect(200),
@@ -129,7 +140,7 @@ describe('an athlete writing their own library', () => {
       .set(...asUser(ALICE))
       .send(body())
       .expect(201);
-    const id = created.body.id as string;
+    const id = idOf(created);
 
     await http()
       .post(`/exercises/${id}/archive`)
@@ -206,7 +217,7 @@ describe('an admin curating the shared library', () => {
       .set(...asUser(ADMIN))
       .send(body({ name: 'Air squat' }))
       .expect(201);
-    const id = created.body.id as string;
+    const id = idOf(created);
 
     await http()
       .patch(`/admin/exercises/${id}`)
@@ -247,7 +258,7 @@ describe('an admin curating the shared library', () => {
       .expect(201);
 
     await http()
-      .patch(`/admin/exercises/${hers.body.id}`)
+      .patch(`/admin/exercises/${idOf(hers)}`)
       .set(...asUser(ADMIN))
       .send({ scalable: true })
       .expect(403);
@@ -263,7 +274,7 @@ describe('the boundary between them', () => {
       .set(...asUser(ADMIN))
       .send(body({ name: 'Air squat' }))
       .expect(201);
-    const id = global.body.id as string;
+    const id = idOf(global);
 
     await http()
       .post('/admin/exercises')
@@ -295,12 +306,12 @@ describe('the boundary between them', () => {
       .expect(201);
 
     await http()
-      .patch(`/exercises/${global.body.id}`)
+      .patch(`/exercises/${idOf(global)}`)
       .set(...asUser(ALICE))
       .send({ scalable: true })
       .expect(403);
     await http()
-      .post(`/exercises/${global.body.id}/archive`)
+      .post(`/exercises/${idOf(global)}/archive`)
       .set(...asUser(ALICE))
       .expect(403);
   });
@@ -313,7 +324,7 @@ describe('the boundary between them', () => {
       .expect(201);
 
     await http()
-      .patch(`/exercises/${his.body.id}`)
+      .patch(`/exercises/${idOf(his)}`)
       .set(...asUser(ALICE))
       .send({ scalable: true })
       .expect(403);
