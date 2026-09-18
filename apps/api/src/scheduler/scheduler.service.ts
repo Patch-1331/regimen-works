@@ -68,6 +68,11 @@ export class SchedulerService {
 
       return {
         date: today,
+        // Always null so far: nothing reads an enrollment yet (DN-16).
+        // Stated rather than omitted, because the field is non-optional on
+        // the shared schema -- a client parsing `todayResponseSchema` would
+        // reject a payload that simply left it out.
+        plan: null,
         isRestDay: existing.status === 'skipped',
         assignment,
         warmupCooldownEnabled,
@@ -90,6 +95,7 @@ export class SchedulerService {
     if (isRestDay(today, trainingDays)) {
       return {
         date: today,
+        plan: null,
         isRestDay: true,
         assignment: null,
         warmupCooldownEnabled,
@@ -118,6 +124,7 @@ export class SchedulerService {
 
     return {
       date: today,
+      plan: null,
       isRestDay: false,
       assignment: {
         id: created.id,
@@ -203,6 +210,7 @@ export class SchedulerService {
     });
     return {
       date: today,
+      plan: null,
       isRestDay: true,
       assignment: null,
       warmupCooldownEnabled: rule?.warmupCooldownEnabled ?? false,

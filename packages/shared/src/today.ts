@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { checklistExerciseSchema } from "./checklist.js";
-import { assignmentStatus } from "./enums.js";
+import { assignmentStatus, planSlotKind } from "./enums.js";
 import { wodSchema } from "./wod.js";
 import { workoutSessionSchema } from "./session.js";
 
@@ -13,6 +13,40 @@ export const todayAssignmentSchema = z.object({
   session: workoutSessionSchema.nullable(),
 });
 export type TodayAssignment = z.infer<typeof todayAssignmentSchema>;
+
+/**
+ * Which program day the athlete is training, when they are training one.
+ *
+ * Deliberately not the enrollment and not the plan: this block answers "where
+ * am I in my program today?", and the screen that asks it wants a heading, not
+ * a program definition. The full shapes are `planEnrollmentSchema` and
+ * `planDetailSchema`, fetched by the screens that actually need them.
+ */
+export const todayPlanSchema = z.object({
+  enrollmentId: z.string(),
+  planId: z.string(),
+  /** The program's name, for the heading above the plate. */
+  name: z.string(),
+  /**
+   * Which week the athlete is in, **1-based** — the only 1-based number in
+   * this vocabulary, because it is the one an athlete reads. `PlanWeek.order`
+   * and `resolveSlotForDate`'s `weekIndex` are both 0-based and neither is
+   * this: an authored core week is played several times over a run.
+   */
+  week: z.number().int().positive(),
+  /** How many weeks this run lasts. Null for an open-ended program, where "week 3 of ..." has no second half. */
+  totalWeeks: z.number().int().positive().nullable(),
+  /** This week's label, e.g. "Deload". Null where the week has nothing to say beyond its number. */
+  weekLabel: z.string().nullable(),
+  /**
+   * What the program makes of today. Null when the program is running but
+   * authors nothing for this weekday — `resolveSlotForDate`'s `unscheduled`,
+   * which is a different fact from an authored `rest` and is why that function
+   * keeps the two apart.
+   */
+  slotKind: planSlotKind.nullable(),
+});
+export type TodayPlan = z.infer<typeof todayPlanSchema>;
 
 /**
  * `assignment` is null exactly when `isRestDay` is true and no WOD has
@@ -31,5 +65,16 @@ export const todayResponseSchema = z.object({
   warmupCooldownEnabled: z.boolean(),
   warmup: z.array(checklistExerciseSchema).nullable(),
   cooldown: z.array(checklistExerciseSchema).nullable(),
+  /**
+   * The program context for today (DN-10), or null when there is none to
+   * report: no active enrollment, or an enrollment whose start date has not
+   * arrived and whose days still fall back to Just WODs.
+   *
+   * Nullable rather than a second response shape, so every existing client
+   * path keeps working untouched while the program UI is built — a client
+   * that ignores this field still renders today correctly, which is what
+   * makes the block safe to add before anything reads it.
+   */
+  plan: todayPlanSchema.nullable(),
 });
 export type TodayResponse = z.infer<typeof todayResponseSchema>;
