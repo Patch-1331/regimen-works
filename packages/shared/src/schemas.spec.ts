@@ -10,6 +10,7 @@ import { sessionMovementSchema, workoutSessionSchema } from "./session.js";
 import { settingsSchema, updateSettingsSchema } from "./settings.js";
 import { skillLevelSchema } from "./skill-level.js";
 import { setSubstitutionRequestSchema } from "./substitution.js";
+import { createWodSchema, updateWodSchema } from "./wod.js";
 import { todayResponseSchema } from "./today.js";
 import { wodMovementSchema, wodSchema } from "./wod.js";
 
@@ -737,5 +738,141 @@ describe("movementHistorySchema", () => {
       history({ unit: "seconds", total: 300, line: "core_hold" }),
     );
     expect(parsed).toMatchObject({ unit: "seconds", total: 300 });
+  });
+});
+
+describe("createWodSchema", () => {
+  /** A complete write body — each test changes only the field it is about. */
+  function wod(overrides: Record<string, unknown> = {}) {
+    return {
+      name: "Fran",
+      type: "for_time",
+      timeCapMinutes: 12,
+      rounds: null,
+      workSeconds: null,
+      restSeconds: null,
+      intervalCount: null,
+      isNamed: true,
+      dominantPattern: "push",
+      description: null,
+      movements: [{ exerciseId: "ex-1", reps: 21 }],
+      ...overrides,
+    };
+  }
+
+  it("rejects a write that names its own tier", () => {
+    // `ownerId` and `archivedAt` are the server's answer to which route was
+    // called. Writable, an athlete could post one naming `ownerId: null` and
+    // write straight into the pool every other athlete trains from.
+    const written = createWodSchema.safeParse(wod({ ownerId: null, archivedAt: null }));
+    expect(written.success).toBe(true);
+    expect(written.success && "ownerId" in written.data).toBe(false);
+    expect(written.success && "archivedAt" in written.data).toBe(false);
+  });
+
+  it("drops the session-only fields a read carries", () => {
+    // `wodMovementSchema` describes a movement in one athlete's session. None
+    // of what it says about that session means anything in the library, which
+    // is why the write shape is spelled out rather than derived from it.
+    const written = createWodSchema.safeParse(
+      wod({
+        movements: [
+          { exerciseId: "ex-1", reps: 21, isSwapped: true, prescribedName: "Pull-up" },
+        ],
+      }),
+    );
+    expect(written.success).toBe(true);
+    expect(written.success && "isSwapped" in written.data.movements[0]).toBe(false);
+  });
+
+  it("takes a flat count or a ladder, and refuses both at once", () => {
+    // The pair is what the CHECK constraint rejects, and Postgres rejecting it
+    // arrives as an opaque constraint violation. Accepting only one of the two
+    // is how the totals stop being two numbers that have to agree.
+    expect(createWodSchema.safeParse(wod()).success).toBe(true);
+    expect(
+      createWodSchema.safeParse({
+        ...wod(),
+        movements: [{ exerciseId: "ex-1", repScheme: [21, 15, 9] }],
+      }).success,
+    ).toBe(true);
+    expect(
+      createWodSchema.safeParse({
+        ...wod(),
+        movements: [{ exerciseId: "ex-1", reps: 45, repScheme: [21, 15, 9] }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("refuses a movement stating neither", () => {
+    expect(
+      createWodSchema.safeParse({ ...wod(), movements: [{ exerciseId: "ex-1" }] }).success,
+    ).toBe(false);
+  });
+
+  it("refuses a WOD with no movements", () => {
+    // It parses, schedules, and hands the athlete an empty screen at the
+    // moment they meant to train.
+    expect(createWodSchema.safeParse(wod({ movements: [] })).success).toBe(false);
+  });
+
+  it("refuses ladders of differing lengths", () => {
+    // A ladder is one shape for the whole workout. Two lengths leave no single
+    // answer to "what round is this?" — the same rule wodSchema holds on read.
+    expect(
+      createWodSchema.safeParse({
+        ...wod(),
+        movements: [
+          { exerciseId: "ex-1", repScheme: [21, 15, 9] },
+          { exerciseId: "ex-2", repScheme: [10, 10] },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("lets a flat movement sit alongside a ladder", () => {
+    // Only non-empty schemes are compared: "15 burpees every round" is not a
+    // third length, it is the absence of one.
+    expect(
+      createWodSchema.safeParse({
+        ...wod(),
+        movements: [
+          { exerciseId: "ex-1", repScheme: [21, 15, 9] },
+          { exerciseId: "ex-2", reps: 15 },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("takes no order, so the list's own sequence is the only one", () => {
+    const written = createWodSchema.safeParse({
+      ...wod(),
+      movements: [{ exerciseId: "ex-1", reps: 21, order: 7 }],
+    });
+    expect(written.success).toBe(true);
+    expect(written.success && "order" in written.data.movements[0]).toBe(false);
+  });
+});
+
+describe("updateWodSchema", () => {
+  it("accepts a patch naming one field", () => {
+    expect(updateWodSchema.safeParse({ timeCapMinutes: 20 }).success).toBe(true);
+  });
+
+  it("holds the movement rules on a patch that carries a list", () => {
+    // `.partial()` makes the field optional, not lax: a list that arrives is
+    // the whole list, and it has to be a legal one.
+    expect(updateWodSchema.safeParse({ movements: [] }).success).toBe(false);
+    expect(
+      updateWodSchema.safeParse({
+        movements: [{ exerciseId: "ex-1", reps: 45, repScheme: [21, 15, 9] }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("cannot retire a WOD by echoing back a field it read", () => {
+    const written = updateWodSchema.safeParse({ archivedAt: "2026-09-17T00:00:00.000Z" });
+    expect(written.success).toBe(true);
+    expect(written.success && "archivedAt" in written.data).toBe(false);
   });
 });

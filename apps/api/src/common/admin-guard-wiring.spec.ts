@@ -140,6 +140,48 @@ describe('AdminGuard wiring', () => {
       .expect(403);
   });
 
+  /**
+   * The second admin controller (DN-26), which is the case this spec exists
+   * for: `@AdminOnly()` is a decorator someone has to remember, and a new
+   * admin controller without it type-checks, reads as guarded, and is open.
+   *
+   * Only the refusals are asserted here. They never reach the service, so
+   * this stays a wiring spec rather than a second copy of the WOD rules —
+   * the admissions are proved end to end in `wod-library-write.e2e-spec.ts`.
+   */
+  it('refuses a signed-in athlete every route on the admin WOD controller', async () => {
+    const http = request(app.getHttpServer());
+
+    await http
+      .post('/admin/wods')
+      .set('Authorization', 'Bearer athlete-token')
+      .send({})
+      .expect(403);
+    await http
+      .patch('/admin/wods/wod-1')
+      .set('Authorization', 'Bearer athlete-token')
+      .send({})
+      .expect(403);
+    await http
+      .post('/admin/wods/wod-1/archive')
+      .set('Authorization', 'Bearer athlete-token')
+      .expect(403);
+    await http
+      .post('/admin/wods/wod-1/unarchive')
+      .set('Authorization', 'Bearer athlete-token')
+      .expect(403);
+  });
+
+  // 403 rather than 400: the guard runs before the body is ever read, so an
+  // empty body is not what any of the above is reporting.
+  it('closes the admin WOD routes before validating anything', () => {
+    return request(app.getHttpServer())
+      .post('/admin/wods')
+      .set('Authorization', 'Bearer admin-token')
+      .send({})
+      .expect(400);
+  });
+
   it('leaves unmarked routes alone for every signed-in caller', () => {
     return request(app.getHttpServer())
       .get('/exercises')

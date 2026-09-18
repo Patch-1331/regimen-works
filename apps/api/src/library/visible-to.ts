@@ -58,3 +58,38 @@ export function libraryVisibleTo(userId: string): {
  * outcome — re-seeding a retired global movement brings it back.
  */
 export const GLOBAL_LIBRARY = { ownerId: null } as const;
+
+/**
+ * Who is writing, and therefore which tier the row lands in (DN-25, DN-26).
+ *
+ * `ownerId: null` is an admin curating global content; a string is an athlete
+ * writing their own. It comes from *which controller was called* — the admin
+ * routes live behind `@AdminOnly()` — and never from a request body, so there
+ * is no path by which a caller names a tier they are not entitled to.
+ */
+export type LibraryWriter = { ownerId: string | null };
+
+/**
+ * What a writer's references may point at.
+ *
+ * This one function carries three of the rules at once, which is why it is a
+ * function and not three checks in a row:
+ *
+ *   - An admin writing global content sees only global content, so the
+ *     one-way reference rule (DN-93) holds by construction rather than by a
+ *     comparison someone can forget. A global row pointing at an athlete's
+ *     own would let one athlete's delete break everyone's scheduler.
+ *   - An athlete sees the global library plus their own, so an id lifted from
+ *     another athlete's library is simply not found.
+ *   - Neither sees archived rows, so a live row cannot be pointed at content
+ *     the pool has stopped offering.
+ *
+ * Shared rather than per-service: an `Exercise`'s equipment fallback and a
+ * `Wod`'s movement list are the same question asked of the same table, and
+ * two copies of it would be two chances for one to drift.
+ */
+export function referenceableBy(writer: LibraryWriter) {
+  return writer.ownerId === null
+    ? { ownerId: null, archivedAt: null }
+    : libraryVisibleTo(writer.ownerId);
+}
