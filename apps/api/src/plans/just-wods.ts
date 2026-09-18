@@ -1,3 +1,4 @@
+import type { PrismaClient } from '@prisma/client';
 import { DEFAULT_TRAINING_DAYS } from '@regimen-works/shared';
 
 /**
@@ -106,3 +107,46 @@ export const JUST_WODS_SLOTS = [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
   allowNamed: true,
   maxTimeCapMinutes: null,
 }));
+
+/**
+ * Writes the program, updating a row that has drifted from the definition
+ * above.
+ *
+ * The other half of the pair `UserProvisioningService` holds: that one
+ * creates these rows when they are missing and never touches them again,
+ * which is what a service on the request path should do. This one *updates*,
+ * so an edit to the definition reaches a deploy whose rows already exist --
+ * an athlete enrolled last month must not be left on last month's program.
+ *
+ * Takes its client as an argument so the deploy seed and a test can run the
+ * same code. The seed is otherwise a script with a module-level client and no
+ * exports, which is why the update path had no test before.
+ */
+export async function upsertJustWods(
+  // The real client type rather than a hand-written shape, so a field renamed
+  // on the model is a compile error here instead of a silent no-op update.
+  prisma: Pick<PrismaClient, 'plan' | 'planWeek' | 'planSlot'>,
+): Promise<void> {
+  const { id: planId, ...planFields } = JUST_WODS_PLAN;
+  await prisma.plan.upsert({
+    where: { id: planId },
+    update: planFields,
+    create: JUST_WODS_PLAN,
+  });
+
+  const { id: weekId, ...weekFields } = JUST_WODS_WEEK;
+  await prisma.planWeek.upsert({
+    where: { id: weekId },
+    update: weekFields,
+    create: JUST_WODS_WEEK,
+  });
+
+  for (const slot of JUST_WODS_SLOTS) {
+    const { id: slotId, ...slotFields } = slot;
+    await prisma.planSlot.upsert({
+      where: { id: slotId },
+      update: slotFields,
+      create: slot,
+    });
+  }
+}

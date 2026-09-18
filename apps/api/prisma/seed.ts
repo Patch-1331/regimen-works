@@ -4,11 +4,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
 import { GLOBAL_LIBRARY } from '../src/library/visible-to';
-import {
-  JUST_WODS_PLAN,
-  JUST_WODS_SLOTS,
-  JUST_WODS_WEEK,
-} from '../src/plans/just-wods';
+import { upsertJustWods } from '../src/plans/just-wods';
 import {
   assertSubstitutesReachable,
   assertSubstituteUnitsMatch,
@@ -182,28 +178,7 @@ async function main() {
   // and the other is a no-op. The difference is that this one *updates*, so
   // a change to the definition reaches an existing deploy.
   console.log('Seeding the Just WODs program...');
-  const { id: planId, ...planFields } = JUST_WODS_PLAN;
-  await prisma.plan.upsert({
-    where: { id: planId },
-    update: planFields,
-    create: JUST_WODS_PLAN,
-  });
-
-  const { id: weekId, ...weekFields } = JUST_WODS_WEEK;
-  await prisma.planWeek.upsert({
-    where: { id: weekId },
-    update: weekFields,
-    create: JUST_WODS_WEEK,
-  });
-
-  for (const slot of JUST_WODS_SLOTS) {
-    const { id: slotId, ...slotFields } = slot;
-    await prisma.planSlot.upsert({
-      where: { id: slotId },
-      update: slotFields,
-      create: slot,
-    });
-  }
+  await upsertJustWods(prisma);
 
   // Enrollments are not seeded. They are per-user rows, and the users this
   // would backfill are exactly the ones UserProvisioningService reaches on
