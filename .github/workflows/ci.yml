@@ -42,11 +42,11 @@ jobs:
           node-version: 22
           cache: npm
 
+      # Generating the Prisma client is part of the root postinstall, so
+      # `npm ci` leaves one behind with real model types (DN-55). The
+      # explicit step this replaced meant a fresh clone typechecked here and
+      # nowhere else.
       - run: npm ci
-
-      - name: Generate Prisma client
-        run: npx prisma generate
-        working-directory: apps/api
 
       - name: Typecheck
         run: npm run typecheck

@@ -110,12 +110,13 @@ projects:
                 - package.json
                 - package-lock.json
                 - render.yaml
-            # prisma generate is explicit because the root postinstall only builds
-            # packages/shared, and @prisma/client's own postinstall doesn't reliably
-            # find apps/api/prisma/schema.prisma through a hoisted workspace install.
+            # npm ci generates the Prisma client as well as building
+            # packages/shared: both are in the root postinstall (DN-55).
+            # @prisma/client's own postinstall cannot be relied on here — from a
+            # hoisted workspace install it does not find apps/api/prisma/schema.prisma
+            # and leaves a client with no model types, which fails the build below.
             buildCommand: >-
               npm ci &&
-              npm run prisma:generate --workspace apps/api &&
               npm run build
             # Runs after the build succeeds but before the new instance starts, on a
             # throwaway instance of its own; the paid plan above is what makes it
