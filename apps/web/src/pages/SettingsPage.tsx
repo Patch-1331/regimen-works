@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { EQUIPMENT_CATALOG, type Equipment, type UpdateSettings } from "@regimen-works/shared";
 import { api } from "../lib/api";
 
@@ -13,6 +14,11 @@ export function SettingsPage() {
     onSuccess: async (updated) => {
       queryClient.setQueryData(["settings"], updated);
       await queryClient.invalidateQueries({ queryKey: ["today"] });
+      // Stats draws its cap line from GET /schedule-rule, which since DN-12 is
+      // `trainingDays.length` derived server-side — the same fact under a
+      // different cache key. Without this, changing the days here leaves Stats
+      // drawing the old cap until something else happens to refetch it.
+      await queryClient.invalidateQueries({ queryKey: ["scheduleRule"] });
     },
   });
 
@@ -45,6 +51,16 @@ export function SettingsPage() {
             owned={settings.equipment}
             pending={toggleMutation.isPending}
             onChange={(equipment) => toggleMutation.mutate({ equipment })}
+          />
+          <TrainingDaysSetting
+            days={settings.trainingDays}
+            pending={toggleMutation.isPending}
+            onChange={(trainingDays) => toggleMutation.mutate({ trainingDays })}
+          />
+          <PatternCooldownSetting
+            days={settings.patternCooldownDays}
+            pending={toggleMutation.isPending}
+            onChange={(patternCooldownDays) => toggleMutation.mutate({ patternCooldownDays })}
           />
           {/* A workout already under way keeps the rule it started with, so
               say so rather than leaving the athlete to find out at the cap.
@@ -181,6 +197,203 @@ function EquipmentSetting({
         </p>
       )}
     </fieldset>
+  );
+}
+
+/**
+ * The week as it is *shown*: Monday first.
+ *
+ * The numbers are `trainingDaysSchema`'s — 0 = Sunday, matching
+ * `Date.getUTCDay()` — and this list is the only place the app reorders them.
+ * That is what `packages/shared/src/schedule.ts` means by calling Monday-first
+ * a display order rather than a second numbering: it converts at the point it
+ * renders, and nowhere else (DN-12).
+ */
+const WEEKDAYS: readonly { value: number; short: string; full: string }[] = [
+  { value: 1, short: "Mon", full: "Monday" },
+  { value: 2, short: "Tue", full: "Tuesday" },
+  { value: 3, short: "Wed", full: "Wednesday" },
+  { value: 4, short: "Thu", full: "Thursday" },
+  { value: 5, short: "Fri", full: "Friday" },
+  { value: 6, short: "Sat", full: "Saturday" },
+  { value: 0, short: "Sun", full: "Sunday" },
+];
+
+/**
+ * Which weekdays the athlete trains on (DN-12, DN-30).
+ *
+ * Days rather than a count: the quota this replaced knew how many days but
+ * never which, so the same Wednesday was a training day or a rest day
+ * depending on the order the week had gone in. The count is still shown —
+ * it is what an athlete thinks in — but it is *derived* here exactly as it is
+ * derived on the server, so there is no second control stating the same fact.
+ *
+ * **The last remaining day cannot be unticked.** `trainingDaysSchema` refuses
+ * an empty week, so a checkbox that could empty it is a control whose only
+ * possible outcome is a rejected write. It is disabled and the reason is said
+ * out loud, rather than left to be discovered by clicking.
+ */
+function TrainingDaysSetting({
+  days,
+  pending,
+  onChange,
+}: {
+  days: number[];
+  pending: boolean;
+  onChange: (days: number[]) => void;
+}) {
+  const trained = new Set(days);
+  const isLastDay = days.length === 1;
+
+  // Built from `days`, which comes straight from the settings query, and never
+  // from state initialised at mount: `trainingDays` is a whole-set replacement
+  // with no add or remove verb, so a second tab's write must not be sent back.
+  function toggle(day: number, next: boolean) {
+    onChange(next ? [...days, day] : days.filter((d) => d !== day));
+  }
+
+  return (
+    <fieldset className="p-4" style={{ background: "var(--panel)", border: "1px solid var(--border)" }}>
+      <legend className="float-left w-full font-semibold uppercase" style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}>
+        Training days
+      </legend>
+      <p className="mt-1 text-xs text-[var(--ink-faint)]">
+        The days the app expects you. Anything else is a rest day.
+      </p>
+
+      <ul className="mt-3 flex flex-wrap gap-2">
+        {WEEKDAYS.map((day) => {
+          const checked = trained.has(day.value);
+          // Only the last *checked* box is frozen. The unchecked ones are
+          // still how you get back above one day.
+          const frozen = checked && isLastDay;
+          return (
+            <li key={day.value}>
+              <label className={frozen ? "block cursor-not-allowed" : "block cursor-pointer"}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={pending || frozen}
+                  onChange={(event) => toggle(day.value, event.target.checked)}
+                  // The full day name, because "Mon" read aloud on its own is
+                  // an abbreviation the listener has to expand.
+                  aria-label={day.full}
+                  className="peer sr-only"
+                />
+                <span
+                  aria-hidden="true"
+                  className="flex h-10 w-12 items-center justify-center text-[12px] font-semibold uppercase tracking-[0.1em] transition-colors peer-focus-visible:outline peer-focus-visible:outline-2"
+                  style={{
+                    background: checked ? "var(--glow)" : "var(--panel-2)",
+                    border: "1px solid var(--border)",
+                    boxShadow: checked ? "0 0 8px var(--glow-tint)" : "none",
+                    color: checked ? "var(--panel)" : "var(--ink-soft)",
+                    fontFamily: "var(--font-mono)",
+                    opacity: pending || frozen ? 0.5 : 1,
+                    outlineColor: "var(--glow)",
+                  }}
+                >
+                  {day.short}
+                </span>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+
+      {/* Derived, never stored: "days per week" is the length of the set and
+          the server computes it the same way (DN-12). */}
+      <p className="mt-3 text-[11px] text-[var(--ink-faint)]">
+        {days.length === 1 ? "1 day a week" : `${days.length} days a week`}
+        {isLastDay && " — keep at least one, or there is nothing to open the app for."}
+      </p>
+    </fieldset>
+  );
+}
+
+/** The widest window the scheduler can honour; see `patternCooldownDaysSchema`. */
+const MAX_COOLDOWN_DAYS = 30;
+
+/**
+ * How long before a workout or its pattern comes round again (DN-27, DN-30).
+ *
+ * A drafted field rather than a live one: `PATCH /settings` on every keystroke
+ * would write 1, then 12, on the way to typing 12. The draft commits on blur
+ * or Enter, which is also when a number is finished being typed.
+ *
+ * Out-of-range input is clamped here and explained, rather than sent for the
+ * API to refuse — the bound is a fact about the scheduler (it reads this
+ * rule's history with `take: 30`), and a screen that knows it should say so
+ * rather than make the athlete discover it as an error.
+ */
+function PatternCooldownSetting({
+  days,
+  pending,
+  onChange,
+}: {
+  days: number;
+  pending: boolean;
+  onChange: (days: number) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? String(days);
+
+  function commit() {
+    const parsed = Number.parseInt(shown, 10);
+    // An unreadable or empty box is not a value — fall back to what is stored
+    // rather than guessing at zero, which is a real setting of its own.
+    const next = Number.isNaN(parsed)
+      ? days
+      : Math.min(Math.max(parsed, 0), MAX_COOLDOWN_DAYS);
+    setDraft(null);
+    if (next !== days) onChange(next);
+  }
+
+  return (
+    <div className="p-4" style={{ background: "var(--panel)", border: "1px solid var(--border)" }}>
+      <label
+        htmlFor="pattern-cooldown"
+        className="font-semibold uppercase"
+        style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}
+      >
+        Repeat cooldown
+      </label>
+      <p className="mt-1 text-xs text-[var(--ink-faint)]">
+        How long before a workout, or another one working the same pattern, can come round again.
+      </p>
+
+      <div className="mt-3 flex items-center gap-3">
+        <input
+          id="pattern-cooldown"
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={MAX_COOLDOWN_DAYS}
+          value={shown}
+          disabled={pending}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+          }}
+          className="w-20 px-2 py-1.5 text-[14px] disabled:opacity-50"
+          style={{
+            background: "var(--panel-2)",
+            border: "1px solid var(--border)",
+            color: "var(--ink)",
+            fontFamily: "var(--font-mono)",
+          }}
+        />
+        <span className="text-[12px] text-[var(--ink-soft)]">
+          {days === 0 ? "Off — a workout can come round the next day." : days === 1 ? "day" : "days"}
+        </span>
+      </div>
+
+      <p className="mt-2 text-[11px] text-[var(--ink-faint)]">
+        0 turns it off. {MAX_COOLDOWN_DAYS} is the longest the scheduler can hold to — it looks back{" "}
+        {MAX_COOLDOWN_DAYS} days and no further.
+      </p>
+    </div>
   );
 }
 
