@@ -420,6 +420,7 @@ describe('settings and skill levels', () => {
       autoStopAtCapEnabled: true,
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
+      patternCooldownDays: 5,
     });
   });
 
@@ -444,6 +445,7 @@ describe('settings and skill levels', () => {
       autoStopAtCapEnabled: false,
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
+      patternCooldownDays: 5,
     });
   });
 
@@ -496,6 +498,36 @@ describe('settings and skill levels', () => {
     // Sorted on the way in, so what comes back is comparable to any other
     // stored set and a picker's tap order never reaches the database.
     expect(res.trainingDays).toEqual([0, 2, 6]);
+  });
+
+  it('sets the pattern cooldown over HTTP, zero included (DN-27)', async () => {
+    const res = parsed(
+      settingsSchema,
+      await http()
+        .patch('/settings')
+        .set(...asUser(ALICE))
+        .send({ patternCooldownDays: 0 })
+        .expect(200),
+    );
+
+    // Zero is the rule turned off, not a field left out.
+    expect(res.patternCooldownDays).toBe(0);
+  });
+
+  it('refuses a cooldown wider than the history the scheduler reads', async () => {
+    // SchedulerService reads that history with `take: 30`, so 31 is a number
+    // it could store and then fail to honour.
+    await http()
+      .patch('/settings')
+      .set(...asUser(ALICE))
+      .send({ patternCooldownDays: 31 })
+      .expect(400);
+
+    await http()
+      .patch('/settings')
+      .set(...asUser(ALICE))
+      .send({ patternCooldownDays: -1 })
+      .expect(400);
   });
 
   it('refuses a weekday outside 0-6, and an empty week', async () => {

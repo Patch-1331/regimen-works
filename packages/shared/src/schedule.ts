@@ -40,10 +40,30 @@ export const trainingDaysSchema = z
   )
   .transform((days) => [...days].sort((a, b) => a - b));
 
+/**
+ * How many days must pass before a WOD's name or dominant pattern may come
+ * round again (DN-27).
+ *
+ * **0 is off**, and is a real answer rather than an omission: against a small
+ * library the rule is relaxing on most days anyway, and an athlete who would
+ * rather have the variety the pool can actually offer than a window it cannot
+ * fill is entitled to say so.
+ *
+ * **30 is the ceiling that means anything.** `SchedulerService` fetches the
+ * history this rule reads with `take: 30`, so a window wider than 30 rows
+ * cannot see further back than one exactly 30 days wide. Anything above it
+ * would be a number stored and then not honoured, which is worse than a
+ * number refused.
+ */
+export const patternCooldownDaysSchema = z.number().int().min(0).max(30);
+
+/** The default window, mirroring the column default in schema.prisma. */
+export const DEFAULT_PATTERN_COOLDOWN_DAYS = 5;
+
 export const scheduleRuleSchema = z.object({
   id: z.string(),
   trainingDays: trainingDaysSchema,
-  patternCooldownDays: z.number().int().min(0),
+  patternCooldownDays: patternCooldownDaysSchema,
 });
 export type ScheduleRule = z.infer<typeof scheduleRuleSchema>;
 
