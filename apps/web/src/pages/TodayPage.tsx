@@ -1,10 +1,17 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { effectiveRounds } from "@regimen-works/shared";
+import {
+  DEFAULT_PLAN_ID,
+  effectiveRounds,
+  type TodayPlan,
+} from "@regimen-works/shared";
 import { api } from "../lib/api";
 import { DigitReadout } from "../components/DigitReadout";
-import { InstructionsCaret, InstructionsPanel } from "../components/MovementInstructions";
+import {
+  InstructionsCaret,
+  InstructionsPanel,
+} from "../components/MovementInstructions";
 import { SwapButton, SwapPanel } from "../components/MovementSwap";
 import { buildSwapOptions } from "../lib/swapOptions";
 
@@ -31,8 +38,14 @@ export function TodayPage() {
     staleTime: Infinity,
   });
 
-  if (isLoading) return <p className="p-6 text-[var(--ink-faint)]">Loading today's WOD…</p>;
-  if (error) return <p className="p-6 text-[var(--danger)]">Couldn't reach the API — is it running on :3001?</p>;
+  if (isLoading)
+    return <p className="p-6 text-[var(--ink-faint)]">Loading today's WOD…</p>;
+  if (error)
+    return (
+      <p className="p-6 text-[var(--danger)]">
+        Couldn't reach the API — is it running on :3001?
+      </p>
+    );
   if (!data) return null;
 
   async function handleSkip() {
@@ -54,15 +67,22 @@ export function TodayPage() {
     await queryClient.invalidateQueries({ queryKey: ["today"] });
   }
 
+  // Just WODs is the absence of programming (DN-13), so naming it would be
+  // telling the athlete about a program they never chose. Everything below
+  // reads `program` rather than `data.plan` for that reason.
+  const program = namedProgram(data.plan);
+
   if (data.isRestDay || !data.assignment) {
     return (
       <div className="p-6">
-        <h1 className="text-4xl font-extrabold uppercase leading-none" style={{ fontFamily: "var(--font-display)" }}>
+        <h1
+          className="text-4xl font-extrabold uppercase leading-none"
+          style={{ fontFamily: "var(--font-display)" }}
+        >
           Rest day
         </h1>
         <p className="mt-3 text-[var(--ink-soft)]">
-          Either the week's 5 training days are already used, or today was marked as rest. Come back
-          tomorrow for the next WOD.
+          {restDayCopy(program, data.date)}
         </p>
 
         {/* de-energized instrument bank — the panel is still there, just unlit */}
@@ -79,8 +99,12 @@ export function TodayPage() {
   const isInProgress = status === "in_progress";
   // A session already exists once in progress, so the warm-up checklist —
   // shown before a session starts — has either already run or doesn't apply.
-  const hasWarmup = data.warmupCooldownEnabled && (data.warmup?.length ?? 0) > 0;
-  const startPath = !isInProgress && hasWarmup ? `/warmup/${assignmentId}` : `/workout/${assignmentId}`;
+  const hasWarmup =
+    data.warmupCooldownEnabled && (data.warmup?.length ?? 0) > 0;
+  const startPath =
+    !isInProgress && hasWarmup
+      ? `/warmup/${assignmentId}`
+      : `/workout/${assignmentId}`;
   // True whenever at least one movement is on a tracked progression line
   // (Feature #2) — the scheduler already substituted every such movement
   // for the exercise at the user's current rung before this response left
@@ -93,6 +117,7 @@ export function TodayPage() {
 
   return (
     <div className="flex flex-1 flex-col p-6">
+      {program && <ProgramStrip plan={program} date={data.date} />}
       <h1
         className="text-5xl font-extrabold uppercase leading-none"
         style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}
@@ -100,13 +125,20 @@ export function TodayPage() {
         {wod.name}
       </h1>
       <div className="mt-2 flex items-center gap-2">
-        <p className="text-xs font-semibold tracking-[0.14em] text-[var(--ink-faint)]" style={{ fontFamily: "var(--font-mono)" }}>
+        <p
+          className="text-xs font-semibold tracking-[0.14em] text-[var(--ink-faint)]"
+          style={{ fontFamily: "var(--font-mono)" }}
+        >
           {wod.type.toUpperCase()}
         </p>
         {isAutoScaled && (
           <span
             className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold tracking-[0.1em]"
-            style={{ fontFamily: "var(--font-mono)", color: "var(--glow)", background: "var(--glow-tint)" }}
+            style={{
+              fontFamily: "var(--font-mono)",
+              color: "var(--glow)",
+              background: "var(--glow-tint)",
+            }}
           >
             AUTO-SCALED
           </span>
@@ -116,17 +148,33 @@ export function TodayPage() {
       {/* how the workout is meant to be performed — engraved, not lit, and
           absent entirely on the WODs whose movement list already says it */}
       {wod.description && (
-        <p className="mt-3 text-sm leading-relaxed text-[var(--ink-soft)]">{wod.description}</p>
+        <p className="mt-3 text-sm leading-relaxed text-[var(--ink-soft)]">
+          {wod.description}
+        </p>
       )}
 
       {/* the readout bank — the world's signature moment */}
       <div className="mt-5 grid grid-cols-2 gap-2.5">
-        <DigitReadout value={String(wod.timeCapMinutes).padStart(2, "0")} label="Time cap (min)" size="lg" />
-        <DigitReadout value={totalRounds ? String(totalRounds) : "—"} label="Rounds" size="lg" />
+        <DigitReadout
+          value={String(wod.timeCapMinutes).padStart(2, "0")}
+          label="Time cap (min)"
+          size="lg"
+        />
+        <DigitReadout
+          value={totalRounds ? String(totalRounds) : "—"}
+          label="Rounds"
+          size="lg"
+        />
       </div>
 
       {/* engraved plate — the fixed layer, never editable, never lit */}
-      <div className="mt-2.5" style={{ background: "var(--panel)", border: "1px solid var(--border)" }}>
+      <div
+        className="mt-2.5"
+        style={{
+          background: "var(--panel)",
+          border: "1px solid var(--border)",
+        }}
+      >
         <p
           className="px-4 pt-3 text-[10px] font-semibold tracking-[0.14em] text-[var(--ink-faint)]"
           style={{ fontFamily: "var(--font-mono)" }}
@@ -160,7 +208,10 @@ export function TodayPage() {
 
             const name = (
               <>
-                <span className="truncate font-semibold tracking-wide text-[var(--ink-soft)]" style={{ fontFamily: "var(--font-mono)" }}>
+                <span
+                  className="truncate font-semibold tracking-wide text-[var(--ink-soft)]"
+                  style={{ fontFamily: "var(--font-mono)" }}
+                >
                   {m.exercise.name.toUpperCase()}
                 </span>
                 {/* An automatic substitution used to be applied silently, so
@@ -177,7 +228,9 @@ export function TodayPage() {
                     className="shrink-0 text-[10px] tracking-[0.1em] text-[var(--ink-faint)]"
                     style={{ fontFamily: "var(--font-mono)" }}
                   >
-                    {m.prescribedReason === "equipment" ? "NO KIT" : "YOUR PICK"}
+                    {m.prescribedReason === "equipment"
+                      ? "NO KIT"
+                      : "YOUR PICK"}
                   </span>
                 )}
               </>
@@ -185,7 +238,11 @@ export function TodayPage() {
             const count = (
               <span
                 className="text-lg font-bold"
-                style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", color: "var(--ink)" }}
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontVariantNumeric: "tabular-nums",
+                  color: "var(--ink)",
+                }}
               >
                 {movementCount(m)}
               </span>
@@ -221,7 +278,10 @@ export function TodayPage() {
                       <span className="flex min-w-0 items-center gap-2">
                         {/* Holds the caret's place so a movement without copy
                             still lines up with the ones that have it. */}
-                        <span aria-hidden="true" style={{ width: 12, flexShrink: 0 }} />
+                        <span
+                          aria-hidden="true"
+                          style={{ width: 12, flexShrink: 0 }}
+                        />
                         {name}
                       </span>
                       {count}
@@ -240,10 +300,15 @@ export function TodayPage() {
                   ) : (
                     // Holds the control's place so an unswappable row's count
                     // still lines up with the ones that have it.
-                    <span aria-hidden="true" style={{ width: 44, flexShrink: 0 }} />
+                    <span
+                      aria-hidden="true"
+                      style={{ width: 44, flexShrink: 0 }}
+                    />
                   )}
                 </div>
-                {isOpen && instructions && <InstructionsPanel id={panelId} text={instructions} />}
+                {isOpen && instructions && (
+                  <InstructionsPanel id={panelId} text={instructions} />
+                )}
                 {isSwapOpen && (
                   <SwapPanel
                     id={swapPanelId}
@@ -268,7 +333,12 @@ export function TodayPage() {
           <button
             onClick={() => navigate(`/log/${assignmentId}`)}
             className="flex w-full items-center justify-center gap-2 py-4 text-sm font-bold tracking-[0.14em]"
-            style={{ fontFamily: "var(--font-mono)", background: "var(--panel-2)", border: "1px solid var(--border)", color: "var(--ink)" }}
+            style={{
+              fontFamily: "var(--font-mono)",
+              background: "var(--panel-2)",
+              border: "1px solid var(--border)",
+              color: "var(--ink)",
+            }}
           >
             <CheckIcon /> VIEW RESULT
           </button>
@@ -312,14 +382,31 @@ function movementCount(m: {
 
 function CheckIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="var(--ink)" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" width={16} height={16}>
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="var(--ink)"
+      strokeWidth={2.2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      width={16}
+      height={16}
+    >
       <path d="M20 6 9 17l-5-5" />
     </svg>
   );
 }
 
 // The panel's physical toggle switch — flips lit when the session is live.
-function ToggleStart({ onClick, label, energized }: { onClick: () => void; label: string; energized: boolean }) {
+function ToggleStart({
+  onClick,
+  label,
+  energized,
+}: {
+  onClick: () => void;
+  label: string;
+  energized: boolean;
+}) {
   return (
     <button
       onClick={onClick}
@@ -333,9 +420,69 @@ function ToggleStart({ onClick, label, energized }: { onClick: () => void; label
     >
       <span
         className="inline-block h-2.5 w-2.5 rounded-full"
-        style={{ background: energized ? "var(--glow)" : "var(--bg)", boxShadow: energized ? "0 0 6px var(--glow)" : "none" }}
+        style={{
+          background: energized ? "var(--glow)" : "var(--bg)",
+          boxShadow: energized ? "0 0 6px var(--glow)" : "none",
+        }}
       />
       {label}
     </button>
+  );
+}
+
+/**
+ * The program worth naming, or null.
+ *
+ * Null covers three situations the athlete experiences identically: no
+ * enrollment, a program that has not started, and Just WODs — which is a real
+ * enrollment and deliberately not a program anyone chose.
+ */
+function namedProgram(plan: TodayPlan | null): TodayPlan | null {
+  return plan && plan.planId !== DEFAULT_PLAN_ID ? plan : null;
+}
+
+/**
+ * Which day of the program week a date is, Monday-first and 1-based.
+ *
+ * Monday-first is display-only, which is why it is computed here and not
+ * carried on the response: the API's weekday numbering is Sunday-first
+ * everywhere (`Date.getUTCDay()`), and program weeks align to Mon–Sun
+ * calendar weeks. This is the same date the API resolved the day from, so the
+ * two cannot drift.
+ */
+function dayOfProgramWeek(date: string): number {
+  return ((new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
+}
+
+function restDayCopy(program: TodayPlan | null, date: string): string {
+  // "Planned rest" only when the program actually planned one. A flexible
+  // program defers to the athlete's own training days, and telling them the
+  // program planned a day they themselves took off would be the app taking
+  // credit for their decision — which is why `slotKind` is null in that case.
+  if (program?.slotKind === "rest") {
+    return `Planned rest — week ${program.week}, day ${dayOfProgramWeek(date)} of ${program.name}. Come back tomorrow for the next session.`;
+  }
+  return "Today isn't one of your training days, or it was marked as rest. Come back tomorrow for the next WOD.";
+}
+
+/** Where the athlete is in their program, above the plate. */
+function ProgramStrip({ plan, date }: { plan: TodayPlan; date: string }) {
+  const parts = [
+    plan.name.toUpperCase(),
+    plan.totalWeeks === null
+      ? `WK ${plan.week}`
+      : `WK ${plan.week}/${plan.totalWeeks}`,
+    `D ${dayOfProgramWeek(date)}`,
+    // The authored week's own name, when it has one to add — "Deload" is the
+    // part of today an athlete most wants to know before they start.
+    ...(plan.weekLabel ? [plan.weekLabel.toUpperCase()] : []),
+  ];
+  return (
+    <p
+      className="mb-2 text-[11px] font-bold tracking-[0.18em] text-[var(--glow)]"
+      style={{ fontFamily: "var(--font-mono)" }}
+    >
+      {parts.join(" · ")}
+    </p>
   );
 }

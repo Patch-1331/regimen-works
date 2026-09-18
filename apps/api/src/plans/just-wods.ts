@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
-import { DEFAULT_TRAINING_DAYS } from '@regimen-works/shared';
+import { DEFAULT_PLAN_ID, DEFAULT_TRAINING_DAYS } from '@regimen-works/shared';
 
 /**
  * Just WODs as a real program (DN-13).
@@ -16,7 +16,10 @@ import { DEFAULT_TRAINING_DAYS } from '@regimen-works/shared';
  * one is simply a no-op. They also let provisioning enroll an athlete
  * without first reading the plan back to learn what it is called.
  */
-export const JUST_WODS_PLAN_ID = 'plan_just_wods';
+// Re-exported from the shared package rather than declared here: the web app
+// has to recognise this id too (DN-16), and an id written down twice is an id
+// that can differ.
+export const JUST_WODS_PLAN_ID = DEFAULT_PLAN_ID;
 export const JUST_WODS_WEEK_ID = 'plan_week_just_wods';
 
 /** Its slot for a given weekday. 0 = Sunday … 6 = Saturday, as everywhere else. */

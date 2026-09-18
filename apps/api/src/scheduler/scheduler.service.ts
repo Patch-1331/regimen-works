@@ -17,6 +17,13 @@ import {
   type ResolvedMovement,
 } from './movement-resolution.service';
 import {
+  narrowToSlot,
+  resolveProgramDay,
+  type ActiveProgram,
+  type ProgramDay,
+  type SlotConstraints,
+} from '../plans/program-day';
+import {
   applyEquipmentFloor,
   applyRememberedChoice,
   dominantMovement,
@@ -26,6 +33,9 @@ import {
 } from './scheduler.logic';
 
 const wodInclude = resolvableMovementInclude;
+
+/** A program day that has been acted on: a finished run is already retired. */
+type SettledDay = Exclude<ProgramDay, { kind: 'completed' }>;
 
 @Injectable()
 export class SchedulerService {
@@ -38,17 +48,33 @@ export class SchedulerService {
     @Inject(RNG) private readonly rng: Rng = Math.random,
   ) {}
 
-  /** Returns today's assignment, generating one if the day hasn't been decided yet. */
+  /**
+   * Returns today's assignment, generating one if the day hasn't been decided
+   * yet.
+   *
+   * Since DN-16 the day is resolved through the athlete's active enrollment
+   * rather than going straight to `pickWod`. There is still **one** path:
+   * every athlete has an enrollment (DN-13), and the cases where a program is
+   * not deciding today -- none, not started, just finished -- collapse into
+   * the same fallback the app had before programs existed, instead of an
+   * `if (enrolled) ... else ...` spreading through the scheduler.
+   */
   async getToday(userId: string, today: string) {
-    const rule = await this.prisma.scheduleRule.findUnique({
-      where: { userId },
-    });
-    const warmupCooldownEnabled = rule?.warmupCooldownEnabled ?? false;
+    const [rule, existing, program] = await Promise.all([
+      this.prisma.scheduleRule.findUnique({ where: { userId } }),
+      this.prisma.dailyAssignment.findUnique({
+        where: { userId_date: { userId, date: today } },
+        include: { wod: { include: wodInclude }, session: true },
+      }),
+      this.loadActiveProgram(userId),
+    ]);
 
-    const existing = await this.prisma.dailyAssignment.findUnique({
-      where: { userId_date: { userId, date: today } },
-      include: { wod: { include: wodInclude }, session: true },
-    });
+    const warmupCooldownEnabled = rule?.warmupCooldownEnabled ?? false;
+    const trainingDays = rule?.trainingDays ?? [...DEFAULT_TRAINING_DAYS];
+    const day = await this.settleProgramDay(
+      resolveProgramDay(program, trainingDays, today),
+    );
+    const plan = planBlock(day);
 
     if (existing) {
       const assignment =
@@ -68,11 +94,10 @@ export class SchedulerService {
 
       return {
         date: today,
-        // Always null so far: nothing reads an enrollment yet (DN-16).
-        // Stated rather than omitted, because the field is non-optional on
-        // the shared schema -- a client parsing `todayResponseSchema` would
-        // reject a payload that simply left it out.
-        plan: null,
+        // Recomputed rather than read back off the row's plan columns. Those
+        // record what produced the day and are history; this answers "where am
+        // I today", which is a question about the enrollment as it stands now.
+        plan,
         isRestDay: existing.status === 'skipped',
         assignment,
         warmupCooldownEnabled,
@@ -88,14 +113,23 @@ export class SchedulerService {
     // rest-day check is a weekday lookup, nothing reads the number, and a
     // query whose answer is discarded is how dead code starts. DN-17 wants a
     // count of this shape back for makeup days, with a different meaning.
-    const trainingDays = rule?.trainingDays ?? [...DEFAULT_TRAINING_DAYS];
     const cooldownDays =
       rule?.patternCooldownDays ?? DEFAULT_PATTERN_COOLDOWN_DAYS;
 
-    if (isRestDay(today, trainingDays)) {
+    // `isRestDay` is still the whole rule when no program is deciding, which
+    // is what keeps an athlete who has never touched a program on exactly the
+    // behaviour they had before. Under a program the calendar question has
+    // already been asked -- a flexible plan defers to these same training
+    // days, a fixed one overrides them on purpose.
+    const resting =
+      day.kind === 'fallback'
+        ? isRestDay(today, trainingDays)
+        : day.kind === 'rest';
+
+    if (resting) {
       return {
         date: today,
-        plan: null,
+        plan,
         isRestDay: true,
         assignment: null,
         warmupCooldownEnabled,
@@ -104,15 +138,27 @@ export class SchedulerService {
       };
     }
 
-    const wod = await this.generateWodForDate(
+    const wod = await this.wodForDay(
       userId,
       today,
+      day,
       cooldownDays,
       rule?.equipment ?? [...DEFAULT_EQUIPMENT],
     );
 
     const created = await this.prisma.dailyAssignment.create({
-      data: { userId, date: today, wodId: wod.id, status: 'scheduled' },
+      data: {
+        userId,
+        date: today,
+        wodId: wod.id,
+        status: 'scheduled',
+        // All three null on a day no program produced, which is what the
+        // columns mean -- see the schema. Written together because they are
+        // one fact: this day came from that slot of that run.
+        enrollmentId: day.kind === 'fallback' ? null : day.day.enrollmentId,
+        planSlotId: day.kind === 'fallback' ? null : day.day.planSlotId,
+        planDayIndex: day.kind === 'fallback' ? null : day.day.planDayIndex,
+      },
       include: { wod: { include: wodInclude } },
     });
 
@@ -124,7 +170,7 @@ export class SchedulerService {
 
     return {
       date: today,
-      plan: null,
+      plan,
       isRestDay: false,
       assignment: {
         id: created.id,
@@ -141,6 +187,96 @@ export class SchedulerService {
         scaledWod.dominantPattern,
       )),
     };
+  }
+
+  /**
+   * The athlete's active run, flattened for `resolveProgramDay`.
+   *
+   * Null is an ordinary answer, not a missing row to repair: an athlete who
+   * has just finished a program has none until provisioning enrolls them in
+   * Just WODs again on a later request, and `getToday` must render their day
+   * either way.
+   */
+  private async loadActiveProgram(
+    userId: string,
+  ): Promise<ActiveProgram | null> {
+    const enrollment = await this.prisma.planEnrollment.findFirst({
+      where: { userId, status: 'active' },
+      include: {
+        plan: {
+          include: {
+            weeks: {
+              orderBy: { order: 'asc' },
+              include: { slots: { orderBy: { dayOfWeek: 'asc' } } },
+            },
+          },
+        },
+      },
+    });
+    if (!enrollment) return null;
+
+    return {
+      enrollmentId: enrollment.id,
+      planId: enrollment.planId,
+      planName: enrollment.plan.name,
+      scheduleMode: enrollment.plan.scheduleMode,
+      startDate: enrollment.startDate,
+      weeks: enrollment.weeks,
+      authoredWeeks: enrollment.plan.weeks,
+    };
+  }
+
+  /**
+   * Retires a run that has passed its last day, and hands back the fallback
+   * so the rest of `getToday` has one less case to carry.
+   *
+   * Completing on read rather than on a schedule is what keeps the app free of
+   * a nightly job: the day an athlete's program ends is a day they open Today,
+   * and nobody needs the row flipped before then. `updateMany` scoped to
+   * `active` so two concurrent requests cannot both write a completion.
+   */
+  private async settleProgramDay(
+    day: ProgramDay,
+    // Excluding `completed` from the return type is the point of this
+    // function: past that line every caller is dealing with a day that has
+    // already been dealt with, and the compiler says so.
+  ): Promise<SettledDay> {
+    if (day.kind !== 'completed') return day;
+    await this.prisma.planEnrollment.updateMany({
+      where: { id: day.enrollmentId, status: 'active' },
+      data: { status: 'completed', completedAt: new Date() },
+    });
+    return { kind: 'fallback', reason: 'no-enrollment' };
+  }
+
+  /** The day's WOD: the one the program pinned, or one picked for its slot. */
+  private async wodForDay(
+    userId: string,
+    today: string,
+    day: SettledDay,
+    cooldownDays: number,
+    equipment: string[],
+  ) {
+    if (day.kind === 'pinned') {
+      const pinned = await this.prisma.wod.findUnique({
+        where: { id: day.wodId },
+        select: { id: true, name: true, type: true, dominantPattern: true },
+      });
+      // A pinned WOD is chosen on purpose, so no cooldown or equipment rule
+      // overrides it -- re-testing a benchmark is the point, and the movement
+      // resolution below still fits it to the athlete. Archived is deliberate
+      // too: the program was authored around this workout, and history is not
+      // rewritten by a later edit (DN-25).
+      if (pinned) return pinned;
+    }
+
+    return this.generateWodForDate(
+      userId,
+      today,
+      cooldownDays,
+      equipment,
+      day.kind === 'generated' ? day.constraints : null,
+    );
   }
 
   /** Null lists when the setting is off or there's no WOD to build a checklist for. */
@@ -205,12 +341,24 @@ export class SchedulerService {
       update: { status: 'skipped' },
       create: { userId, date: today, status: 'skipped' },
     });
-    const rule = await this.prisma.scheduleRule.findUnique({
-      where: { userId },
-    });
+    const [rule, program] = await Promise.all([
+      this.prisma.scheduleRule.findUnique({ where: { userId } }),
+      this.loadActiveProgram(userId),
+    ]);
+    // Resolved rather than hardcoded null: skipping a day does not leave the
+    // program, so the strip that says which week the athlete is in is still
+    // true afterwards. Nothing is settled here -- an enrollment past its last
+    // day completes on the next `getToday`, not on a skip.
+    const plan = planBlock(
+      resolveProgramDay(
+        program,
+        rule?.trainingDays ?? [...DEFAULT_TRAINING_DAYS],
+        today,
+      ),
+    );
     return {
       date: today,
-      plan: null,
+      plan,
       isRestDay: true,
       assignment: null,
       warmupCooldownEnabled: rule?.warmupCooldownEnabled ?? false,
@@ -224,6 +372,7 @@ export class SchedulerService {
     today: string,
     cooldownDays: number,
     equipment: string[],
+    constraints: SlotConstraints | null,
   ) {
     const [wods, recentAssignments, skillLevels, linedExercises] =
       await Promise.all([
@@ -241,6 +390,12 @@ export class SchedulerService {
             name: true,
             type: true,
             dominantPattern: true,
+            // The two axes only a program constrains (DN-16). Selected
+            // unconditionally rather than behind the constraints, because a
+            // select that changes shape per call is a candidate list that
+            // changes shape per call.
+            isNamed: true,
+            timeCapMinutes: true,
             // The movements come along so the equipment floor can find the one
             // the WOD is identified by (DN-82). Ordered, because "the first
             // movement in the dominant pattern" is only meaningful in the
@@ -307,6 +462,8 @@ export class SchedulerService {
         name: wod.name,
         type: wod.type,
         dominantPattern: wod.dominantPattern,
+        isNamed: wod.isNamed,
+        timeCapMinutes: wod.timeCapMinutes,
         // A WOD whose claimed pattern no movement carries has no identity to
         // judge, so it stays in the pool rather than being dropped on a data
         // gap — the discipline every resolution layer here keeps.
@@ -314,12 +471,41 @@ export class SchedulerService {
       };
     });
 
-    return pickWod(
-      applyEquipmentFloor(candidates, owned),
-      history,
-      today,
-      cooldownDays,
-      this.rng,
-    );
+    // Equipment first, then the slot. The floor is about what the athlete can
+    // physically do and the slot is about what the program asked for, so
+    // narrowing inside a pool already reduced to performable WODs is the only
+    // order that cannot hand someone a workout they own no gear for. Both
+    // relax rather than empty, so the pool handed to `pickWod` is never bare.
+    const performable = applyEquipmentFloor(candidates, owned);
+    const pool =
+      constraints === null
+        ? performable
+        : narrowToSlot(performable, constraints);
+
+    return pickWod(pool, history, today, cooldownDays, this.rng);
   }
+}
+
+/**
+ * The today response's program block, or null when no program is deciding
+ * today.
+ *
+ * Null covers the athlete with no enrollment, the one whose program has not
+ * started, and the one whose program just ended -- three situations, one
+ * answer, because from the screen's point of view they are the same: there is
+ * no program context to show above today's plate.
+ */
+function planBlock(day: ProgramDay) {
+  // `completed` answers null alongside `fallback` because it is the same fact
+  // for the screen: the run that just ended is no longer context for today.
+  if (day.kind === 'fallback' || day.kind === 'completed') return null;
+  return {
+    enrollmentId: day.day.enrollmentId,
+    planId: day.day.planId,
+    name: day.day.planName,
+    week: day.day.week,
+    totalWeeks: day.day.totalWeeks,
+    weekLabel: day.day.weekLabel,
+    slotKind: day.day.slotKind,
+  };
 }

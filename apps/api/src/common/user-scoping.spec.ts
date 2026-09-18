@@ -81,6 +81,11 @@ function recordingPrisma() {
         (calls['wod.findMany'] ??= []).push(args);
         return Promise.resolve([]);
       }),
+      findUnique: record('wod.findUnique'),
+    },
+    planEnrollment: {
+      findFirst: record('planEnrollment.findFirst'),
+      updateMany: record('planEnrollment.updateMany'),
     },
   };
   return prisma as typeof prisma & PrismaService;
@@ -234,6 +239,28 @@ describe('library ownership scoping', () => {
     }
     for (const where of whereOf(prisma, 'exercise.findMany')) {
       expectLibraryScope(where);
+    }
+  });
+
+  it('scopes the enrollment the day is resolved through', async () => {
+    // The read that decides whose program shapes today (DN-16). Unscoped it
+    // compiles and returns whichever active enrollment Postgres happens to
+    // hand back first -- which is to say, someone else's program, on this
+    // athlete's screen, writing their id onto a stranger's run.
+    const prisma = recordingPrisma();
+    const wods = {
+      getChecklists: jest.fn(),
+    } as unknown as ConstructorParameters<typeof SchedulerService>[1];
+    await new SchedulerService(
+      prisma,
+      wods,
+      new MovementResolutionService(prisma),
+    )
+      .getToday(ALICE, '2026-09-07')
+      .catch(() => undefined);
+
+    for (const where of whereOf(prisma, 'planEnrollment.findFirst')) {
+      expect(where).toContain(ALICE);
     }
   });
 
