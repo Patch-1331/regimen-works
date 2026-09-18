@@ -5,6 +5,11 @@ import { PrismaClient } from '@prisma/client';
 
 import { GLOBAL_LIBRARY } from '../src/library/visible-to';
 import {
+  JUST_WODS_PLAN,
+  JUST_WODS_SLOTS,
+  JUST_WODS_WEEK,
+} from '../src/plans/just-wods';
+import {
   assertSubstitutesReachable,
   assertSubstituteUnitsMatch,
 } from '../src/seed/substitute-guard';
@@ -164,9 +169,48 @@ async function main() {
 
   // ScheduleRule and SkillLevel rows used to be seeded here, when they were
   // global singletons. They are per-user now, so UserProvisioningService
-  // creates them on a user's first authenticated request instead — this seed
-  // runs at deploy time, when no user exists yet. Only the shared catalogue
-  // (exercises and WODs) belongs here.
+  // creates them on a user's first authenticated request instead -- this seed
+  // runs at deploy time, when no user exists yet.
+  //
+  // Just WODs is library content like the WODs above -- global, admin-owned,
+  // the same for everyone -- so the deploy keeps it current here (DN-13).
+  //
+  // UserProvisioningService creates these same rows if they are missing, and
+  // that is not a duplicate of this loop but the other half of it: it cannot
+  // wait for a seed that may not have run, and this cannot wait for a user
+  // who may never sign in. The ids are shared, so whichever runs first wins
+  // and the other is a no-op. The difference is that this one *updates*, so
+  // a change to the definition reaches an existing deploy.
+  console.log('Seeding the Just WODs program...');
+  const { id: planId, ...planFields } = JUST_WODS_PLAN;
+  await prisma.plan.upsert({
+    where: { id: planId },
+    update: planFields,
+    create: JUST_WODS_PLAN,
+  });
+
+  const { id: weekId, ...weekFields } = JUST_WODS_WEEK;
+  await prisma.planWeek.upsert({
+    where: { id: weekId },
+    update: weekFields,
+    create: JUST_WODS_WEEK,
+  });
+
+  for (const slot of JUST_WODS_SLOTS) {
+    const { id: slotId, ...slotFields } = slot;
+    await prisma.planSlot.upsert({
+      where: { id: slotId },
+      update: slotFields,
+      create: slot,
+    });
+  }
+
+  // Enrollments are not seeded. They are per-user rows, and the users this
+  // would backfill are exactly the ones UserProvisioningService reaches on
+  // their next authenticated request -- through the very code path that
+  // enrolls a new athlete, rather than a second one written once and never
+  // exercised again. An athlete who never signs in again gets no enrollment
+  // and needs none, having no Today to render.
   console.log(`Done: ${exercises.length} exercises, ${wods.length} WODs.`);
 }
 
