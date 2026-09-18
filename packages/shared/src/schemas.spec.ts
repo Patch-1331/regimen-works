@@ -6,6 +6,7 @@ import { movementHistorySchema } from "./history.js";
 import { logResultRequestSchema, workoutLogListItemSchema } from "./log.js";
 import { proposedRungChangeSchema } from "./rung-change.js";
 import {
+  patternCooldownDaysSchema,
   scheduleCapSchema,
   scheduleRuleSchema,
   trainingDaysSchema,
@@ -359,6 +360,7 @@ describe("settingsSchema", () => {
     autoStopAtCapEnabled: true,
     equipment: ["bar"],
     trainingDays: [1, 2, 3, 4, 5],
+    patternCooldownDays: 5,
     ...overrides,
   });
 
@@ -393,6 +395,18 @@ describe("settingsSchema", () => {
 
   it("rejects a bare string where the set belongs", () => {
     expect(settingsSchema.safeParse(settings({ equipment: "bar" })).success).toBe(false);
+  });
+
+  it("carries the pattern cooldown, the last ScheduleRule knob to be exposed", () => {
+    expect(settingsSchema.safeParse(settings({ patternCooldownDays: 0 })).data).toEqual(
+      expect.objectContaining({ patternCooldownDays: 0 }),
+    );
+  });
+
+  it("refuses a cooldown the scheduler could not honour", () => {
+    expect(settingsSchema.safeParse(settings({ patternCooldownDays: 31 })).success).toBe(
+      false,
+    );
   });
 });
 
@@ -450,6 +464,30 @@ describe("trainingDaysSchema", () => {
   });
 });
 
+describe("patternCooldownDaysSchema", () => {
+  const parse = (days: unknown) => patternCooldownDaysSchema.safeParse(days);
+
+  it("accepts 0, which is the rule turned off rather than a missing answer", () => {
+    // Against a small library the cooldown relaxes on most days anyway, so an
+    // athlete preferring the variety the pool can offer is entitled to say so.
+    expect(parse(0).success).toBe(true);
+  });
+
+  it("accepts 30, the widest window the scheduler can honour", () => {
+    expect(parse(30).success).toBe(true);
+  });
+
+  it("refuses 31, which the history query could not see", () => {
+    // SchedulerService reads the cooldown's history with `take: 30`. A wider
+    // window would be a number stored and then quietly not applied.
+    expect(parse(31).success).toBe(false);
+  });
+
+  it.each([-1, 2.5])("refuses %s", (value) => {
+    expect(parse(value).success).toBe(false);
+  });
+});
+
 describe("scheduleRuleSchema", () => {
   const rule = (overrides: Record<string, unknown> = {}) => ({
     id: "rule-1",
@@ -464,6 +502,14 @@ describe("scheduleRuleSchema", () => {
 
   it("accepts a zero pattern cooldown, which means no cooldown", () => {
     expect(scheduleRuleSchema.safeParse(rule({ patternCooldownDays: 0 })).success).toBe(true);
+  });
+
+  it("refuses a cooldown past the ceiling, the same bound settings applies", () => {
+    // One schema behind both, so the rule row and the settings endpoint can
+    // not disagree about what is storable.
+    expect(scheduleRuleSchema.safeParse(rule({ patternCooldownDays: 31 })).success).toBe(
+      false,
+    );
   });
 
   it("takes the day count on its own for callers that need nothing else", () => {

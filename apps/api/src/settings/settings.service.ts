@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   DEFAULT_EQUIPMENT,
+  DEFAULT_PATTERN_COOLDOWN_DAYS,
   DEFAULT_TRAINING_DAYS,
   equipment as equipmentPiece,
 } from '@regimen-works/shared';
@@ -33,15 +34,17 @@ function ownedEquipment(stored: string[]): Equipment[] {
  * defaults in schema.prisma rather than restating a policy: warm-up/cool-down
  * is opt-in (#63), stopping at the time cap is how the timer runs unless the
  * athlete opts out, equipment starts at the baseline the app has always
- * assumed -- bodyweight, which is no tag at all, plus the bar (DN-81) -- and
+ * assumed -- bodyweight, which is no tag at all, plus the bar (DN-81),
  * training days start at Mon-Fri, the spread the old five-day quota
- * backfilled to (DN-12).
+ * backfilled to (DN-12), and the pattern cooldown starts at the window the
+ * scheduler has always applied (DN-27).
  */
 const DEFAULTS: Settings = {
   warmupCooldownEnabled: false,
   autoStopAtCapEnabled: true,
   equipment: [...DEFAULT_EQUIPMENT],
   trainingDays: [...DEFAULT_TRAINING_DAYS],
+  patternCooldownDays: DEFAULT_PATTERN_COOLDOWN_DAYS,
 };
 
 function toSettings(rule: ScheduleRule | null): Settings {
@@ -51,6 +54,7 @@ function toSettings(rule: ScheduleRule | null): Settings {
     autoStopAtCapEnabled: rule.autoStopAtCapEnabled,
     equipment: ownedEquipment(rule.equipment),
     trainingDays: rule.trainingDays,
+    patternCooldownDays: rule.patternCooldownDays,
   };
 }
 

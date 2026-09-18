@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { Exercise } from '@prisma/client';
 import {
   DEFAULT_EQUIPMENT,
+  DEFAULT_PATTERN_COOLDOWN_DAYS,
   DEFAULT_TRAINING_DAYS,
 } from '@regimen-works/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -79,7 +80,8 @@ export class SchedulerService {
     // query whose answer is discarded is how dead code starts. DN-17 wants a
     // count of this shape back for makeup days, with a different meaning.
     const trainingDays = rule?.trainingDays ?? [...DEFAULT_TRAINING_DAYS];
-    const cooldownDays = rule?.patternCooldownDays ?? 5;
+    const cooldownDays =
+      rule?.patternCooldownDays ?? DEFAULT_PATTERN_COOLDOWN_DAYS;
 
     if (isRestDay(today, trainingDays)) {
       return {

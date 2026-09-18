@@ -31,6 +31,7 @@ describe('SettingsService.get', () => {
       autoStopAtCapEnabled: true,
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
+      patternCooldownDays: 5,
     });
   });
 
@@ -49,6 +50,7 @@ describe('SettingsService.get', () => {
       autoStopAtCapEnabled: false,
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
+      patternCooldownDays: 5,
     });
   });
 
@@ -68,6 +70,7 @@ describe('SettingsService.get', () => {
       autoStopAtCapEnabled: true,
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
+      patternCooldownDays: 5,
     });
   });
 
@@ -134,6 +137,7 @@ describe('SettingsService.update', () => {
       autoStopAtCapEnabled: false,
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
+      patternCooldownDays: 5,
     });
   });
 
@@ -152,6 +156,7 @@ describe('SettingsService.update', () => {
       autoStopAtCapEnabled: false,
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
+      patternCooldownDays: 5,
     });
   });
 
@@ -164,6 +169,7 @@ describe('SettingsService.update', () => {
       autoStopAtCapEnabled: true,
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
+      patternCooldownDays: 5,
     });
   });
 
@@ -175,6 +181,7 @@ describe('SettingsService.update', () => {
       autoStopAtCapEnabled: true,
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
+      patternCooldownDays: 5,
     });
     expect(await storedRule(user.id)).not.toBeNull();
   });
@@ -188,10 +195,8 @@ describe('SettingsService.update', () => {
     expect(await testPrisma().scheduleRule.count()).toBe(1);
   });
 
-  it('leaves the scheduling fields alone, which this endpoint does not expose', async () => {
-    // ScheduleRule still carries patternCooldownDays, which this endpoint does
-    // not expose (DN-27's, once Programs has reshaped it); the settings patch
-    // must not reset it on its way past.
+  it('leaves a field the patch does not name alone', async () => {
+    // A patch touching one preference must not reset another on its way past.
     const user = await createUser();
     await testPrisma().scheduleRule.create({
       data: { userId: user.id, patternCooldownDays: 7 },
@@ -201,6 +206,34 @@ describe('SettingsService.update', () => {
 
     const rule = await storedRule(user.id);
     expect(rule).toMatchObject({ patternCooldownDays: 7 });
+  });
+
+  it('reads back the pattern cooldown it stored (DN-27)', async () => {
+    const user = await createUser();
+
+    await service().update(user.id, { patternCooldownDays: 9 });
+
+    expect((await service().get(user.id)).patternCooldownDays).toBe(9);
+    expect((await storedRule(user.id))?.patternCooldownDays).toBe(9);
+  });
+
+  it('stores a zero cooldown as the answer it is, not as an omission', async () => {
+    // 0 turns the rule off. Falling back to the default here would be the app
+    // overruling a choice the athlete made explicitly.
+    const user = await createUser();
+
+    expect(
+      (await service().update(user.id, { patternCooldownDays: 0 }))
+        .patternCooldownDays,
+    ).toBe(0);
+    expect((await storedRule(user.id))?.patternCooldownDays).toBe(0);
+  });
+
+  it('reports the default cooldown for an athlete with no rule row', async () => {
+    // DEFAULTS mirrors the column default; nothing links the two but this.
+    const user = await createUser();
+
+    expect((await service().get(user.id)).patternCooldownDays).toBe(5);
   });
 
   it('reads back the training days it stored', async () => {
@@ -255,6 +288,7 @@ describe('SettingsService.update', () => {
       autoStopAtCapEnabled: false,
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
+      patternCooldownDays: 5,
     });
   });
 

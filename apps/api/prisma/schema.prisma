@@ -222,6 +222,11 @@ model ScheduleRule {
   // The default is Mon–Fri, which is the spread the old `@default(5)` quota
   // backfilled to, and must stay in step with DEFAULT_TRAINING_DAYS.
   trainingDays          Int[]   @default([1, 2, 3, 4, 5])
+  // How long before a WOD's name or dominant pattern may come round again.
+  // Exposed through /settings since DN-27, where the bounds (0 = off, 30 =
+  // the widest window the scheduler's `take: 30` history can honour) are
+  // stated on `patternCooldownDaysSchema`. The default must stay in step with
+  // DEFAULT_PATTERN_COOLDOWN_DAYS.
   patternCooldownDays   Int     @default(5)
   warmupCooldownEnabled Boolean @default(false) // Feature #63 opt-in
   // Whether reaching a WOD's time cap stops the clock and ends the session.

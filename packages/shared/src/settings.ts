@@ -1,11 +1,15 @@
 import { z } from "zod";
 import { equipment } from "./enums.js";
-import { trainingDaysSchema } from "./schedule.js";
+import { patternCooldownDaysSchema, trainingDaysSchema } from "./schedule.js";
 
 /**
- * The preferences the app exposes. Still not full ScheduleRule CRUD —
- * `patternCooldownDays` remains unexposed, and is DN-27's to add once Programs
- * has reshaped it from a hard rule into a soft preference.
+ * The preferences the app exposes — now every column on `ScheduleRule` that is
+ * a preference at all (DN-27).
+ *
+ * What is still missing is not a field but a state: while a fixed program is
+ * driving the schedule it overrides `trainingDays` outright, and this shape
+ * has no way to say so. Reporting a value the scheduler is ignoring is the
+ * failure mode there; DN-118 fixes it once there is an enrollment to read.
  */
 export const settingsSchema = z.object({
   /** Feature #63 — show the warm-up/cool-down checklists at all. */
@@ -38,6 +42,15 @@ export const settingsSchema = z.object({
    * are lit, not the one that just changed.
    */
   trainingDays: trainingDaysSchema,
+  /**
+   * How long before a WOD's name or dominant pattern may repeat (DN-27), with
+   * 0 meaning off. The bounds, and why 30 is the top, live on
+   * `patternCooldownDaysSchema`.
+   *
+   * A scalar, so the per-field PATCH protection covers it outright: two tabs
+   * changing it is the later write winning, which is what it should be.
+   */
+  patternCooldownDays: patternCooldownDaysSchema,
 });
 export type Settings = z.infer<typeof settingsSchema>;
 
