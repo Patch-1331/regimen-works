@@ -401,3 +401,80 @@ describe('the boundary between them', () => {
     expect(seen.body).toHaveLength(2);
   });
 });
+
+/**
+ * `?includeArchived=true` (DN-29).
+ *
+ * The same flag the exercise library grew, on the model the scheduler reads
+ * from. The service spec proves the filter; what only this layer decides is
+ * which boolean the query string turns into.
+ */
+describe('listing retired workouts over HTTP', () => {
+  /** A retired workout of Alice's, under the given name. */
+  async function retire(name: string, exerciseId: string) {
+    const made = await http()
+      .post('/wods')
+      .set(...asUser(ALICE))
+      .send(wodBody(exerciseId, { name }))
+      .expect(201);
+    await http()
+      .post(`/wods/${wodId(made)}/archive`)
+      .set(...asUser(ALICE))
+      .expect(201);
+  }
+
+  async function names(query: string): Promise<string[]> {
+    const res = await http()
+      .get(`/wods${query}`)
+      .set(...asUser(ALICE))
+      .expect(200);
+    return z
+      .array(wodSchema)
+      .parse(res.body)
+      .map((w) => w.name);
+  }
+
+  it('leaves retired workouts out of the pool a day is planned from', async () => {
+    const exerciseId = await globalExercise();
+    await retire('Old Fran', exerciseId);
+    await http()
+      .post('/wods')
+      .set(...asUser(ALICE))
+      .send(wodBody(exerciseId, { name: 'Cindy' }))
+      .expect(201);
+
+    expect(await names('')).toEqual(['Cindy']);
+  });
+
+  it('includes them when the editor asks for them', async () => {
+    await retire('Old Fran', await globalExercise());
+
+    expect(await names('?includeArchived=true')).toEqual(['Old Fran']);
+  });
+
+  // The exact string, not truthiness — the same three spellings the exercise
+  // library refuses, for the same reason.
+  it.each(['?includeArchived=false', '?includeArchived=0', '?includeArchived'])(
+    'reads %s as no',
+    async (query) => {
+      await retire('Old Fran', await globalExercise());
+
+      expect(await names(query)).toEqual([]);
+    },
+  );
+
+  it('still hides another athlete’s retired workouts either way', async () => {
+    const exerciseId = await globalExercise();
+    const his = await http()
+      .post('/wods')
+      .set(...asUser(BOB))
+      .send(wodBody(exerciseId, { name: 'His Fran' }))
+      .expect(201);
+    await http()
+      .post(`/wods/${wodId(his)}/archive`)
+      .set(...asUser(BOB))
+      .expect(201);
+
+    expect(await names('?includeArchived=true')).toEqual([]);
+  });
+});
