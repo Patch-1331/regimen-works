@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { Exercise } from '@prisma/client';
 import {
   DEFAULT_EQUIPMENT,
@@ -6,6 +6,7 @@ import {
   DEFAULT_TRAINING_DAYS,
 } from '@regimen-works/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { RNG, type Rng } from './rng';
 import { libraryVisibleTo } from '../library/visible-to';
 import { toSessionDto } from '../sessions/session.mapper';
 import { WodsService } from '../wods/wods.service';
@@ -32,6 +33,9 @@ export class SchedulerService {
     private readonly prisma: PrismaService,
     private readonly wodsService: WodsService,
     private readonly resolution: MovementResolutionService,
+    // Defaulted so the db specs that build this service by hand still get
+    // production's randomness unless they deliberately pin it (DN-119).
+    @Inject(RNG) private readonly rng: Rng = Math.random,
   ) {}
 
   /** Returns today's assignment, generating one if the day hasn't been decided yet. */
@@ -307,7 +311,7 @@ export class SchedulerService {
       history,
       today,
       cooldownDays,
-      Math.random,
+      this.rng,
     );
   }
 }

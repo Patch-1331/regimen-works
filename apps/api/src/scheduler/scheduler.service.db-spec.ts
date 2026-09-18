@@ -26,12 +26,16 @@ import { SchedulerService } from './scheduler.service';
  * service composes them in. That is what these cases are for.
  */
 
-function service(client: PrismaClient = testPrisma()): SchedulerService {
+function service(
+  client: PrismaClient = testPrisma(),
+  rng: () => number = Math.random,
+): SchedulerService {
   const prisma = client as unknown as PrismaService;
   return new SchedulerService(
     prisma,
     new WodsService(prisma),
     new MovementResolutionService(prisma),
+    rng,
   );
 }
 
@@ -749,5 +753,94 @@ describe('SchedulerService equipment floor', () => {
     } finally {
       random.mockRestore();
     }
+  });
+});
+
+describe('SchedulerService reads the stored pattern cooldown', () => {
+  /**
+   * The wiring between `ScheduleRule.patternCooldownDays` and `pickWod`
+   * (DN-119). `scheduler.logic.spec.ts` fixes what the cooldown *means*; only
+   * a test that goes through the service can say the stored number is the one
+   * that reaches it, and until the rng seam existed no such test could be
+   * written — the pick was unpinnable, so replacing the stored value with a
+   * literal left every suite passing.
+   *
+   * The library below is shaped so the two cooldowns disagree. Most are not:
+   * `pickWod`'s format-alternation step re-collapses the pool to the same
+   * single answer under both, which is what defeated the first attempts at
+   * this test.
+   */
+  async function libraryAndHistory(cooldownDays: number) {
+    const move = await createExercise({ line: null, rung: null });
+
+    // Yesterday's workout: an EMOM in the squat pattern.
+    const helen = await createWod({
+      name: 'Helen',
+      type: 'emom',
+      dominantPattern: 'squat',
+      movements: [{ exerciseId: move.id, reps: 10, order: 0 }],
+    });
+    // Both AMRAPs, so format alternation keeps both of them.
+    const alpha = await createWod({
+      name: 'Alpha Wod',
+      type: 'amrap',
+      dominantPattern: 'squat',
+      movements: [{ exerciseId: move.id, reps: 10, order: 0 }],
+    });
+    const bravo = await createWod({
+      name: 'Bravo Wod',
+      type: 'amrap',
+      dominantPattern: 'pull',
+      movements: [{ exerciseId: move.id, reps: 10, order: 0 }],
+    });
+
+    const user = await createUser();
+    await testPrisma().scheduleRule.create({
+      data: { userId: user.id, patternCooldownDays: cooldownDays },
+    });
+    await createAssignment(user.id, { date: '2026-09-15', wodId: helen.id });
+
+    return { user, alpha, bravo };
+  }
+
+  /** Pinned to the first of whatever pool survives, so the pool is what is measured. */
+  const always0 = () => 0;
+
+  it('honours a stored cooldown, which rules out yesterday’s pattern', async () => {
+    const { user, bravo } = await libraryAndHistory(5);
+
+    const today = await service(testPrisma(), always0).getToday(user.id, TODAY);
+
+    // Helen is out by name and Alpha Wod by pattern, both inside the 5-day
+    // window, so the squat WOD cannot come round again today.
+    expect(today.assignment!.wod.name).toBe(bravo.name);
+  });
+
+  it('rolls the randomness it was given, not Math.random', async () => {
+    // Without this, reverting the seam does not fail the two cases above --
+    // it makes them flaky, because the pool they leave has two members and
+    // the real Math.random agrees with a pinned 0 about half the time. A
+    // coin-flip failure is worse than no test: it reads as an infra problem
+    // and gets re-run rather than read.
+    const { user } = await libraryAndHistory(0);
+    let rolls = 0;
+    const counting = () => {
+      rolls += 1;
+      return 0;
+    };
+
+    await service(testPrisma(), counting).getToday(user.id, TODAY);
+
+    expect(rolls).toBe(1);
+  });
+
+  it('honours a stored 0, which rules out nothing', async () => {
+    const { user, alpha } = await libraryAndHistory(0);
+
+    const today = await service(testPrisma(), always0).getToday(user.id, TODAY);
+
+    // Off means yesterday's squat pattern is eligible again, so the pool is
+    // both AMRAPs and the pinned roll takes the first by name.
+    expect(today.assignment!.wod.name).toBe(alpha.name);
   });
 });
