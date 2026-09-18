@@ -16,6 +16,12 @@ import { join } from 'node:path';
  * correctly — only that nobody has put `--fix` back on the checking script,
  * which is a one-word change that would restore the whole failure silently and
  * which no other test in this repo would notice.
+ *
+ * It also guards *coverage* (DN-117). `packages/shared` went 26 files with no
+ * linter at all, and the root's `--if-present` made that look like a pass: a
+ * workspace with no `lint` script was skipped without a word. The skip is
+ * gone, and the first test below is what keeps a new workspace from
+ * reintroducing it.
  */
 
 const ROOT = join(__dirname, '..', '..', '..', '..');
@@ -40,12 +46,22 @@ function workspaces(): { name: string; dir: string }[] {
 }
 
 describe('lint scripts', () => {
-  const linting = workspaces().filter((w) => 'lint' in scriptsOf(w.dir));
+  const all = workspaces();
+  const linting = all.filter((w) => 'lint' in scriptsOf(w.dir));
 
   it('finds the workspaces that lint', () => {
     // Guards the loops below: a bad path would make every one of them vacuous
     // and this file would pass while checking nothing.
     expect(linting.length).toBeGreaterThan(0);
+  });
+
+  it('leaves no workspace unlinted', () => {
+    // The root fans out to every workspace with no `--if-present` to fall
+    // through, so a workspace without the script fails `npm run lint`
+    // outright. This says the same thing in a place that explains why.
+    expect(linting.map((w) => w.name).sort()).toEqual(
+      all.map((w) => w.name).sort(),
+    );
   });
 
   it.each(linting)('$name: `lint` does not fix', ({ dir }) => {

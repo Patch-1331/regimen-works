@@ -13,8 +13,8 @@
     "dev:api": "npm run start:dev --workspace apps/api",
     "dev:web": "npm run dev --workspace apps/web",
     "build": "npm run build --workspace packages/shared && npm run build --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present",
-    "lint:fix": "npm run lint:fix --workspaces --if-present",
+    "lint": "npm run lint --workspaces",
+    "lint:fix": "npm run lint:fix --workspaces",
     "test": "npm run build --workspace packages/shared && npm run test --workspaces --if-present",
     "test:cov": "npm run build --workspace packages/shared && npm run test:cov --workspaces --if-present",
     "typecheck": "npm run build --workspace packages/shared && npm run typecheck --workspaces --if-present"

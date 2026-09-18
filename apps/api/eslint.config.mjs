@@ -6,7 +6,11 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['eslint.config.mjs'],
+    // Everything that is not source. `lint` points at the workspace rather
+    // than a list of directories (DN-117), so what is *not* linted is stated
+    // here, once — a new directory of TypeScript is covered by default
+    // instead of being missed until someone notices.
+    ignores: ['eslint.config.mjs', 'dist/**', 'coverage/**'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
