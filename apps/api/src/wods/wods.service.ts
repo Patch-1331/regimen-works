@@ -12,6 +12,7 @@ import type {
 } from '@regimen-works/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  libraryOwnedBy,
   libraryVisibleTo,
   referenceableBy,
   type LibraryWriter,
@@ -87,10 +88,20 @@ function assertIntervalCoherent(row: {
 export class WodsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** The global library plus this athlete's own WODs (DN-93). */
-  findAll(userId: string) {
+  /**
+   * The global library plus this athlete's own WODs (DN-93).
+   *
+   * `includeArchived` is for the editor screen and nothing else (DN-29), on
+   * the same reasoning as `ExercisesService.findAll`: every other caller is a
+   * pool the scheduler picks from, and a pool offering a retired workout is
+   * the bug the soft delete exists to prevent. It defaults to false, so the
+   * one page that wants retired rows is the one that has to say so.
+   */
+  findAll(userId: string, includeArchived = false) {
     return this.prisma.wod.findMany({
-      where: libraryVisibleTo(userId),
+      where: includeArchived
+        ? libraryOwnedBy(userId)
+        : libraryVisibleTo(userId),
       include: {
         movements: { include: { exercise: true }, orderBy: { order: 'asc' } },
       },

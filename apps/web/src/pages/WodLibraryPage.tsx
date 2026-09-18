@@ -1,57 +1,60 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CreateExercise } from "@regimen-works/shared";
-import { ApiError, api, type ApiExercise, type LibraryTier } from "../lib/api";
-import { ExerciseForm } from "../components/ExerciseForm";
-import {
-  EMPTY_DRAFT,
-  alternativesFor,
-  toDraft,
-} from "../lib/exerciseDraft";
-import { lineLabel, patternLabel } from "../lib/progressions";
-import { SectionLabel } from "../components/Panel";
+import type { CreateWod } from "@regimen-works/shared";
+import { ApiError, api, type ApiWod, type LibraryTier } from "../lib/api";
+import { WodForm } from "../components/WodForm";
 import { LibraryNav } from "../components/LibraryNav";
+import { SectionLabel } from "../components/Panel";
+import { patternLabel } from "../lib/progressions";
+import {
+  EMPTY_WOD_DRAFT,
+  movementChoicesFor,
+  toWodDraft,
+} from "../lib/wodDraft";
 
-/**
- * Which form is open, if any. A single piece of state rather than one flag per
- * section, because two forms open at once on a phone-width column is not a
- * state worth being able to reach.
- */
 type Editing =
   | { kind: "none" }
   | { kind: "create"; tier: LibraryTier }
-  | { kind: "edit"; tier: LibraryTier; exercise: ApiExercise };
+  | { kind: "edit"; tier: LibraryTier; wod: ApiWod };
 
-/** What a row says about itself under its name — pattern, ladder, equipment. */
-function summarise(exercise: ApiExercise): string {
-  const parts: string[] = [];
-  if (exercise.pattern) parts.push(patternLabel(exercise.pattern));
-  if (exercise.line && exercise.rung !== null)
-    parts.push(`${lineLabel(exercise.line)} · rung ${exercise.rung}`);
+const TYPE_LABELS: Record<string, string> = {
+  amrap: "AMRAP",
+  for_time: "For time",
+  emom: "EMOM",
+  tabata: "Tabata",
+};
+
+/** What a row says about itself under its name — format, cap, shape. */
+function summarise(wod: ApiWod): string {
+  const parts = [
+    TYPE_LABELS[wod.type] ?? wod.type,
+    `${wod.timeCapMinutes} min cap`,
+    patternLabel(wod.dominantPattern),
+  ];
+  const ladder = wod.movements.find((m) => m.repScheme.length > 0);
+  if (ladder) parts.push(ladder.repScheme.join("-"));
   parts.push(
-    exercise.equipment.length === 0
-      ? "bodyweight"
-      : exercise.equipment.join(", "),
+    wod.movements.length === 1 ? "1 movement" : `${wod.movements.length} movements`,
   );
   return parts.join(" — ");
 }
 
-function ExerciseRow({
-  exercise,
+function WodRow({
+  wod,
   editable,
   onEdit,
   onArchive,
   onUnarchive,
   busy,
 }: {
-  exercise: ApiExercise;
+  wod: ApiWod;
   editable: boolean;
   onEdit: () => void;
   onArchive: () => void;
   onUnarchive: () => void;
   busy: boolean;
 }) {
-  const retired = exercise.archivedAt !== null;
+  const retired = wod.archivedAt !== null;
   return (
     <li
       className="flex items-center gap-3 px-4 py-3"
@@ -62,9 +65,9 @@ function ExerciseRow({
           className="truncate text-[14px]"
           style={{ color: retired ? "var(--ink-faint)" : "var(--ink)" }}
         >
-          {exercise.name}
-          {/* Said in words rather than by a strikethrough, which a screen
-              reader does not read out and a glance can mistake for styling. */}
+          {wod.name}
+          {/* In words rather than by a strikethrough, which a screen reader
+              does not read out. Same as the movement library. */}
           {retired && (
             <span className="ml-2 text-[11px] uppercase tracking-[0.14em] text-[var(--ink-faint)]">
               Retired
@@ -72,7 +75,7 @@ function ExerciseRow({
           )}
         </p>
         <p className="truncate text-[11px] text-[var(--ink-faint)]">
-          {summarise(exercise)}
+          {summarise(wod)}
         </p>
       </div>
       {editable && (
@@ -88,7 +91,7 @@ function ExerciseRow({
                 color: "var(--ink-soft)",
                 fontFamily: "var(--font-mono)",
               }}
-              aria-label={`Bring back ${exercise.name}`}
+              aria-label={`Bring back ${wod.name}`}
             >
               Bring back
             </button>
@@ -103,7 +106,7 @@ function ExerciseRow({
                   color: "var(--ink-soft)",
                   fontFamily: "var(--font-mono)",
                 }}
-                aria-label={`Edit ${exercise.name}`}
+                aria-label={`Edit ${wod.name}`}
               >
                 Edit
               </button>
@@ -117,7 +120,7 @@ function ExerciseRow({
                   color: "var(--danger)",
                   fontFamily: "var(--font-mono)",
                 }}
-                aria-label={`Retire ${exercise.name}`}
+                aria-label={`Retire ${wod.name}`}
               >
                 Retire
               </button>
@@ -130,42 +133,45 @@ function ExerciseRow({
 }
 
 /**
- * The movement library, in the two tiers it is actually stored in (DN-28).
+ * The workout library, in the two tiers it is stored in (DN-29).
  *
- * One page with two sections rather than two pages, because the distinction
- * between "yours" and "everyone's" is the thing an author most needs to see,
- * and a second page would hide it behind a tab. Each section carries its own
- * Add button so the tier is chosen by the act rather than by a control
- * somewhere else on the screen.
+ * The same shape as the movement library and for the same reasons — two
+ * sections so the tier is visible, an Add button per section so it is chosen
+ * by the act, `isAdmin` deciding what is rendered and never what is allowed.
  *
- * `isAdmin` decides what is rendered and nothing else. Every admin route is
- * guarded by the API on its own (DN-92), so a client that got this wrong would
- * produce a 403, not an unauthorised write.
+ * This is the page that ends the need to seed new WODs by hand.
  */
-export function LibraryPage() {
+export function WodLibraryPage() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<Editing>({ kind: "none" });
   const [serverError, setServerError] = useState<string | null>(null);
 
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: api.me });
   const {
-    data: exercises,
+    data: wods,
     isLoading,
     error,
-  } = useQuery({ queryKey: ["libraryExercises"], queryFn: api.libraryExercises });
+  } = useQuery({ queryKey: ["libraryWods"], queryFn: api.libraryWods });
+  // The pool a workout's movements are chosen from. Retired movements are in
+  // this list too and `movementChoicesFor` drops them — the editor needs the
+  // same read the movement library does, not a second endpoint.
+  const { data: exercises } = useQuery({
+    queryKey: ["libraryExercises"],
+    queryFn: api.libraryExercises,
+  });
 
   function close() {
     setEditing({ kind: "none" });
     setServerError(null);
   }
 
-  // Every write invalidates both lists: `exercises` is the pool the rest of
-  // the app plans from, and a movement retired here has to leave it.
+  // `wods` is the pool the scheduler plans from, so a workout retired here has
+  // to leave it as well as leaving this page's list.
   const mutationOptions = {
     onSuccess: async () => {
       close();
-      await queryClient.invalidateQueries({ queryKey: ["libraryExercises"] });
-      await queryClient.invalidateQueries({ queryKey: ["exercises"] });
+      await queryClient.invalidateQueries({ queryKey: ["libraryWods"] });
+      await queryClient.invalidateQueries({ queryKey: ["wods"] });
     },
     onError: (err: unknown) => {
       setServerError(
@@ -175,8 +181,8 @@ export function LibraryPage() {
   };
 
   const create = useMutation({
-    mutationFn: ({ tier, body }: { tier: LibraryTier; body: CreateExercise }) =>
-      api.createExercise(tier, body),
+    mutationFn: ({ tier, body }: { tier: LibraryTier; body: CreateWod }) =>
+      api.createWod(tier, body),
     ...mutationOptions,
   });
   const update = useMutation({
@@ -187,33 +193,24 @@ export function LibraryPage() {
     }: {
       tier: LibraryTier;
       id: string;
-      body: CreateExercise;
-    }) => api.updateExercise(tier, id, body),
+      body: CreateWod;
+    }) => api.updateWod(tier, id, body),
     ...mutationOptions,
   });
   const archive = useMutation({
     mutationFn: ({ tier, id }: { tier: LibraryTier; id: string }) =>
-      api.archiveExercise(tier, id),
+      api.archiveWod(tier, id),
     ...mutationOptions,
   });
   const unarchive = useMutation({
     mutationFn: ({ tier, id }: { tier: LibraryTier; id: string }) =>
-      api.unarchiveExercise(tier, id),
+      api.unarchiveWod(tier, id),
     ...mutationOptions,
   });
 
-  const title = (
-    <h1
-      className="text-3xl font-extrabold uppercase"
-      style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}
-    >
-      Library
-    </h1>
-  );
-
   if (isLoading)
-    return <p className="p-6 text-[var(--ink-faint)]">Loading movements…</p>;
-  if (error || !exercises)
+    return <p className="p-6 text-[var(--ink-faint)]">Loading workouts…</p>;
+  if (error || !wods)
     return (
       <p className="p-6 text-[var(--danger)]">
         Couldn't reach the API — is it running on :3001?
@@ -221,8 +218,8 @@ export function LibraryPage() {
     );
 
   const isAdmin = me?.isAdmin === true;
-  const mine = exercises.filter((e) => e.ownerId !== null);
-  const shared = exercises.filter((e) => e.ownerId === null);
+  const mine = wods.filter((w) => w.ownerId !== null);
+  const shared = wods.filter((w) => w.ownerId === null);
   const busy =
     archive.isPending ||
     unarchive.isPending ||
@@ -231,24 +228,20 @@ export function LibraryPage() {
 
   function form(tier: LibraryTier) {
     if (editing.kind === "none" || editing.tier !== tier) return null;
-    const exercise = editing.kind === "edit" ? editing.exercise : null;
+    const wod = editing.kind === "edit" ? editing.wod : null;
     return (
-      <ExerciseForm
-        // Remounted per target, so opening a second row doesn't inherit the
+      <WodForm
+        // Remounted per target, so opening a second row does not inherit the
         // first row's half-finished edits from the form's own state.
-        key={exercise?.id ?? `new-${tier}`}
-        initial={exercise ? toDraft(exercise) : EMPTY_DRAFT}
-        alternatives={alternativesFor(
-          exercises ?? [],
-          tier,
-          exercise?.id ?? null,
-        )}
+        key={wod?.id ?? `new-${tier}`}
+        initial={wod ? toWodDraft(wod) : EMPTY_WOD_DRAFT}
+        choices={movementChoicesFor(exercises ?? [], tier)}
         saving={create.isPending || update.isPending}
         serverError={serverError}
-        submitLabel={exercise ? "Save" : "Add movement"}
+        submitLabel={wod ? "Save" : "Add workout"}
         onSubmit={(body) => {
           setServerError(null);
-          if (exercise) update.mutate({ tier, id: exercise.id, body });
+          if (wod) update.mutate({ tier, id: wod.id, body });
           else create.mutate({ tier, body });
         }}
         onCancel={close}
@@ -272,17 +265,12 @@ export function LibraryPage() {
           fontFamily: "var(--font-mono)",
         }}
       >
-        {tier === "own" ? "Add your own movement" : "Add a shared movement"}
+        {tier === "own" ? "Add your own workout" : "Add a shared workout"}
       </button>
     );
   }
 
-  function list(
-    rows: ApiExercise[],
-    tier: LibraryTier,
-    editable: boolean,
-    label: string,
-  ) {
+  function list(rows: ApiWod[], tier: LibraryTier, editable: boolean, label: string) {
     if (rows.length === 0)
       return (
         <p className="mt-3 text-[13px] text-[var(--ink-faint)]">
@@ -291,24 +279,22 @@ export function LibraryPage() {
       );
     return (
       <ul
-        // Named, so the two lists are told apart by what they are rather than
-        // by where they sit on the page.
         aria-label={label}
         className="mt-3"
         style={{ background: "var(--panel)", border: "1px solid var(--border)" }}
       >
-        {rows.map((exercise) => (
-          <ExerciseRow
-            key={exercise.id}
-            exercise={exercise}
+        {rows.map((wod) => (
+          <WodRow
+            key={wod.id}
+            wod={wod}
             editable={editable}
             busy={busy}
             onEdit={() => {
               setServerError(null);
-              setEditing({ kind: "edit", tier, exercise });
+              setEditing({ kind: "edit", tier, wod });
             }}
-            onArchive={() => archive.mutate({ tier, id: exercise.id })}
-            onUnarchive={() => unarchive.mutate({ tier, id: exercise.id })}
+            onArchive={() => archive.mutate({ tier, id: wod.id })}
+            onUnarchive={() => unarchive.mutate({ tier, id: wod.id })}
           />
         ))}
       </ul>
@@ -317,23 +303,28 @@ export function LibraryPage() {
 
   return (
     <div className="p-6">
-      {title}
+      <h1
+        className="text-3xl font-extrabold uppercase"
+        style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}
+      >
+        Library
+      </h1>
       <LibraryNav />
       <p className="mt-4 text-[13px] text-[var(--ink-faint)]">
-        Every movement the app can program for you. Retiring one keeps the
-        workouts you've already logged and takes it out of future ones.
+        Every workout the app can schedule for you. Retiring one keeps the
+        sessions you've already trained and takes it out of future ones.
       </p>
 
-      <SectionLabel>YOUR MOVEMENTS</SectionLabel>
-      {list(mine, "own", true, "Your movements")}
+      <SectionLabel>YOUR WORKOUTS</SectionLabel>
+      {list(mine, "own", true, "Your workouts")}
       {form("own")}
       {editing.kind === "none" && addButton("own")}
 
       <SectionLabel>SHARED LIBRARY</SectionLabel>
       <p className="mt-2 text-[12px] text-[var(--ink-faint)]">
         {isAdmin
-          ? "Everyone's movements. What you change here, every athlete gets."
-          : "Movements everyone gets. Add your own above to change what you're given."}
+          ? "Everyone's workouts. What you change here, every athlete gets."
+          : "Workouts everyone gets. Add your own above to change what you're given."}
       </p>
       {list(shared, "global", isAdmin, "Shared library")}
       {isAdmin && form("global")}

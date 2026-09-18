@@ -40,16 +40,15 @@ export default defineConfig({
       // is a decision to state in the PR description, never a quiet edit to
       // make CI pass.
       thresholds: {
-        // Raised by DN-28, which measured 76.62 / 71.91 / 68.10 / 78.02.
-        statements: 76,
-        branches: 71,
-        // 67, not 68. DN-96 set this from a reading the suite did not
-        // reproduce and turned main red the moment it merged; 68.10 is too
-        // close to sit a floor under. Floors go just *under* measured
-        // (DN-54), with enough room that a rounding difference is not a
-        // failure.
-        functions: 67,
-        lines: 77,
+        // Raised by DN-29, which measured 79.28 / 75.30 / 71.63 / 80.45.
+        statements: 78,
+        branches: 74,
+        // The margins here are deliberate: DN-96 set a floor from a reading
+        // the suite did not reproduce and turned main red the moment it
+        // merged. Floors go just *under* measured (DN-54), with enough room
+        // that a rounding difference is not a failure.
+        functions: 70,
+        lines: 79,
       },
     },
   },

@@ -8,7 +8,7 @@ import type {
   WorkoutLogListItem,
   WorkoutSession,
 } from "@regimen-works/shared";
-import type { ApiExercise } from "../lib/api";
+import type { ApiExercise, ApiWod } from "../lib/api";
 
 /**
  * Builders for the API payloads the route smoke tests serve through MSW.
@@ -63,6 +63,14 @@ export function wod(overrides: Partial<Wod> = {}): Wod {
     movements: [movement()],
     ...overrides,
   };
+}
+
+/**
+ * A WOD as the library editor reads it (DN-29) — the shared shape plus the
+ * two ownership columns. Global and live unless a test says otherwise.
+ */
+export function apiWod(overrides: Partial<ApiWod> = {}): ApiWod {
+  return { ...wod(), ownerId: null, archivedAt: null, ...overrides };
 }
 
 export function session(overrides: Partial<WorkoutSession> = {}): WorkoutSession {

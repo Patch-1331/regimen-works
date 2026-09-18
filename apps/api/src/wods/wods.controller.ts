@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { createWodSchema, updateWodSchema } from '@regimen-works/shared';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { validateBody } from '../common/validate';
@@ -20,9 +28,21 @@ import { WodsService } from './wods.service';
 export class WodsController {
   constructor(private readonly wodsService: WodsService) {}
 
+  /**
+   * `?includeArchived=true` adds this caller's retired workouts (DN-29).
+   *
+   * Opt-in by the exact string, for the reason spelled out on
+   * `ExercisesController.findAll`: `=false`, `=0` and a bare
+   * `?includeArchived` all read as no, so a flag that got mangled on its way
+   * into a URL cannot quietly put retired workouts back in the pool the
+   * scheduler picks from.
+   */
   @Get()
-  findAll(@CurrentUser() userId: string) {
-    return this.wodsService.findAll(userId);
+  findAll(
+    @CurrentUser() userId: string,
+    @Query('includeArchived') includeArchived?: string,
+  ) {
+    return this.wodsService.findAll(userId, includeArchived === 'true');
   }
 
   @Post()

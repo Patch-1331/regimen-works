@@ -15,6 +15,9 @@ import type {
   SkillLevel,
   TodayResponse,
   UpdateSettings,
+  CreateWod,
+  UpdateWod,
+  Wod,
   WorkoutLog,
   WorkoutLogListItem,
   WorkoutSession,
@@ -168,6 +171,24 @@ export type LibraryTier = "own" | "global";
 const exercisesBase = (tier: LibraryTier) =>
   tier === "global" ? "/admin/exercises" : "/exercises";
 
+const wodsBase = (tier: LibraryTier) =>
+  tier === "global" ? "/admin/wods" : "/wods";
+
+/**
+ * A WOD as `GET /wods` returns it (DN-29).
+ *
+ * The shared `Wod` unchanged, plus the two columns the read schema does not
+ * declare because no screen but the editor has any use for them. Extended
+ * rather than restated — unlike `ApiExercise`, nothing in the web app reads a
+ * WOD through a looser shape, so there is no divergence to preserve.
+ */
+export type ApiWod = Wod & {
+  /** Null for global library content, set for the reading athlete's own. */
+  ownerId: string | null;
+  /** When it was retired, or null while it is live. */
+  archivedAt: string | null;
+};
+
 export const api = {
   exercises: () => request<ApiExercise[]>("/exercises"),
 
@@ -187,6 +208,23 @@ export const api = {
     postJson<ApiExercise>(`${exercisesBase(tier)}/${id}/archive`),
   unarchiveExercise: (tier: LibraryTier, id: string) =>
     postJson<ApiExercise>(`${exercisesBase(tier)}/${id}/unarchive`),
+  /**
+   * Every WOD the editor may show, retired ones included (DN-29).
+   *
+   * A separate method rather than an argument, for the reason
+   * `libraryExercises` is one: the pool a day is planned from must not be
+   * able to acquire retired workouts by someone passing a flag through.
+   */
+  libraryWods: () => request<ApiWod[]>("/wods?includeArchived=true"),
+  createWod: (tier: LibraryTier, body: CreateWod) =>
+    postJson<ApiWod>(wodsBase(tier), body),
+  updateWod: (tier: LibraryTier, id: string, body: UpdateWod) =>
+    patchJson<ApiWod>(`${wodsBase(tier)}/${id}`, body),
+  archiveWod: (tier: LibraryTier, id: string) =>
+    postJson<ApiWod>(`${wodsBase(tier)}/${id}/archive`),
+  unarchiveWod: (tier: LibraryTier, id: string) =>
+    postJson<ApiWod>(`${wodsBase(tier)}/${id}/unarchive`),
+
   today: () => request<TodayResponse>("/today"),
   scheduleRule: () => request<ScheduleCap>("/schedule-rule"),
   skipToday: () => postJson<TodayResponse>("/today/skip"),

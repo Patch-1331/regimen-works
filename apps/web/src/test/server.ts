@@ -35,6 +35,9 @@ export const handlers = [
     );
   }),
   http.get(api("/skill-levels"), () => HttpResponse.json([fixtures.skillLevel()])),
+  // The WOD library, empty by default (DN-29): most route tests are about a
+  // day rather than about the pool it was planned from.
+  http.get(api("/wods"), () => HttpResponse.json([])),
   // Empty by default: a movement history is something an athlete accrues, and
   // most route tests are about a day rather than about months of them.
   http.get(api("/movement-history"), () => HttpResponse.json([])),

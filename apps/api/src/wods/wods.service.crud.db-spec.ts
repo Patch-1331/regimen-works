@@ -470,3 +470,71 @@ describe('archiving', () => {
     expect(same.archivedAt).toBeNull();
   });
 });
+
+/**
+ * Listing retired workouts (DN-29).
+ *
+ * The editor screen and the scheduler disagree about what the library is, and
+ * this flag is the whole of the disagreement: a retired workout has to be
+ * listable in order to be brought back, and must never reach the pool a day
+ * is planned from.
+ */
+describe('listing retired workouts (DN-29)', () => {
+  it('leaves them out by default, so the pool stays what it was', async () => {
+    const alice = await createUser();
+    const created = await wods().create({ ownerId: alice.id }, await bodyOn());
+    await wods().archive({ ownerId: alice.id }, created.id);
+
+    expect((await wods().findAll(alice.id)).map((w) => w.id)).not.toContain(
+      created.id,
+    );
+  });
+
+  it('includes them when the editor asks', async () => {
+    const alice = await createUser();
+    const created = await wods().create({ ownerId: alice.id }, await bodyOn());
+    await wods().archive({ ownerId: alice.id }, created.id);
+
+    expect((await wods().findAll(alice.id, true)).map((w) => w.id)).toContain(
+      created.id,
+    );
+  });
+
+  it('still carries the movements, so a retired row renders like any other', async () => {
+    // The editor lists retired workouts in the same list as live ones, and a
+    // row with no movements to summarise would read as an empty workout
+    // rather than a retired one.
+    const alice = await createUser();
+    const created = await wods().create({ ownerId: alice.id }, await bodyOn());
+    await wods().archive({ ownerId: alice.id }, created.id);
+
+    const listed = (await wods().findAll(alice.id, true)).find(
+      (w) => w.id === created.id,
+    );
+    expect(listed?.movements).toHaveLength(1);
+  });
+
+  it('never reaches across to another athlete, flag or no flag', async () => {
+    const alice = await createUser();
+    const bob = await createUser();
+    const his = await wods().create({ ownerId: bob.id }, await bodyOn());
+    await wods().archive({ ownerId: bob.id }, his.id);
+
+    expect(
+      (await wods().findAll(alice.id, true)).map((w) => w.id),
+    ).not.toContain(his.id);
+    expect((await wods().findAll(alice.id)).map((w) => w.id)).not.toContain(
+      his.id,
+    );
+  });
+
+  it('carries a retired global workout, so an admin can bring one back', async () => {
+    const alice = await createUser();
+    const created = await wods().create(ADMIN, await bodyOn());
+    await wods().archive(ADMIN, created.id);
+
+    expect((await wods().findAll(alice.id, true)).map((w) => w.id)).toContain(
+      created.id,
+    );
+  });
+});
