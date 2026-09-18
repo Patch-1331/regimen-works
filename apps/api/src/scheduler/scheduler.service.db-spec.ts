@@ -450,24 +450,44 @@ describe('SchedulerService.getToday', () => {
     ).toBe(1);
   });
 
-  it('reports a rest day once the week is at its cap', async () => {
+  it('reports a rest day when today is not one of the training days', async () => {
     const user = await createUser();
+    // TODAY is a Wednesday, and this athlete trains Mon/Tue (DN-12).
     await testPrisma().scheduleRule.create({
-      data: { userId: user.id, maxDaysPerWeek: 2 },
+      data: { userId: user.id, trainingDays: [1, 2] },
     });
     const { negative } = await pullLadder();
     await createWod({
       dominantPattern: 'pull',
       movements: [{ exerciseId: negative.id, reps: 30, order: 0 }],
     });
-    // TODAY is a Wednesday; these are the Monday and Tuesday of its week.
-    await createAssignment(user.id, { date: '2026-09-14' });
-    await createAssignment(user.id, { date: '2026-09-15' });
 
     const today = await service().getToday(user.id, TODAY);
 
     expect(today.isRestDay).toBe(true);
     expect(today.assignment).toBeNull();
+  });
+
+  it('trains on a training day however full the week already is', async () => {
+    const user = await createUser();
+    // Every day picked, so Wednesday is a training day no matter what else
+    // the week holds. Under the quota this replaced, three assignments
+    // already banked would have made today a rest day.
+    await testPrisma().scheduleRule.create({
+      data: { userId: user.id, trainingDays: [0, 1, 2, 3, 4, 5, 6] },
+    });
+    const { negative } = await pullLadder();
+    await createWod({
+      dominantPattern: 'pull',
+      movements: [{ exerciseId: negative.id, reps: 30, order: 0 }],
+    });
+    await createAssignment(user.id, { date: '2026-09-14' });
+    await createAssignment(user.id, { date: '2026-09-15' });
+
+    const today = await service().getToday(user.id, TODAY);
+
+    expect(today.isRestDay).toBe(false);
+    expect(today.assignment).not.toBeNull();
   });
 
   it('reports a skipped day as rest rather than as a workout', async () => {
@@ -557,14 +577,31 @@ describe('SchedulerService.skipToday', () => {
 });
 
 describe('SchedulerService.getScheduleCap', () => {
-  it("reports the athlete's own cap", async () => {
+  it("counts the athlete's own training days", async () => {
     const user = await createUser();
     await testPrisma().scheduleRule.create({
-      data: { userId: user.id, maxDaysPerWeek: 3 },
+      data: { userId: user.id, trainingDays: [1, 3, 5] },
+    });
+
+    // Derived from the days rather than read from a column of its own (DN-12).
+    expect(await service().getScheduleCap(user.id)).toEqual({
+      maxDaysPerWeek: 3,
+    });
+  });
+
+  it('follows the days when they change, having nowhere else to read from', async () => {
+    const user = await createUser();
+    await testPrisma().scheduleRule.create({
+      data: { userId: user.id, trainingDays: [1, 3, 5] },
+    });
+
+    await testPrisma().scheduleRule.update({
+      where: { userId: user.id },
+      data: { trainingDays: [1, 2, 4, 5] },
     });
 
     expect(await service().getScheduleCap(user.id)).toEqual({
-      maxDaysPerWeek: 3,
+      maxDaysPerWeek: 4,
     });
   });
 

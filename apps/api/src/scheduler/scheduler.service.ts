@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import type { Exercise } from '@prisma/client';
-import { DEFAULT_EQUIPMENT } from '@regimen-works/shared';
+import {
+  DEFAULT_EQUIPMENT,
+  DEFAULT_TRAINING_DAYS,
+} from '@regimen-works/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { libraryVisibleTo } from '../library/visible-to';
 import { toSessionDto } from '../sessions/session.mapper';
@@ -15,7 +18,6 @@ import {
   applyEquipmentFloor,
   applyRememberedChoice,
   dominantMovement,
-  getWeekRange,
   isRestDay,
   pickWod,
   RecentAssignment,
@@ -72,19 +74,14 @@ export class SchedulerService {
       };
     }
 
-    const { start } = getWeekRange(today);
-    const assignedThisWeek = await this.prisma.dailyAssignment.count({
-      where: {
-        userId,
-        date: { gte: start, lt: today },
-        status: { in: ['scheduled', 'in_progress', 'completed'] },
-      },
-    });
-
-    const maxDaysPerWeek = rule?.maxDaysPerWeek ?? 5;
+    // The week-so-far count this used to run went with the quota: once the
+    // rest-day check is a weekday lookup, nothing reads the number, and a
+    // query whose answer is discarded is how dead code starts. DN-17 wants a
+    // count of this shape back for makeup days, with a different meaning.
+    const trainingDays = rule?.trainingDays ?? [...DEFAULT_TRAINING_DAYS];
     const cooldownDays = rule?.patternCooldownDays ?? 5;
 
-    if (isRestDay(assignedThisWeek, maxDaysPerWeek)) {
+    if (isRestDay(today, trainingDays)) {
       return {
         date: today,
         isRestDay: true,
@@ -180,7 +177,12 @@ export class SchedulerService {
     const rule = await this.prisma.scheduleRule.findUnique({
       where: { userId },
     });
-    return { maxDaysPerWeek: rule?.maxDaysPerWeek ?? 5 };
+    // Derived, not stored (DN-12). The athlete picks days; how many is the
+    // count of what they picked, so there is no column here that could drift
+    // out of step with the days themselves.
+    return {
+      maxDaysPerWeek: (rule?.trainingDays ?? DEFAULT_TRAINING_DAYS).length,
+    };
   }
 
   /** Marks today as a rest day — upserts so this works whether or not a WOD was already generated. */

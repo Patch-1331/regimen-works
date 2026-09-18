@@ -5,7 +5,11 @@ import { exerciseSchema, createExerciseSchema } from "./exercise.js";
 import { movementHistorySchema } from "./history.js";
 import { logResultRequestSchema, workoutLogListItemSchema } from "./log.js";
 import { proposedRungChangeSchema } from "./rung-change.js";
-import { scheduleCapSchema, scheduleRuleSchema } from "./schedule.js";
+import {
+  scheduleCapSchema,
+  scheduleRuleSchema,
+  trainingDaysSchema,
+} from "./schedule.js";
 import { sessionMovementSchema, workoutSessionSchema } from "./session.js";
 import { settingsSchema, updateSettingsSchema } from "./settings.js";
 import { skillLevelSchema } from "./skill-level.js";
@@ -354,6 +358,7 @@ describe("settingsSchema", () => {
     warmupCooldownEnabled: true,
     autoStopAtCapEnabled: true,
     equipment: ["bar"],
+    trainingDays: [1, 2, 3, 4, 5],
     ...overrides,
   });
 
@@ -414,27 +419,55 @@ describe("skillLevelSchema", () => {
   });
 });
 
+describe("trainingDaysSchema", () => {
+  const parse = (days: unknown) => trainingDaysSchema.safeParse(days);
+
+  it.each([[[0]], [[6]], [[0, 1, 2, 3, 4, 5, 6]]])(
+    "accepts %j, at the edges of the week",
+    (days) => {
+      expect(parse(days).success).toBe(true);
+    },
+  );
+
+  it("sorts what it accepts, so tap order never reaches the database", () => {
+    expect(parse([5, 1, 3]).data).toEqual([1, 3, 5]);
+  });
+
+  it("refuses an empty week rather than reading it as a break", () => {
+    // An athlete who trains on no days has no app, and "I'm taking a week off"
+    // is answered by not opening it.
+    expect(parse([]).success).toBe(false);
+  });
+
+  it("refuses a repeated day rather than collapsing it", () => {
+    // [1, 1, 3] is a client that believes it asked for three days. Storing two
+    // would leave it right about the request and wrong about the result.
+    expect(parse([1, 1, 3]).success).toBe(false);
+  });
+
+  it.each([-1, 7, 1.5])("refuses %s, which is not a weekday", (day) => {
+    expect(parse([day]).success).toBe(false);
+  });
+});
+
 describe("scheduleRuleSchema", () => {
   const rule = (overrides: Record<string, unknown> = {}) => ({
     id: "rule-1",
-    maxDaysPerWeek: 5,
+    trainingDays: [1, 2, 3, 4, 5],
     patternCooldownDays: 2,
     ...overrides,
   });
 
-  it.each([1, 7])("accepts a cap of %s days, at the edge of a week", (maxDaysPerWeek) => {
-    expect(scheduleRuleSchema.safeParse(rule({ maxDaysPerWeek })).success).toBe(true);
-  });
-
-  it.each([0, 8])("rejects a cap of %s days, which is not a week", (maxDaysPerWeek) => {
-    expect(scheduleRuleSchema.safeParse(rule({ maxDaysPerWeek })).success).toBe(false);
+  it("carries the training days that replaced the quota", () => {
+    expect(scheduleRuleSchema.safeParse(rule()).success).toBe(true);
   });
 
   it("accepts a zero pattern cooldown, which means no cooldown", () => {
     expect(scheduleRuleSchema.safeParse(rule({ patternCooldownDays: 0 })).success).toBe(true);
   });
 
-  it("takes the cap on its own for callers that need nothing else", () => {
+  it("takes the day count on its own for callers that need nothing else", () => {
+    // Derived from trainingDays.length by the API; the shape is still a count.
     expect(scheduleCapSchema.safeParse({ maxDaysPerWeek: 5 }).success).toBe(true);
   });
 });

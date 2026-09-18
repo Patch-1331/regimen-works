@@ -126,7 +126,7 @@ export function today(overrides: Partial<TodayResponse> = {}): TodayResponse {
   };
 }
 
-/** A rest day: the week's day cap is reached, so there is no assignment at all. */
+/** A rest day: today is not one of the athlete's training days, so there is no assignment at all. */
 export function restDay(): TodayResponse {
   return today({ isRestDay: true, assignment: null, warmup: null, cooldown: null });
 }
@@ -182,6 +182,7 @@ export function settings(overrides: Partial<Settings> = {}): Settings {
     warmupCooldownEnabled: true,
     autoStopAtCapEnabled: true,
     equipment: ["bar"],
+    trainingDays: [1, 2, 3, 4, 5],
     ...overrides,
   };
 }

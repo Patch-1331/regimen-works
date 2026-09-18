@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { equipment } from "./enums.js";
+import { trainingDaysSchema } from "./schedule.js";
 
 /**
- * The handful of preferences the app exposes — not full ScheduleRule CRUD,
- * which is separate, unbuilt Program-Editor work (#20).
+ * The preferences the app exposes. Still not full ScheduleRule CRUD —
+ * `patternCooldownDays` remains unexposed, and is DN-27's to add once Programs
+ * has reshaped it from a hard rule into a soft preference.
  */
 export const settingsSchema = z.object({
   /** Feature #63 — show the warm-up/cool-down checklists at all. */
@@ -27,6 +29,15 @@ export const settingsSchema = z.object({
    * is not a member of the catalog, so owning nothing else is the empty array.
    */
   equipment: z.array(equipment),
+  /**
+   * Which weekdays the athlete trains on (DN-12), 0 = Sunday. This replaced
+   * `maxDaysPerWeek`: the athlete picks days and the count follows from them,
+   * so there is no second control stating the same fact differently.
+   *
+   * Whole-set replacement, like `equipment` — a week strip sends the days that
+   * are lit, not the one that just changed.
+   */
+  trainingDays: trainingDaysSchema,
 });
 export type Settings = z.infer<typeof settingsSchema>;
 

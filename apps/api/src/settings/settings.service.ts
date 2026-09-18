@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   DEFAULT_EQUIPMENT,
+  DEFAULT_TRAINING_DAYS,
   equipment as equipmentPiece,
 } from '@regimen-works/shared';
 import type {
@@ -31,13 +32,16 @@ function ownedEquipment(stored: string[]): Equipment[] {
  * Defaults for a user with no ScheduleRule row yet. They mirror the column
  * defaults in schema.prisma rather than restating a policy: warm-up/cool-down
  * is opt-in (#63), stopping at the time cap is how the timer runs unless the
- * athlete opts out, and equipment starts at the baseline the app has always
- * assumed -- bodyweight, which is no tag at all, plus the bar (DN-81).
+ * athlete opts out, equipment starts at the baseline the app has always
+ * assumed -- bodyweight, which is no tag at all, plus the bar (DN-81) -- and
+ * training days start at Mon-Fri, the spread the old five-day quota
+ * backfilled to (DN-12).
  */
 const DEFAULTS: Settings = {
   warmupCooldownEnabled: false,
   autoStopAtCapEnabled: true,
   equipment: [...DEFAULT_EQUIPMENT],
+  trainingDays: [...DEFAULT_TRAINING_DAYS],
 };
 
 function toSettings(rule: ScheduleRule | null): Settings {
@@ -46,6 +50,7 @@ function toSettings(rule: ScheduleRule | null): Settings {
     warmupCooldownEnabled: rule.warmupCooldownEnabled,
     autoStopAtCapEnabled: rule.autoStopAtCapEnabled,
     equipment: ownedEquipment(rule.equipment),
+    trainingDays: rule.trainingDays,
   };
 }
 
