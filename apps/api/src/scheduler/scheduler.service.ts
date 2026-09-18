@@ -232,8 +232,14 @@ export class SchedulerService {
    *
    * Completing on read rather than on a schedule is what keeps the app free of
    * a nightly job: the day an athlete's program ends is a day they open Today,
-   * and nobody needs the row flipped before then. `updateMany` scoped to
-   * `active` so two concurrent requests cannot both write a completion.
+   * and nobody needs the row flipped before then.
+   *
+   * `status: 'active'` on the update is deliberately redundant and no test
+   * kills it: `loadActiveProgram` already reads only active enrollments, so
+   * nothing that reaches this line can be anything else. It is here for the
+   * one case that read cannot rule out -- two requests landing together, both
+   * finding the run still active -- where it makes the loser a no-op instead
+   * of a second, later `completedAt` overwriting the first.
    */
   private async settleProgramDay(
     day: ProgramDay,

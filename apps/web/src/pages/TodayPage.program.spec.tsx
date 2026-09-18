@@ -46,6 +46,17 @@ describe("the program strip", () => {
     ).toBeInTheDocument();
   });
 
+  it("numbers the day Monday-first, so Sunday closes the week", async () => {
+    // 2026-09-20 is a Sunday: day 7 of the program week, not day 0. The
+    // weekday numbering the API works in is Sunday-first, and a Wednesday
+    // cannot tell the two apart -- this is the day that can.
+    todayIs({ date: "2026-09-20", plan: fixtures.todayPlan() });
+
+    renderRoute("/");
+
+    expect(await screen.findByText(/WK 2\/6 · D 7/)).toBeInTheDocument();
+  });
+
   it("drops the total on an open-ended program, which has no second half", async () => {
     todayIs({ plan: fixtures.todayPlan({ totalWeeks: null }) });
 
