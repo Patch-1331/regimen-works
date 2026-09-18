@@ -66,8 +66,12 @@ describe('the test database', () => {
       testPrisma().skillLevel.count(),
       testPrisma().scheduleRule.count(),
       testPrisma().assignmentSubstitution.count(),
+      testPrisma().plan.count(),
+      testPrisma().planWeek.count(),
+      testPrisma().planSlot.count(),
+      testPrisma().planEnrollment.count(),
     ]);
-    expect(counts).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(counts).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
   });
 });
 

@@ -24,6 +24,9 @@ model User {
   // owner and appear in nobody's list here.
   ownExercises Exercise[]
   ownWods      Wod[]
+  ownPlans     Plan[]
+
+  enrollments PlanEnrollment[]
 }
 
 model Exercise {
@@ -160,6 +163,7 @@ model Wod {
 
   movements   WodMovement[]
   assignments DailyAssignment[]
+  planSlots   PlanSlot[]
 
   // Soft delete, same semantics as Exercise.archivedAt (DN-25). Written by
   // DN-26's endpoints; it lands here early because `libraryVisibleTo` filters
@@ -261,6 +265,36 @@ model DailyAssignment {
   wodId  String? // null for a rest day recorded before any WOD was generated
   wod    Wod?    @relation(fields: [wodId], references: [id])
   status String  @default("scheduled") // scheduled | in_progress | completed | skipped
+
+  // Which program day this was, when a program produced it (DN-9). All three
+  // are null on a Just WODs day, and stay null until DN-16 teaches `getToday`
+  // to resolve the day through an enrollment -- nothing writes them yet.
+  //
+  // `planDayIndex` is denormalised on purpose. It is derivable from the date
+  // and the enrollment's start date, but it is what "day 17 of 24" on the
+  // completion card counts, and recomputing a date difference on every row of
+  // a history page to answer it is work the write already knows the answer to.
+  enrollmentId String?
+  // The same composite (id, userId) foreign key WorkoutSession and WorkoutLog
+  // use, so an assignment cannot claim an enrollment belonging to someone
+  // else -- the cross-user drift is unrepresentable rather than merely avoided.
+  //
+  // NoAction states the intent: deleting an enrollment a trained day points at
+  // is refused, so history cannot be quietly detached from the program it was
+  // part of. Measured (DN-9), Restrict and even the SetNull Prisma would pick
+  // by default refuse it too -- SetNull because `userId` is half this key and
+  // NOT NULL, so there is no null to set. The one that behaves differently is
+  // Cascade, which would take the athlete's training day with the enrollment.
+  // So read this as a guard against Cascade, not as a fine distinction between
+  // the other three.
+  enrollment   PlanEnrollment? @relation(fields: [enrollmentId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  planSlotId   String?
+  // Same intent: an authored slot cannot be deleted while a day the athlete
+  // trained points at it. Editing a program people are running has to archive
+  // rather than delete, the answer DN-25 reached for Exercise and Wod --
+  // history is not rewritten by a later edit.
+  planSlot     PlanSlot?       @relation(fields: [planSlotId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  planDayIndex Int?
 
   session       WorkoutSession?
   log           WorkoutLog?
@@ -376,4 +410,203 @@ model WorkoutLog {
 
   // See WorkoutSession: required by Prisma for the composite relation.
   @@unique([assignmentId, userId])
+}
+
+// A program: what each training day is, for as long as the athlete runs it
+// (DN-9). Shared library content like `Wod`, and owned the same way.
+//
+// Nothing reads these four models yet. They land ahead of the code because
+// "Just WODs is itself a program" (docs/design/programs.md) only pays off if
+// `getToday` can be written with one path instead of two, and that rewrite
+// (DN-16) needs a plan to already exist to resolve against.
+model Plan {
+  id      String  @id @default(cuid())
+  // The name the athlete picks it by, e.g. "Pull-Up Builder".
+  name    String
+  // One line under the name in the picker. Required: a program nobody can
+  // tell apart from the next one is not a program anyone will choose.
+  summary String
+  // What finishing it is supposed to get you, where that is a single nameable
+  // thing ("your first unassisted chin-up"). Null for programs that are a
+  // way of training rather than a target -- Just WODs is exactly that.
+  goal    String?
+
+  // fixed | flexible -- whether the cadence screen is an input or a readout.
+  //
+  //   flexible -- the athlete taps which weekdays they train, bounded by
+  //               min/maxDaysPerWeek and starting from `defaultDays`.
+  //   fixed    -- the slot layout IS the schedule. This is what lets a
+  //               program insist on spacing rather than mere frequency:
+  //               48 hours between heavy pull days is Mon/Tue/Thu/Fri, which
+  //               "4 days a week" cannot say.
+  //
+  // The CHECK in this field's migration keeps the two modes from blurring:
+  // fixed carries neither bound, flexible carries both.
+  scheduleMode   String
+  minDaysPerWeek Int?
+  maxDaysPerWeek Int?
+  // Which weekdays the picker starts on for a flexible program, 0 = Sunday,
+  // the same numbering as ScheduleRule.trainingDays. Empty for fixed, where
+  // the slots already answer it -- not CHECKed, because "empty" is also the
+  // honest value for a flexible program with no opinion about which days.
+  defaultDays    Int[]  @default([])
+
+  // How many weeks the athlete may run it for, and where the picker starts.
+  // All three are null for an open-ended program: Just WODs never finishes,
+  // so there is no length to choose and no last day to complete on. A length
+  // is therefore a property of a program, not of every program.
+  //
+  // `minWeeks` has to be at least intro + one whole core block + peak, or
+  // `expandPlanWeeks` (DN-11) truncates mid-wave and the program ends on a
+  // light week. That is a count of PlanWeek rows, so it is checked where the
+  // rows are visible rather than by a constraint here.
+  minWeeks     Int?
+  maxWeeks     Int?
+  defaultWeeks Int?
+
+  // Which tier of the library this row belongs to, exactly as on Exercise and
+  // Wod (DN-93): null is global, admin-curated content; set is that athlete's
+  // own. "Build your own program", stubbed in DN-15's wizard, is the owned
+  // case, and the column is cheaper to add now -- while nothing points at a
+  // Plan -- than after enrollments do.
+  ownerId String?
+  owner   User?   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  weeks       PlanWeek[]
+  enrollments PlanEnrollment[]
+
+  // Scoped to the owner, and paired with a partial unique index over global
+  // names, for the reasons written out in full on Exercise: Postgres treats
+  // NULLs as distinct, so this alone would permit two global plans of the
+  // same name. The partial index cannot be expressed here and lives only in
+  // the migration -- `prisma migrate dev` will offer to drop it. Keep it.
+  @@unique([ownerId, name])
+}
+
+// One authored week of a program.
+//
+// `phase` is what makes a program scale to a length the athlete chose:
+// `expandPlanWeeks` (DN-11) plays the intro weeks in order, cycles the core
+// weeks to fill the middle, then plays the peak weeks. Core weeks cycle **in
+// order and never shuffled**, because escalation is authored as a wave across
+// the block (3x5, 4x5, 5x5, repeat) rather than applied by a multiplier --
+// shuffling them flattens the wave into noise.
+model PlanWeek {
+  id     String  @id @default(cuid())
+  planId String
+  plan   Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  // Position within the program as authored, 0-indexed. Not the week the
+  // athlete is in: that is a count from their start date, and one authored
+  // week can be played several times.
+  order  Int
+  phase  String // intro | core | peak
+  // Shown on the program's calendar preview, e.g. "Deload". Null where the
+  // week has nothing to say beyond its number.
+  label  String?
+
+  slots PlanSlot[]
+
+  @@unique([planId, order])
+}
+
+// One day of one authored week. `kind` is the fork that makes a training day
+// something other than a WOD:
+//
+//   rest          -- the program's own rest day, which is not the same fact as
+//                    the athlete not having picked that weekday.
+//   wod_pinned    -- this exact WOD, for a benchmark re-test.
+//   wod_generated -- constraints the existing pickWod resolves against the
+//                    library (DN-14).
+//   movements     -- prescribed sets and reps. The columns carrying the
+//                    prescription are DN-19's; this model reserves the `kind`
+//                    so the fork is complete, and nothing writes that value
+//                    until they exist.
+model PlanSlot {
+  id         String   @id @default(cuid())
+  planWeekId String
+  planWeek   PlanWeek @relation(fields: [planWeekId], references: [id], onDelete: Cascade)
+  // 0 = Sunday … 6 = Saturday, the numbering Date.getUTCDay() uses and the
+  // same one ScheduleRule.trainingDays is in. One slot per weekday per week,
+  // because resolveSlotForDate (DN-11) looks the day up by its weekday.
+  dayOfWeek  Int
+  kind       String
+
+  // Which days survive when a flexible program runs at fewer days per week
+  // than it was authored for: lower is kept first, so the program's main
+  // session is 0. Without it, dropping 5 days to 3 keeps whichever days fall
+  // earliest in the week, which can delete the point of the program.
+  //
+  // Never read for a fixed program, where every authored day is trained.
+  priority Int @default(0)
+
+  // The pinned WOD. A CHECK in this field's migration holds it non-null
+  // exactly when `kind` is wod_pinned -- a pinned day with nothing pinned and
+  // a rest day pointing at a WOD are both states the database refuses rather
+  // than states the writer is trusted to avoid.
+  wodId String?
+  wod   Wod?    @relation(fields: [wodId], references: [id])
+
+  // The wod_generated constraints. Explicit nullable columns rather than
+  // jsonb because there are few of them and they are filtered on; the schema
+  // keeps jsonb for genuinely open shapes. A null skips its axis.
+  //
+  // `allowNamed` defaults false because programs mostly program movement
+  // rather than benchmarks, and a named WOD landing in the middle of a
+  // progression block is the surprise that default protects against.
+  pattern           String? // push | pull | squat | hinge | core | cardio
+  wodType           String? // amrap | for_time | emom | tabata
+  allowNamed        Boolean @default(false)
+  maxTimeCapMinutes Int?
+
+  assignments DailyAssignment[]
+
+  @@unique([planWeekId, dayOfWeek])
+}
+
+// One athlete's run at one program.
+//
+// At most one may be `active` per user, enforced by a partial unique index
+// that only the migration can express. Without it two tabs racing on "Start
+// program" both succeed and the athlete has two programs claiming the same
+// day.
+model PlanEnrollment {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId String
+  plan   Plan   @relation(fields: [planId], references: [id])
+
+  // ISO date, stored as text like DailyAssignment.date so the two compare
+  // directly. May be in the future: enrolling on Thursday to start Monday is
+  // supported outright, and the days in between fall back to Just WODs
+  // because `date < startDate` is the whole rule (DN-16). That is why a
+  // future start needs no second enrollment and no status-flipping job -- the
+  // partial unique index above still holds while the program waits.
+  startDate String
+  // How many weeks this run lasts, chosen within the plan's bounds. Null for
+  // an open-ended program, which has no last day and so never completes.
+  weeks     Int?
+  status    String @default("active") // active | completed
+
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  // Every tracked line's rung on the start date, as { line: rung }. SkillLevel
+  // only keeps the current value, so without this a finished program can count
+  // sessions but cannot say what changed -- which is the interesting half of
+  // the completion card. jsonb rather than a table because it is written once
+  // and always read whole.
+  startingRungs Json  @default("{}")
+  // The completion card's figures, snapshotted when the enrollment completes
+  // rather than recomputed on every read of the Completed list. Null while the
+  // program is still running, which is also how "has this been completed" reads
+  // without a join.
+  summary       Json?
+
+  assignments DailyAssignment[]
+
+  // Required by Prisma for DailyAssignment's composite relation. `id` is
+  // already the primary key, so this adds no further restriction -- see the
+  // identical pair on DailyAssignment.
+  @@unique([id, userId])
 }
