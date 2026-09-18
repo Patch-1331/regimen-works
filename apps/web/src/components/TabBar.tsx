@@ -4,6 +4,7 @@ const tabs = [
   { to: "/", label: "Today" },
   { to: "/history", label: "History" },
   { to: "/stats", label: "Stats" },
+  { to: "/library", label: "Library" },
   { to: "/settings", label: "Settings" },
 ];
 

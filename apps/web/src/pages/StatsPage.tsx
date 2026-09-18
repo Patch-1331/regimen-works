@@ -10,6 +10,7 @@ import {
   computeWodTypeDistribution,
   formatResult,
 } from "../lib/stats";
+import { patternLabel } from "../lib/progressions";
 import { DigitReadout } from "../components/DigitReadout";
 import { MovementChoicesPanel } from "../components/MovementChoicesPanel";
 import { Panel, SectionLabel } from "../components/Panel";
@@ -17,16 +18,6 @@ import { PatternVolumeTrendChart } from "../components/PatternVolumeTrendChart";
 import { WodTypeDistribution } from "../components/WodTypeDistribution";
 import { WeeklyTrainingDaysChart } from "../components/WeeklyTrainingDaysChart";
 import { ForTimeTrendCharts } from "../components/ForTimeTrendChart";
-
-const PATTERN_LABELS: Record<string, string> = {
-  squat: "Squat",
-  hinge: "Hinge",
-  push: "Push",
-  pull: "Pull",
-  core: "Core",
-  carry: "Carry",
-  monostructural: "Monostructural",
-};
 
 export function StatsPage() {
   const { data: logs, isLoading: logsLoading, error } = useQuery({ queryKey: ["logs"], queryFn: api.logs });
@@ -111,7 +102,7 @@ export function StatsPage() {
         {balance.map((b) => (
           <div key={b.pattern} className="flex items-center gap-3">
             <span className="w-28 shrink-0 text-sm text-[var(--ink-soft)]">
-              {PATTERN_LABELS[b.pattern] ?? b.pattern}
+              {patternLabel(b.pattern)}
             </span>
             <div className="h-2.5 flex-1" style={{ background: "var(--panel-2)", border: "1px solid var(--border)" }}>
               <div

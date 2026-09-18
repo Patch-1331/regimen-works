@@ -4,6 +4,7 @@ import { TabBar } from "./components/TabBar";
 import { TodayPage } from "./pages/TodayPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { StatsPage } from "./pages/StatsPage";
+import { LibraryPage } from "./pages/LibraryPage";
 import { ActiveWorkoutPage } from "./pages/ActiveWorkoutPage";
 import { LogResultPage } from "./pages/LogResultPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -50,6 +51,9 @@ function App() {
           <Route path="/" element={<TodayPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/stats" element={<StatsPage />} />
+          {/* `/library` rather than `/exercises`: DN-29 brings WODs to the
+              same home, and they belong under one word, not two tabs. */}
+          <Route path="/library" element={<LibraryPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
         <Route

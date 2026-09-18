@@ -36,6 +36,11 @@ function exercise(
     unit: "reps",
     line: "pull",
     rung: 0,
+    instructions: null,
+    altExerciseId: null,
+    phase: null,
+    ownerId: null,
+    archivedAt: null,
     altExercise: null,
     ...partial,
   };
