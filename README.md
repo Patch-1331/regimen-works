@@ -100,6 +100,13 @@ rebuild on save.
 - `npm run dev:api` / `npm run dev:web` — run one app
 - `npm run build` — build all workspaces
 - `npm run lint` / `npm run typecheck` / `npm run test` — across all workspaces
+- `npm run lint:fix` — the same lint, but applying what it can fix
+
+`npm run lint` is a check and never edits a file. That is worth knowing
+because it used to be `eslint --fix`, which made the CI gate exit 0 on any
+auto-fixable violation and discard the repair — so no fixable rule could fail
+CI — while locally it rewrote your working tree as a side effect of asking it
+a question. Reach for `lint:fix` when you want the edits.
 
 `apps/web`'s Vitest suite runs in jsdom, so components can be mounted and
 asserted on with Testing Library — see
