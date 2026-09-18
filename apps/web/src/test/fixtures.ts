@@ -122,6 +122,8 @@ export function today(overrides: Partial<TodayResponse> = {}): TodayResponse {
     warmupCooldownEnabled: true,
     warmup: [checklistItem()],
     cooldown: [checklistItem({ id: "checklist-2", name: "Hamstring stretch" })],
+    // Not on a program. Overridden by the tests that are (DN-10).
+    plan: null,
     ...overrides,
   };
 }

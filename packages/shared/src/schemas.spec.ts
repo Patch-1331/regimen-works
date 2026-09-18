@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { dailyAssignmentSchema } from "./assignment.js";
-import { movementPattern, progressionLine, resultType, wodType } from "./enums.js";
+import {
+  enrollmentStatus,
+  movementPattern,
+  planPhase,
+  planSlotKind,
+  progressionLine,
+  resultType,
+  scheduleMode,
+  wodType,
+} from "./enums.js";
 import { exerciseSchema, createExerciseSchema } from "./exercise.js";
 import { movementHistorySchema } from "./history.js";
 import { logResultRequestSchema, workoutLogListItemSchema } from "./log.js";
@@ -16,6 +25,8 @@ import { settingsSchema, updateSettingsSchema } from "./settings.js";
 import { skillLevelSchema } from "./skill-level.js";
 import { setSubstitutionRequestSchema } from "./substitution.js";
 import { createWodSchema, updateWodSchema } from "./wod.js";
+import { planDetailSchema, planSchema, planSlotSchema } from "./plan.js";
+import { createEnrollmentSchema, planEnrollmentSchema } from "./plan-enrollment.js";
 import { todayResponseSchema } from "./today.js";
 import { wodMovementSchema, wodSchema } from "./wod.js";
 
@@ -677,6 +688,18 @@ describe("todayResponseSchema", () => {
     warmupCooldownEnabled: true,
     warmup: [{ id: "c-1", name: "Arm circles", instructions: null }],
     cooldown: [],
+    plan: null,
+    ...overrides,
+  });
+
+  const planBlock = (overrides: Record<string, unknown> = {}) => ({
+    enrollmentId: "enrollment-1",
+    planId: "plan-1",
+    name: "Pull-Up Builder",
+    week: 2,
+    totalWeeks: 6,
+    weekLabel: "Deload",
+    slotKind: "wod_generated",
     ...overrides,
   });
 
@@ -702,6 +725,50 @@ describe("todayResponseSchema", () => {
       ).success,
     ).toBe(false);
   });
+
+  it("requires the plan block to be stated, even as null", () => {
+    // Nullable, not optional. An API that omits it is an API whose response
+    // the client rejects, which is the whole reason the field is spelled out
+    // on every path in SchedulerService rather than added where convenient.
+    const { plan: _omitted, ...withoutPlan } = todayPayload();
+    expect(todayResponseSchema.safeParse(withoutPlan).success).toBe(false);
+  });
+
+  it("parses a day inside a program", () => {
+    expect(todayResponseSchema.safeParse(todayPayload({ plan: planBlock() })).success).toBe(true);
+  });
+
+  it("parses an open-ended program, where the week has no second half", () => {
+    // "Week 37" rather than "week 37 of ...". Just WODs never finishes.
+    expect(
+      todayResponseSchema.safeParse(
+        todayPayload({ plan: planBlock({ week: 37, totalWeeks: null, weekLabel: null }) }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it("parses a day the program authors nothing for", () => {
+    // resolveSlotForDate's `unscheduled`: inside the program, but this week
+    // says nothing about this weekday. Distinct from an authored rest day,
+    // which is a positive instruction.
+    expect(
+      todayResponseSchema.safeParse(todayPayload({ plan: planBlock({ slotKind: null }) })).success,
+    ).toBe(true);
+  });
+
+  it("rejects a week counted from zero", () => {
+    // The one 1-based number in this vocabulary, because it is the one an
+    // athlete reads. Accepting 0 would put "Week 0" on someone's screen.
+    expect(
+      todayResponseSchema.safeParse(todayPayload({ plan: planBlock({ week: 0 }) })).success,
+    ).toBe(false);
+  });
+
+  it("rejects a slot kind the program vocabulary does not have", () => {
+    expect(
+      todayResponseSchema.safeParse(todayPayload({ plan: planBlock({ slotKind: "wod" }) })).success,
+    ).toBe(false);
+  });
 });
 
 describe("enums", () => {
@@ -710,6 +777,10 @@ describe("enums", () => {
     ["progressionLine", progressionLine, "core_hold", "core"],
     ["wodType", wodType, "amrap", "chipper"],
     ["resultType", resultType, "total_reps", "calories"],
+    ["planPhase", planPhase, "core", "deload"],
+    ["planSlotKind", planSlotKind, "wod_generated", "wod"],
+    ["scheduleMode", scheduleMode, "flexible", "strict"],
+    ["enrollmentStatus", enrollmentStatus, "completed", "cancelled"],
   ])("%s accepts its members and rejects anything else", (_name, schema, valid, invalid) => {
     expect(schema.safeParse(valid).success).toBe(true);
     expect(schema.safeParse(invalid).success).toBe(false);
@@ -953,5 +1024,288 @@ describe("updateWodSchema", () => {
     const written = updateWodSchema.safeParse({ archivedAt: "2026-09-17T00:00:00.000Z" });
     expect(written.success).toBe(true);
     expect(written.success && "archivedAt" in written.data).toBe(false);
+  });
+});
+
+
+/**
+ * Programs (DN-10). The two refinements here mirror database CHECKs, so each
+ * is tested from both sides: what the constraint permits must parse, and what
+ * it refuses must not. A schema looser than its CHECK lets the API build a
+ * payload the database will reject; a schema tighter than its CHECK lets the
+ * seed write a row the API then cannot serialize.
+ */
+function slot(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "slot-1",
+    dayOfWeek: 1,
+    kind: "wod_generated",
+    priority: 0,
+    wodId: null,
+    pattern: "pull",
+    wodType: null,
+    allowNamed: false,
+    maxTimeCapMinutes: 20,
+    ...overrides,
+  };
+}
+
+function plan(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "plan-1",
+    name: "Pull-Up Builder",
+    summary: "Six weeks to your first unassisted chin-up.",
+    goal: "your first unassisted chin-up",
+    scheduleMode: "flexible",
+    minDaysPerWeek: 3,
+    maxDaysPerWeek: 5,
+    defaultDays: [1, 3, 5],
+    minWeeks: 4,
+    maxWeeks: 8,
+    defaultWeeks: 6,
+    ...overrides,
+  };
+}
+
+describe("planSlotSchema's pinned-WOD refinement", () => {
+  it("accepts a pinned slot that names a WOD", () => {
+    expect(planSlotSchema.safeParse(slot({ kind: "wod_pinned", wodId: "wod-1" })).success).toBe(true);
+  });
+
+  it("rejects a pinned slot with nothing pinned", () => {
+    const result = planSlotSchema.safeParse(slot({ kind: "wod_pinned", wodId: null }));
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0].path).toEqual(["wodId"]);
+  });
+
+  it("rejects a rest day that points at a WOD", () => {
+    // The CHECK is a biconditional, not "a pinned slot has a wodId". A rest
+    // day carrying a WOD is a row whose `kind` and `wodId` tell different
+    // stories, and whichever a reader believes, the other is a bug.
+    expect(planSlotSchema.safeParse(slot({ kind: "rest", wodId: "wod-1" })).success).toBe(false);
+  });
+
+  it("rejects a generated slot that points at a WOD", () => {
+    expect(planSlotSchema.safeParse(slot({ kind: "wod_generated", wodId: "wod-1" })).success).toBe(false);
+  });
+
+  it("accepts a generated slot with every constraint left open", () => {
+    // A null skips its axis rather than narrowing to nothing.
+    expect(
+      planSlotSchema.safeParse(
+        slot({ pattern: null, wodType: null, maxTimeCapMinutes: null }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it("rejects a weekday outside 0-6", () => {
+    expect(planSlotSchema.safeParse(slot({ dayOfWeek: 7 })).success).toBe(false);
+    expect(planSlotSchema.safeParse(slot({ dayOfWeek: -1 })).success).toBe(false);
+  });
+
+  it("accepts Sunday, which is 0 and not 7", () => {
+    expect(planSlotSchema.safeParse(slot({ dayOfWeek: 0 })).success).toBe(true);
+  });
+});
+
+describe("planSchema's schedule-mode refinement", () => {
+  it("accepts a flexible program carrying both day bounds", () => {
+    expect(planSchema.safeParse(plan()).success).toBe(true);
+  });
+
+  it("accepts a fixed program carrying neither", () => {
+    expect(
+      planSchema.safeParse(
+        plan({ scheduleMode: "fixed", minDaysPerWeek: null, maxDaysPerWeek: null }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it("rejects a fixed program that states day bounds anyway", () => {
+    // The slot layout IS a fixed program's schedule, so a day count beside it
+    // is a second answer to a question already settled -- and the one the
+    // scheduler ignores.
+    const result = planSchema.safeParse(plan({ scheduleMode: "fixed" }));
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0].path).toEqual(["scheduleMode"]);
+  });
+
+  it("rejects a fixed program stating just one of them", () => {
+    expect(
+      planSchema.safeParse(plan({ scheduleMode: "fixed", maxDaysPerWeek: null })).success,
+    ).toBe(false);
+  });
+
+  it("rejects a flexible program missing its bounds", () => {
+    expect(
+      planSchema.safeParse(
+        plan({ minDaysPerWeek: null, maxDaysPerWeek: null }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it("rejects a flexible program stating only one bound", () => {
+    expect(planSchema.safeParse(plan({ maxDaysPerWeek: null })).success).toBe(false);
+  });
+
+  it("accepts an open-ended program, which has no length to choose", () => {
+    // Just WODs: fixed, never finishes, so all three week fields are null.
+    expect(
+      planSchema.safeParse(
+        plan({
+          name: "Just WODs",
+          goal: null,
+          scheduleMode: "fixed",
+          minDaysPerWeek: null,
+          maxDaysPerWeek: null,
+          defaultDays: [],
+          minWeeks: null,
+          maxWeeks: null,
+          defaultWeeks: null,
+        }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it("rejects a program with no summary to tell it apart", () => {
+    expect(planSchema.safeParse(plan({ summary: undefined })).success).toBe(false);
+  });
+});
+
+describe("planDetailSchema", () => {
+  const week = (overrides: Record<string, unknown> = {}) => ({
+    id: "week-1",
+    order: 0,
+    phase: "core",
+    label: null,
+    slots: [slot()],
+    ...overrides,
+  });
+
+  it("parses a program with its authored weeks", () => {
+    expect(planDetailSchema.safeParse({ ...plan(), weeks: [week()] }).success).toBe(true);
+  });
+
+  it("carries the same schedule-mode rule as planSchema", () => {
+    // One predicate, applied twice -- a rule restated in two places is a rule
+    // that eventually becomes two different rules.
+    expect(
+      planDetailSchema.safeParse({ ...plan({ scheduleMode: "fixed" }), weeks: [week()] }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a malformed slot nested two levels down", () => {
+    const bad = week({ slots: [slot({ kind: "rest", wodId: "wod-1" })] });
+    expect(planDetailSchema.safeParse({ ...plan(), weeks: [bad] }).success).toBe(false);
+  });
+
+  it("rejects a week whose phase is not one expandPlanWeeks will play", () => {
+    expect(
+      planDetailSchema.safeParse({ ...plan(), weeks: [week({ phase: "deload" })] }).success,
+    ).toBe(false);
+  });
+
+  it("accepts a program with no weeks authored yet", () => {
+    // An empty list is a program under construction, not a malformed one.
+    // What a program may not do is run without weeks, which is
+    // minimumViableWeeks' job and not a shape question.
+    expect(planDetailSchema.safeParse({ ...plan(), weeks: [] }).success).toBe(true);
+  });
+});
+
+describe("planEnrollmentSchema", () => {
+  const enrollment = (overrides: Record<string, unknown> = {}) => ({
+    id: "enrollment-1",
+    plan: plan(),
+    startDate: "2026-09-14",
+    weeks: 6,
+    status: "active",
+    completedAt: null,
+    startingRungs: { pull: 2, squat: 4 },
+    summary: null,
+    ...overrides,
+  });
+
+  it("parses an active run", () => {
+    expect(planEnrollmentSchema.safeParse(enrollment()).success).toBe(true);
+  });
+
+  it("parses a completed run with its snapshotted card", () => {
+    expect(
+      planEnrollmentSchema.safeParse(
+        enrollment({
+          status: "completed",
+          completedAt: "2026-10-26T09:00:00.000Z",
+          summary: {
+            weeks: 6,
+            sessions: 24,
+            rungChanges: [
+              { line: "pull", fromRung: 2, toRung: 4, fromName: "Negative", toName: "Chin-up" },
+            ],
+          },
+        }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it("accepts an athlete with no rungs at all", () => {
+    // A new athlete has no SkillLevel rows (DN-86). An exhaustive record would
+    // reject exactly the athlete this snapshot exists to describe.
+    expect(planEnrollmentSchema.safeParse(enrollment({ startingRungs: {} })).success).toBe(true);
+  });
+
+  it("does not require a rung for every line in the app", () => {
+    expect(planEnrollmentSchema.safeParse(enrollment({ startingRungs: { pull: 2 } })).success).toBe(true);
+  });
+
+  it("rejects a rung snapshot keyed by something that is not a line", () => {
+    expect(planEnrollmentSchema.safeParse(enrollment({ startingRungs: { biceps: 2 } })).success).toBe(false);
+  });
+
+  it("rejects a start date that is not a date", () => {
+    // startDate is string-compared against DailyAssignment.date, so a value
+    // in another format does not merely look wrong -- it sorts wrong, and the
+    // program silently never starts.
+    expect(planEnrollmentSchema.safeParse(enrollment({ startDate: "14/09/2026" })).success).toBe(false);
+    expect(planEnrollmentSchema.safeParse(enrollment({ startDate: "2026-09-14T00:00:00Z" })).success).toBe(false);
+  });
+
+  it("accepts an open-ended run, which has no length and never completes", () => {
+    expect(planEnrollmentSchema.safeParse(enrollment({ weeks: null })).success).toBe(true);
+  });
+
+  it("rejects a run of zero weeks", () => {
+    expect(planEnrollmentSchema.safeParse(enrollment({ weeks: 0 })).success).toBe(false);
+  });
+
+  it("rejects a malformed plan nested inside it", () => {
+    expect(
+      planEnrollmentSchema.safeParse(enrollment({ plan: plan({ scheduleMode: "fixed" }) })).success,
+    ).toBe(false);
+  });
+});
+
+describe("createEnrollmentSchema", () => {
+  it("defaults weeks to null, which is the plan's own length", () => {
+    const result = createEnrollmentSchema.safeParse({ planId: "plan-1", startDate: "2026-09-14" });
+    expect(result.success).toBe(true);
+    expect(result.data?.weeks).toBeNull();
+  });
+
+  it("rejects an empty planId", () => {
+    expect(createEnrollmentSchema.safeParse({ planId: "", startDate: "2026-09-14" }).success).toBe(false);
+  });
+
+  it("does not accept starting rungs from the client", () => {
+    // They are read from the athlete's own SkillLevel rows when enrolling. A
+    // client that could send them could misreport what the program is
+    // measured against.
+    const result = createEnrollmentSchema.safeParse({
+      planId: "plan-1",
+      startDate: "2026-09-14",
+      startingRungs: { pull: 99 },
+    });
+    expect(result.success).toBe(true);
+    expect(result.data).not.toHaveProperty("startingRungs");
   });
 });
