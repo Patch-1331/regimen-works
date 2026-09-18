@@ -149,3 +149,50 @@ export async function createLadder(
   }
   return { rungs, alt };
 }
+
+/**
+ * A program with no weeks on it. Flexible by default, with both day bounds
+ * set, because the CHECK added in DN-9's migration refuses a flexible plan
+ * missing either -- a fixture that could not be written is no use to a test
+ * about something else.
+ *
+ * Pass `weeks` to build the whole tree in one call:
+ *
+ *   createPlan({ weeks: { create: [{ order: 0, phase: 'core',
+ *     slots: { create: [{ dayOfWeek: 1, kind: 'rest' }] } }] } })
+ */
+export async function createPlan(overrides: Record<string, unknown> = {}) {
+  return testPrisma().plan.create({
+    data: {
+      name: unique('Pull-Up Builder'),
+      summary: 'Your first chin-up, six weeks.',
+      scheduleMode: 'flexible',
+      minDaysPerWeek: 3,
+      maxDaysPerWeek: 5,
+      defaultDays: [1, 3, 5],
+      minWeeks: 4,
+      maxWeeks: 8,
+      defaultWeeks: 6,
+      ...overrides,
+    },
+  });
+}
+
+/** An athlete's active run at a program, creating the program unless given one. */
+export async function createEnrollment(
+  userId: string,
+  overrides: Record<string, unknown> = {},
+) {
+  const planId =
+    (overrides.planId as string | undefined) ?? (await createPlan()).id;
+  return testPrisma().planEnrollment.create({
+    data: {
+      userId,
+      startDate: '2026-09-16',
+      weeks: 6,
+      status: 'active',
+      ...overrides,
+      planId,
+    },
+  });
+}
