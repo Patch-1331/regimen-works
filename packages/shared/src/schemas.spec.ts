@@ -479,6 +479,8 @@ describe("exerciseSchema", () => {
     rung: 2,
     altExerciseId: null,
     phase: null,
+    ownerId: null,
+    archivedAt: null,
     ...overrides,
   });
 
@@ -501,6 +503,36 @@ describe("exerciseSchema", () => {
 
   it("accepts a movement tagged with what it needs", () => {
     expect(exerciseSchema.safeParse(libraryExercise({ equipment: ["bar"] })).success).toBe(true);
+  });
+
+  it("carries which tier the row is in and whether it is retired", () => {
+    // Both nullable, and both meaningful when set (DN-93, DN-25): an owner id
+    // marks the row as one athlete's own rather than shared, and a timestamp
+    // marks it retired. The management screen is the one reader that asks for
+    // retired rows on purpose, so the shape has to admit them.
+    const owned = libraryExercise({ ownerId: "user_alice", archivedAt: "2026-09-17T00:00:00.000Z" });
+    expect(exerciseSchema.safeParse(owned).success).toBe(true);
+  });
+
+  it("rejects a write that names its own tier", () => {
+    // `ownerId` and `archivedAt` are the server's answer to which route was
+    // called. If they ever became writable, an athlete could post one naming
+    // `ownerId: null` and write straight into the shared library.
+    const written = createExerciseSchema.safeParse({
+      name: "Push-up",
+      pattern: "push",
+      equipment: [],
+      scalable: true,
+      unit: "reps",
+      instructions: null,
+      line: null,
+      rung: null,
+      altExerciseId: null,
+      phase: null,
+      ownerId: null,
+    });
+    expect(written.success).toBe(true);
+    expect(written.success && "ownerId" in written.data).toBe(false);
   });
 
   it("rejects a tag outside the equipment catalog", () => {

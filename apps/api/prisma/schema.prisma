@@ -85,6 +85,18 @@ model Exercise {
   wodMovements  WodMovement[]
   substitutedIn AssignmentSubstitution[]
 
+  // Soft delete (DN-25). Archiving hides the row from every pool and picker --
+  // `libraryVisibleTo` filters it out, so the scheduler, the ladder and the
+  // swap panel stop offering it -- while leaving it resolvable through the
+  // relations that already point at it. A hard delete cannot do that: a
+  // `WodMovement` or a logged `AssignmentSubstitution` naming this row would
+  // either block the delete or lose the movement's name out of the athlete's
+  // own history.
+  //
+  // Note it does NOT free the name: the unique index over (ownerId, name)
+  // counts archived rows, so re-using an archived name means un-archiving it.
+  archivedAt DateTime?
+
   // Scoped to the owner so two athletes may both write "Push-up" (DN-93). A
   // personal name is allowed to shadow a global one -- the alternative
   // reserves every global name forever, and an admin seeding a name an
@@ -148,6 +160,13 @@ model Wod {
 
   movements   WodMovement[]
   assignments DailyAssignment[]
+
+  // Soft delete, same semantics as Exercise.archivedAt (DN-25). Written by
+  // DN-26's endpoints; it lands here early because `libraryVisibleTo` filters
+  // on it for both models, and a helper that meant one thing for Exercise and
+  // another for Wod is the kind of difference nobody remembers at the call
+  // site.
+  archivedAt DateTime?
 
   // Scoped to the owner so two athletes may both write "Push-up" (DN-93). A
   // personal name is allowed to shadow a global one -- the alternative

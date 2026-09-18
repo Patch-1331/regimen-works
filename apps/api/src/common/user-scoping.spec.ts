@@ -103,6 +103,11 @@ function whereOf(prisma: ReturnType<typeof recordingPrisma>, key: string) {
 function expectLibraryScope(where: string) {
   expect(where).toContain('"ownerId":null');
   expect(where).toContain(ALICE);
+  // The liveness half (DN-25). Dropped, every one of these pools starts
+  // offering movements the library has retired — and unlike the ownership
+  // half, that failure is invisible until a seeded row is actually archived,
+  // so nothing else in the suite would notice.
+  expect(where).toContain('"archivedAt":null');
 }
 
 describe('per-user query scoping', () => {

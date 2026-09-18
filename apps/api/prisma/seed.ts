@@ -80,6 +80,11 @@ async function main() {
       rung: e.rung ?? null,
       phase: e.phase ?? null,
       instructions: e.instructions,
+      // Re-seeding a retired movement brings it back (DN-25). The lookup
+      // below deliberately does not filter on `archivedAt`: archiving does
+      // not free the name, so skipping archived rows would make this try to
+      // create a name the unique index still holds and fail the deploy.
+      archivedAt: null,
     };
 
     // Not an upsert any more (DN-93). `name` is no longer unique on its own,
@@ -135,6 +140,8 @@ async function main() {
       dominantPattern: w.dominantPattern,
       description: w.description ?? null,
       movements: { create: movements },
+      // Same as the exercise loop: re-seeding un-retires (DN-25).
+      archivedAt: null,
     };
 
     // Scoped to the global tier for the same reason the exercise loop is
