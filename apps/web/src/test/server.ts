@@ -22,7 +22,18 @@ const api = (path: string) => `/api${path}`;
 export const handlers = [
   http.get(api("/today"), () => HttpResponse.json(fixtures.today())),
   http.get(api("/logs"), () => HttpResponse.json([fixtures.workoutLog()])),
-  http.get(api("/exercises"), () => HttpResponse.json([fixtures.apiExercise()])),
+  http.get(api("/exercises"), ({ request }) => {
+    // The library page asks the same endpoint for retired rows too (DN-28).
+    // Matched on the query here rather than as a second handler, because msw
+    // matches a bare path against both and the first one registered wins.
+    const includeArchived =
+      new URL(request.url).searchParams.get("includeArchived") === "true";
+    return HttpResponse.json(
+      includeArchived
+        ? [fixtures.apiExercise(), fixtures.apiExercise({ id: "exercise-2", name: "Ring row", ownerId: "user_alice" })]
+        : [fixtures.apiExercise()],
+    );
+  }),
   http.get(api("/skill-levels"), () => HttpResponse.json([fixtures.skillLevel()])),
   // Empty by default: a movement history is something an athlete accrues, and
   // most route tests are about a day rather than about months of them.

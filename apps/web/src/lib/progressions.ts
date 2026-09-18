@@ -20,6 +20,29 @@ export function lineLabel(line: string): string {
   return LINE_LABELS[line] ?? line;
 }
 
+const PATTERN_LABELS: Record<string, string> = {
+  squat: "Squat",
+  hinge: "Hinge",
+  push: "Push",
+  pull: "Pull",
+  core: "Core",
+  carry: "Carry",
+  monostructural: "Monostructural",
+};
+
+/**
+ * A movement pattern as a person reads it.
+ *
+ * Beside `lineLabel` because they are the same job on the neighbouring
+ * column, and because two screens now name patterns — the stats breakdown and
+ * the library page (DN-28). Falls through to the raw slug for the same reason
+ * `lineLabel` does: a pattern added to the enum and not to this map should
+ * ship as an ugly label, not as a blank one.
+ */
+export function patternLabel(pattern: string): string {
+  return PATTERN_LABELS[pattern] ?? pattern;
+}
+
 export type MovementOption = {
   id: string;
   name: string;

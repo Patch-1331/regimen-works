@@ -517,3 +517,47 @@ describe('archiving', () => {
     ).rejects.toThrow(/admin/i);
   });
 });
+
+describe('listing retired movements (DN-28)', () => {
+  it('leaves them out of the pool by default', async () => {
+    const alice = await createUser();
+    const hers = await exercises().create({ ownerId: alice.id }, body());
+    await exercises().archive({ ownerId: alice.id }, hers.id);
+
+    const pool = await exercises().findAll(alice.id);
+
+    expect(pool.map((e) => e.id)).not.toContain(hers.id);
+  });
+
+  it('includes them when the management screen asks', async () => {
+    const alice = await createUser();
+    const hers = await exercises().create({ ownerId: alice.id }, body());
+    await exercises().archive({ ownerId: alice.id }, hers.id);
+
+    const all = await exercises().findAll(alice.id, true);
+
+    expect(all.map((e) => e.id)).toContain(hers.id);
+  });
+
+  it('still refuses another athlete’s movements either way', async () => {
+    // The flag relaxes liveness, never ownership. Asked here because the two
+    // clauses live in one helper, so a mistake in it would let both go.
+    const alice = await createUser();
+    const bob = await createUser();
+    const his = await exercises().create({ ownerId: bob.id }, body());
+
+    const all = await exercises().findAll(alice.id, true);
+
+    expect(all.map((e) => e.id)).not.toContain(his.id);
+  });
+
+  it('carries global retired movements too, so an admin can bring one back', async () => {
+    const alice = await createUser();
+    const global = await exercises().create(ADMIN, body());
+    await exercises().archive(ADMIN, global.id);
+
+    const all = await exercises().findAll(alice.id, true);
+
+    expect(all.map((e) => e.id)).toContain(global.id);
+  });
+});

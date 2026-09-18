@@ -9,6 +9,7 @@ import type { CreateExercise, UpdateExercise } from '@regimen-works/shared';
 import type { Exercise } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  libraryOwnedBy,
   libraryVisibleTo,
   referenceableBy,
   type LibraryWriter,
@@ -40,10 +41,19 @@ function merged(existing: Exercise, patch: UpdateExercise) {
 export class ExercisesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** The global library plus this athlete's own movements (DN-93). */
-  findAll(userId: string) {
+  /**
+   * The global library plus this athlete's own movements (DN-93).
+   *
+   * `includeArchived` is for the management screen and nothing else (DN-28).
+   * Every other caller is a pool, and a pool offering a retired movement is
+   * the bug the soft delete exists to prevent — so it defaults to false and
+   * the page that wants retired rows has to say so.
+   */
+  findAll(userId: string, includeArchived = false) {
     return this.prisma.exercise.findMany({
-      where: libraryVisibleTo(userId),
+      where: includeArchived
+        ? libraryOwnedBy(userId)
+        : libraryVisibleTo(userId),
       include: { altExercise: true },
       orderBy: { name: 'asc' },
     });

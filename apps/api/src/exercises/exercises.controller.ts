@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import {
   createExerciseSchema,
   updateExerciseSchema,
@@ -18,9 +26,20 @@ import { ExercisesService } from './exercises.service';
 export class ExercisesController {
   constructor(private readonly exercisesService: ExercisesService) {}
 
+  /**
+   * `?includeArchived=true` adds this caller's retired movements (DN-28).
+   *
+   * Opt-in by the exact string, not by truthiness: `?includeArchived=false`
+   * and `?includeArchived=0` both read as "no" the way anyone writing them
+   * means them, and a bare `?includeArchived` is not an accident that quietly
+   * puts retired movements back in a pool.
+   */
   @Get()
-  findAll(@CurrentUser() userId: string) {
-    return this.exercisesService.findAll(userId);
+  findAll(
+    @CurrentUser() userId: string,
+    @Query('includeArchived') includeArchived?: string,
+  ) {
+    return this.exercisesService.findAll(userId, includeArchived === 'true');
   }
 
   @Post()

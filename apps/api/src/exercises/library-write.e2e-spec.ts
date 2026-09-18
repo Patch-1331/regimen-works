@@ -354,3 +354,83 @@ describe('the boundary between them', () => {
     expect(seen.body).toHaveLength(2);
   });
 });
+
+/**
+ * `?includeArchived=true` (DN-28).
+ *
+ * The one place the management screen and the planner disagree about what the
+ * library is: a retired movement has to be listable in order to be brought
+ * back, and must never reach the pool a workout is planned from. Both halves
+ * of that live in the query string, which is why they are asserted here rather
+ * than against the service — the service is handed a boolean, and what this
+ * layer decides is which boolean.
+ */
+describe('listing retired movements over HTTP', () => {
+  /** A retired movement of Alice's, and the name it was retired under. */
+  async function retire(name: string) {
+    const made = await http()
+      .post('/exercises')
+      .set(...asUser(ALICE))
+      .send(body({ name }))
+      .expect(201);
+    await http()
+      .post(`/exercises/${idOf(made)}/archive`)
+      .set(...asUser(ALICE))
+      .expect(201);
+    return idOf(made);
+  }
+
+  async function names(query: string): Promise<string[]> {
+    const res = await http()
+      .get(`/exercises${query}`)
+      .set(...asUser(ALICE))
+      .expect(200);
+    return z
+      .array(exerciseSchema)
+      .parse(res.body)
+      .map((e) => e.name);
+  }
+
+  it('leaves retired movements out of the list a workout is planned from', async () => {
+    await retire('Burpee');
+    await http()
+      .post('/exercises')
+      .set(...asUser(ALICE))
+      .send(body({ name: 'Ring row' }))
+      .expect(201);
+
+    expect(await names('')).toEqual(['Ring row']);
+  });
+
+  it('includes them when the management screen asks for them', async () => {
+    await retire('Burpee');
+
+    expect(await names('?includeArchived=true')).toEqual(['Burpee']);
+  });
+
+  // The exact string, not truthiness: "false" and "0" are what someone writes
+  // when they mean no, and a bare `?includeArchived` is a flag that got lost
+  // on its way into a URL rather than a request for retired content.
+  it.each(['?includeArchived=false', '?includeArchived=0', '?includeArchived'])(
+    'reads %s as no',
+    async (query) => {
+      await retire('Burpee');
+
+      expect(await names(query)).toEqual([]);
+    },
+  );
+
+  it('still hides another athlete’s retired movements either way', async () => {
+    const his = await http()
+      .post('/exercises')
+      .set(...asUser(BOB))
+      .send(body({ name: 'Burpee' }))
+      .expect(201);
+    await http()
+      .post(`/exercises/${idOf(his)}/archive`)
+      .set(...asUser(BOB))
+      .expect(201);
+
+    expect(await names('?includeArchived=true')).toEqual([]);
+  });
+});

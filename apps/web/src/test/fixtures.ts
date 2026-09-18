@@ -159,6 +159,11 @@ export function apiExercise(overrides: Partial<ApiExercise> = {}): ApiExercise {
     unit: "reps",
     line: "push_horizontal",
     rung: 2,
+    instructions: null,
+    altExerciseId: null,
+    phase: null,
+    ownerId: null,
+    archivedAt: null,
     altExercise: null,
     ...overrides,
   };

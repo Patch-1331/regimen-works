@@ -39,7 +39,29 @@ export function libraryVisibleTo(userId: string): {
   OR: [{ ownerId: null }, { ownerId: string }];
   archivedAt: null;
 } {
-  return { OR: [{ ownerId: null }, { ownerId: userId }], archivedAt: null };
+  return { ...libraryOwnedBy(userId), archivedAt: null };
+}
+
+/**
+ * The ownership half alone, retired rows included (DN-28).
+ *
+ * The exception `libraryVisibleTo` names in its own doc: the management screen
+ * is the one reader that asks for archived rows on purpose, because a page
+ * that can archive a movement and never list it again can never bring it back.
+ *
+ * Defined as the half rather than as a second full clause, and
+ * `libraryVisibleTo` is built from it, so there is one statement anywhere of
+ * who owns what. That is the drift its comment warns about: two helpers
+ * differing by one clause would be the original problem again, and the clause
+ * they differ by is now written exactly once.
+ *
+ * Reach for this only where retired rows are the point. Every pool wants
+ * `libraryVisibleTo`.
+ */
+export function libraryOwnedBy(userId: string): {
+  OR: [{ ownerId: null }, { ownerId: string }];
+} {
+  return { OR: [{ ownerId: null }, { ownerId: userId }] };
 }
 
 /**
