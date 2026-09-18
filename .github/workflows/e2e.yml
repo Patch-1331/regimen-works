@@ -52,13 +52,10 @@ jobs:
           node-version: 22
           cache: npm
 
+      # The e2e database reset runs through ts-node and imports the Prisma
+      # client, so it has to exist before Playwright's global setup. It does:
+      # generating it is part of the root postinstall (DN-55).
       - run: npm ci
-
-      # The e2e database reset runs through ts-node and imports the client, so
-      # it has to exist before Playwright's global setup.
-      - name: Generate Prisma client
-        run: npx prisma generate
-        working-directory: apps/api
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium

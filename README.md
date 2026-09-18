@@ -35,12 +35,13 @@ in `packages/shared`.
 ## Getting started
 
 ```bash
-npm install   # also builds packages/shared (postinstall) — apps/api needs its compiled dist
+npm install   # postinstall builds packages/shared (apps/api needs its compiled
+              # dist) and generates the Prisma client (without it, typecheck
+              # and lint fail across apps/api with hundreds of errors)
 
 docker compose up -d   # local Postgres; the API's Prisma datasource needs it
 
-# API: generate the Prisma client, run the migration, seed the WOD library
-npm run prisma:generate --workspace apps/api
+# API: run the migration, seed the WOD library
 npm run prisma:migrate --workspace apps/api
 npm run prisma:seed --workspace apps/api
 

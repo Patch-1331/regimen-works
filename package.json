@@ -6,7 +6,7 @@
     "packages/*"
   ],
   "scripts": {
-    "postinstall": "npm run build --workspace packages/shared",
+    "postinstall": "npm run build --workspace packages/shared && npm run prisma:generate --workspace apps/api",
     "hooks:install": "git config core.hooksPath .githooks",
     "security:scan": "gitleaks git --no-banner --redact --verbose -c .gitleaks.toml .",
     "security:audit": "npm audit --omit=dev --audit-level=moderate",
