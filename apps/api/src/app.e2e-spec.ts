@@ -9,6 +9,7 @@ import {
   workoutLogListItemSchema,
   workoutLogSchema,
   workoutSessionSchema,
+  movementVolumeSchema,
   workoutSetLogSchema,
 } from '@regimen-works/shared';
 import { z } from 'zod';
@@ -1057,5 +1058,20 @@ describe('the straight-sets session, end to end', () => {
         resultValue: '5/5',
       }),
     );
+
+    // And Stats reads the same day as volume per movement (DN-22): the sets
+    // as they ended up, correction included, which is what makes a strength
+    // day chartable at all.
+    const volume = parsed(
+      z.array(movementVolumeSchema),
+      await http()
+        .get('/movement-volume')
+        .set(...asUser(ALICE))
+        .expect(200),
+    );
+    expect(volume).toHaveLength(1);
+    expect(volume[0].sessions).toEqual([
+      expect.objectContaining({ assignmentId: assignment.id, sets: [2, 3] }),
+    ]);
   });
 });

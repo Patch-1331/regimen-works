@@ -10,6 +10,7 @@ import type {
   WodMovement,
   WorkoutLogListItem,
   WorkoutSession,
+  MovementVolume,
   WorkoutSetLog,
 } from "@regimen-works/shared";
 import type { ApiExercise, ApiWod } from "../lib/api";
@@ -341,6 +342,21 @@ export function settings(overrides: Partial<Settings> = {}): Settings {
     // No program is driving this athlete's week, which is the ordinary case:
     // Just WODs is flexible, so it defers to the days above (DN-118).
     scheduleLock: null,
+    ...overrides,
+  };
+}
+
+/** One movement's recorded volume (DN-22), newest session first. */
+export function movementVolume(
+  overrides: Partial<MovementVolume> = {},
+): MovementVolume {
+  return {
+    exerciseId: "exercise-1",
+    name: "Chin-up",
+    unit: "reps",
+    sessions: [
+      { date: "2026-09-16", assignmentId: "assignment-1", sets: [3, 3, 3] },
+    ],
     ...overrides,
   };
 }

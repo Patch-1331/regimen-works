@@ -12,9 +12,14 @@
  * which is what keeps it clear of the rung-change offer below, the one thing
  * on this screen that does ask a question.
  *
- * With per-set logging the second line can eventually say something sharper —
- * "8, 8, 8 — up from 8, 8, 6 last week" — without changing what this is.
+ * On a prescribed day it now says something sharper — "8, 8, 8, up from
+ * 8, 8, 6 last time" (DN-22) — without changing what this is. Both sets of
+ * numbers happened, and the phrase between them reports which way the total
+ * moved. It is not a grade: "down from" on the day after a hard one is a fact
+ * about the week, and the app has no view about what it means (DN-88).
  */
+
+import type { SessionComparison } from "../lib/stats";
 
 const ORDINALS = [
   "First",
@@ -26,16 +31,39 @@ const ORDINALS = [
   "Seventh",
 ];
 
+/** "3, 3, 2" — the sets as they were done, in the order they were done. */
+function setsLabel(sets: number[]): string {
+  return sets.join(", ");
+}
+
+function comparisonLine(comparison: SessionComparison): string {
+  const today = `${comparison.name} — ${setsLabel(comparison.sets)}`;
+  if (comparison.previous === null) return `${today}.`;
+  const last = setsLabel(comparison.previous);
+  // Keyed off the total, which is the only thing two different-shaped
+  // sessions can be compared on at all.
+  if (comparison.direction === "up") return `${today}, up from ${last} last time.`;
+  if (comparison.direction === "down") return `${today}, down from ${last} last time.`;
+  return `${today}, the same total as ${last} last time.`;
+}
+
 export function CompletionCard({
   wodName,
   trainingDaysThisWeek,
   fromTimer,
+  comparisons = [],
 }: {
   wodName: string;
   /** Counting today — see `trainingDaysThisWeek` in lib/stats. */
   trainingDaysThisWeek: number;
   /** True when the numbers below were filled in from the live timer. */
   fromTimer: boolean;
+  /**
+   * What each movement was just done at, beside last time (DN-22). Empty on a
+   * WOD day, and on the first prescribed day of a movement there is simply no
+   * "last time" to quote.
+   */
+  comparisons?: SessionComparison[];
 }) {
   // Beyond seven the ordinal stops being a word anyone says, and a week with
   // more training days than it has days is not worth a special case.
@@ -61,6 +89,20 @@ export function CompletionCard({
         <p className="mt-1 text-[13px] text-[var(--ink-soft)]">
           {ordinal} day you've trained this week.
         </p>
+      )}
+
+      {comparisons.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {comparisons.map((comparison) => (
+            <li
+              key={comparison.exerciseId}
+              className="text-[13px] text-[var(--ink-soft)]"
+              style={{ fontVariantNumeric: "tabular-nums" }}
+            >
+              {comparisonLine(comparison)}
+            </li>
+          ))}
+        </ul>
       )}
 
       {fromTimer && (

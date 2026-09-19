@@ -19,7 +19,7 @@ import { MinusIcon, PlusIcon } from "../components/StepperIcons";
 import { RungChangeCard } from "../components/RungChangeCard";
 import { CompletionCard } from "../components/CompletionCard";
 import { useRungChangeCard } from "../lib/rungChangeDismissal";
-import { trainingDaysThisWeek } from "../lib/stats";
+import { compareToLastSession, trainingDaysThisWeek } from "../lib/stats";
 
 /**
  * What today was, as this screen needs to read it (DN-126).
@@ -135,6 +135,16 @@ function LogResultForm({
     enabled: day.kind === "prescribed" && session !== null,
   });
 
+  // Every session of every movement, so the completion card can put today's
+  // beside the one before it (DN-22). Read on the same condition as the rows
+  // above: a WOD day has no movements to compare, and a day logged from
+  // memory has no session of its own in the answer to find.
+  const { data: movementVolume } = useQuery({
+    queryKey: ["movementVolume"],
+    queryFn: api.movementVolume,
+    enabled: day.kind === "prescribed" && session !== null,
+  });
+
   // Corrections, keyed by position, and only for the sets actually touched.
   // Pre-filling this from the rows would make every set look edited and send
   // the whole session back on save; absent means "as it was recorded".
@@ -232,6 +242,7 @@ function LogResultForm({
           wodName={name}
           trainingDaysThisWeek={trainingDaysThisWeek(loggedDates, todayIsoDate)}
           fromTimer={session !== null}
+          comparisons={compareToLastSession(movementVolume ?? [], assignmentId)}
         />
       )}
 

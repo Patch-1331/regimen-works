@@ -1,4 +1,4 @@
-import type { WorkoutLogListItem } from "@regimen-works/shared";
+import type { MovementVolume, WorkoutLogListItem } from "@regimen-works/shared";
 
 /**
  * A row the WOD-shaped charts can read.
@@ -221,4 +221,88 @@ export function computeWeeklyTrainingDays(dates: string[]): WeekTrainingDays[] {
   return Array.from(byWeek.entries())
     .map(([weekStart, set]) => ({ weekStart, days: set.size }))
     .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+}
+
+export type MovementVolumePoint = { date: string; sets: number[]; total: number };
+export type MovementVolumeTrend = {
+  exerciseId: string;
+  name: string;
+  unit: MovementVolume["unit"];
+  points: MovementVolumePoint[];
+};
+
+/** The reps of one session added up — the height of one bar. */
+function volumeOf(sets: number[]): number {
+  return sets.reduce((sum, reps) => sum + reps, 0);
+}
+
+/**
+ * Per-movement volume, session by session in the order they happened (DN-22).
+ *
+ * The API answers newest-first because that is the order the athlete reads a
+ * list in; a chart runs the other way, so this reverses it.
+ *
+ * Totals per movement and never across them: seconds of a hold and reps of a
+ * pull-up are not the same quantity, which is why each movement gets its own
+ * card rather than a share of one stacked bar. A movement trained once is left
+ * out for the same reason `computeForTimeTrends` leaves out a WOD done once —
+ * a single point is a number, not a trend, and it is already on the day's log.
+ */
+export function computeMovementVolumeTrends(volumes: MovementVolume[]): MovementVolumeTrend[] {
+  return volumes
+    .map((volume) => ({
+      exerciseId: volume.exerciseId,
+      name: volume.name,
+      unit: volume.unit,
+      points: volume.sessions
+        .map((session) => ({ date: session.date, sets: session.sets, total: volumeOf(session.sets) }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
+    }))
+    .filter((trend) => trend.points.length > 1)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export type SessionComparison = {
+  exerciseId: string;
+  name: string;
+  sets: number[];
+  /** The same movement's session before this one, or null if this is the first. */
+  previous: number[] | null;
+  /** How the total moved. Null when there is nothing to move from. */
+  direction: "up" | "down" | "same" | null;
+};
+
+/**
+ * What the athlete just did, beside the last time they did it (DN-22).
+ *
+ * A record and not a score (DN-88): both sets of numbers happened, and
+ * `direction` says which way the total moved. Nothing here judges the session
+ * — "down" on a day that followed a hard one is information, not a mark.
+ *
+ * Matched by assignment rather than by date, because the session being
+ * celebrated is the one the athlete is standing in, and a day can hold more
+ * than one.
+ */
+export function compareToLastSession(
+  volumes: MovementVolume[],
+  assignmentId: string,
+): SessionComparison[] {
+  const comparisons: SessionComparison[] = [];
+  for (const volume of volumes) {
+    // Newest first, so the session before this one is the next in the list.
+    const index = volume.sessions.findIndex((s) => s.assignmentId === assignmentId);
+    if (index === -1) continue;
+    const sets = volume.sessions[index].sets;
+    const previous = volume.sessions[index + 1]?.sets ?? null;
+    const direction =
+      previous === null
+        ? null
+        : volumeOf(sets) > volumeOf(previous)
+          ? "up"
+          : volumeOf(sets) < volumeOf(previous)
+            ? "down"
+            : "same";
+    comparisons.push({ exerciseId: volume.exerciseId, name: volume.name, sets, previous, direction });
+  }
+  return comparisons;
 }

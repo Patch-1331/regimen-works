@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import {
   computeForTimeTrends,
+  computeMovementVolumeTrends,
   computePRs,
   computePatternBalance,
   computePatternVolumeTrend,
@@ -18,6 +19,7 @@ import { PatternVolumeTrendChart } from "../components/PatternVolumeTrendChart";
 import { WodTypeDistribution } from "../components/WodTypeDistribution";
 import { WeeklyTrainingDaysChart } from "../components/WeeklyTrainingDaysChart";
 import { ForTimeTrendCharts } from "../components/ForTimeTrendChart";
+import { MovementVolumeCharts } from "../components/MovementVolumeChart";
 
 export function StatsPage() {
   const { data: logs, isLoading: logsLoading, error } = useQuery({ queryKey: ["logs"], queryFn: api.logs });
@@ -26,6 +28,7 @@ export function StatsPage() {
   const { data: exercises } = useQuery({ queryKey: ["exercises"], queryFn: api.exercises });
   const { data: scheduleRule } = useQuery({ queryKey: ["scheduleRule"], queryFn: api.scheduleRule });
   const { data: movementHistory } = useQuery({ queryKey: ["movementHistory"], queryFn: api.movementHistory });
+  const { data: movementVolume } = useQuery({ queryKey: ["movementVolume"], queryFn: api.movementVolume });
 
   if (logsLoading) return <p className="p-6 text-[var(--ink-faint)]">Loading stats…</p>;
   if (error) return <p className="p-6 text-[var(--danger)]">Couldn't reach the API — is it running on :3001?</p>;
@@ -95,6 +98,11 @@ export function StatsPage() {
       <SectionLabel>FOR TIME TREND</SectionLabel>
       <Panel>
         <ForTimeTrendCharts trends={forTimeTrends} />
+      </Panel>
+
+      <SectionLabel>MOVEMENT VOLUME</SectionLabel>
+      <Panel>
+        <MovementVolumeCharts trends={computeMovementVolumeTrends(movementVolume ?? [])} />
       </Panel>
 
       <SectionLabel>MOVEMENT PATTERN BALANCE</SectionLabel>

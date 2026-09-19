@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { WorkoutLogListItem } from "@regimen-works/shared";
+import type { MovementVolume, WorkoutLogListItem } from "@regimen-works/shared";
 import {
+  compareToLastSession,
   computeForTimeTrends,
+  computeMovementVolumeTrends,
   computePRs,
   computePatternBalance,
   computePatternVolumeTrend,
@@ -395,5 +397,178 @@ describe("computeWeeklyTrainingDays", () => {
       { weekStart: "2026-09-14", days: 3 },
       { weekStart: "2026-09-21", days: 1 },
     ]);
+  });
+});
+
+/** One movement's recorded sessions, newest first the way the API answers. */
+function volume(
+  sessions: Array<{ date: string; assignmentId?: string; sets: number[] }>,
+  overrides: Partial<MovementVolume> = {},
+): MovementVolume {
+  return {
+    exerciseId: "chin-up",
+    name: "Chin-up",
+    unit: "reps",
+    sessions: sessions.map((s) => ({
+      date: s.date,
+      assignmentId: s.assignmentId ?? s.date,
+      sets: s.sets,
+    })),
+    ...overrides,
+  };
+}
+
+describe("computeMovementVolumeTrends", () => {
+  it("totals each session and runs them oldest to newest", () => {
+    // The API answers newest-first, a chart reads left to right.
+    const [trend] = computeMovementVolumeTrends([
+      volume([
+        { date: "2026-09-14", sets: [3, 3, 3] },
+        { date: "2026-09-07", sets: [3, 3, 2] },
+      ]),
+    ]);
+
+    expect(trend.points).toEqual([
+      { date: "2026-09-07", sets: [3, 3, 2], total: 8 },
+      { date: "2026-09-14", sets: [3, 3, 3], total: 9 },
+    ]);
+  });
+
+  it("carries the unit, so a hold is not read as reps", () => {
+    const [trend] = computeMovementVolumeTrends([
+      volume(
+        [
+          { date: "2026-09-14", sets: [40, 40] },
+          { date: "2026-09-07", sets: [30, 30] },
+        ],
+        { exerciseId: "hollow-hold", name: "Hollow hold", unit: "seconds" },
+      ),
+    ]);
+
+    expect(trend.unit).toBe("seconds");
+  });
+
+  it("leaves out a movement trained only once", () => {
+    // One bar is a number, not a trend, and the day's log already says it.
+    expect(computeMovementVolumeTrends([volume([{ date: "2026-09-14", sets: [3, 3] }])])).toEqual([]);
+  });
+
+  it("orders the cards by movement name", () => {
+    const trends = computeMovementVolumeTrends([
+      volume(
+        [
+          { date: "2026-09-14", sets: [8] },
+          { date: "2026-09-07", sets: [8] },
+        ],
+        { exerciseId: "push-up", name: "Push-up" },
+      ),
+      volume([
+        { date: "2026-09-14", sets: [3] },
+        { date: "2026-09-07", sets: [3] },
+      ]),
+    ]);
+
+    expect(trends.map((t) => t.name)).toEqual(["Chin-up", "Push-up"]);
+  });
+
+  it("answers nothing when no movement has been recorded", () => {
+    expect(computeMovementVolumeTrends([])).toEqual([]);
+  });
+});
+
+describe("compareToLastSession", () => {
+  it("puts this session beside the one before it", () => {
+    const [comparison] = compareToLastSession(
+      [
+        volume([
+          { date: "2026-09-14", assignmentId: "today", sets: [3, 3, 3] },
+          { date: "2026-09-07", assignmentId: "before", sets: [3, 3, 2] },
+        ]),
+      ],
+      "today",
+    );
+
+    expect(comparison).toEqual({
+      exerciseId: "chin-up",
+      name: "Chin-up",
+      sets: [3, 3, 3],
+      previous: [3, 3, 2],
+      direction: "up",
+    });
+  });
+
+  it("reads a smaller total as down", () => {
+    const [comparison] = compareToLastSession(
+      [
+        volume([
+          { date: "2026-09-14", assignmentId: "today", sets: [3, 2, 2] },
+          { date: "2026-09-07", assignmentId: "before", sets: [3, 3, 3] },
+        ]),
+      ],
+      "today",
+    );
+
+    expect(comparison.direction).toBe("down");
+  });
+
+  it("reads an equal total as the same, whatever shape it was", () => {
+    // 3, 3, 2 and 2, 3, 3 are different sessions with one total, and the
+    // direction is about the total -- the sets themselves are quoted beside
+    // it so the difference is still there to read.
+    const [comparison] = compareToLastSession(
+      [
+        volume([
+          { date: "2026-09-14", assignmentId: "today", sets: [3, 3, 2] },
+          { date: "2026-09-07", assignmentId: "before", sets: [2, 3, 3] },
+        ]),
+      ],
+      "today",
+    );
+
+    expect(comparison).toMatchObject({ direction: "same", previous: [2, 3, 3] });
+  });
+
+  it("has no direction the first time a movement is trained", () => {
+    const [comparison] = compareToLastSession(
+      [volume([{ date: "2026-09-14", assignmentId: "today", sets: [3, 3] }])],
+      "today",
+    );
+
+    expect(comparison).toMatchObject({ previous: null, direction: null });
+  });
+
+  it("compares every movement the session held", () => {
+    const comparisons = compareToLastSession(
+      [
+        volume([
+          { date: "2026-09-14", assignmentId: "today", sets: [3, 3] },
+          { date: "2026-09-07", assignmentId: "before", sets: [3, 2] },
+        ]),
+        volume(
+          [
+            { date: "2026-09-14", assignmentId: "today", sets: [8, 8] },
+            { date: "2026-09-07", assignmentId: "before", sets: [8, 8] },
+          ],
+          { exerciseId: "push-up", name: "Push-up" },
+        ),
+      ],
+      "today",
+    );
+
+    expect(comparisons.map((c) => [c.name, c.direction])).toEqual([
+      ["Chin-up", "up"],
+      ["Push-up", "same"],
+    ]);
+  });
+
+  it("leaves out a movement this session did not train", () => {
+    // Matched by assignment, not by date: the card is about the session the
+    // athlete is standing in, not about everything that happened that day.
+    const comparisons = compareToLastSession(
+      [volume([{ date: "2026-09-14", assignmentId: "before", sets: [3, 3] }])],
+      "today",
+    );
+
+    expect(comparisons).toEqual([]);
   });
 });

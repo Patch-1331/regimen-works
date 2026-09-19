@@ -7,6 +7,7 @@ import type {
   LogSet,
   Me,
   MovementHistory,
+  MovementVolume,
   RoundSplit,
   ScheduleCap,
   SetRoundSplitRequest,
@@ -310,6 +311,8 @@ export const api = {
   logs: () => request<WorkoutLogListItem[]>("/logs"),
   /** What has actually been trained, movement by movement (DN-89). */
   movementHistory: () => request<MovementHistory[]>("/movement-history"),
+  /** What each movement has actually been trained at, set by set (DN-22). */
+  movementVolume: () => request<MovementVolume[]>("/movement-volume"),
 
   skillLevels: () => request<SkillLevel[]>("/skill-levels"),
   setSkillLevel: (line: string, body: SetSkillLevelRequest) =>
