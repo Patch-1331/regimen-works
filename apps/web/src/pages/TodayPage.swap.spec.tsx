@@ -288,7 +288,11 @@ describe("the prescribed movement after an equipment fallback", () => {
     await userEvent.click(screen.getByRole("button", { name: /^double-unders/i }));
 
     expect(swaps).toEqual([
-      { wodMovementId: "wod-movement-1", exerciseId: "double-unders" },
+      {
+        wodMovementId: "wod-movement-1",
+        planSlotMovementId: null,
+        exerciseId: "double-unders",
+      },
     ]);
   });
 

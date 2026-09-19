@@ -2,6 +2,7 @@ import type {
   ChecklistExercise,
   Settings,
   SkillLevel,
+  PrescribedMovement,
   TodayPlan,
   TodayResponse,
   Wod,
@@ -42,6 +43,40 @@ export function movement(overrides: Partial<WodMovement> = {}): WodMovement {
       instructions: "Hands under the shoulders, body in one line.",
       line: "push_horizontal",
       rung: 2,
+      altExerciseId: null,
+      ...overrides.exercise,
+    },
+  };
+}
+
+/**
+ * One movement of a prescribed day (DN-125) — the resolved shape the athlete
+ * is handed, not the authored one. `id` is a PlanSlotMovement's.
+ */
+export function prescribedMovement(
+  overrides: Partial<PrescribedMovement> = {},
+): PrescribedMovement {
+  return {
+    id: "plan-slot-movement-1",
+    order: 0,
+    sets: 5,
+    reps: 3,
+    restSeconds: 90,
+    line: "pull",
+    isSwapped: false,
+    prescribedName: null,
+    prescribedId: null,
+    prescribedReason: null,
+    ...overrides,
+    exercise: {
+      id: "exercise-chin-up",
+      name: "Chin-up",
+      pattern: "pull",
+      equipment: [],
+      unit: "reps",
+      instructions: null,
+      line: "pull",
+      rung: 1,
       altExerciseId: null,
       ...overrides.exercise,
     },

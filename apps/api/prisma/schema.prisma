@@ -328,8 +328,19 @@ model AssignmentSubstitution {
   // See WorkoutSession: the same composite FK, so a substitution can't claim
   // an assignment belonging to another user.
   assignment    DailyAssignment @relation(fields: [assignmentId, userId], references: [id, userId], onDelete: Cascade)
-  wodMovementId String
-  wodMovement   WodMovement     @relation(fields: [wodMovementId], references: [id], onDelete: Cascade)
+  // **Exactly one of these two.** A CHECK in DN-125's migration holds it, the
+  // same shape of rule as PlanSlotMovement's own line/exerciseId xor.
+  //
+  // A swap is keyed by the movement the athlete tapped rather than by the
+  // exercise, so a day naming the same line twice moves only the row they
+  // touched -- and since DN-125 a day can be straight sets rather than a WOD,
+  // which has no WodMovement anywhere in it. Two nullable FKs rather than one
+  // polymorphic id column, so the database still refuses a swap pointing at a
+  // movement that does not exist.
+  wodMovementId      String?
+  wodMovement        WodMovement?      @relation(fields: [wodMovementId], references: [id], onDelete: Cascade)
+  planSlotMovementId String?
+  planSlotMovement   PlanSlotMovement? @relation(fields: [planSlotMovementId], references: [id], onDelete: Cascade)
   exerciseId    String
   exercise      Exercise        @relation(fields: [exerciseId], references: [id])
   createdAt     DateTime        @default(now())
@@ -340,8 +351,16 @@ model AssignmentSubstitution {
   updatedAt     DateTime        @updatedAt
 
   // One swap per movement per day: swapping twice corrects the choice, it
-  // doesn't stack. The write is an upsert on this key.
+  // doesn't stack. The write is an upsert on whichever of these keys the
+  // tapped movement belongs to.
+  //
+  // These are the partial indexes DN-125 wanted, spelled as something Prisma
+  // can express: Postgres treats NULLs as distinct, so the wodMovementId index
+  // constrains exactly the rows that have one and ignores every prescribed-day
+  // row, and vice versa. A raw partial index would say the same thing and cost
+  // the upserts their compound key.
   @@unique([assignmentId, wodMovementId])
+  @@unique([assignmentId, planSlotMovementId])
 }
 
 // The live timer's state. roundSplits is jsonb: [{ round, atSeconds }],
@@ -599,6 +618,11 @@ model PlanSlotMovement {
   line       String? // push_horizontal | push_vertical | pull | squat | ... (see progressionLine)
   exerciseId String?
   exercise   Exercise? @relation(fields: [exerciseId], references: [id])
+
+  // The day's swaps that key off this row (DN-125). A prescribed movement is
+  // swappable for the same reason a WOD's is: the app decides what you do, you
+  // decide how hard it is.
+  substitutedIn AssignmentSubstitution[]
 
   sets        Int
   reps        Int

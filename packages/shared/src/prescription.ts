@@ -37,6 +37,8 @@ export const prescribedMovementSchema = z.object({
   line: progressionLine.nullable(),
   /** What this athlete actually trains today. */
   exercise: movementExerciseSchema,
+  /** True where the athlete swapped this row themselves, for today only (DN-125). */
+  isSwapped: z.boolean(),
   /**
    * What the line resolved to before an automatic layer replaced it, and
    * which layer did — the same honesty rule the WOD plate follows (DN-79,
@@ -46,8 +48,13 @@ export const prescribedMovementSchema = z.object({
    * Only `equipment` can appear here today. A WOD's `remembered_choice`
    * has no counterpart on this shape, because resolving through the
    * athlete's rung *is* the prescription rather than a substitution for it.
+   *
+   * All three are null on a row the athlete swapped: naming what a swap
+   * overrode would argue with a decision just made (DN-116).
    */
   prescribedName: z.string().nullable(),
+  /** The prescribed exercise's id, so the swap panel can offer it back (DN-110). */
+  prescribedId: z.string().nullable(),
   prescribedReason: substitutionReason.nullable(),
 });
 export type PrescribedMovement = z.infer<typeof prescribedMovementSchema>;

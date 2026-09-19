@@ -94,7 +94,10 @@ export class MovementResolutionService {
           where: { ...libraryVisibleTo(userId), line: { not: null } },
         }),
         this.prisma.assignmentSubstitution.findMany({
-          where: { userId, assignmentId },
+          // A day is a WOD or a prescription, never both, so in practice this
+          // filter drops nothing -- it is here to make the non-null assertions
+          // below true by construction rather than by that argument (DN-125).
+          where: { userId, assignmentId, wodMovementId: { not: null } },
           include: { exercise: true },
         }),
         this.prisma.scheduleRule.findUnique({
@@ -129,14 +132,14 @@ export class MovementResolutionService {
     );
     const swapped = applySubstitutions(
       available,
-      new Map(substitutions.map((s) => [s.wodMovementId, s.exerciseId])),
+      new Map(substitutions.map((s) => [s.wodMovementId!, s.exerciseId])),
       new Map(substitutions.map((s) => [s.exerciseId, s.exercise])),
     );
 
     // Flagged rather than inferred: once a swap has been applied there is
     // nothing left in the movement to tell it from a remembered choice, and
     // the plate needs to know which rows the athlete chose themselves.
-    const swappedIds = new Set(substitutions.map((s) => s.wodMovementId));
+    const swappedIds = new Set(substitutions.map((s) => s.wodMovementId!));
 
     // What the library prescribed and which layer replaced it (DN-88, DN-79),
     // carried wherever an automatic layer did. The substitution used to happen
@@ -170,40 +173,62 @@ export class MovementResolutionService {
    * (DN-19): the line resolved to their rung, then dropped to its alternative
    * where they own nothing for it.
    *
-   * Two of `resolve`'s three layers, and the third left out on purpose. The
+   * `resolve`'s three layers, differing in what the first one means. The
    * remembered choice *is* the rung here rather than an override of it, so
    * nothing is reported as a substitution for it -- a program that asks for
    * "pull" and hands over a ring row has done exactly what it said. Only
    * equipment replaced something the athlete was told about, so only equipment
-   * is named. The day's swap is missing because it cannot be made yet:
-   * `AssignmentSubstitution` keys off a `WodMovement`, and a prescribed day
-   * has none.
+   * is named. Then the day's swap on top, the same way and for the same
+   * reason: the app decides what you do, you decide how hard it is (DN-125).
+   *
+   * `assignmentId` is null where the day has no row yet -- `getToday` resolves
+   * the prescription before writing one, because an empty result is a day to
+   * generate a WOD for instead. Nothing is lost by it: a swap is made against
+   * a day already on screen, so a day with no row has none.
    *
    * Returns fewer rows than it was given where the library cannot answer, and
    * possibly none -- see `attachPrescribedExercises`. The caller treats an
    * empty result as a day with nothing prescribed.
    */
-  async resolvePrescription(userId: string, movements: ProgramSlotMovement[]) {
-    const [skillLevels, linedExercises, pinned, rule] = await Promise.all([
-      this.prisma.skillLevel.findMany({ where: { userId } }),
-      this.prisma.exercise.findMany({
-        where: { ...libraryVisibleTo(userId), line: { not: null } },
-      }),
-      this.prisma.exercise.findMany({
-        where: {
-          ...libraryVisibleTo(userId),
-          id: {
-            in: movements
-              .map((m) => m.exerciseId)
-              .filter((id): id is string => id !== null),
+  async resolvePrescription(
+    userId: string,
+    assignmentId: string | null,
+    movements: ProgramSlotMovement[],
+  ) {
+    // Typed rather than inferred, because the empty case is a literal and the
+    // query's own row type is what the map below reads.
+    const swapsQuery: Promise<
+      { planSlotMovementId: string | null; exercise: Exercise }[]
+    > =
+      assignmentId === null
+        ? Promise.resolve([])
+        : this.prisma.assignmentSubstitution.findMany({
+            where: { userId, assignmentId, planSlotMovementId: { not: null } },
+            include: { exercise: true },
+          });
+
+    const [skillLevels, linedExercises, pinned, rule, substitutions] =
+      await Promise.all([
+        this.prisma.skillLevel.findMany({ where: { userId } }),
+        this.prisma.exercise.findMany({
+          where: { ...libraryVisibleTo(userId), line: { not: null } },
+        }),
+        this.prisma.exercise.findMany({
+          where: {
+            ...libraryVisibleTo(userId),
+            id: {
+              in: movements
+                .map((m) => m.exerciseId)
+                .filter((id): id is string => id !== null),
+            },
           },
-        },
-      }),
-      this.prisma.scheduleRule.findUnique({
-        where: { userId },
-        select: { equipment: true },
-      }),
-    ]);
+        }),
+        this.prisma.scheduleRule.findUnique({
+          where: { userId },
+          select: { equipment: true },
+        }),
+        swapsQuery,
+      ]);
 
     const prescribed = attachPrescribedExercises(
       movements,
@@ -220,7 +245,18 @@ export class MovementResolutionService {
       rule?.equipment ?? DEFAULT_EQUIPMENT,
     );
 
+    // Last, the same as on a WOD day: the rung and the equipment fallback are
+    // both standing facts about the athlete, and the swap is what they want
+    // this morning.
+    const swaps = new Map(
+      substitutions.map((s): [string, Exercise] => [
+        s.planSlotMovementId!,
+        s.exercise,
+      ]),
+    );
+
     return available.map((m, i) => {
+      const swap = swaps.get(m.movement.id);
       const replaced = m.exercise.id !== prescribed[i].exercise.id;
       return {
         id: m.movement.id,
@@ -232,8 +268,13 @@ export class MovementResolutionService {
         // athlete off it: the line is the session's intent, and a screen that
         // showed only the substitute could not say what the day was for.
         line: m.movement.line,
-        exercise: m.exercise,
+        exercise: swap ?? m.exercise,
+        isSwapped: swap !== undefined,
+        // Recorded on a swapped row too, and hidden by the caller through
+        // `hideOverriddenPrescriptions` -- one rule for both kinds of day, and
+        // the reasoning is in that function.
         prescribedName: replaced ? prescribed[i].exercise.name : null,
+        prescribedId: replaced ? prescribed[i].exercise.id : null,
         prescribedReason: replaced ? ('equipment' as const) : null,
       };
     });

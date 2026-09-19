@@ -1774,6 +1774,105 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     expect(today.assignment!.wod!.id).toBe(wod.id);
   });
 
+  /** Swaps a prescribed movement the way the endpoint does, by its own id. */
+  async function swap(
+    userId: string,
+    assignmentId: string,
+    planSlotMovementId: string,
+    exerciseId: string,
+  ) {
+    await testPrisma().assignmentSubstitution.create({
+      data: { userId, assignmentId, planSlotMovementId, exerciseId },
+    });
+  }
+
+  it("applies the day's swap over the rung the line resolved to", async () => {
+    // The third layer (DN-125). The rung and the equipment fallback are
+    // standing facts about the athlete; this is what they want this morning,
+    // so it goes on last.
+    const { ring, chinUp } = await pullRungs();
+    const user = await athlete();
+    await enrolled(user, (await prescribingPlan()).id);
+
+    const first = await programService().getToday(user.id, TODAY);
+    expect(first.assignment!.prescription!.movements[0].exercise.id).toBe(
+      ring.id,
+    );
+    await swap(
+      user.id,
+      first.assignment!.id,
+      first.assignment!.prescription!.movements[0].id,
+      chinUp.id,
+    );
+
+    const again = await programService().getToday(user.id, TODAY);
+
+    expect(again.assignment!.prescription!.movements[0]).toMatchObject({
+      exercise: { id: chinUp.id },
+      isSwapped: true,
+    });
+  });
+
+  it('says nothing about the equipment fallback on a row the athlete swapped', async () => {
+    // The plate does not argue with a decision just made (DN-116): the
+    // fallback is still recorded by the resolver, and hidden here.
+    const { alt, ring, chinUp } = await pullRungs();
+    const user = await athlete();
+    await createSkillLevel(user.id, 'pull', 1);
+    await enrolled(user, (await prescribingPlan()).id);
+
+    const first = await programService().getToday(user.id, TODAY);
+    // No bar, so the chin-up they train at fell to its off-line alternative.
+    expect(first.assignment!.prescription!.movements[0]).toMatchObject({
+      exercise: { id: alt.id },
+      prescribedName: chinUp.name,
+      prescribedReason: 'equipment',
+    });
+    await swap(
+      user.id,
+      first.assignment!.id,
+      first.assignment!.prescription!.movements[0].id,
+      ring.id,
+    );
+
+    const again = await programService().getToday(user.id, TODAY);
+
+    expect(again.assignment!.prescription!.movements[0]).toMatchObject({
+      exercise: { id: ring.id },
+      isSwapped: true,
+      prescribedName: null,
+      prescribedId: null,
+      prescribedReason: null,
+    });
+  });
+
+  it('keeps the swaps on a day taken, put back and taken again', async () => {
+    // The makeup resolves the prescription against the row that is already
+    // there rather than the one its own upsert writes. Changing your mind
+    // twice about whether to train should not quietly undo the choices made
+    // in between.
+    const { chinUp } = await pullRungs();
+    const user = await athlete();
+    await enrolled(user, (await prescribingPlan()).id);
+
+    const taken = await programService().trainMakeup(user.id, SATURDAY);
+    await swap(
+      user.id,
+      taken.assignment.id,
+      taken.assignment.prescription!.movements[0].id,
+      chinUp.id,
+    );
+    await programService().skipToday(user.id, SATURDAY);
+
+    const again = await programService().trainMakeup(user.id, SATURDAY);
+
+    expect(again.assignment.id).toBe(taken.assignment.id);
+    expect(again.assignment.prescription!.movements[0]).toMatchObject({
+      exercise: { id: chinUp.id },
+      isSwapped: true,
+    });
+  });
+
   it('hands over the prescription when the day is taken as a makeup', async () => {
     // A makeup resolves against the whole week (DN-17), so a flexible
     // program's Saturday session is whatever it authored -- including straight
