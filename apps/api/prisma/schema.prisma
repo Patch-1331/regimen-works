@@ -379,7 +379,14 @@ model WorkoutSession {
   // rather than merely avoided by careful writes.
   assignment        DailyAssignment @relation(fields: [assignmentId, userId], references: [id, userId], onDelete: Cascade)
   startedAt         DateTime        @default(now())
-  capSeconds        Int
+  // Where this session's clock stops. Null on a straight-sets session
+  // (DN-20), which is untimed on purpose: the athlete works at their own
+  // pace, and the only clock on that screen is the rest between sets.
+  //
+  // Null rather than 0. A zero cap is a cap that has already been reached, so
+  // `wasCappedFinish` would call every prescribed session capped and the log
+  // screen would report a clock that stopped at 0:00.
+  capSeconds        Int?
   roundSplits       Json            @default("[]") // RoundSplit[]
   // What the athlete actually trained (DN-90): the WOD's movement list after
   // the current-rung scaling and the day's swaps were applied, written once
@@ -411,6 +418,24 @@ model WorkoutSession {
   // every tap: a locked phone or a refresh must not restart the sequence.
   intervalIndex            Int? // 0-based interval in progress; == intervalCount once the sequence has run out
   intervalStartedAtSeconds Int? // elapsed seconds (from startedAt) at which that interval began
+
+  // DN-20 -- how far a straight-sets session has got, written on every set for
+  // the same reason intervalIndex is written on every rollover: a locked phone
+  // or a refresh must not put the athlete back on set one.
+  //
+  // One counter rather than a movement index beside a set index. Two columns
+  // can say "movement 2, set 7" about a movement with five sets; one number
+  // cannot, and the client posting the absolute count makes a replayed tap
+  // rewrite rather than count the set twice. Resolved back to a position
+  // against this session's own `movements` -- see `straightSetsStateAt`.
+  //
+  // Null on a WOD. 0 on a prescribed session nobody has finished a set of yet,
+  // which is a different fact.
+  setsCompleted            Int?
+  // Elapsed seconds at which the rest after the last set began; null while the
+  // athlete is working. When it started rather than what is left of it, so a
+  // backgrounded tab resumes the countdown at the right second.
+  restStartedAtSeconds     Int?
 
   // Required by Prisma for the composite relation above. assignmentId is
   // already unique on its own, so this adds no further restriction.

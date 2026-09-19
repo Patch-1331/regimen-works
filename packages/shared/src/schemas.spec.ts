@@ -307,6 +307,40 @@ describe("sessionMovementSchema", () => {
     const { wodMovementId: _omitted, ...withoutId } = sessionMovement();
     expect(sessionMovementSchema.safeParse(withoutId).success).toBe(false);
   });
+
+  it("takes a prescribed movement's id instead, on a straight-sets day", () => {
+    // DN-20: the day was prescribed by a program slot, so there is no
+    // WodMovement to point at and the sets and rest are what it carries.
+    const { wodMovementId: _omitted, ...prescribed } = sessionMovement();
+    const parsed = sessionMovementSchema.parse({
+      ...prescribed,
+      planSlotMovementId: "plan-slot-movement-1",
+      sets: 5,
+      restSeconds: 90,
+    });
+
+    expect(parsed.wodMovementId).toBeNull();
+    expect(parsed.sets).toBe(5);
+  });
+
+  it("refuses a row claiming to be both kinds of movement", () => {
+    expect(
+      sessionMovementSchema.safeParse({
+        ...sessionMovement(),
+        planSlotMovementId: "plan-slot-movement-1",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("defaults the straight-sets fields to null on a WOD snapshot", () => {
+    // Null rather than zero: a WOD movement has rounds, not sets, and a zero
+    // would read as a movement nobody was asked to do.
+    const parsed = sessionMovementSchema.parse(sessionMovement());
+
+    expect(parsed.sets).toBeNull();
+    expect(parsed.restSeconds).toBeNull();
+    expect(parsed.planSlotMovementId).toBeNull();
+  });
 });
 
 describe("workoutSessionSchema", () => {
@@ -315,6 +349,8 @@ describe("workoutSessionSchema", () => {
     assignmentId: "assignment-1",
     startedAt: "2026-09-16T10:00:00.000Z",
     capSeconds: 720,
+    setsCompleted: null,
+    restStartedAtSeconds: null,
     roundSplits: [],
     movements: [],
     status: "in_progress",
@@ -355,6 +391,30 @@ describe("workoutSessionSchema", () => {
     expect(
       workoutSessionSchema.safeParse(session({ intervalIndex: 0 })).success,
     ).toBe(true);
+  });
+
+  it("parses an untimed session, which is what a prescribed day is", () => {
+    // DN-20. Null rather than a zero cap, because a zero cap is one that has
+    // already been reached.
+    expect(
+      workoutSessionSchema.safeParse(
+        session({ capSeconds: null, setsCompleted: 0 }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it("accepts setsCompleted 0, a started session with no set behind it yet", () => {
+    // Distinct from null, which means this is not a straight-sets session at
+    // all — the same distinction intervalIndex 0 carries.
+    expect(
+      workoutSessionSchema.parse(session({ setsCompleted: 0 })).setsCompleted,
+    ).toBe(0);
+  });
+
+  it("rejects a cap of zero, which was never a real session", () => {
+    expect(workoutSessionSchema.safeParse(session({ capSeconds: 0 })).success).toBe(
+      false,
+    );
   });
 
   it("rejects a round split at a negative time", () => {

@@ -45,10 +45,16 @@ export function RoundTapWorkout({
   const queryClient = useQueryClient();
   const now = useNow(1000, !isFinished);
 
+  // A session's cap is null only on a prescribed day (DN-20), which never
+  // reaches this screen. Falling back to the WOD's own cap rather than
+  // asserting: it is the number the session was seeded from, so if the two
+  // could ever disagree the clock would still read something true.
+  const capSeconds = session.capSeconds ?? wod.timeCapMinutes * 60;
+
   // The clock the whole screen reads. `autoStopAtCap` is the athlete's setting
   // as it stood when this session started, so it decides whether the cap is a
   // boundary or only a marker the clock runs past.
-  const cap = capStateAt(elapsedSecondsSince(session.startedAt, now), session.capSeconds);
+  const cap = capStateAt(elapsedSecondsSince(session.startedAt, now), capSeconds);
   const autoStop = session.autoStopAtCap;
   const isCapStopped = autoStop && cap.isCapped;
 
@@ -99,7 +105,7 @@ export function RoundTapWorkout({
   // logged at a second the athlete never saw — which past the cap is the cap
   // itself, unless the athlete opted out of stopping there.
   const elapsedSeconds = autoStop ? cap.clockSeconds : cap.elapsedSeconds;
-  const progress = Math.min(1, elapsedSeconds / session.capSeconds);
+  const progress = Math.min(1, elapsedSeconds / capSeconds);
   const splits = [...session.roundSplits].sort((a, b) => b.round - a.round);
   const currentRound = session.roundSplits.length + 1;
 
@@ -171,7 +177,7 @@ export function RoundTapWorkout({
           className="mt-1.5 text-[11px] font-semibold tracking-[0.14em]"
           style={{ color: cap.isCapped ? "var(--danger)" : "var(--ink-faint)", fontFamily: "var(--font-mono)" }}
         >
-          {capLabel(session.capSeconds, cap.isCapped, autoStop)}
+          {capLabel(capSeconds, cap.isCapped, autoStop)}
         </div>
       </div>
 

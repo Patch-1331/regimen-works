@@ -3,6 +3,7 @@ import type {
   CreateExercise,
   UpdateExercise,
   LogResultRequest,
+  LogSet,
   Me,
   MovementHistory,
   RoundSplit,
@@ -240,6 +241,9 @@ export const api = {
       `/assignments/${assignmentId}/session/rounds`,
       round,
     ),
+  /** Posted on every completed set, so a refresh resumes where it was (DN-20). */
+  logSet: (assignmentId: string, body: LogSet) =>
+    postJson<WorkoutSession>(`/assignments/${assignmentId}/session/sets`, body),
   advanceInterval: (assignmentId: string, body: AdvanceInterval) =>
     postJson<WorkoutSession>(
       `/assignments/${assignmentId}/session/interval`,

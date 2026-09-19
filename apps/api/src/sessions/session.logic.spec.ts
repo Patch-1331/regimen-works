@@ -2,6 +2,7 @@ import {
   advanceInterval,
   mergeRoundSplit,
   snapshotMovements,
+  snapshotPrescribedMovements,
 } from './session.logic';
 
 describe('mergeRoundSplit', () => {
@@ -122,6 +123,11 @@ describe('snapshotMovements', () => {
     expect(snapshotMovements([resolved])).toEqual([
       {
         wodMovementId: 'wm-1',
+        // A WOD day joins back to a WodMovement and has rounds rather than
+        // sets, so the three straight-sets fields are absent facts (DN-20).
+        planSlotMovementId: null,
+        sets: null,
+        restSeconds: null,
         order: 1,
         reps: 45,
         repScheme: [21, 15, 9],
@@ -178,5 +184,82 @@ describe('snapshotMovements', () => {
   it('copies the rep scheme rather than sharing the array', () => {
     const [snap] = snapshotMovements([resolved]);
     expect(snap.repScheme).not.toBe(resolved.repScheme);
+  });
+});
+
+describe('snapshotPrescribedMovements', () => {
+  const resolved = {
+    id: 'psm-1',
+    order: 1,
+    sets: 5,
+    reps: 3,
+    restSeconds: 90,
+    isSwapped: false,
+    prescribedName: 'Chin-up',
+    prescribedReason: 'equipment' as const,
+    exercise: {
+      id: 'ex-ring',
+      name: 'Ring row',
+      unit: 'reps',
+      line: 'pull',
+      rung: 1,
+      instructions: 'Lean back, pull the rings to the chest.',
+      equipment: [],
+      altExerciseId: 'ex-table',
+    },
+  };
+
+  it('joins back to the prescribed movement rather than a WOD one', () => {
+    const [snapshot] = snapshotPrescribedMovements([resolved]);
+
+    expect(snapshot.planSlotMovementId).toBe('psm-1');
+    expect(snapshot.wodMovementId).toBeNull();
+  });
+
+  it('keeps the sets and the rest, which are what this day is', () => {
+    const [snapshot] = snapshotPrescribedMovements([resolved]);
+
+    expect(snapshot.sets).toBe(5);
+    expect(snapshot.restSeconds).toBe(90);
+    // One set's count, not the day's total: everything that reads a snapshot
+    // asks what one set is, and 15 would be a number nobody was asked to do
+    // in one go.
+    expect(snapshot.reps).toBe(3);
+  });
+
+  it('records no ladder, because a prescribed movement has none', () => {
+    // Empty rather than [3, 3, 3, 3, 3]: a repScheme means "the counts
+    // descend as written", which five identical sets are not.
+    expect(snapshotPrescribedMovements([resolved])[0].repScheme).toEqual([]);
+  });
+
+  it('keeps what equipment replaced, as a WOD snapshot does', () => {
+    const [snapshot] = snapshotPrescribedMovements([resolved]);
+
+    expect(snapshot.prescribedName).toBe('Chin-up');
+    expect(snapshot.prescribedReason).toBe('equipment');
+  });
+
+  it('carries nothing of the Exercise row but what history needs', () => {
+    expect(snapshotPrescribedMovements([resolved])[0].exercise).toEqual({
+      id: 'ex-ring',
+      name: 'Ring row',
+      unit: 'reps',
+      line: 'pull',
+      rung: 1,
+    });
+  });
+
+  it('orders by the movement order, whatever order the rows arrived in', () => {
+    // The count of completed sets indexes into this list, so the order is not
+    // presentation -- a list built the other way round would resume the
+    // athlete on the wrong movement.
+    const first = { ...resolved, id: 'psm-0', order: 0 };
+
+    expect(
+      snapshotPrescribedMovements([resolved, first]).map(
+        (m) => m.planSlotMovementId,
+      ),
+    ).toEqual(['psm-0', 'psm-1']);
   });
 });

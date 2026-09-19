@@ -72,10 +72,16 @@ export function finishSecondsAt(
  * and the time they finished at is their real one.
  */
 export function wasCappedFinish(session: {
-  capSeconds: number;
+  capSeconds: number | null;
   finishedAtSeconds: number | null;
   autoStopAtCap: boolean;
 }): boolean {
+  // An untimed session -- a straight-sets day (DN-20) -- has no cap to be
+  // stopped by. Worth stating rather than leaving to the arithmetic: a null
+  // read as a zero would make every such session report itself capped, since
+  // any finish at all is at or past second zero.
+  if (session.capSeconds === null) return false;
+
   return (
     session.autoStopAtCap &&
     session.finishedAtSeconds !== null &&

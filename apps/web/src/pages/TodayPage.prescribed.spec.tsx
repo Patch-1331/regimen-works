@@ -39,7 +39,10 @@ const ringRow = fixtures.apiExercise({
 });
 
 /** Today, prescribing the given movements and nothing else. */
-function prescribing(movements: PrescribedMovement[]) {
+function prescribing(
+  movements: PrescribedMovement[],
+  status: "scheduled" | "in_progress" | "completed" = "scheduled",
+) {
   server.use(
     http.get("/api/exercises", () => HttpResponse.json([ringRow, chinUp])),
     http.get("/api/today", () =>
@@ -49,6 +52,7 @@ function prescribing(movements: PrescribedMovement[]) {
             ...fixtures.today().assignment!,
             wod: null,
             prescription: { movements },
+            status,
           },
         }),
       ),
@@ -194,9 +198,53 @@ describe("the prescribed plate", () => {
     ]);
   });
 
-  it("offers no way to start a session it cannot run yet", async () => {
-    // The runner is its own issue and is not built. A button that does nothing
-    // would be worse than saying so.
+  it("starts the session through the warm-up, the same as a WOD day", async () => {
+    // The warm-up is the athlete's, not the WOD's: nothing about it depends on
+    // today being scored against a clock, so a strength day gets it too.
+    prescribing([fixtures.prescribedMovement()]);
+    renderRoute("/");
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /start session/i }),
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Warm-up" }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers to resume rather than to start, once one is running", async () => {
+    prescribing([fixtures.prescribedMovement()], "in_progress");
+    renderRoute("/");
+
+    expect(
+      await screen.findByRole("button", { name: /resume session/i }),
+    ).toBeInTheDocument();
+    // Nothing to skip to: the day is already under way.
+    expect(
+      screen.queryByRole("button", { name: /mark today as rest/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("says the session is done, and offers no result to read", async () => {
+    // A WOD day offers VIEW RESULT here. Logging a strength session is its own
+    // slice, so this says the true thing rather than opening a screen that
+    // reads a WOD and would sit there loading.
+    prescribing([fixtures.prescribedMovement()], "completed");
+    renderRoute("/");
+
+    expect(await screen.findByText("SESSION COMPLETE")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /view result/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /start session/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("says start rather than start workout, because this day is not one", async () => {
+    // "WORKOUT" is the WOD plate's word and this screen is deliberately not
+    // that screen -- the readouts, the heading and the button all say so.
     prescribing([fixtures.prescribedMovement()]);
     renderRoute("/");
 
@@ -204,8 +252,5 @@ describe("the prescribed plate", () => {
     expect(
       screen.queryByRole("button", { name: /start workout/i }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /mark today as rest/i }),
-    ).toBeInTheDocument();
   });
 });

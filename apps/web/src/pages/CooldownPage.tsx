@@ -15,25 +15,35 @@ export function CooldownPage() {
   // where an unfamiliar movement name is most likely to stop someone.
   const [openItemId, setOpenItemId] = useState<string | null>(null);
 
+  const cooldown = today?.cooldown ?? [];
+
+  /**
+   * Where the cool-down lets out. A straight-sets session (DN-20) has no
+   * result screen: the log reads a WOD to know what kind of number it is
+   * asking for, and a strength day has none. So that day ends on Today rather
+   * than on a screen stuck loading, and the copy below stops promising a
+   * result form that is not there.
+   */
+  const isStraightSets = today?.assignment?.session?.setsCompleted != null;
+  const exitPath = isStraightSets ? "/" : `/log/${assignmentId}`;
+
   const proceedMutation = useMutation({
     mutationFn: async (allChecked: boolean) => {
       if (allChecked) await api.completeCooldown(assignmentId);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["today"] });
-      navigate(`/log/${assignmentId}`);
+      navigate(exitPath);
     },
   });
 
-  const cooldown = today?.cooldown ?? [];
-
-  // Nothing to show — proceed straight to logging instead of an empty screen.
+  // Nothing to show — proceed straight on instead of an empty screen.
   useEffect(() => {
     if (today && cooldown.length === 0) {
-      navigate(`/log/${assignmentId}`, { replace: true });
+      navigate(exitPath, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [today, cooldown.length]);
+  }, [today, cooldown.length, exitPath]);
 
   if (isLoading || !today || cooldown.length === 0) {
     return <p className="p-6 text-[var(--ink-faint)]">Loading…</p>;
@@ -55,7 +65,11 @@ export function CooldownPage() {
       <h1 className="text-3xl font-extrabold uppercase leading-none" style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}>
         Cool-down
       </h1>
-      <p className="mt-2 text-sm text-[var(--ink-faint)]">Check off each item before logging your result.</p>
+      <p className="mt-2 text-sm text-[var(--ink-faint)]">
+        {isStraightSets
+          ? "Check off each item to finish the session."
+          : "Check off each item before logging your result."}
+      </p>
 
       <div className="mt-5" style={{ background: "var(--panel)", border: "1px solid var(--border)" }}>
         <div className="divide-y" style={{ borderColor: "var(--border)" }}>
@@ -113,7 +127,7 @@ export function CooldownPage() {
           className="flex w-full items-center justify-center gap-3 py-4 text-sm font-bold tracking-[0.14em]"
           style={{ fontFamily: "var(--font-mono)", background: "var(--glow)", color: "var(--bg)" }}
         >
-          LOG RESULT
+          {isStraightSets ? "DONE" : "LOG RESULT"}
         </button>
         <button
           onClick={() => proceedMutation.mutate(false)}

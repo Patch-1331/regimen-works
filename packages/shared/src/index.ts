@@ -21,3 +21,4 @@ export * from "./round-split.js";
 export * from "./substitution.js";
 export * from "./rung-change.js";
 export * from "./history.js";
+export * from "./straight-sets.js";

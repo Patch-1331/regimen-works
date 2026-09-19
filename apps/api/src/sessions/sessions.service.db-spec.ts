@@ -7,6 +7,7 @@ import {
   createAssignment,
   createExercise,
   createLadder,
+  createPlan,
   createSkillLevel,
   createUser,
   createWod,
@@ -769,5 +770,307 @@ describe('SessionsService.cancel', () => {
       NotFoundException,
     );
     expect(await storedSession(assignment.id)).not.toBeNull();
+  });
+});
+
+/**
+ * A prescribed day (DN-20): a program slot authoring two movements, and an
+ * assignment pointing at it with no WOD anywhere.
+ *
+ * Two movements rather than one, because the interesting arithmetic is what
+ * happens when a movement's sets run out — a single movement would let a
+ * broken roll-over pass.
+ */
+async function prescribedDay(options: { kind?: string } = {}) {
+  const user = await createUser();
+  const { rungs } = await createLadder('pull', [
+    'Negative chin-up',
+    'Chin-up',
+    'Pull-up',
+  ]);
+  const push = await createExercise({ name: 'Push-up', pattern: 'push' });
+  const plan = await createPlan({
+    weeks: {
+      create: [
+        {
+          order: 0,
+          phase: 'core',
+          slots: {
+            create: [
+              {
+                dayOfWeek: 3,
+                kind: options.kind ?? 'movements',
+                movements: {
+                  create: [
+                    {
+                      order: 0,
+                      line: 'pull',
+                      sets: 5,
+                      reps: 3,
+                      restSeconds: 90,
+                    },
+                    {
+                      order: 1,
+                      exerciseId: push.id,
+                      sets: 3,
+                      reps: 8,
+                      restSeconds: 60,
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+  });
+  const slot = await testPrisma().planSlot.findFirstOrThrow({
+    where: { planWeek: { planId: plan.id } },
+    include: { movements: { orderBy: { order: 'asc' } } },
+  });
+  const assignment = await testPrisma().dailyAssignment.create({
+    data: {
+      userId: user.id,
+      date: '2026-09-16',
+      status: 'scheduled',
+      planSlotId: slot.id,
+    },
+  });
+  return { user, rungs, assignment, slot, movements: slot.movements };
+}
+
+/**
+ * Starting and running a straight-sets session (DN-20).
+ *
+ * The other two runners are clock-shaped and this one is not, so what these
+ * say is that the session still records the same kind of thing: what was
+ * trained, pinned down when it started, and where the athlete has got to,
+ * written on every set so a locked phone resumes rather than restarts.
+ */
+describe('SessionsService, on a prescribed day', () => {
+  it('starts a session with no cap, because the day is untimed', async () => {
+    const { user, assignment } = await prescribedDay();
+
+    const session = await service().start(user.id, assignment.id);
+
+    // Null rather than 0: a zero cap is one that has already been reached,
+    // and every finish would then report itself as stopped by the clock.
+    expect(session.capSeconds).toBeNull();
+    expect(session.status).toBe('in_progress');
+  });
+
+  it('leaves the auto-stop off, having no clock for it to stop', async () => {
+    const { user, assignment } = await prescribedDay();
+    await testPrisma().scheduleRule.create({
+      data: { userId: user.id, autoStopAtCapEnabled: true },
+    });
+
+    expect((await service().start(user.id, assignment.id)).autoStopAtCap).toBe(
+      false,
+    );
+  });
+
+  it('opens on set one rather than on no set at all', async () => {
+    const { user, assignment } = await prescribedDay();
+
+    // 0 and null are different facts: the first says the athlete is on set
+    // one of a straight-sets session, the second that this is not one.
+    expect((await service().start(user.id, assignment.id)).setsCompleted).toBe(
+      0,
+    );
+  });
+
+  it('snapshots the prescription the athlete is about to train', async () => {
+    const { user, assignment, movements } = await prescribedDay();
+
+    const session = await service().start(user.id, assignment.id);
+
+    expect(session.movements).toHaveLength(2);
+    expect(session.movements[0]).toMatchObject({
+      planSlotMovementId: movements[0].id,
+      wodMovementId: null,
+      sets: 5,
+      reps: 3,
+      restSeconds: 90,
+    });
+  });
+
+  it("resolves the line to the athlete's own rung, as the plate did", async () => {
+    const { user, rungs, assignment } = await prescribedDay();
+    await createSkillLevel(user.id, 'pull', 2);
+
+    const session = await service().start(user.id, assignment.id);
+
+    // The whole reason the snapshot exists: the rung keeps moving afterwards,
+    // so a day re-read through today's level would describe today.
+    expect(session.movements[0].exercise.id).toBe(rungs[2].id);
+  });
+
+  it('moves the day from scheduled to in progress, as a WOD day does', async () => {
+    const { user, assignment } = await prescribedDay();
+
+    await service().start(user.id, assignment.id);
+
+    expect((await storedAssignment(assignment.id))?.status).toBe('in_progress');
+  });
+
+  it('refuses a slot that prescribes nothing, which is a rest day', async () => {
+    // A slot the athlete's own schedule turned into a rest day still carries
+    // its authored movements, so the kind is what decides -- the same two
+    // checks `resolveProgramDay` makes before calling a day prescribed.
+    const { user, assignment } = await prescribedDay({ kind: 'rest' });
+
+    await expect(service().start(user.id, assignment.id)).rejects.toThrow(
+      BadRequestException,
+    );
+  });
+});
+
+describe('SessionsService.logSet', () => {
+  /** A started straight-sets session, ready to record sets against. */
+  async function running() {
+    const day = await prescribedDay();
+    const session = await service().start(day.user.id, day.assignment.id);
+    return { ...day, session };
+  }
+
+  it('records the set and when the rest after it began', async () => {
+    const { user, assignment } = await running();
+
+    const updated = await service().logSet(user.id, assignment.id, {
+      setsCompleted: 1,
+      restStartedAtSeconds: 42,
+    });
+
+    expect(updated.setsCompleted).toBe(1);
+    expect(updated.restStartedAtSeconds).toBe(42);
+  });
+
+  it('rewrites rather than counts twice when a tap is replayed', async () => {
+    const { user, assignment } = await running();
+
+    await service().logSet(user.id, assignment.id, {
+      setsCompleted: 3,
+      restStartedAtSeconds: 100,
+    });
+    // The same tap arriving again after a flaky connection. An increment
+    // would put the athlete on set five having done three.
+    const replayed = await service().logSet(user.id, assignment.id, {
+      setsCompleted: 3,
+      restStartedAtSeconds: 100,
+    });
+
+    expect(replayed.setsCompleted).toBe(3);
+  });
+
+  it('never moves the athlete back onto a set they have done', async () => {
+    const { user, assignment } = await running();
+
+    await service().logSet(user.id, assignment.id, {
+      setsCompleted: 4,
+      restStartedAtSeconds: 200,
+    });
+    // Two taps racing on a reconnect can land out of order.
+    const late = await service().logSet(user.id, assignment.id, {
+      setsCompleted: 2,
+      restStartedAtSeconds: 90,
+    });
+
+    expect(late.setsCompleted).toBe(4);
+  });
+
+  it('clears the rest when the next set starts', async () => {
+    const { user, assignment } = await running();
+
+    await service().logSet(user.id, assignment.id, {
+      setsCompleted: 1,
+      restStartedAtSeconds: 42,
+    });
+    const working = await service().logSet(user.id, assignment.id, {
+      setsCompleted: 2,
+      restStartedAtSeconds: null,
+    });
+
+    expect(working.restStartedAtSeconds).toBeNull();
+  });
+
+  it('takes the last set of the session', async () => {
+    // 5 + 3 sets, so 8 is the end of the day rather than past it.
+    const { user, assignment } = await running();
+
+    expect(
+      (
+        await service().logSet(user.id, assignment.id, {
+          setsCompleted: 8,
+          restStartedAtSeconds: null,
+        })
+      ).setsCompleted,
+    ).toBe(8);
+  });
+
+  it('refuses a set past the end of the session', async () => {
+    const { user, assignment } = await running();
+
+    // Counted against the session's own snapshot, which is what the number
+    // indexes into -- the same refusal advanceInterval makes past a sequence.
+    await expect(
+      service().logSet(user.id, assignment.id, {
+        setsCompleted: 9,
+        restStartedAtSeconds: null,
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('refuses a WOD session, which has rounds rather than sets', async () => {
+    const { user, assignment } = await pullDay();
+    await service().start(user.id, assignment.id);
+
+    // Zero, and the message asserted, because both guards would refuse a 1: a
+    // WOD's snapshot prescribes no sets, so `Set 1 is past the end` fires
+    // first and the test would pass without the guard it is named after.
+    await expect(
+      service().logSet(user.id, assignment.id, {
+        setsCompleted: 0,
+        restStartedAtSeconds: null,
+      }),
+    ).rejects.toThrow('This session has no sets to log');
+  });
+
+  it('refuses a session that is no longer running', async () => {
+    const { user, assignment } = await running();
+    await service().finish(user.id, assignment.id);
+
+    await expect(
+      service().logSet(user.id, assignment.id, {
+        setsCompleted: 1,
+        restStartedAtSeconds: null,
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it("reads another athlete's session as not found", async () => {
+    const { assignment } = await running();
+    const stranger = await createUser();
+
+    await expect(
+      service().logSet(stranger.id, assignment.id, {
+        setsCompleted: 1,
+        restStartedAtSeconds: null,
+      }),
+    ).rejects.toThrow(NotFoundException);
+  });
+});
+
+describe('SessionsService.finish, on an untimed session', () => {
+  it('records how long it took rather than clamping to a cap it has not got', async () => {
+    const { user, assignment } = await prescribedDay();
+    await startedSecondsAgo(user.id, assignment.id, 2400);
+
+    const finished = await service().finish(user.id, assignment.id);
+
+    // 40 minutes. Not a score on a straight-sets day, but it is what
+    // happened, and a null cap must not clamp it to zero.
+    expect(finished.finishedAtSeconds).toBeGreaterThanOrEqual(2399);
   });
 });
