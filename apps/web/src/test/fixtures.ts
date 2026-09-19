@@ -54,7 +54,12 @@ export function movement(overrides: Partial<WodMovement> = {}): WodMovement {
  * is handed, not the authored one. `id` is a PlanSlotMovement's.
  */
 export function prescribedMovement(
-  overrides: Partial<PrescribedMovement> = {},
+  // `exercise` partial rather than whole, because the body below spreads it
+  // over a complete default: a spec that wants a hold in seconds should not
+  // have to restate the line, the rung and the kit to say so.
+  overrides: Partial<Omit<PrescribedMovement, "exercise">> & {
+    exercise?: Partial<PrescribedMovement["exercise"]>;
+  } = {},
 ): PrescribedMovement {
   return {
     id: "plan-slot-movement-1",

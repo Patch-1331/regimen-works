@@ -69,7 +69,7 @@ describe("the prescribed plate", () => {
   it("counts a hold in seconds, the way the WOD plate does", async () => {
     prescribing([
       fixtures.prescribedMovement({
-        exercise: { ...chinUp, unit: "seconds", name: "Hollow hold" },
+        exercise: { unit: "seconds", name: "Hollow hold" },
         sets: 3,
         reps: 40,
       }),
@@ -106,7 +106,7 @@ describe("the prescribed plate", () => {
         id: "plan-slot-movement-2",
         order: 1,
         sets: 3,
-        exercise: { ...ringRow, name: "Ring row" },
+        exercise: { id: ringRow.id, name: "Ring row", rung: 0 },
       }),
     ]);
     renderRoute("/");
@@ -124,7 +124,7 @@ describe("the prescribed plate", () => {
     // somebody a different movement should at least say so.
     prescribing([
       fixtures.prescribedMovement({
-        exercise: { ...ringRow, name: "Row under table", line: null },
+        exercise: { id: ringRow.id, name: "Row under table", line: null, rung: null },
         prescribedName: "Chin-up",
         prescribedId: chinUp.id,
         prescribedReason: "equipment",
