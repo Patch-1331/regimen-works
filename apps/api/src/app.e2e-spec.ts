@@ -92,6 +92,37 @@ function parsed<T>(schema: z.ZodType<T>, res: request.Response): T {
   return schema.parse(res.body);
 }
 
+/**
+ * Puts the athlete on a seven-day week before the test asks what today is.
+ *
+ * Without it the suite fails every Saturday and Sunday in CI (DN-122), for a
+ * reason that is not a bug in the app: a freshly provisioned athlete trains
+ * Monday to Friday, so on a weekend `/today` correctly answers `isRestDay:
+ * true` and every assertion expecting an assignment collapses. It never
+ * showed up on a developer machine west of UTC, where the runner is already
+ * on Saturday while the laptop is still on Friday.
+ *
+ * The fix is for the test to *state* the schedule it depends on rather than
+ * inherit one. It goes through `PATCH /settings` rather than writing the row,
+ * so it also provisions the athlete the way a first request would, and it
+ * asserts the round trip -- a settings write that silently stopped taking
+ * would otherwise leave every one of these tests passing for the wrong
+ * reason.
+ */
+async function trainsEveryDay(...userIds: string[]) {
+  for (const userId of userIds) {
+    const settings = parsed(
+      settingsSchema,
+      await http()
+        .patch('/settings')
+        .set(...asUser(userId))
+        .send({ trainingDays: [0, 1, 2, 3, 4, 5, 6] })
+        .expect(200),
+    );
+    expect(settings.trainingDays).toEqual([0, 1, 2, 3, 4, 5, 6]);
+  }
+}
+
 /** Enough of a library for the scheduler to have something to assign. */
 async function seedLibrary() {
   const { rungs } = await createLadder('pull', [
@@ -169,6 +200,8 @@ describe('auth', () => {
 });
 
 describe('GET /today', () => {
+  beforeEach(() => trainsEveryDay(ALICE, MALLORY));
+
   it('generates an assignment and returns the day', async () => {
     await seedLibrary();
 
@@ -274,6 +307,8 @@ describe('GET /today', () => {
 });
 
 describe('POST /today/skip', () => {
+  beforeEach(() => trainsEveryDay(ALICE));
+
   it('marks the day as rest', async () => {
     await seedLibrary();
     await todaysAssignmentId(ALICE);
@@ -292,6 +327,8 @@ describe('POST /today/skip', () => {
 });
 
 describe('the workout, end to end', () => {
+  beforeEach(() => trainsEveryDay(ALICE));
+
   it('starts, records rounds, finishes, and logs a result', async () => {
     await seedLibrary();
     const assignmentId = await todaysAssignmentId(ALICE);
@@ -378,6 +415,8 @@ describe('the workout, end to end', () => {
 });
 
 describe('204 for an absent resource', () => {
+  beforeEach(() => trainsEveryDay(ALICE));
+
   // NoContentInterceptor. An endpoint that models "absent" as null would
   // otherwise answer 200 with an empty body, which no client can parse as
   // JSON. The interceptor is registered in bootstrap, not in AppModule, so
@@ -606,6 +645,8 @@ describe('settings and skill levels', () => {
 });
 
 describe('validation and not-found', () => {
+  beforeEach(() => trainsEveryDay(ALICE));
+
   it('400s a body that does not parse, naming the field', async () => {
     await seedLibrary();
     const assignmentId = await todaysAssignmentId(ALICE);
