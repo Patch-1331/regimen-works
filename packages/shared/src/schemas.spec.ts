@@ -21,12 +21,19 @@ import {
   trainingDaysSchema,
 } from "./schedule.js";
 import { sessionMovementSchema, workoutSessionSchema } from "./session.js";
-import { settingsSchema, updateSettingsSchema } from "./settings.js";
+import {
+  scheduleLockSchema,
+  settingsSchema,
+  updateSettingsSchema,
+} from "./settings.js";
 import { skillLevelSchema } from "./skill-level.js";
 import { setSubstitutionRequestSchema } from "./substitution.js";
 import { createWodSchema, updateWodSchema } from "./wod.js";
 import { planDetailSchema, planSchema, planSlotSchema } from "./plan.js";
-import { createEnrollmentSchema, planEnrollmentSchema } from "./plan-enrollment.js";
+import {
+  createEnrollmentSchema,
+  planEnrollmentSchema,
+} from "./plan-enrollment.js";
 import { todayResponseSchema } from "./today.js";
 import { wodMovementSchema, wodSchema } from "./wod.js";
 
@@ -119,20 +126,27 @@ describe("wodMovementSchema", () => {
     // The day's own swap is not one of them — it is `isSwapped`, and carries
     // no prescription at all.
     expect(
-      wodMovementSchema.safeParse(movement({ prescribedReason: "swapped" })).success,
+      wodMovementSchema.safeParse(movement({ prescribedReason: "swapped" }))
+        .success,
     ).toBe(false);
   });
 
   it("rejects a rep count of zero, which is not a movement", () => {
-    expect(wodMovementSchema.safeParse(movement({ reps: 0 })).success).toBe(false);
+    expect(wodMovementSchema.safeParse(movement({ reps: 0 })).success).toBe(
+      false,
+    );
   });
 
   it("rejects a fractional rep count", () => {
-    expect(wodMovementSchema.safeParse(movement({ reps: 10.5 })).success).toBe(false);
+    expect(wodMovementSchema.safeParse(movement({ reps: 10.5 })).success).toBe(
+      false,
+    );
   });
 
   it("rejects a negative order", () => {
-    expect(wodMovementSchema.safeParse(movement({ order: -1 })).success).toBe(false);
+    expect(wodMovementSchema.safeParse(movement({ order: -1 })).success).toBe(
+      false,
+    );
   });
 });
 
@@ -141,26 +155,43 @@ describe("wodMovementSchema's repScheme refinement", () => {
   // `reps` has the screen counting one workout while the record credits
   // another, so neither layer may accept it.
   it("accepts a ladder that sums to the total", () => {
-    expect(wodMovementSchema.safeParse(movement({ reps: 45, repScheme: [21, 15, 9] })).success).toBe(true);
+    expect(
+      wodMovementSchema.safeParse(
+        movement({ reps: 45, repScheme: [21, 15, 9] }),
+      ).success,
+    ).toBe(true);
   });
 
   it("rejects a ladder that sums to less than the total", () => {
-    const result = wodMovementSchema.safeParse(movement({ reps: 45, repScheme: [21, 15] }));
+    const result = wodMovementSchema.safeParse(
+      movement({ reps: 45, repScheme: [21, 15] }),
+    );
     expect(result.success).toBe(false);
     expect(result.error?.issues[0].path).toEqual(["repScheme"]);
     expect(result.error?.issues[0].message).toBe("repScheme must sum to reps");
   });
 
   it("rejects a ladder that sums to more than the total", () => {
-    expect(wodMovementSchema.safeParse(movement({ reps: 45, repScheme: [21, 15, 9, 9] })).success).toBe(false);
+    expect(
+      wodMovementSchema.safeParse(
+        movement({ reps: 45, repScheme: [21, 15, 9, 9] }),
+      ).success,
+    ).toBe(false);
   });
 
   it("lets an empty scheme through — it means the movement is flat, not that it sums to nothing", () => {
-    expect(wodMovementSchema.safeParse(movement({ reps: 45, repScheme: [] })).success).toBe(true);
+    expect(
+      wodMovementSchema.safeParse(movement({ reps: 45, repScheme: [] }))
+        .success,
+    ).toBe(true);
   });
 
   it("rejects a zero rung in the ladder", () => {
-    expect(wodMovementSchema.safeParse(movement({ reps: 45, repScheme: [21, 15, 9, 0] })).success).toBe(false);
+    expect(
+      wodMovementSchema.safeParse(
+        movement({ reps: 45, repScheme: [21, 15, 9, 0] }),
+      ).success,
+    ).toBe(false);
   });
 });
 
@@ -168,35 +199,50 @@ describe("wodSchema's matching-scheme-lengths refinement", () => {
   // A ladder is one shape for the whole WOD: 21-15-9 of push-ups and jump
   // squats is three rounds for both. Different lengths leave no single answer
   // to "what round is this?".
-  const ladder = (id: string, reps: number, repScheme: number[]) => movement({ id, reps, repScheme });
+  const ladder = (id: string, reps: number, repScheme: number[]) =>
+    movement({ id, reps, repScheme });
 
   it("accepts two movements on the same ladder", () => {
     const parsed = wodSchema.safeParse(
-      wod({ movements: [ladder("a", 45, [21, 15, 9]), ladder("b", 45, [21, 15, 9])] }),
+      wod({
+        movements: [ladder("a", 45, [21, 15, 9]), ladder("b", 45, [21, 15, 9])],
+      }),
     );
     expect(parsed.success).toBe(true);
   });
 
   it("accepts different rep counts on schemes of the same length", () => {
     expect(
-      wodSchema.safeParse(wod({ movements: [ladder("a", 45, [21, 15, 9]), ladder("b", 90, [42, 30, 18])] }))
-        .success,
+      wodSchema.safeParse(
+        wod({
+          movements: [
+            ladder("a", 45, [21, 15, 9]),
+            ladder("b", 90, [42, 30, 18]),
+          ],
+        }),
+      ).success,
     ).toBe(true);
   });
 
   it("rejects schemes of differing lengths in one WOD", () => {
     const result = wodSchema.safeParse(
-      wod({ movements: [ladder("a", 45, [21, 15, 9]), ladder("b", 36, [21, 15])] }),
+      wod({
+        movements: [ladder("a", 45, [21, 15, 9]), ladder("b", 36, [21, 15])],
+      }),
     );
     expect(result.success).toBe(false);
     expect(result.error?.issues[0].path).toEqual(["movements"]);
-    expect(result.error?.issues[0].message).toBe("every repScheme in a WOD must have the same length");
+    expect(result.error?.issues[0].message).toBe(
+      "every repScheme in a WOD must have the same length",
+    );
   });
 
   it("lets a laddered movement sit beside a flat one", () => {
     // The flat movement has no scheme to disagree about — it is every round.
     expect(
-      wodSchema.safeParse(wod({ movements: [ladder("a", 45, [21, 15, 9]), ladder("b", 30, [])] })).success,
+      wodSchema.safeParse(
+        wod({ movements: [ladder("a", 45, [21, 15, 9]), ladder("b", 30, [])] }),
+      ).success,
     ).toBe(true);
   });
 });
@@ -231,20 +277,30 @@ describe("sessionMovementSchema", () => {
     reps: 45,
     repScheme: [21, 15, 9],
     isSwapped: false,
-    exercise: { id: "e-1", name: "Push-up", unit: "reps", line: "push_horizontal", rung: 2 },
+    exercise: {
+      id: "e-1",
+      name: "Push-up",
+      unit: "reps",
+      line: "push_horizontal",
+      rung: 2,
+    },
     ...overrides,
   });
 
   it("defaults prescribedName to null so a session snapshotted before the field existed still parses", () => {
     // Those sessions predate it and there is no honest way to fill it in after
     // the fact — parsing them must not fail.
-    expect(sessionMovementSchema.parse(sessionMovement()).prescribedName).toBeNull();
+    expect(
+      sessionMovementSchema.parse(sessionMovement()).prescribedName,
+    ).toBeNull();
   });
 
   it("keeps a prescribedName when the athlete's standing choice replaced one", () => {
-    expect(sessionMovementSchema.parse(sessionMovement({ prescribedName: "Ring row" })).prescribedName).toBe(
-      "Ring row",
-    );
+    expect(
+      sessionMovementSchema.parse(
+        sessionMovement({ prescribedName: "Ring row" }),
+      ).prescribedName,
+    ).toBe("Ring row");
   });
 
   it("requires the join back to the template", () => {
@@ -277,62 +333,96 @@ describe("workoutSessionSchema", () => {
   });
 
   it("rejects a startedAt that is a date without a time", () => {
-    expect(workoutSessionSchema.safeParse(session({ startedAt: "2026-09-16" })).success).toBe(false);
+    expect(
+      workoutSessionSchema.safeParse(session({ startedAt: "2026-09-16" }))
+        .success,
+    ).toBe(false);
   });
 
   it("rejects an unknown session status", () => {
-    expect(workoutSessionSchema.safeParse(session({ status: "paused" })).success).toBe(false);
+    expect(
+      workoutSessionSchema.safeParse(session({ status: "paused" })).success,
+    ).toBe(false);
   });
 
   it("accepts a zero finish time, which is a real elapsed value", () => {
-    expect(workoutSessionSchema.safeParse(session({ finishedAtSeconds: 0 })).success).toBe(true);
+    expect(
+      workoutSessionSchema.safeParse(session({ finishedAtSeconds: 0 })).success,
+    ).toBe(true);
   });
 
   it("accepts intervalIndex 0, the first interval rather than an absent one", () => {
-    expect(workoutSessionSchema.safeParse(session({ intervalIndex: 0 })).success).toBe(true);
+    expect(
+      workoutSessionSchema.safeParse(session({ intervalIndex: 0 })).success,
+    ).toBe(true);
   });
 
   it("rejects a round split at a negative time", () => {
     expect(
-      workoutSessionSchema.safeParse(session({ roundSplits: [{ round: 1, atSeconds: -1 }] })).success,
+      workoutSessionSchema.safeParse(
+        session({ roundSplits: [{ round: 1, atSeconds: -1 }] }),
+      ).success,
     ).toBe(false);
   });
 
   it("rejects a round numbered zero", () => {
     expect(
-      workoutSessionSchema.safeParse(session({ roundSplits: [{ round: 0, atSeconds: 10 }] })).success,
+      workoutSessionSchema.safeParse(
+        session({ roundSplits: [{ round: 0, atSeconds: 10 }] }),
+      ).success,
     ).toBe(false);
   });
 });
 
 describe("logResultRequestSchema", () => {
   it("parses a result with only the two required fields", () => {
-    expect(logResultRequestSchema.safeParse({ resultType: "time_seconds", resultValue: "305" }).success).toBe(
-      true,
-    );
+    expect(
+      logResultRequestSchema.safeParse({
+        resultType: "time_seconds",
+        resultValue: "305",
+      }).success,
+    ).toBe(true);
   });
 
   it("rejects an empty result value — the whole point of the request", () => {
-    expect(logResultRequestSchema.safeParse({ resultType: "time_seconds", resultValue: "" }).success).toBe(
-      false,
-    );
-  });
-
-  it.each([0, 11, 5.5])("rejects an RPE of %s, which is off the 1-10 scale", (rpe) => {
     expect(
-      logResultRequestSchema.safeParse({ resultType: "rounds_reps", resultValue: "5+3", rpe }).success,
+      logResultRequestSchema.safeParse({
+        resultType: "time_seconds",
+        resultValue: "",
+      }).success,
     ).toBe(false);
   });
 
+  it.each([0, 11, 5.5])(
+    "rejects an RPE of %s, which is off the 1-10 scale",
+    (rpe) => {
+      expect(
+        logResultRequestSchema.safeParse({
+          resultType: "rounds_reps",
+          resultValue: "5+3",
+          rpe,
+        }).success,
+      ).toBe(false);
+    },
+  );
+
   it.each([1, 10])("accepts an RPE of %s, at the edge of the scale", (rpe) => {
     expect(
-      logResultRequestSchema.safeParse({ resultType: "rounds_reps", resultValue: "5+3", rpe }).success,
+      logResultRequestSchema.safeParse({
+        resultType: "rounds_reps",
+        resultValue: "5+3",
+        rpe,
+      }).success,
     ).toBe(true);
   });
 
   it("accepts a null RPE, which is 'not asked' rather than a score", () => {
     expect(
-      logResultRequestSchema.safeParse({ resultType: "rounds_reps", resultValue: "5+3", rpe: null }).success,
+      logResultRequestSchema.safeParse({
+        resultType: "rounds_reps",
+        resultValue: "5+3",
+        rpe: null,
+      }).success,
     ).toBe(true);
   });
 });
@@ -357,11 +447,17 @@ describe("workoutLogListItemSchema", () => {
   });
 
   it("rejects an unknown movement pattern", () => {
-    expect(workoutLogListItemSchema.safeParse(listItem({ dominantPattern: "grip" })).success).toBe(false);
+    expect(
+      workoutLogListItemSchema.safeParse(listItem({ dominantPattern: "grip" }))
+        .success,
+    ).toBe(false);
   });
 
   it("rejects an unknown result type", () => {
-    expect(workoutLogListItemSchema.safeParse(listItem({ resultType: "calories" })).success).toBe(false);
+    expect(
+      workoutLogListItemSchema.safeParse(listItem({ resultType: "calories" }))
+        .success,
+    ).toBe(false);
   });
 });
 
@@ -372,20 +468,28 @@ describe("settingsSchema", () => {
     equipment: ["bar"],
     trainingDays: [1, 2, 3, 4, 5],
     patternCooldownDays: 5,
+    scheduleLock: null,
     ...overrides,
   });
 
   it("requires every field", () => {
-    expect(settingsSchema.safeParse({ warmupCooldownEnabled: true }).success).toBe(false);
+    expect(
+      settingsSchema.safeParse({ warmupCooldownEnabled: true }).success,
+    ).toBe(false);
   });
 
   it("rejects a string standing in for a boolean", () => {
-    expect(settingsSchema.safeParse(settings({ warmupCooldownEnabled: "true" })).success).toBe(false);
+    expect(
+      settingsSchema.safeParse(settings({ warmupCooldownEnabled: "true" }))
+        .success,
+    ).toBe(false);
   });
 
   it("lets a PATCH carry one toggle, so two switches never restate each other", () => {
     // A stale tab echoing what it last read must not flip the other one back.
-    expect(updateSettingsSchema.safeParse({ autoStopAtCapEnabled: false }).success).toBe(true);
+    expect(
+      updateSettingsSchema.safeParse({ autoStopAtCapEnabled: false }).success,
+    ).toBe(true);
   });
 
   it("lets a PATCH carry nothing at all", () => {
@@ -393,31 +497,73 @@ describe("settingsSchema", () => {
   });
 
   it("accepts owning nothing, which is a real answer rather than an omission", () => {
-    expect(settingsSchema.safeParse(settings({ equipment: [] })).success).toBe(true);
-    expect(updateSettingsSchema.safeParse({ equipment: [] }).success).toBe(true);
+    expect(settingsSchema.safeParse(settings({ equipment: [] })).success).toBe(
+      true,
+    );
+    expect(updateSettingsSchema.safeParse({ equipment: [] }).success).toBe(
+      true,
+    );
+  });
+
+  it("refuses a PATCH that tries to write the schedule lock", () => {
+    // Derived from the enrollment on every read, so there is nothing here to
+    // write it to. Omitted rather than ignored, so a client that sends it is
+    // told no instead of watching it vanish.
+    expect(
+      updateSettingsSchema.safeParse({
+        scheduleLock: { planId: "p", planName: "Pull-Up Builder", days: [1] },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("requires the lock to say which program locked the week", () => {
+    // "Locked" without naming the program is not an answer the athlete can
+    // act on: ending that program is the action available to them.
+    expect(
+      scheduleLockSchema.safeParse({ planId: "p", days: [1] }).success,
+    ).toBe(false);
+  });
+
+  it("accepts a lock with no training days, which a rest week really has", () => {
+    // `trainingDaysSchema` refuses an empty set -- an athlete training on no
+    // days has no app. A program authoring a week of pure rest has made a
+    // coaching decision, and this is how it says so.
+    expect(
+      scheduleLockSchema.safeParse({
+        planId: "p",
+        planName: "Deload",
+        days: [],
+      }).success,
+    ).toBe(true);
   });
 
   it("rejects a piece the catalog does not have", () => {
     // Prisma will not check a String[], so this is what keeps an unknown
     // string out of the column.
-    expect(settingsSchema.safeParse(settings({ equipment: ["sandbag"] })).success).toBe(false);
-    expect(updateSettingsSchema.safeParse({ equipment: ["sandbag"] }).success).toBe(false);
+    expect(
+      settingsSchema.safeParse(settings({ equipment: ["sandbag"] })).success,
+    ).toBe(false);
+    expect(
+      updateSettingsSchema.safeParse({ equipment: ["sandbag"] }).success,
+    ).toBe(false);
   });
 
   it("rejects a bare string where the set belongs", () => {
-    expect(settingsSchema.safeParse(settings({ equipment: "bar" })).success).toBe(false);
+    expect(
+      settingsSchema.safeParse(settings({ equipment: "bar" })).success,
+    ).toBe(false);
   });
 
   it("carries the pattern cooldown, the last ScheduleRule knob to be exposed", () => {
-    expect(settingsSchema.safeParse(settings({ patternCooldownDays: 0 })).data).toEqual(
-      expect.objectContaining({ patternCooldownDays: 0 }),
-    );
+    expect(
+      settingsSchema.safeParse(settings({ patternCooldownDays: 0 })).data,
+    ).toEqual(expect.objectContaining({ patternCooldownDays: 0 }));
   });
 
   it("refuses a cooldown the scheduler could not honour", () => {
-    expect(settingsSchema.safeParse(settings({ patternCooldownDays: 31 })).success).toBe(
-      false,
-    );
+    expect(
+      settingsSchema.safeParse(settings({ patternCooldownDays: 31 })).success,
+    ).toBe(false);
   });
 });
 
@@ -440,7 +586,9 @@ describe("skillLevelSchema", () => {
 
   it("rejects a line that is not one of the eight", () => {
     // push/pull are patterns; the lines are finer-grained than that.
-    expect(skillLevelSchema.safeParse(level({ line: "push" })).success).toBe(false);
+    expect(skillLevelSchema.safeParse(level({ line: "push" })).success).toBe(
+      false,
+    );
   });
 });
 
@@ -512,20 +660,24 @@ describe("scheduleRuleSchema", () => {
   });
 
   it("accepts a zero pattern cooldown, which means no cooldown", () => {
-    expect(scheduleRuleSchema.safeParse(rule({ patternCooldownDays: 0 })).success).toBe(true);
+    expect(
+      scheduleRuleSchema.safeParse(rule({ patternCooldownDays: 0 })).success,
+    ).toBe(true);
   });
 
   it("refuses a cooldown past the ceiling, the same bound settings applies", () => {
     // One schema behind both, so the rule row and the settings endpoint can
     // not disagree about what is storable.
-    expect(scheduleRuleSchema.safeParse(rule({ patternCooldownDays: 31 })).success).toBe(
-      false,
-    );
+    expect(
+      scheduleRuleSchema.safeParse(rule({ patternCooldownDays: 31 })).success,
+    ).toBe(false);
   });
 
   it("takes the day count on its own for callers that need nothing else", () => {
     // Derived from trainingDays.length by the API; the shape is still a count.
-    expect(scheduleCapSchema.safeParse({ maxDaysPerWeek: 5 }).success).toBe(true);
+    expect(scheduleCapSchema.safeParse({ maxDaysPerWeek: 5 }).success).toBe(
+      true,
+    );
   });
 });
 
@@ -543,17 +695,25 @@ describe("dailyAssignmentSchema", () => {
   });
 
   it("rejects a full timestamp where a calendar date belongs", () => {
-    expect(dailyAssignmentSchema.safeParse(assignment({ date: "2026-09-16T10:00:00.000Z" })).success).toBe(
-      false,
-    );
+    expect(
+      dailyAssignmentSchema.safeParse(
+        assignment({ date: "2026-09-16T10:00:00.000Z" }),
+      ).success,
+    ).toBe(false);
   });
 
   it("rejects a date that does not exist", () => {
-    expect(dailyAssignmentSchema.safeParse(assignment({ date: "2026-02-30" })).success).toBe(false);
+    expect(
+      dailyAssignmentSchema.safeParse(assignment({ date: "2026-02-30" }))
+        .success,
+    ).toBe(false);
   });
 
   it("rejects an unknown assignment status", () => {
-    expect(dailyAssignmentSchema.safeParse(assignment({ status: "pending" })).success).toBe(false);
+    expect(
+      dailyAssignmentSchema.safeParse(assignment({ status: "pending" }))
+        .success,
+    ).toBe(false);
   });
 });
 
@@ -580,20 +740,31 @@ describe("exerciseSchema", () => {
   });
 
   it("accepts a null pattern, which warm-up filler has", () => {
-    expect(exerciseSchema.safeParse(libraryExercise({ pattern: null, phase: "warmup" })).success).toBe(true);
+    expect(
+      exerciseSchema.safeParse(
+        libraryExercise({ pattern: null, phase: "warmup" }),
+      ).success,
+    ).toBe(true);
   });
 
   it("accepts an off-ladder exercise with no line or rung", () => {
     // Cardio is not on a progression ladder.
-    expect(exerciseSchema.safeParse(libraryExercise({ line: null, rung: null })).success).toBe(true);
+    expect(
+      exerciseSchema.safeParse(libraryExercise({ line: null, rung: null }))
+        .success,
+    ).toBe(true);
   });
 
   it("rejects a unit that is neither reps nor seconds", () => {
-    expect(exerciseSchema.safeParse(libraryExercise({ unit: "metres" })).success).toBe(false);
+    expect(
+      exerciseSchema.safeParse(libraryExercise({ unit: "metres" })).success,
+    ).toBe(false);
   });
 
   it("accepts a movement tagged with what it needs", () => {
-    expect(exerciseSchema.safeParse(libraryExercise({ equipment: ["bar"] })).success).toBe(true);
+    expect(
+      exerciseSchema.safeParse(libraryExercise({ equipment: ["bar"] })).success,
+    ).toBe(true);
   });
 
   it("carries which tier the row is in and whether it is retired", () => {
@@ -601,7 +772,10 @@ describe("exerciseSchema", () => {
     // marks the row as one athlete's own rather than shared, and a timestamp
     // marks it retired. The management screen is the one reader that asks for
     // retired rows on purpose, so the shape has to admit them.
-    const owned = libraryExercise({ ownerId: "user_alice", archivedAt: "2026-09-17T00:00:00.000Z" });
+    const owned = libraryExercise({
+      ownerId: "user_alice",
+      archivedAt: "2026-09-17T00:00:00.000Z",
+    });
     expect(exerciseSchema.safeParse(owned).success).toBe(true);
   });
 
@@ -629,7 +803,10 @@ describe("exerciseSchema", () => {
   it("rejects a tag outside the equipment catalog", () => {
     // The column is a bare String[] -- this schema is the only thing standing
     // between a typo in the seed and a tag no ownership check will ever match.
-    expect(exerciseSchema.safeParse(libraryExercise({ equipment: ["barbell"] })).success).toBe(false);
+    expect(
+      exerciseSchema.safeParse(libraryExercise({ equipment: ["barbell"] }))
+        .success,
+    ).toBe(false);
   });
 
   it("drops the id for a create payload", () => {
@@ -641,21 +818,30 @@ describe("exerciseSchema", () => {
 describe("setSubstitutionRequestSchema", () => {
   it("parses a swap keyed by the movement row, not the exercise", () => {
     // A WOD naming the same line twice must move only the row that was tapped.
-    expect(setSubstitutionRequestSchema.safeParse({ wodMovementId: "wm-1", exerciseId: "e-2" }).success).toBe(
-      true,
-    );
+    expect(
+      setSubstitutionRequestSchema.safeParse({
+        wodMovementId: "wm-1",
+        exerciseId: "e-2",
+      }).success,
+    ).toBe(true);
   });
 
   it("rejects an empty movement id rather than swapping nothing", () => {
-    expect(setSubstitutionRequestSchema.safeParse({ wodMovementId: "", exerciseId: "e-2" }).success).toBe(
-      false,
-    );
+    expect(
+      setSubstitutionRequestSchema.safeParse({
+        wodMovementId: "",
+        exerciseId: "e-2",
+      }).success,
+    ).toBe(false);
   });
 
   it("rejects an empty exercise id", () => {
-    expect(setSubstitutionRequestSchema.safeParse({ wodMovementId: "wm-1", exerciseId: "" }).success).toBe(
-      false,
-    );
+    expect(
+      setSubstitutionRequestSchema.safeParse({
+        wodMovementId: "wm-1",
+        exerciseId: "",
+      }).success,
+    ).toBe(false);
   });
 });
 
@@ -672,11 +858,15 @@ describe("proposedRungChangeSchema", () => {
   it("accepts a null fromRung — 'no default yet' is a proposal like any other", () => {
     // The ordinary case for a first swap, since DN-86 stopped provisioning a
     // rung for everyone.
-    expect(proposedRungChangeSchema.safeParse(proposal({ fromRung: null })).success).toBe(true);
+    expect(
+      proposedRungChangeSchema.safeParse(proposal({ fromRung: null })).success,
+    ).toBe(true);
   });
 
   it("requires a destination rung", () => {
-    expect(proposedRungChangeSchema.safeParse(proposal({ toRung: null })).success).toBe(false);
+    expect(
+      proposedRungChangeSchema.safeParse(proposal({ toRung: null })).success,
+    ).toBe(false);
   });
 });
 
@@ -684,7 +874,13 @@ describe("todayResponseSchema", () => {
   const todayPayload = (overrides: Record<string, unknown> = {}) => ({
     date: "2026-09-16",
     isRestDay: false,
-    assignment: { id: "a-1", date: "2026-09-16", status: "scheduled", wod: wod(), session: null },
+    assignment: {
+      id: "a-1",
+      date: "2026-09-16",
+      status: "scheduled",
+      wod: wod(),
+      session: null,
+    },
     warmupCooldownEnabled: true,
     warmup: [{ id: "c-1", name: "Arm circles", instructions: null }],
     cooldown: [],
@@ -710,7 +906,12 @@ describe("todayResponseSchema", () => {
   it("parses a rest day, where the assignment and both checklists are null", () => {
     expect(
       todayResponseSchema.safeParse(
-        todayPayload({ isRestDay: true, assignment: null, warmup: null, cooldown: null }),
+        todayPayload({
+          isRestDay: true,
+          assignment: null,
+          warmup: null,
+          cooldown: null,
+        }),
       ).success,
     ).toBe(true);
   });
@@ -718,10 +919,20 @@ describe("todayResponseSchema", () => {
   it("rejects a malformed WOD nested inside it", () => {
     // The refinements have to survive nesting, or the API's outermost
     // response is the one place they stop applying.
-    const badWod = wod({ movements: [movement({ reps: 45, repScheme: [21, 15] })] });
+    const badWod = wod({
+      movements: [movement({ reps: 45, repScheme: [21, 15] })],
+    });
     expect(
       todayResponseSchema.safeParse(
-        todayPayload({ assignment: { id: "a-1", date: "2026-09-16", status: "scheduled", wod: badWod, session: null } }),
+        todayPayload({
+          assignment: {
+            id: "a-1",
+            date: "2026-09-16",
+            status: "scheduled",
+            wod: badWod,
+            session: null,
+          },
+        }),
       ).success,
     ).toBe(false);
   });
@@ -735,14 +946,19 @@ describe("todayResponseSchema", () => {
   });
 
   it("parses a day inside a program", () => {
-    expect(todayResponseSchema.safeParse(todayPayload({ plan: planBlock() })).success).toBe(true);
+    expect(
+      todayResponseSchema.safeParse(todayPayload({ plan: planBlock() }))
+        .success,
+    ).toBe(true);
   });
 
   it("parses an open-ended program, where the week has no second half", () => {
     // "Week 37" rather than "week 37 of ...". Just WODs never finishes.
     expect(
       todayResponseSchema.safeParse(
-        todayPayload({ plan: planBlock({ week: 37, totalWeeks: null, weekLabel: null }) }),
+        todayPayload({
+          plan: planBlock({ week: 37, totalWeeks: null, weekLabel: null }),
+        }),
       ).success,
     ).toBe(true);
   });
@@ -752,7 +968,9 @@ describe("todayResponseSchema", () => {
     // says nothing about this weekday. Distinct from an authored rest day,
     // which is a positive instruction.
     expect(
-      todayResponseSchema.safeParse(todayPayload({ plan: planBlock({ slotKind: null }) })).success,
+      todayResponseSchema.safeParse(
+        todayPayload({ plan: planBlock({ slotKind: null }) }),
+      ).success,
     ).toBe(true);
   });
 
@@ -760,13 +978,17 @@ describe("todayResponseSchema", () => {
     // The one 1-based number in this vocabulary, because it is the one an
     // athlete reads. Accepting 0 would put "Week 0" on someone's screen.
     expect(
-      todayResponseSchema.safeParse(todayPayload({ plan: planBlock({ week: 0 }) })).success,
+      todayResponseSchema.safeParse(
+        todayPayload({ plan: planBlock({ week: 0 }) }),
+      ).success,
     ).toBe(false);
   });
 
   it("rejects a slot kind the program vocabulary does not have", () => {
     expect(
-      todayResponseSchema.safeParse(todayPayload({ plan: planBlock({ slotKind: "wod" }) })).success,
+      todayResponseSchema.safeParse(
+        todayPayload({ plan: planBlock({ slotKind: "wod" }) }),
+      ).success,
     ).toBe(false);
   });
 });
@@ -781,10 +1003,13 @@ describe("enums", () => {
     ["planSlotKind", planSlotKind, "wod_generated", "wod"],
     ["scheduleMode", scheduleMode, "flexible", "strict"],
     ["enrollmentStatus", enrollmentStatus, "completed", "cancelled"],
-  ])("%s accepts its members and rejects anything else", (_name, schema, valid, invalid) => {
-    expect(schema.safeParse(valid).success).toBe(true);
-    expect(schema.safeParse(invalid).success).toBe(false);
-  });
+  ])(
+    "%s accepts its members and rejects anything else",
+    (_name, schema, valid, invalid) => {
+      expect(schema.safeParse(valid).success).toBe(true);
+      expect(schema.safeParse(invalid).success).toBe(false);
+    },
+  );
 
   it("keeps progressionLine finer-grained than movementPattern", () => {
     // "core" is a pattern; the ladders under it are core_dynamic/hold/side.
@@ -834,13 +1059,17 @@ describe("movementHistorySchema", () => {
   it("accepts a movement that sits off every progression line", () => {
     // Cardio and the loaded movements carry no line, and they are trained like
     // anything else.
-    expect(movementHistorySchema.parse(history({ line: null })).line).toBeNull();
+    expect(
+      movementHistorySchema.parse(history({ line: null })).line,
+    ).toBeNull();
   });
 
   it("refuses a history of no sessions", () => {
     // `sessions` counts the days behind it, so zero is not a movement with an
     // empty history — it is a row that should not have been built.
-    expect(movementHistorySchema.safeParse(history({ sessions: 0 })).success).toBe(false);
+    expect(
+      movementHistorySchema.safeParse(history({ sessions: 0 })).success,
+    ).toBe(false);
   });
 
   it("carries which layer replaced the prescribed movement", () => {
@@ -914,7 +1143,9 @@ describe("createWodSchema", () => {
     // `ownerId` and `archivedAt` are the server's answer to which route was
     // called. Writable, an athlete could post one naming `ownerId: null` and
     // write straight into the pool every other athlete trains from.
-    const written = createWodSchema.safeParse(wod({ ownerId: null, archivedAt: null }));
+    const written = createWodSchema.safeParse(
+      wod({ ownerId: null, archivedAt: null }),
+    );
     expect(written.success).toBe(true);
     expect(written.success && "ownerId" in written.data).toBe(false);
     expect(written.success && "archivedAt" in written.data).toBe(false);
@@ -927,12 +1158,19 @@ describe("createWodSchema", () => {
     const written = createWodSchema.safeParse(
       wod({
         movements: [
-          { exerciseId: "ex-1", reps: 21, isSwapped: true, prescribedName: "Pull-up" },
+          {
+            exerciseId: "ex-1",
+            reps: 21,
+            isSwapped: true,
+            prescribedName: "Pull-up",
+          },
         ],
       }),
     );
     expect(written.success).toBe(true);
-    expect(written.success && "isSwapped" in written.data.movements[0]).toBe(false);
+    expect(written.success && "isSwapped" in written.data.movements[0]).toBe(
+      false,
+    );
   });
 
   it("takes a flat count or a ladder, and refuses both at once", () => {
@@ -956,14 +1194,19 @@ describe("createWodSchema", () => {
 
   it("refuses a movement stating neither", () => {
     expect(
-      createWodSchema.safeParse({ ...wod(), movements: [{ exerciseId: "ex-1" }] }).success,
+      createWodSchema.safeParse({
+        ...wod(),
+        movements: [{ exerciseId: "ex-1" }],
+      }).success,
     ).toBe(false);
   });
 
   it("refuses a WOD with no movements", () => {
     // It parses, schedules, and hands the athlete an empty screen at the
     // moment they meant to train.
-    expect(createWodSchema.safeParse(wod({ movements: [] })).success).toBe(false);
+    expect(createWodSchema.safeParse(wod({ movements: [] })).success).toBe(
+      false,
+    );
   });
 
   it("refuses ladders of differing lengths", () => {
@@ -1006,7 +1249,9 @@ describe("createWodSchema", () => {
 
 describe("updateWodSchema", () => {
   it("accepts a patch naming one field", () => {
-    expect(updateWodSchema.safeParse({ timeCapMinutes: 20 }).success).toBe(true);
+    expect(updateWodSchema.safeParse({ timeCapMinutes: 20 }).success).toBe(
+      true,
+    );
   });
 
   it("holds the movement rules on a patch that carries a list", () => {
@@ -1021,12 +1266,13 @@ describe("updateWodSchema", () => {
   });
 
   it("cannot retire a WOD by echoing back a field it read", () => {
-    const written = updateWodSchema.safeParse({ archivedAt: "2026-09-17T00:00:00.000Z" });
+    const written = updateWodSchema.safeParse({
+      archivedAt: "2026-09-17T00:00:00.000Z",
+    });
     expect(written.success).toBe(true);
     expect(written.success && "archivedAt" in written.data).toBe(false);
   });
 });
-
 
 /**
  * Programs (DN-10). The two refinements here mirror database CHECKs, so each
@@ -1069,11 +1315,16 @@ function plan(overrides: Record<string, unknown> = {}) {
 
 describe("planSlotSchema's pinned-WOD refinement", () => {
   it("accepts a pinned slot that names a WOD", () => {
-    expect(planSlotSchema.safeParse(slot({ kind: "wod_pinned", wodId: "wod-1" })).success).toBe(true);
+    expect(
+      planSlotSchema.safeParse(slot({ kind: "wod_pinned", wodId: "wod-1" }))
+        .success,
+    ).toBe(true);
   });
 
   it("rejects a pinned slot with nothing pinned", () => {
-    const result = planSlotSchema.safeParse(slot({ kind: "wod_pinned", wodId: null }));
+    const result = planSlotSchema.safeParse(
+      slot({ kind: "wod_pinned", wodId: null }),
+    );
     expect(result.success).toBe(false);
     expect(result.error?.issues[0].path).toEqual(["wodId"]);
   });
@@ -1082,11 +1333,16 @@ describe("planSlotSchema's pinned-WOD refinement", () => {
     // The CHECK is a biconditional, not "a pinned slot has a wodId". A rest
     // day carrying a WOD is a row whose `kind` and `wodId` tell different
     // stories, and whichever a reader believes, the other is a bug.
-    expect(planSlotSchema.safeParse(slot({ kind: "rest", wodId: "wod-1" })).success).toBe(false);
+    expect(
+      planSlotSchema.safeParse(slot({ kind: "rest", wodId: "wod-1" })).success,
+    ).toBe(false);
   });
 
   it("rejects a generated slot that points at a WOD", () => {
-    expect(planSlotSchema.safeParse(slot({ kind: "wod_generated", wodId: "wod-1" })).success).toBe(false);
+    expect(
+      planSlotSchema.safeParse(slot({ kind: "wod_generated", wodId: "wod-1" }))
+        .success,
+    ).toBe(false);
   });
 
   it("accepts a generated slot with every constraint left open", () => {
@@ -1099,8 +1355,12 @@ describe("planSlotSchema's pinned-WOD refinement", () => {
   });
 
   it("rejects a weekday outside 0-6", () => {
-    expect(planSlotSchema.safeParse(slot({ dayOfWeek: 7 })).success).toBe(false);
-    expect(planSlotSchema.safeParse(slot({ dayOfWeek: -1 })).success).toBe(false);
+    expect(planSlotSchema.safeParse(slot({ dayOfWeek: 7 })).success).toBe(
+      false,
+    );
+    expect(planSlotSchema.safeParse(slot({ dayOfWeek: -1 })).success).toBe(
+      false,
+    );
   });
 
   it("accepts Sunday, which is 0 and not 7", () => {
@@ -1116,7 +1376,11 @@ describe("planSchema's schedule-mode refinement", () => {
   it("accepts a fixed program carrying neither", () => {
     expect(
       planSchema.safeParse(
-        plan({ scheduleMode: "fixed", minDaysPerWeek: null, maxDaysPerWeek: null }),
+        plan({
+          scheduleMode: "fixed",
+          minDaysPerWeek: null,
+          maxDaysPerWeek: null,
+        }),
       ).success,
     ).toBe(true);
   });
@@ -1132,20 +1396,23 @@ describe("planSchema's schedule-mode refinement", () => {
 
   it("rejects a fixed program stating just one of them", () => {
     expect(
-      planSchema.safeParse(plan({ scheduleMode: "fixed", maxDaysPerWeek: null })).success,
+      planSchema.safeParse(
+        plan({ scheduleMode: "fixed", maxDaysPerWeek: null }),
+      ).success,
     ).toBe(false);
   });
 
   it("rejects a flexible program missing its bounds", () => {
     expect(
-      planSchema.safeParse(
-        plan({ minDaysPerWeek: null, maxDaysPerWeek: null }),
-      ).success,
+      planSchema.safeParse(plan({ minDaysPerWeek: null, maxDaysPerWeek: null }))
+        .success,
     ).toBe(false);
   });
 
   it("rejects a flexible program stating only one bound", () => {
-    expect(planSchema.safeParse(plan({ maxDaysPerWeek: null })).success).toBe(false);
+    expect(planSchema.safeParse(plan({ maxDaysPerWeek: null })).success).toBe(
+      false,
+    );
   });
 
   it("accepts an open-ended program, which has no length to choose", () => {
@@ -1168,7 +1435,9 @@ describe("planSchema's schedule-mode refinement", () => {
   });
 
   it("rejects a program with no summary to tell it apart", () => {
-    expect(planSchema.safeParse(plan({ summary: undefined })).success).toBe(false);
+    expect(planSchema.safeParse(plan({ summary: undefined })).success).toBe(
+      false,
+    );
   });
 });
 
@@ -1183,25 +1452,35 @@ describe("planDetailSchema", () => {
   });
 
   it("parses a program with its authored weeks", () => {
-    expect(planDetailSchema.safeParse({ ...plan(), weeks: [week()] }).success).toBe(true);
+    expect(
+      planDetailSchema.safeParse({ ...plan(), weeks: [week()] }).success,
+    ).toBe(true);
   });
 
   it("carries the same schedule-mode rule as planSchema", () => {
     // One predicate, applied twice -- a rule restated in two places is a rule
     // that eventually becomes two different rules.
     expect(
-      planDetailSchema.safeParse({ ...plan({ scheduleMode: "fixed" }), weeks: [week()] }).success,
+      planDetailSchema.safeParse({
+        ...plan({ scheduleMode: "fixed" }),
+        weeks: [week()],
+      }).success,
     ).toBe(false);
   });
 
   it("rejects a malformed slot nested two levels down", () => {
     const bad = week({ slots: [slot({ kind: "rest", wodId: "wod-1" })] });
-    expect(planDetailSchema.safeParse({ ...plan(), weeks: [bad] }).success).toBe(false);
+    expect(
+      planDetailSchema.safeParse({ ...plan(), weeks: [bad] }).success,
+    ).toBe(false);
   });
 
   it("rejects a week whose phase is not one expandPlanWeeks will play", () => {
     expect(
-      planDetailSchema.safeParse({ ...plan(), weeks: [week({ phase: "deload" })] }).success,
+      planDetailSchema.safeParse({
+        ...plan(),
+        weeks: [week({ phase: "deload" })],
+      }).success,
     ).toBe(false);
   });
 
@@ -1209,7 +1488,9 @@ describe("planDetailSchema", () => {
     // An empty list is a program under construction, not a malformed one.
     // What a program may not do is run without weeks, which is
     // minimumViableWeeks' job and not a shape question.
-    expect(planDetailSchema.safeParse({ ...plan(), weeks: [] }).success).toBe(true);
+    expect(planDetailSchema.safeParse({ ...plan(), weeks: [] }).success).toBe(
+      true,
+    );
   });
 });
 
@@ -1240,7 +1521,13 @@ describe("planEnrollmentSchema", () => {
             weeks: 6,
             sessions: 24,
             rungChanges: [
-              { line: "pull", fromRung: 2, toRung: 4, fromName: "Negative", toName: "Chin-up" },
+              {
+                line: "pull",
+                fromRung: 2,
+                toRung: 4,
+                fromName: "Negative",
+                toName: "Chin-up",
+              },
             ],
           },
         }),
@@ -1251,49 +1538,77 @@ describe("planEnrollmentSchema", () => {
   it("accepts an athlete with no rungs at all", () => {
     // A new athlete has no SkillLevel rows (DN-86). An exhaustive record would
     // reject exactly the athlete this snapshot exists to describe.
-    expect(planEnrollmentSchema.safeParse(enrollment({ startingRungs: {} })).success).toBe(true);
+    expect(
+      planEnrollmentSchema.safeParse(enrollment({ startingRungs: {} })).success,
+    ).toBe(true);
   });
 
   it("does not require a rung for every line in the app", () => {
-    expect(planEnrollmentSchema.safeParse(enrollment({ startingRungs: { pull: 2 } })).success).toBe(true);
+    expect(
+      planEnrollmentSchema.safeParse(enrollment({ startingRungs: { pull: 2 } }))
+        .success,
+    ).toBe(true);
   });
 
   it("rejects a rung snapshot keyed by something that is not a line", () => {
-    expect(planEnrollmentSchema.safeParse(enrollment({ startingRungs: { biceps: 2 } })).success).toBe(false);
+    expect(
+      planEnrollmentSchema.safeParse(
+        enrollment({ startingRungs: { biceps: 2 } }),
+      ).success,
+    ).toBe(false);
   });
 
   it("rejects a start date that is not a date", () => {
     // startDate is string-compared against DailyAssignment.date, so a value
     // in another format does not merely look wrong -- it sorts wrong, and the
     // program silently never starts.
-    expect(planEnrollmentSchema.safeParse(enrollment({ startDate: "14/09/2026" })).success).toBe(false);
-    expect(planEnrollmentSchema.safeParse(enrollment({ startDate: "2026-09-14T00:00:00Z" })).success).toBe(false);
+    expect(
+      planEnrollmentSchema.safeParse(enrollment({ startDate: "14/09/2026" }))
+        .success,
+    ).toBe(false);
+    expect(
+      planEnrollmentSchema.safeParse(
+        enrollment({ startDate: "2026-09-14T00:00:00Z" }),
+      ).success,
+    ).toBe(false);
   });
 
   it("accepts an open-ended run, which has no length and never completes", () => {
-    expect(planEnrollmentSchema.safeParse(enrollment({ weeks: null })).success).toBe(true);
+    expect(
+      planEnrollmentSchema.safeParse(enrollment({ weeks: null })).success,
+    ).toBe(true);
   });
 
   it("rejects a run of zero weeks", () => {
-    expect(planEnrollmentSchema.safeParse(enrollment({ weeks: 0 })).success).toBe(false);
+    expect(
+      planEnrollmentSchema.safeParse(enrollment({ weeks: 0 })).success,
+    ).toBe(false);
   });
 
   it("rejects a malformed plan nested inside it", () => {
     expect(
-      planEnrollmentSchema.safeParse(enrollment({ plan: plan({ scheduleMode: "fixed" }) })).success,
+      planEnrollmentSchema.safeParse(
+        enrollment({ plan: plan({ scheduleMode: "fixed" }) }),
+      ).success,
     ).toBe(false);
   });
 });
 
 describe("createEnrollmentSchema", () => {
   it("defaults weeks to null, which is the plan's own length", () => {
-    const result = createEnrollmentSchema.safeParse({ planId: "plan-1", startDate: "2026-09-14" });
+    const result = createEnrollmentSchema.safeParse({
+      planId: "plan-1",
+      startDate: "2026-09-14",
+    });
     expect(result.success).toBe(true);
     expect(result.data?.weeks).toBeNull();
   });
 
   it("rejects an empty planId", () => {
-    expect(createEnrollmentSchema.safeParse({ planId: "", startDate: "2026-09-14" }).success).toBe(false);
+    expect(
+      createEnrollmentSchema.safeParse({ planId: "", startDate: "2026-09-14" })
+        .success,
+    ).toBe(false);
   });
 
   it("does not accept starting rungs from the client", () => {

@@ -1,5 +1,9 @@
 import { testPrisma, withSeparateConnections } from '../test-support/database';
-import { createUser } from '../test-support/fixtures';
+import {
+  createEnrollment,
+  createPlan,
+  createUser,
+} from '../test-support/fixtures';
 import { SettingsService } from './settings.service';
 import type { PrismaClient } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
@@ -14,8 +18,29 @@ import type { PrismaService } from '../prisma/prisma.service';
  * the row that was stored or an echo of the patch.
  */
 
-function service(client: PrismaClient = testPrisma()): SettingsService {
+// 2026-09-16 is a Wednesday, inside the week that starts Monday 2026-09-14.
+const TODAY = '2026-09-16';
+
+function settingsService(client: PrismaClient = testPrisma()): SettingsService {
   return new SettingsService(client as unknown as PrismaService);
+}
+
+/**
+ * The service with the date already supplied, since almost every case here
+ * predates programs and has no opinion about what day it is. `serviceOn` is
+ * for the cases that do.
+ */
+function service(client: PrismaClient = testPrisma()) {
+  return serviceOn(TODAY, client);
+}
+
+function serviceOn(date: string, client: PrismaClient = testPrisma()) {
+  const settings = settingsService(client);
+  return {
+    get: (userId: string) => settings.get(userId, date),
+    update: (userId: string, patch: Parameters<typeof settings.update>[1]) =>
+      settings.update(userId, patch, date),
+  };
 }
 
 function storedRule(userId: string) {
@@ -32,6 +57,7 @@ describe('SettingsService.get', () => {
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
+      scheduleLock: null,
     });
   });
 
@@ -51,6 +77,7 @@ describe('SettingsService.get', () => {
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
+      scheduleLock: null,
     });
   });
 
@@ -71,6 +98,7 @@ describe('SettingsService.get', () => {
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
+      scheduleLock: null,
     });
   });
 
@@ -138,6 +166,7 @@ describe('SettingsService.update', () => {
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
+      scheduleLock: null,
     });
   });
 
@@ -157,6 +186,7 @@ describe('SettingsService.update', () => {
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
+      scheduleLock: null,
     });
   });
 
@@ -170,6 +200,7 @@ describe('SettingsService.update', () => {
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
+      scheduleLock: null,
     });
   });
 
@@ -182,6 +213,7 @@ describe('SettingsService.update', () => {
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
+      scheduleLock: null,
     });
     expect(await storedRule(user.id)).not.toBeNull();
   });
@@ -289,6 +321,7 @@ describe('SettingsService.update', () => {
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
+      scheduleLock: null,
     });
   });
 
@@ -419,5 +452,178 @@ describe('SettingsService.update under concurrency', () => {
     expect(rejected.map((o) => String(o.reason))).toEqual([]);
     expect(await testPrisma().scheduleRule.count()).toBe(1);
     expect((await storedRule(user.id))?.warmupCooldownEnabled).toBe(true);
+  });
+});
+
+/**
+ * A plan whose one authored week trains on `days` and rests on the others,
+ * with the athlete already enrolled in it and started.
+ *
+ * The plan is `fixed` unless a test says otherwise, because that is the only
+ * mode this block is about -- a flexible plan has no opinion about which days
+ * the athlete trains, which is the whole reason Just WODs is one.
+ */
+async function enrolledIn(
+  userId: string,
+  days: number[],
+  planOverrides: Record<string, unknown> = {},
+) {
+  const plan = await createPlan({
+    name: 'Pull-Up Builder',
+    // A fixed plan may not carry day bounds -- `Plan_schedule_mode_bounds`
+    // refuses the row outright. Its slots are the schedule, so "three to five
+    // days a week" would be a second, weaker statement of the same fact.
+    scheduleMode: 'fixed',
+    minDaysPerWeek: null,
+    maxDaysPerWeek: null,
+    ...planOverrides,
+    weeks: {
+      create: [
+        {
+          order: 0,
+          phase: 'core',
+          slots: {
+            create: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+              dayOfWeek,
+              kind: days.includes(dayOfWeek) ? 'wod_generated' : 'rest',
+            })),
+          },
+        },
+      ],
+    },
+  });
+  await createEnrollment(userId, {
+    planId: plan.id,
+    startDate: '2026-09-14',
+    weeks: null,
+  });
+  return plan;
+}
+
+describe('SettingsService under a fixed program', () => {
+  it('reports the program that is driving the week, and its days', async () => {
+    const user = await createUser();
+    const plan = await enrolledIn(user.id, [1, 3, 5]);
+
+    expect((await service().get(user.id)).scheduleLock).toEqual({
+      planId: plan.id,
+      planName: 'Pull-Up Builder',
+      days: [1, 3, 5],
+    });
+  });
+
+  it("still reports the athlete's own days, which come back afterwards", async () => {
+    // Not overwritten with the program's. The stored value is still true --
+    // it is what the athlete returns to when the run ends -- and a response
+    // that replaced it would leave the screen nothing to restore them from.
+    const user = await createUser();
+    await testPrisma().scheduleRule.create({
+      data: { userId: user.id, trainingDays: [2, 4, 6] },
+    });
+    await enrolledIn(user.id, [1, 3, 5]);
+
+    const settings = await service().get(user.id);
+
+    expect(settings.trainingDays).toEqual([2, 4, 6]);
+    expect(settings.scheduleLock?.days).toEqual([1, 3, 5]);
+  });
+
+  it('reports no lock for an athlete on a flexible program', async () => {
+    // Which after DN-13 is every athlete by default, so this is the path
+    // almost everybody is on.
+    const user = await createUser();
+    await enrolledIn(user.id, [1, 3, 5], {
+      scheduleMode: 'flexible',
+      minDaysPerWeek: 3,
+      maxDaysPerWeek: 5,
+    });
+
+    expect((await service().get(user.id)).scheduleLock).toBeNull();
+  });
+
+  it('ignores a run the athlete has already finished', async () => {
+    // A completed enrollment is a record of something they did, not a claim
+    // on next week. Locking the picker to it would leave an athlete between
+    // programs unable to change their own days at all.
+    const user = await createUser();
+    const plan = await enrolledIn(user.id, [1, 3, 5]);
+    await testPrisma().planEnrollment.updateMany({
+      where: { userId: user.id, planId: plan.id },
+      data: { status: 'completed', completedAt: new Date() },
+    });
+
+    const settings = await service().update(user.id, { trainingDays: [2, 4] });
+
+    expect(settings.scheduleLock).toBeNull();
+    expect(settings.trainingDays).toEqual([2, 4]);
+  });
+
+  it('refuses a training-days write while the program is running', async () => {
+    const user = await createUser();
+    await enrolledIn(user.id, [1, 3, 5]);
+
+    await expect(
+      service().update(user.id, { trainingDays: [2, 4] }),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('names the program in the refusal, since ending it is the way out', async () => {
+    const user = await createUser();
+    await enrolledIn(user.id, [1, 3, 5]);
+
+    await expect(
+      service().update(user.id, { trainingDays: [2, 4] }),
+    ).rejects.toThrow(/Pull-Up Builder/);
+  });
+
+  it('stores nothing when it refuses', async () => {
+    // The point of refusing rather than no-oping: a 200 with the write
+    // dropped would leave the athlete believing their week had changed and
+    // the database agreeing with them, while the scheduler went its own way.
+    const user = await createUser();
+    await testPrisma().scheduleRule.create({
+      data: { userId: user.id, trainingDays: [2, 4, 6] },
+    });
+    await enrolledIn(user.id, [1, 3, 5]);
+
+    await service()
+      .update(user.id, { trainingDays: [1, 2] })
+      .catch(() => undefined);
+
+    expect((await storedRule(user.id))?.trainingDays).toEqual([2, 4, 6]);
+  });
+
+  it('still accepts every other preference, which the program has no say in', async () => {
+    // A fixed program has an opinion about *when* the athlete trains and none
+    // at all about what they own or how their timer behaves.
+    const user = await createUser();
+    await enrolledIn(user.id, [1, 3, 5]);
+
+    const settings = await service().update(user.id, {
+      warmupCooldownEnabled: true,
+      equipment: [],
+      patternCooldownDays: 0,
+    });
+
+    expect(settings).toMatchObject({
+      warmupCooldownEnabled: true,
+      equipment: [],
+      patternCooldownDays: 0,
+    });
+    expect(settings.scheduleLock?.planName).toBe('Pull-Up Builder');
+  });
+
+  it('accepts a training-days write again once the program is not running', async () => {
+    // Before the start date the athlete is still on their own days, so the
+    // picker has to work in the gap between enrolling and starting.
+    const user = await createUser();
+    await enrolledIn(user.id, [1, 3, 5]);
+
+    const settings = await serviceOn('2026-09-07').update(user.id, {
+      trainingDays: [2, 4],
+    });
+
+    expect(settings.trainingDays).toEqual([2, 4]);
+    expect(settings.scheduleLock).toBeNull();
   });
 });
