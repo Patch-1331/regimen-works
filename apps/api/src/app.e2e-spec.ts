@@ -12,6 +12,7 @@ import {
 } from '@regimen-works/shared';
 import { z } from 'zod';
 import { asUser, createE2eApp } from './test-support/e2e-app';
+import { todayIsoDate } from './common/today';
 import { testPrisma } from './test-support/database';
 import {
   createAssignment,
@@ -323,6 +324,65 @@ describe('POST /today/skip', () => {
 
     expect(res.isRestDay).toBe(true);
     expect(res.assignment).toBeNull();
+  });
+});
+
+describe('POST /today/makeup', () => {
+  /**
+   * Whatever day CI runs on, put the athlete on the other six (DN-17). The
+   * date is read the way the controller reads it rather than from the test's
+   * own clock, so the rest day this sets up is the same day the API resolves.
+   */
+  async function restsToday(userId: string) {
+    const today = new Date(`${todayIsoDate()}T00:00:00Z`).getUTCDay();
+    const days = [0, 1, 2, 3, 4, 5, 6].filter((day) => day !== today);
+    const settings = parsed(
+      settingsSchema,
+      await http()
+        .patch('/settings')
+        .set(...asUser(userId))
+        .send({ trainingDays: days })
+        .expect(200),
+    );
+    expect(settings.trainingDays).toEqual(days);
+  }
+
+  it('offers the makeup on a rest day and hands over the session', async () => {
+    await seedLibrary();
+    await restsToday(ALICE);
+
+    const rest = parsed(
+      todayResponseSchema,
+      await http()
+        .get('/today')
+        .set(...asUser(ALICE))
+        .expect(200),
+    );
+    expect(rest.isRestDay).toBe(true);
+    expect(rest.assignment).toBeNull();
+    expect(rest.makeup).toEqual({ sessionsThisWeek: 6, completedThisWeek: 0 });
+
+    const taken = parsed(
+      todayResponseSchema,
+      await http()
+        .post('/today/makeup')
+        .set(...asUser(ALICE))
+        .expect(201),
+    );
+    expect(taken.isRestDay).toBe(false);
+    expect(taken.assignment).not.toBeNull();
+    // The offer is spent: there is a session on today now.
+    expect(taken.makeup).toBeNull();
+  });
+
+  it('refuses on a day the athlete is already training', async () => {
+    await seedLibrary();
+    await trainsEveryDay(ALICE);
+
+    await http()
+      .post('/today/makeup')
+      .set(...asUser(ALICE))
+      .expect(409);
   });
 });
 

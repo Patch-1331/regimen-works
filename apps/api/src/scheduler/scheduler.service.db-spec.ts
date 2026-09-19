@@ -1286,3 +1286,294 @@ describe('SchedulerService.skipToday', () => {
     expect((await programService().skipToday(user.id, MONDAY)).plan).toBeNull();
   });
 });
+
+/**
+ * A fixed program, whose slot layout *is* the schedule (DN-16). The CHECK
+ * `Plan_schedule_mode_bounds` refuses day bounds on one, so both are nulled
+ * here rather than inherited from the fixture's flexible defaults.
+ */
+async function fixedPlan(kind = 'wod_generated') {
+  return everyDayPlan(
+    kind,
+    { allowNamed: true },
+    { scheduleMode: 'fixed', minDaysPerWeek: null, maxDaysPerWeek: null },
+  );
+}
+
+describe('SchedulerService makeup days (DN-17)', () => {
+  describe('the offer', () => {
+    it('offers the session on a rest day while the week is short', async () => {
+      const user = await athlete();
+      await createWod();
+      await createAssignment(user.id, { date: MONDAY, status: 'completed' });
+
+      const today = await programService().getToday(user.id, SATURDAY);
+
+      expect(today.isRestDay).toBe(true);
+      expect(today.makeup).toEqual({
+        sessionsThisWeek: 5,
+        completedThisWeek: 1,
+      });
+    });
+
+    it('offers nothing on a training day', async () => {
+      const user = await athlete();
+      await createWod();
+
+      expect(
+        (await programService().getToday(user.id, MONDAY)).makeup,
+      ).toBeNull();
+    });
+
+    it('offers nothing once the week’s sessions are done', async () => {
+      const user = await athlete([1, 2]);
+      await createWod();
+      await createAssignment(user.id, { date: MONDAY, status: 'completed' });
+      await createAssignment(user.id, {
+        date: '2026-09-15',
+        status: 'completed',
+      });
+
+      expect(
+        (await programService().getToday(user.id, SATURDAY)).makeup,
+      ).toBeNull();
+    });
+
+    it('counts only finished sessions, not scheduled ones', async () => {
+      // A scheduled day is the app's expectation, not the athlete's work.
+      // Counting it would make every week look finished before it was.
+      const user = await athlete();
+      await createWod();
+      await createAssignment(user.id, { date: MONDAY, status: 'scheduled' });
+      await createAssignment(user.id, {
+        date: '2026-09-15',
+        status: 'skipped',
+      });
+
+      expect(
+        (await programService().getToday(user.id, SATURDAY)).makeup,
+      ).toMatchObject({ completedThisWeek: 0 });
+    });
+
+    it('carries nothing across the week boundary', async () => {
+      // Last week's five completions do not settle this week. Carrying debt
+      // -- or credit -- forward turns the app into something the athlete is
+      // behind on, which is the thing this feature exists not to do.
+      const user = await athlete();
+      await createWod();
+      for (const date of [
+        '2026-09-07',
+        '2026-09-08',
+        '2026-09-09',
+        '2026-09-10',
+        '2026-09-11',
+      ]) {
+        await createAssignment(user.id, { date, status: 'completed' });
+      }
+
+      expect(
+        (await programService().getToday(user.id, SATURDAY)).makeup,
+      ).toEqual({ sessionsThisWeek: 5, completedThisWeek: 0 });
+    });
+
+    it('opts a fixed program out entirely', async () => {
+      // Its slot layout is the schedule, and compacting Thursday and Friday
+      // into the weekend would defeat the reason it was fixed.
+      const user = await athlete();
+      await createWod();
+      const plan = await fixedPlan('rest');
+      await createEnrollment(user.id, {
+        planId: plan.id,
+        startDate: MONDAY,
+        weeks: null,
+      });
+
+      const today = await programService().getToday(user.id, SATURDAY);
+
+      expect(today.isRestDay).toBe(true);
+      expect(today.makeup).toBeNull();
+    });
+
+    it('still offers under a flexible program, which defers to the athlete', async () => {
+      const user = await athlete();
+      await createWod();
+      const plan = await everyDayPlan('wod_generated', { allowNamed: true });
+      await createEnrollment(user.id, {
+        planId: plan.id,
+        startDate: MONDAY,
+        weeks: null,
+      });
+
+      expect(
+        (await programService().getToday(user.id, SATURDAY)).makeup,
+      ).toMatchObject({ sessionsThisWeek: 5 });
+    });
+
+    it('stands on a day the athlete marked as rest', async () => {
+      // They changed their mind. The row already says skipped, and the week
+      // is still short.
+      const user = await athlete();
+      await createWod();
+      await programService().skipToday(user.id, MONDAY);
+
+      const today = await programService().getToday(user.id, MONDAY);
+
+      expect(today.isRestDay).toBe(true);
+      expect(today.makeup).toMatchObject({ completedThisWeek: 0 });
+    });
+
+    it('is reported by skipToday itself, not only on the next read', async () => {
+      const user = await athlete();
+      await createWod();
+
+      expect(
+        (await programService().skipToday(user.id, SATURDAY)).makeup,
+      ).toMatchObject({ sessionsThisWeek: 5 });
+    });
+  });
+
+  describe('taking it', () => {
+    it('hands over a real session on a rest day', async () => {
+      const user = await athlete();
+      const wod = await createWod();
+
+      const today = await programService().trainMakeup(user.id, SATURDAY);
+
+      expect(today.isRestDay).toBe(false);
+      expect(today.assignment).toMatchObject({ status: 'scheduled' });
+      expect(today.assignment.wod.id).toBe(wod.id);
+      // Taken, so there is nothing left to offer.
+      expect(today.makeup).toBeNull();
+    });
+
+    it('records the day so the next read is the same session', async () => {
+      const user = await athlete();
+      await createWod();
+
+      const taken = await programService().trainMakeup(user.id, SATURDAY);
+      const reread = await programService().getToday(user.id, SATURDAY);
+
+      expect(reread.isRestDay).toBe(false);
+      expect(reread.assignment?.id).toBe(taken.assignment.id);
+    });
+
+    it('turns a day marked as rest back into a training day', async () => {
+      // The row already exists, and (userId, date) is unique -- so this has
+      // to update rather than insert a second one.
+      const user = await athlete();
+      await createWod();
+      await programService().skipToday(user.id, SATURDAY);
+
+      const taken = await programService().trainMakeup(user.id, SATURDAY);
+
+      expect(taken.isRestDay).toBe(false);
+      expect(
+        await testPrisma().dailyAssignment.count({
+          where: { userId: user.id, date: SATURDAY },
+        }),
+      ).toBe(1);
+    });
+
+    it('refuses on a training day, which has a session already', async () => {
+      const user = await athlete();
+      await createWod();
+
+      await expect(
+        programService().trainMakeup(user.id, MONDAY),
+      ).rejects.toThrow(/no makeup session/i);
+    });
+
+    it('refuses once the week is done', async () => {
+      const user = await athlete([1]);
+      await createWod();
+      await createAssignment(user.id, { date: MONDAY, status: 'completed' });
+
+      await expect(
+        programService().trainMakeup(user.id, SATURDAY),
+      ).rejects.toThrow(/no makeup session/i);
+    });
+
+    it('refuses under a fixed program', async () => {
+      // The offer is suppressed on the screen, so a request arriving anyway
+      // is a stale client -- and answering it would train the athlete on a
+      // day the program deliberately kept clear.
+      const user = await athlete();
+      await createWod();
+      const plan = await fixedPlan('rest');
+      await createEnrollment(user.id, {
+        planId: plan.id,
+        startDate: MONDAY,
+        weeks: null,
+      });
+
+      await expect(
+        programService().trainMakeup(user.id, SATURDAY),
+      ).rejects.toThrow(/no makeup session/i);
+    });
+
+    it('writes nothing when it refuses', async () => {
+      const user = await athlete();
+      await createWod();
+
+      await programService()
+        .trainMakeup(user.id, MONDAY)
+        .catch(() => undefined);
+
+      expect(
+        await testPrisma().dailyAssignment.count({
+          where: { userId: user.id, date: MONDAY },
+        }),
+      ).toBe(0);
+    });
+
+    it('hands over the session the program authored for that weekday', async () => {
+      // The point of resolving against a full week rather than the athlete's
+      // training days: a flexible program has a session waiting behind the
+      // day they chose off, and that is the one a makeup should deliver.
+      //
+      // The draw is pinned to the *other* WOD on purpose. Resolving against
+      // the athlete's days instead would make Saturday a rest day, fall
+      // through to generation, and hand back whatever the roll chose -- so a
+      // draw that agreed with the authored slot would pass either way and
+      // prove nothing.
+      const user = await athlete();
+      const authored = await createWod({ name: 'Authored Saturday' });
+      const rolled = await createWod({ name: 'Something else entirely' });
+      const plan = await everyDayPlan('wod_pinned', { wodId: authored.id });
+      await createEnrollment(user.id, {
+        planId: plan.id,
+        startDate: MONDAY,
+        weeks: null,
+      });
+
+      const taken = await service(testPrisma(), () => 0.999).trainMakeup(
+        user.id,
+        SATURDAY,
+      );
+
+      expect(taken.assignment.wod.id).toBe(authored.id);
+      expect(taken.assignment.wod.id).not.toBe(rolled.id);
+      expect(taken.plan).toMatchObject({ name: plan.name });
+    });
+
+    it('records which program day it was, the way a scheduled day does', async () => {
+      const user = await athlete();
+      await createWod();
+      const plan = await everyDayPlan('wod_generated', { allowNamed: true });
+      await createEnrollment(user.id, {
+        planId: plan.id,
+        startDate: MONDAY,
+        weeks: null,
+      });
+
+      const taken = await programService().trainMakeup(user.id, SATURDAY);
+
+      const row = await testPrisma().dailyAssignment.findUnique({
+        where: { id: taken.assignment.id },
+      });
+      expect(row).toMatchObject({ planDayIndex: 5 });
+      expect(row?.enrollmentId).not.toBeNull();
+      expect(row?.planSlotId).not.toBeNull();
+    });
+  });
+});

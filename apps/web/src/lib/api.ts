@@ -228,6 +228,8 @@ export const api = {
   today: () => request<TodayResponse>("/today"),
   scheduleRule: () => request<ScheduleCap>("/schedule-rule"),
   skipToday: () => postJson<TodayResponse>("/today/skip"),
+  /** Take the makeup offer: train on a rest day while the week is short (DN-17). */
+  trainMakeup: () => postJson<TodayResponse>("/today/makeup"),
 
   startSession: (assignmentId: string) =>
     postJson<WorkoutSession>(`/assignments/${assignmentId}/session`),

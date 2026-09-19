@@ -197,6 +197,29 @@ describe('per-user query scoping', () => {
       expect(where).toContain(ALICE);
     }
   });
+
+  it('scopes the week-so-far count behind the makeup offer', async () => {
+    // A Saturday, so the rest-day fork runs and the count is actually issued
+    // (DN-17). Unscoped it would total every athlete's completed sessions,
+    // and a busy database would quietly decide this athlete's week was done.
+    const prisma = recordingPrisma();
+    const wods = {
+      getChecklists: jest.fn(),
+    } as unknown as ConstructorParameters<typeof SchedulerService>[1];
+    await new SchedulerService(
+      prisma,
+      wods,
+      new MovementResolutionService(prisma),
+    )
+      .getToday(ALICE, '2026-09-19')
+      .catch(() => undefined);
+
+    const counts = whereOf(prisma, 'dailyAssignment.count');
+    expect(counts.length).toBeGreaterThan(0);
+    for (const where of counts) {
+      expect(where).toContain(ALICE);
+    }
+  });
 });
 
 /**

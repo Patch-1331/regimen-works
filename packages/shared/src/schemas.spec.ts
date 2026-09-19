@@ -885,6 +885,7 @@ describe("todayResponseSchema", () => {
     warmup: [{ id: "c-1", name: "Arm circles", instructions: null }],
     cooldown: [],
     plan: null,
+    makeup: null,
     ...overrides,
   });
 
@@ -943,6 +944,46 @@ describe("todayResponseSchema", () => {
     // on every path in SchedulerService rather than added where convenient.
     const { plan: _omitted, ...withoutPlan } = todayPayload();
     expect(todayResponseSchema.safeParse(withoutPlan).success).toBe(false);
+  });
+
+  it("requires the makeup block to be stated, even as null", () => {
+    const { makeup: _omitted, ...withoutMakeup } = todayPayload();
+    expect(todayResponseSchema.safeParse(withoutMakeup).success).toBe(false);
+  });
+
+  it("parses a rest day carrying a makeup offer", () => {
+    expect(
+      todayResponseSchema.safeParse(
+        todayPayload({
+          isRestDay: true,
+          assignment: null,
+          makeup: { sessionsThisWeek: 5, completedThisWeek: 3 },
+        }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it("parses a fresh week, short by all of it", () => {
+    // Monday morning with nothing done. Zero is a real count here, so the
+    // schema has to allow it where it refuses a zero week number.
+    expect(
+      todayResponseSchema.safeParse(
+        todayPayload({
+          makeup: { sessionsThisWeek: 5, completedThisWeek: 0 },
+        }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it("rejects a negative completed count", () => {
+    // "-1 short this week" is an accusation, not a count.
+    expect(
+      todayResponseSchema.safeParse(
+        todayPayload({
+          makeup: { sessionsThisWeek: 5, completedThisWeek: -1 },
+        }),
+      ).success,
+    ).toBe(false);
   });
 
   it("parses a day inside a program", () => {
