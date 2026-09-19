@@ -2,6 +2,7 @@ import type {
   ChecklistExercise,
   Settings,
   SkillLevel,
+  TodayPlan,
   TodayResponse,
   Wod,
   WodMovement,
@@ -131,6 +132,25 @@ export function today(overrides: Partial<TodayResponse> = {}): TodayResponse {
 /** A rest day: today is not one of the athlete's training days, so there is no assignment at all. */
 export function restDay(): TodayResponse {
   return today({ isRestDay: true, assignment: null, warmup: null, cooldown: null });
+}
+
+/**
+ * The program block for an athlete part-way through a real program (DN-16).
+ *
+ * Deliberately not Just WODs: that plan is the absence of programming, and
+ * every screen that reads this block treats it as "no program to name".
+ */
+export function todayPlan(overrides: Partial<TodayPlan> = {}): TodayPlan {
+  return {
+    enrollmentId: "enrollment-1",
+    planId: "plan-pull-up-builder",
+    name: "Pull-Up Builder",
+    week: 2,
+    totalWeeks: 6,
+    weekLabel: null,
+    slotKind: "wod_generated",
+    ...overrides,
+  };
 }
 
 export function workoutLog(overrides: Partial<WorkoutLogListItem> = {}): WorkoutLogListItem {

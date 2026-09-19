@@ -9,6 +9,17 @@ import {
 import { SATURDAY, SUNDAY } from "./schedule.js";
 
 /**
+ * The id of the Just WODs program (DN-13), which every athlete is enrolled in
+ * unless they have chosen something else.
+ *
+ * Shared rather than private to the API because both sides need to recognise
+ * it, and for the same reason: Just WODs is the absence of programming, so a
+ * screen that names it is telling the athlete about a program they did not
+ * choose. Today's program strip and its rest-day copy both key off this.
+ */
+export const DEFAULT_PLAN_ID = "plan_just_wods";
+
+/**
  * One authored day (DN-9).
  *
  * `dayOfWeek` is a **calendar** weekday, not an offset from the enrollment's
