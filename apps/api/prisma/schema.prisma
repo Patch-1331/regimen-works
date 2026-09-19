@@ -13,6 +13,11 @@ datasource db {
 model User {
   id String @id
 
+  // Null until the athlete finishes the first-run wizard (DN-15). Stamped
+  // last of everything setup writes, so a setup abandoned halfway resumes
+  // from the start rather than leaving a half-chosen program behind.
+  onboardedAt DateTime?
+
   assignments   DailyAssignment[]
   sessions      WorkoutSession[]
   logs          WorkoutLog[]

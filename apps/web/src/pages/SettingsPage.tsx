@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { EQUIPMENT_CATALOG, type Equipment, type UpdateSettings } from "@regimen-works/shared";
 import { api } from "../lib/api";
+import { WEEKDAYS } from "../lib/weekdays";
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
@@ -200,24 +201,6 @@ function EquipmentSetting({
   );
 }
 
-/**
- * The week as it is *shown*: Monday first.
- *
- * The numbers are `trainingDaysSchema`'s — 0 = Sunday, matching
- * `Date.getUTCDay()` — and this list is the only place the app reorders them.
- * That is what `packages/shared/src/schedule.ts` means by calling Monday-first
- * a display order rather than a second numbering: it converts at the point it
- * renders, and nowhere else (DN-12).
- */
-const WEEKDAYS: readonly { value: number; short: string; full: string }[] = [
-  { value: 1, short: "Mon", full: "Monday" },
-  { value: 2, short: "Tue", full: "Tuesday" },
-  { value: 3, short: "Wed", full: "Wednesday" },
-  { value: 4, short: "Thu", full: "Thursday" },
-  { value: 5, short: "Fri", full: "Friday" },
-  { value: 6, short: "Sat", full: "Saturday" },
-  { value: 0, short: "Sun", full: "Sunday" },
-];
 
 /**
  * Which weekdays the athlete trains on (DN-12, DN-30).

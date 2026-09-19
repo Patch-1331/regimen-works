@@ -48,7 +48,25 @@ export const handlers = [
   http.get(api("/settings"), () => HttpResponse.json(fixtures.settings())),
   // Not an admin by default: the admin is one hand-set flag on one account,
   // so an athlete is what a test should get unless it says otherwise.
-  http.get(api("/me"), () => HttpResponse.json({ id: "user_alice", isAdmin: false })),
+  // Not an admin, and onboarded: the route guard (DN-15) sends an athlete
+  // with a null `onboardedAt` into the wizard, so a default of null would put
+  // every route test in this suite on the setup screen instead of the page it
+  // is about. A test about the wizard says so by overriding this.
+  http.get(api("/me"), () =>
+    HttpResponse.json({
+      id: "user_alice",
+      isAdmin: false,
+      onboardedAt: "2026-09-01T08:00:00.000Z",
+    }),
+  ),
+
+  // The first-run wizard (DN-15). Registered so a test that lands on the
+  // setup route by accident fails on what it rendered rather than on an
+  // unhandled request.
+  http.get(api("/setup"), () => HttpResponse.json(fixtures.setupOptions())),
+  http.post(api("/setup"), () =>
+    HttpResponse.json({ onboardedAt: "2026-09-16T09:00:00.000Z" }),
+  ),
 
   // 204 is how the API says "no log yet" — api.ts turns the empty body into null.
   http.get(api(`/assignments/:assignmentId/log`), () => new HttpResponse(null, { status: 204 })),

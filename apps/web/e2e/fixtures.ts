@@ -3,20 +3,25 @@ import { clerk } from '@clerk/testing/playwright';
 import { API_ORIGIN, testUserEmail } from './config';
 
 /**
- * Puts the test athlete on a seven-day week before any test looks at Today.
+ * Finishes first-run setup for the test athlete, on a seven-day week.
  *
- * Without it the suite fails every Saturday and Sunday (DN-122), and not
+ * Two things at once, because setup writes both (DN-15). The athlete's row is
+ * created by their first request with `onboardedAt` null, so without this
+ * every test below lands on the wizard instead of the page it is about -- the
+ * route guard is doing exactly its job. And the days it commits are all seven,
+ * without which the suite fails every Saturday and Sunday (DN-122) and not
  * because anything is broken: a freshly provisioned athlete trains Monday to
  * Friday, so on a weekend Today is correctly a rest day, there is no WOD
  * heading to read, and `walks a workout from Today to History` times out
  * clicking a button that was never rendered.
  *
- * Done from inside the page, through the same API the app calls and with the
- * same session token, because that is the only place the signed-in athlete's
- * id exists: the database is reset before anyone has signed in, and the row
- * is created by their first request.
+ * Committed through the API the wizard itself posts to, rather than by
+ * clicking through four screens: the wizard's own screens are covered by the
+ * route tests and by the API's e2e walk, and this suite is deliberately thin.
+ * Driving it from inside the page is the only place the signed-in athlete's
+ * id exists -- the database is reset before anyone has signed in.
  */
-async function trainsEveryDay(page: Page, apiOrigin: string): Promise<void> {
+async function finishesSetup(page: Page, apiOrigin: string): Promise<void> {
   const failure = await page.evaluate(async (origin) => {
     const clerkGlobal = (
       window as unknown as {
@@ -26,21 +31,47 @@ async function trainsEveryDay(page: Page, apiOrigin: string): Promise<void> {
     const token = await clerkGlobal?.session?.getToken();
     if (!token) return 'no Clerk session token in the page';
 
-    const res = await fetch(`${origin}/settings`, {
-      method: 'PATCH',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ trainingDays: [0, 1, 2, 3, 4, 5, 6] }),
+    const authorization = `Bearer ${token}`;
+
+    // Once only. The fixture runs per test but the database is reset once a
+    // suite, so a second commit would move the enrollment's start date to
+    // tomorrow -- the earliest the API offers after an earlier test has
+    // started a session on today.
+    const meRes = await fetch(`${origin}/me`, { headers: { authorization } });
+    if (!meRes.ok) return `GET /me answered ${meRes.status}`;
+    const me = (await meRes.json()) as { onboardedAt: string | null };
+    if (me.onboardedAt !== null) return null;
+
+    const optionsRes = await fetch(`${origin}/setup`, {
+      headers: { authorization },
     });
-    return res.ok ? null : `PATCH /settings answered ${res.status}`;
+    if (!optionsRes.ok) return `GET /setup answered ${optionsRes.status}`;
+
+    // Just WODs is first, and the earliest date the API offers is a date it
+    // has already agreed to -- rather than today by the browser's clock,
+    // which need not be the API's.
+    const options = (await optionsRes.json()) as {
+      programs: { id: string }[];
+      earliestStartDate: string;
+    };
+
+    const res = await fetch(`${origin}/setup`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization },
+      body: JSON.stringify({
+        planId: options.programs[0].id,
+        trainingDays: [0, 1, 2, 3, 4, 5, 6],
+        weeks: null,
+        startDate: options.earliestStartDate,
+      }),
+    });
+    return res.ok ? null : `POST /setup answered ${res.status}`;
   }, apiOrigin);
 
   if (failure) {
     throw new Error(
-      `Could not put the test athlete on a seven-day week: ${failure}. ` +
-        'Every Today assertion below depends on it (DN-122).',
+      `Could not finish setup for the test athlete: ${failure}. ` +
+        'Every assertion below depends on it (DN-15, DN-122).',
     );
   }
 }
@@ -64,7 +95,7 @@ export const test = base.extend<{ signedInPage: Page }>({
     // sits behind the gate, so "/" signed out is the page that loads it.
     await page.goto('/');
     await clerk.signIn({ page, emailAddress: testUserEmail() });
-    await trainsEveryDay(page, API_ORIGIN);
+    await finishesSetup(page, API_ORIGIN);
     await use(page);
   },
 });

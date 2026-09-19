@@ -1,3 +1,5 @@
+import { addIsoDays } from '@regimen-works/shared';
+
 /**
  * Pure scheduling logic — no DB, no Date.now(), no Math.random() calls
  * baked in. Everything the algorithm needs comes in as arguments so it's
@@ -99,7 +101,7 @@ export function pickWod(
     throw new Error('pickWod: no candidates to choose from');
   }
 
-  const cutoff = addDays(today, -cooldownDays);
+  const cutoff = addIsoDays(today, -cooldownDays);
   const recent = history.filter((r) => r.date >= cutoff && r.date < today);
 
   const usedNames = new Set(recent.map((r) => r.wod.name));
@@ -128,12 +130,6 @@ export function pickWod(
 
   const index = Math.floor(rng() * pool.length);
   return pool[Math.min(index, pool.length - 1)];
-}
-
-function addDays(isoDate: string, days: number): string {
-  const d = new Date(`${isoDate}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return toIsoDate(d);
 }
 
 /**

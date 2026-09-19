@@ -199,6 +199,43 @@ export async function createPlan(overrides: Record<string, unknown> = {}) {
   });
 }
 
+/**
+ * A program whose slots are its schedule (DN-15's wizard has a readout for
+ * exactly this, and DN-24 has yet to author a real one).
+ *
+ * The shape `createPlan` cannot make: the CHECK from DN-9's migration refuses
+ * a fixed plan that carries either day bound, so the three fields have to be
+ * unset together. The days land in one authored week, because "which days
+ * does it train" is a question about week one.
+ */
+export async function createFixedPlan(
+  days: number[] = [1, 2, 4, 5],
+  overrides: Record<string, unknown> = {},
+) {
+  return createPlan({
+    name: unique('Bar Muscle-Up'),
+    scheduleMode: 'fixed',
+    minDaysPerWeek: null,
+    maxDaysPerWeek: null,
+    defaultDays: [],
+    weeks: {
+      create: [
+        {
+          order: 0,
+          phase: 'core',
+          slots: {
+            create: days.map((dayOfWeek) => ({
+              dayOfWeek,
+              kind: 'wod_generated',
+            })),
+          },
+        },
+      ],
+    },
+    ...overrides,
+  });
+}
+
 /** An athlete's active run at a program, creating the program unless given one. */
 export async function createEnrollment(
   userId: string,

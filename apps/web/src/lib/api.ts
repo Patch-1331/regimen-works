@@ -5,6 +5,7 @@ import type {
   UpdateExercise,
   LogResultRequest,
   LogSet,
+  CommitSetup,
   Me,
   MovementHistory,
   MovementVolume,
@@ -15,6 +16,7 @@ import type {
   ProposedRungChange,
   SetSubstitutionRequest,
   Settings,
+  SetupOptions,
   SkillLevel,
   TodayResponse,
   UpdateSettings,
@@ -324,6 +326,25 @@ export const api = {
    * itself, which the API makes on its own for every admin route.
    */
   me: () => request<Me>("/me"),
+
+  /**
+   * What the first-run wizard asks (DN-15) — the programs, the athlete's
+   * current days, and the dates they may start on.
+   *
+   * One call rather than three, because the wizard is the first screen an
+   * athlete ever sees and every question depends on the answer before it: the
+   * day picker is bounded by the program, and the date grid starts where the
+   * API says it may.
+   */
+  setup: () => request<SetupOptions>("/setup"),
+  /**
+   * The three answers, committed together. Returns when the athlete
+   * onboarded, which is the field the route guard reads — so the client can
+   * write it straight into the `me` cache rather than refetching to find out
+   * whether it is allowed to leave the screen it is on.
+   */
+  commitSetup: (body: CommitSetup) =>
+    postJson<{ onboardedAt: string }>("/setup", body),
 
   settings: () => request<Settings>("/settings"),
   updateSettings: (body: UpdateSettings) =>

@@ -82,3 +82,23 @@ export const scheduleCapSchema = z.object({
   maxDaysPerWeek: z.number().int().min(1).max(7),
 });
 export type ScheduleCap = z.infer<typeof scheduleCapSchema>;
+
+/**
+ * The ISO date `days` after `isoDate` (negative counts back).
+ *
+ * Shared because both sides of the app now shift dates: the scheduler walks
+ * back over a pattern cooldown, and the setup wizard builds three weeks of
+ * start dates forward (DN-15). Two copies of "what is the day after this
+ * one" is two chances to disagree about which day a program starts.
+ *
+ * Arithmetic in UTC deliberately, even though `todayIsoDate` reads the
+ * athlete's local calendar. These strings are calendar dates with no time on
+ * them, so the only thing local arithmetic could add is a daylight-saving
+ * shift turning "seven days later" into the same weekday at 23:00 the day
+ * before.
+ */
+export function addIsoDays(isoDate: string, days: number): string {
+  const d = new Date(`${isoDate}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
