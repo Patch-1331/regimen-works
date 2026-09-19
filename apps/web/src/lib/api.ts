@@ -1,6 +1,7 @@
 import type {
   AdvanceInterval,
   CreateExercise,
+  EditSetLogs,
   UpdateExercise,
   LogResultRequest,
   LogSet,
@@ -22,6 +23,7 @@ import type {
   WorkoutLog,
   WorkoutLogListItem,
   WorkoutSession,
+  WorkoutSetLog,
 } from "@regimen-works/shared";
 
 // Defaults to the "/api" prefix that vite.config.ts proxies to the local API,
@@ -244,6 +246,15 @@ export const api = {
   /** Posted on every completed set, so a refresh resumes where it was (DN-20). */
   logSet: (assignmentId: string, body: LogSet) =>
     postJson<WorkoutSession>(`/assignments/${assignmentId}/session/sets`, body),
+  /** The sets the runner recorded, read by the log screen (DN-21). */
+  setLogs: (assignmentId: string) =>
+    request<WorkoutSetLog[]>(`/assignments/${assignmentId}/session/sets`),
+  /** Corrections to sets already recorded. Never creates one. */
+  editSetLogs: (assignmentId: string, body: EditSetLogs) =>
+    patchJson<WorkoutSetLog[]>(
+      `/assignments/${assignmentId}/session/sets`,
+      body,
+    ),
   advanceInterval: (assignmentId: string, body: AdvanceInterval) =>
     postJson<WorkoutSession>(
       `/assignments/${assignmentId}/session/interval`,

@@ -9,6 +9,7 @@ import {
   workoutLogListItemSchema,
   workoutLogSchema,
   workoutSessionSchema,
+  workoutSetLogSchema,
 } from '@regimen-works/shared';
 import { z } from 'zod';
 import { asUser, createE2eApp } from './test-support/e2e-app';
@@ -975,6 +976,41 @@ describe('the straight-sets session, end to end', () => {
     expect(finished.status).toBe('completed');
     // No cap to have been stopped by, however long the session ran.
     expect(finished.capSeconds).toBeNull();
+
+    // The sets themselves, which the counter alone cannot say anything about
+    // (DN-21). Read after the finish because this is when the log screen
+    // asks: the session is over and the athlete is writing the day down.
+    const sets = parsed(
+      z.array(workoutSetLogSchema),
+      await http()
+        .get(`/assignments/${assignment.id}/session/sets`)
+        .set(...asUser(ALICE))
+        .expect(200),
+    );
+    // Two rows and not three: the replayed tap finished no set. Both read as
+    // prescribed, which is what the runner records.
+    expect(sets).toMatchObject([
+      { movementOrder: 0, setNumber: 1, prescribedReps: 3, actualReps: 3 },
+      { movementOrder: 0, setNumber: 5, prescribedReps: 3, actualReps: 3 },
+    ]);
+
+    // And the correction the log screen makes: "I said three, it was two".
+    const corrected = parsed(
+      z.array(workoutSetLogSchema),
+      await http()
+        .patch(`/assignments/${assignment.id}/session/sets`)
+        .set(...asUser(ALICE))
+        .send({ sets: [{ movementOrder: 0, setNumber: 1, actualReps: 2 }] })
+        .expect(200),
+    );
+    expect(corrected.map((row) => row.actualReps)).toEqual([2, 3]);
+
+    // A set no session recorded cannot be conjured from this screen.
+    await http()
+      .patch(`/assignments/${assignment.id}/session/sets`)
+      .set(...asUser(ALICE))
+      .send({ sets: [] })
+      .expect(400);
 
     // The line DN-126 moved. This was a 400 — `POST /log` read the
     // assignment's WOD to know what kind of number it was being handed, and a

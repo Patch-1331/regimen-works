@@ -5,10 +5,12 @@ import {
 } from '@nestjs/common';
 import type {
   AdvanceInterval,
+  EditSetLogs,
   LogSet,
   RoundSplit,
   WodType,
   WorkoutSession,
+  WorkoutSetLog as WorkoutSetLogDto,
 } from '@regimen-works/shared';
 import {
   finishSecondsAt,
@@ -26,6 +28,7 @@ import {
   toRoundSplits,
   toSessionDto,
   toSessionMovements,
+  toSetLogDto,
 } from './session.mapper';
 import {
   advanceInterval,
@@ -255,12 +258,136 @@ export class SessionsService {
     // athlete back on a set they have already done.
     const setsCompleted = Math.max(session.setsCompleted, next.setsCompleted);
 
-    const updated = await this.prisma.workoutSession.update({
-      where: { assignmentId },
-      data: { setsCompleted, restStartedAtSeconds: next.restStartedAtSeconds },
+    // The set this post finished, or null where it finished none. A call that
+    // repeats the current count is the screen skipping a rest, and one that
+    // arrives late with an earlier count is a replay -- in both cases the row
+    // for that set is already written, so there is nothing to record (DN-21).
+    const finished =
+      next.setsCompleted > session.setsCompleted ? next.setsCompleted : null;
+
+    // Written with the counter rather than beside it: the count and the rows
+    // are two readings of the same tap, and a session whose counter says six
+    // sets over five rows is a record nobody can interpret.
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (finished !== null) {
+        // The position of the set just finished -- `finished - 1` sets were
+        // behind the athlete when they started it. Derived here rather than
+        // sent, so a replayed tap maps to the same row and the client never
+        // has to know how the counter resolves into a position.
+        const at = straightSetsStateAt(
+          movements.map((m) => ({ sets: m.sets ?? 0 })),
+          finished - 1,
+        );
+        const movement = movements[at.movementIndex];
+        const prescribedReps = movement.reps;
+
+        await tx.workoutSetLog.upsert({
+          // Upsert rather than create because the counter is what decides a
+          // set was finished, and two taps racing on a reconnect can both
+          // read the same count before either has written. One of them
+          // rewrites the row it was going to duplicate, instead of losing the
+          // whole request to a unique-constraint violation. A replay that
+          // arrives after the first has landed advances nothing and never
+          // reaches here -- corrections are `editSetLogs`.
+          where: {
+            sessionId_movementOrder_setNumber: {
+              sessionId: session.id,
+              movementOrder: at.movementIndex,
+              setNumber: at.setNumber,
+            },
+          },
+          update: { actualReps: prescribedReps },
+          create: {
+            userId,
+            sessionId: session.id,
+            movementOrder: at.movementIndex,
+            setNumber: at.setNumber,
+            exerciseId: movement.exercise.id,
+            prescribedReps,
+            // The runner records the day as prescribed. It is asking the
+            // athlete to count reps mid-set that would cost more than the
+            // reading is worth, so a set that did not go as asked is
+            // corrected at log time through `editSetLogs`.
+            actualReps: prescribedReps,
+          },
+        });
+      }
+
+      return tx.workoutSession.update({
+        where: { assignmentId },
+        data: {
+          setsCompleted,
+          restStartedAtSeconds: next.restStartedAtSeconds,
+        },
+      });
     });
 
     return toSessionDto(updated);
+  }
+
+  /**
+   * Every set recorded against this session, in the order they were done.
+   *
+   * Ordered by position rather than by `completedAt`, because the position is
+   * what the screen reading them lays out -- and a corrected row keeps its
+   * place in the session rather than jumping to the end.
+   */
+  async setLogs(
+    userId: string,
+    assignmentId: string,
+  ): Promise<WorkoutSetLogDto[]> {
+    const session = await this.prisma.workoutSession.findFirst({
+      where: { assignmentId, userId },
+      select: { id: true },
+    });
+    // Not "active": these are read and corrected at log time, after the
+    // session has finished.
+    if (!session) throw new NotFoundException('No session for this assignment');
+
+    const rows = await this.prisma.workoutSetLog.findMany({
+      where: { sessionId: session.id, userId },
+      orderBy: [{ movementOrder: 'asc' }, { setNumber: 'asc' }],
+    });
+    return rows.map(toSetLogDto);
+  }
+
+  /**
+   * Corrects sets already recorded, at log time (DN-21).
+   *
+   * Updates only. The runner is what creates these rows, and a correction that
+   * could conjure one would let the log screen claim a set no session ever
+   * recorded -- "I did eight" on a day the athlete walked out after three.
+   * `updateMany` per row rather than `update`, so the userId stays in the
+   * where clause and another athlete's row reads as no row at all.
+   */
+  async editSetLogs(
+    userId: string,
+    assignmentId: string,
+    body: EditSetLogs,
+  ): Promise<WorkoutSetLogDto[]> {
+    const session = await this.prisma.workoutSession.findFirst({
+      where: { assignmentId, userId },
+      select: { id: true },
+    });
+    // Not "active": these are read and corrected at log time, after the
+    // session has finished.
+    if (!session) throw new NotFoundException('No session for this assignment');
+
+    await this.prisma.$transaction(
+      body.sets.map((edit) =>
+        this.prisma.workoutSetLog.updateMany({
+          where: {
+            sessionId: session.id,
+            userId,
+            movementOrder: edit.movementOrder,
+            setNumber: edit.setNumber,
+          },
+          data: { actualReps: edit.actualReps },
+        }),
+      ),
+    );
+
+    return this.setLogs(userId, assignmentId);
   }
 
   /**

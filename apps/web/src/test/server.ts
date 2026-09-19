@@ -60,6 +60,10 @@ export const handlers = [
   http.post(api(`/assignments/:assignmentId/session/sets`), () =>
     HttpResponse.json(fixtures.session({ setsCompleted: 1, restStartedAtSeconds: 0 })),
   ),
+  // Empty by default: most days have no sets recorded, and a test that cares
+  // about them says so.
+  http.get(api(`/assignments/:assignmentId/session/sets`), () => HttpResponse.json([])),
+  http.patch(api(`/assignments/:assignmentId/session/sets`), () => HttpResponse.json([])),
   http.post(api(`/assignments/:assignmentId/session/finish`), () =>
     HttpResponse.json(fixtures.session({ status: 'completed', finishedAtSeconds: 300 })),
   ),

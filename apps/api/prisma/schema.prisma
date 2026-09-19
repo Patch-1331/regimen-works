@@ -16,6 +16,7 @@ model User {
   assignments   DailyAssignment[]
   sessions      WorkoutSession[]
   logs          WorkoutLog[]
+  setLogs       WorkoutSetLog[]
   skillLevels   SkillLevel[]
   scheduleRule  ScheduleRule?
   substitutions AssignmentSubstitution[]
@@ -90,6 +91,7 @@ model Exercise {
   // The program slots that pin this exercise by name rather than by line
   // (DN-19).
   prescribedIn  PlanSlotMovement[]
+  setLogs       WorkoutSetLog[]
 
   // Soft delete (DN-25). Archiving hides the row from every pool and picker --
   // `libraryVisibleTo` filters it out, so the scheduler, the ladder and the
@@ -321,13 +323,13 @@ model DailyAssignment {
 // the same reason that one happens at read time: `Wod` is shared library
 // content and must not be mutated per user.
 model AssignmentSubstitution {
-  id            String          @id @default(cuid())
-  userId        String
-  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  assignmentId  String
+  id                 String            @id @default(cuid())
+  userId             String
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignmentId       String
   // See WorkoutSession: the same composite FK, so a substitution can't claim
   // an assignment belonging to another user.
-  assignment    DailyAssignment @relation(fields: [assignmentId, userId], references: [id, userId], onDelete: Cascade)
+  assignment         DailyAssignment   @relation(fields: [assignmentId, userId], references: [id, userId], onDelete: Cascade)
   // **Exactly one of these two.** A CHECK in DN-125's migration holds it, the
   // same shape of rule as PlanSlotMovement's own line/exerciseId xor.
   //
@@ -341,14 +343,14 @@ model AssignmentSubstitution {
   wodMovement        WodMovement?      @relation(fields: [wodMovementId], references: [id], onDelete: Cascade)
   planSlotMovementId String?
   planSlotMovement   PlanSlotMovement? @relation(fields: [planSlotMovementId], references: [id], onDelete: Cascade)
-  exerciseId    String
-  exercise      Exercise        @relation(fields: [exerciseId], references: [id])
-  createdAt     DateTime        @default(now())
+  exerciseId         String
+  exercise           Exercise          @relation(fields: [exerciseId], references: [id])
+  createdAt          DateTime          @default(now())
   // Moves when the swap is corrected, which createdAt doesn't — the upsert
   // below keeps the original row. It is what orders two swaps on the same
   // line, so the completion screen can offer the one chosen most recently
   // (DN-88).
-  updatedAt     DateTime        @updatedAt
+  updatedAt          DateTime          @updatedAt
 
   // One swap per movement per day: swapping twice corrects the choice, it
   // doesn't stack. The write is an upsert on whichever of these keys the
@@ -431,15 +433,78 @@ model WorkoutSession {
   //
   // Null on a WOD. 0 on a prescribed session nobody has finished a set of yet,
   // which is a different fact.
-  setsCompleted            Int?
+  setsCompleted        Int?
   // Elapsed seconds at which the rest after the last set began; null while the
   // athlete is working. When it started rather than what is left of it, so a
   // backgrounded tab resumes the countdown at the right second.
-  restStartedAtSeconds     Int?
+  restStartedAtSeconds Int?
+
+  // Every set the athlete ticked off, on a straight-sets session (DN-21).
+  setLogs WorkoutSetLog[]
 
   // Required by Prisma for the composite relation above. assignmentId is
   // already unique on its own, so this adds no further restriction.
   @@unique([assignmentId, userId])
+  // Likewise for WorkoutSetLog's composite FK below. `id` is the primary key,
+  // so this constrains nothing new either.
+  @@unique([id, userId])
+}
+
+/// One working set, as it was actually done (DN-21).
+///
+/// A per-movement total or a completion flag would both be cheaper. Per-set
+/// wins because it is the only record that can show an athlete their own
+/// progression: `3, 3, 3, 2, 2` this week against `3, 3, 2, 2, 1` last week is
+/// visible improvement that a total of 13 against 11 blurs and a flag erases,
+/// and `5, 5, 3` and `4, 4, 4` are different sessions with the same total.
+///
+/// A table rather than jsonb on the session. `roundSplits` and `movements` get
+/// away with jsonb because a metcon's score collapses to one scalar and
+/// nothing reads across sessions; these exist precisely to be read across
+/// sessions, and an index into jsonb is not the index that answers it.
+model WorkoutSetLog {
+  id        String         @id @default(cuid())
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String
+  // See WorkoutSession: the same composite FK, so a set cannot claim a session
+  // belonging to another user.
+  session   WorkoutSession @relation(fields: [sessionId, userId], references: [id, userId], onDelete: Cascade)
+
+  // Where this set sits, against the session's **own snapshot** -- the list
+  // `setsCompleted` already indexes into, resolved by `straightSetsStateAt`.
+  //
+  // Not `planSlotMovementId`. The snapshot is what the session runs under, so
+  // a program editing the slot mid-run cannot move rows already written, and a
+  // slot id is program-specific besides: it cannot answer "this movement over
+  // time" across two programs that both prescribe chin-ups.
+  movementOrder Int
+  /// 1-based within that movement, the way `straightSetsStateAt` counts it.
+  setNumber     Int
+
+  /// Copied, not joined, for the same reason the snapshot copies its exercise
+  /// fields: a renamed or re-rung exercise must not rewrite what was trained.
+  /// This is also the column the cross-session index reads.
+  exerciseId     String
+  exercise       Exercise @relation(fields: [exerciseId], references: [id])
+  /// What the day asked for, copied so a later edit to the slot cannot change
+  /// what a past set was measured against.
+  prescribedReps Int
+  /// What the athlete actually did. 0 is a real answer -- a set attempted and
+  /// not made is a fact about the session, not a missing row.
+  actualReps     Int
+
+  completedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  /// One row per set. The write is an upsert on this key, so a tap replayed
+  /// after a flaky connection rewrites the row rather than recording the set
+  /// twice -- idempotent by construction, the same property `setsCompleted`
+  /// has by being absolute rather than an increment.
+  @@unique([sessionId, movementOrder, setNumber])
+  /// "This movement, across sessions, over time" -- the query the whole table
+  /// exists for, and the one a jsonb column could not have served.
+  @@index([userId, exerciseId, completedAt])
 }
 
 model WorkoutLog {
