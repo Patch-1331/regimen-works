@@ -34,16 +34,35 @@ export class SubstitutionsController {
     @Param('assignmentId') assignmentId: string,
     @Body() body: unknown,
   ) {
-    const { wodMovementId, exerciseId } = validateBody(
+    const { wodMovementId, planSlotMovementId, exerciseId } = validateBody(
       setSubstitutionRequestSchema,
       body,
     );
     return this.substitutionsService.set(
       userId,
       assignmentId,
-      wodMovementId,
+      { wodMovementId, planSlotMovementId },
       exerciseId,
     );
+  }
+
+  /**
+   * Undoing a swap on a prescribed day (DN-125). Its own route rather than a
+   * discriminator on the one below, because a bare id in the path cannot say
+   * which table it came from — and declared above it for the same reason
+   * "rung-changes" is, so the prefix is never taken for a movement id.
+   */
+  @Delete('prescribed/:planSlotMovementId')
+  @HttpCode(204)
+  clearPrescribed(
+    @CurrentUser() userId: string,
+    @Param('assignmentId') assignmentId: string,
+    @Param('planSlotMovementId') planSlotMovementId: string,
+  ) {
+    return this.substitutionsService.clear(userId, assignmentId, {
+      wodMovementId: null,
+      planSlotMovementId,
+    });
   }
 
   @Delete(':wodMovementId')
@@ -53,6 +72,9 @@ export class SubstitutionsController {
     @Param('assignmentId') assignmentId: string,
     @Param('wodMovementId') wodMovementId: string,
   ) {
-    return this.substitutionsService.clear(userId, assignmentId, wodMovementId);
+    return this.substitutionsService.clear(userId, assignmentId, {
+      wodMovementId,
+      planSlotMovementId: null,
+    });
   }
 }

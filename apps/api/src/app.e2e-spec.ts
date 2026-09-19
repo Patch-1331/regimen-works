@@ -18,6 +18,7 @@ import {
   createAssignment,
   createExercise,
   createLadder,
+  createPlan,
   createWod,
 } from './test-support/fixtures';
 
@@ -767,5 +768,110 @@ describe('validation and not-found', () => {
       .expect(404);
 
     expect(await testPrisma().workoutSession.count()).toBe(0);
+  });
+});
+
+/**
+ * Swapping a movement on a program's straight-sets day (DN-125).
+ *
+ * Here rather than in the service spec because what is at risk is routing: the
+ * two DELETE paths differ only by a prefix, and a `prescribed/:id` declared
+ * below `:wodMovementId` would be swallowed whole by it — with the swap left
+ * in place and a 204 saying otherwise.
+ */
+describe('POST/DELETE /assignments/:id/substitutions, on a prescribed day', () => {
+  /** A slot prescribing `pull, 5x3`, and today's assignment pointing at it. */
+  async function prescribedDay(userId: string) {
+    const { rungs } = await createLadder('pull', [
+      'Negative chin-up',
+      'Chin-up',
+      'Pull-up',
+    ]);
+    const plan = await createPlan({
+      weeks: {
+        create: [
+          {
+            order: 0,
+            phase: 'core',
+            slots: {
+              create: [
+                {
+                  dayOfWeek: 3,
+                  kind: 'movements',
+                  movements: {
+                    create: [
+                      {
+                        order: 0,
+                        line: 'pull',
+                        sets: 5,
+                        reps: 3,
+                        restSeconds: 90,
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+    const slot = await testPrisma().planSlot.findFirstOrThrow({
+      where: { planWeek: { planId: plan.id } },
+      include: { movements: true },
+    });
+    const assignment = await testPrisma().dailyAssignment.create({
+      data: {
+        userId,
+        date: todayIsoDate(),
+        status: 'scheduled',
+        planSlotId: slot.id,
+      },
+    });
+    return { rungs, assignment, movement: slot.movements[0] };
+  }
+
+  it('takes the swap by the prescribed movement, and gives it back', async () => {
+    await http()
+      .get('/exercises')
+      .set(...asUser(ALICE))
+      .expect(200);
+    const alice = await testPrisma().user.findFirstOrThrow();
+    const { rungs, assignment, movement } = await prescribedDay(alice.id);
+
+    await http()
+      .post(`/assignments/${assignment.id}/substitutions`)
+      .set(...asUser(ALICE))
+      .send({ planSlotMovementId: movement.id, exerciseId: rungs[2].id })
+      .expect(201);
+    expect(
+      await testPrisma().assignmentSubstitution.count({
+        where: { planSlotMovementId: movement.id },
+      }),
+    ).toBe(1);
+
+    await http()
+      .delete(
+        `/assignments/${assignment.id}/substitutions/prescribed/${movement.id}`,
+      )
+      .set(...asUser(ALICE))
+      .expect(204);
+
+    expect(await testPrisma().assignmentSubstitution.count()).toBe(0);
+  });
+
+  it('refuses a body naming neither kind of movement', async () => {
+    await http()
+      .get('/exercises')
+      .set(...asUser(ALICE))
+      .expect(200);
+    const alice = await testPrisma().user.findFirstOrThrow();
+    const { rungs, assignment } = await prescribedDay(alice.id);
+
+    await http()
+      .post(`/assignments/${assignment.id}/substitutions`)
+      .set(...asUser(ALICE))
+      .send({ exerciseId: rungs[2].id })
+      .expect(400);
   });
 });

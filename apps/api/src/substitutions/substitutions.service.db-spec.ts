@@ -5,6 +5,7 @@ import {
   createAssignment,
   createExercise,
   createLadder,
+  createPlan,
   createSkillLevel,
   createUser,
   createWod,
@@ -25,6 +26,15 @@ import { SubstitutionsService } from './substitutions.service';
  * mentioned `userId`, and — the case no mock reaches — that
  * `proposedRungChanges` reads its rows in the order its tie-break depends on.
  */
+
+/**
+ * A swap against a WOD movement, which is what every test in this file below
+ * the prescribed-day block is about. The service takes the pair since DN-125,
+ * because a day can be straight sets instead.
+ */
+function wodKey(wodMovementId: string) {
+  return { wodMovementId, planSlotMovementId: null };
+}
 
 function service(): SubstitutionsService {
   return new SubstitutionsService(testPrisma() as unknown as PrismaService);
@@ -66,7 +76,12 @@ describe('SubstitutionsService.set', () => {
   it('records a swap to another rung on the movement line', async () => {
     const { user, rungs, assignment, movement } = await pullDay();
 
-    await service().set(user.id, assignment.id, movement.id, rungs[1].id);
+    await service().set(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+      rungs[1].id,
+    );
 
     const swaps = await storedSwaps(assignment.id);
     expect(swaps).toHaveLength(1);
@@ -80,7 +95,7 @@ describe('SubstitutionsService.set', () => {
   it('allows the no-equipment alternative of a rung on the line', async () => {
     const { user, alt, assignment, movement } = await pullDay();
 
-    await service().set(user.id, assignment.id, movement.id, alt.id);
+    await service().set(user.id, assignment.id, wodKey(movement.id), alt.id);
 
     // The alternative is off the line itself — legal because a rung points at it.
     expect((await storedSwaps(assignment.id))[0].exerciseId).toBe(alt.id);
@@ -89,7 +104,12 @@ describe('SubstitutionsService.set', () => {
   it('allows swapping back to what was prescribed', async () => {
     const { user, rungs, assignment, movement } = await pullDay();
 
-    await service().set(user.id, assignment.id, movement.id, rungs[0].id);
+    await service().set(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+      rungs[0].id,
+    );
 
     expect((await storedSwaps(assignment.id))[0].exerciseId).toBe(rungs[0].id);
   });
@@ -97,8 +117,18 @@ describe('SubstitutionsService.set', () => {
   it('corrects the choice rather than stacking a second row', async () => {
     const { user, rungs, assignment, movement } = await pullDay();
 
-    await service().set(user.id, assignment.id, movement.id, rungs[1].id);
-    await service().set(user.id, assignment.id, movement.id, rungs[2].id);
+    await service().set(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+      rungs[1].id,
+    );
+    await service().set(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+      rungs[2].id,
+    );
 
     // The unique constraint would let a stacking insert fail loudly, but an
     // upsert on the wrong key would quietly leave two rows.
@@ -112,7 +142,7 @@ describe('SubstitutionsService.set', () => {
     const { rungs: squats } = await createLadder('squat', ['Air squat']);
 
     await expect(
-      service().set(user.id, assignment.id, movement.id, squats[0].id),
+      service().set(user.id, assignment.id, wodKey(movement.id), squats[0].id),
     ).rejects.toThrow(BadRequestException);
     expect(await storedSwaps(assignment.id)).toHaveLength(0);
   });
@@ -133,7 +163,7 @@ describe('SubstitutionsService.set', () => {
     });
 
     await expect(
-      service().set(user.id, assignment.id, movement.id, theirs.id),
+      service().set(user.id, assignment.id, wodKey(movement.id), theirs.id),
     ).rejects.toThrow(BadRequestException);
     expect(await storedSwaps(assignment.id)).toHaveLength(0);
   });
@@ -183,7 +213,12 @@ describe('SubstitutionsService.set', () => {
     // movement with no line to check it against.
     const { user, doubleUnders, assignment, movement } = await cardioDay();
 
-    await service().set(user.id, assignment.id, movement.id, doubleUnders.id);
+    await service().set(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+      doubleUnders.id,
+    );
 
     expect((await storedSwaps(assignment.id))[0].exerciseId).toBe(
       doubleUnders.id,
@@ -193,7 +228,12 @@ describe('SubstitutionsService.set', () => {
   it('allows the alternative of a movement that is off every line', async () => {
     const { user, highKnees, assignment, movement } = await cardioDay();
 
-    await service().set(user.id, assignment.id, movement.id, highKnees.id);
+    await service().set(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+      highKnees.id,
+    );
 
     // The case the line gate used to refuse: no ladder to move along, but a
     // rope the athlete doesn't have today and somewhere real to go.
@@ -207,7 +247,7 @@ describe('SubstitutionsService.set', () => {
     // With no line, the alternative is the whole of what this movement scales
     // to — everything else is a different workout at the prescribed reps.
     await expect(
-      service().set(user.id, assignment.id, movement.id, rungs[0].id),
+      service().set(user.id, assignment.id, wodKey(movement.id), rungs[0].id),
     ).rejects.toThrow(BadRequestException);
     expect(await storedSwaps(assignment.id)).toHaveLength(0);
   });
@@ -218,7 +258,7 @@ describe('SubstitutionsService.set', () => {
     });
 
     await expect(
-      service().set(user.id, assignment.id, movement.id, highKnees.id),
+      service().set(user.id, assignment.id, wodKey(movement.id), highKnees.id),
     ).rejects.toThrow(BadRequestException);
   });
 
@@ -228,7 +268,7 @@ describe('SubstitutionsService.set', () => {
     // A swap says what the athlete is going to do; rewriting it afterwards
     // would put the record out of step with the session logged against it.
     await expect(
-      service().set(user.id, assignment.id, movement.id, rungs[1].id),
+      service().set(user.id, assignment.id, wodKey(movement.id), rungs[1].id),
     ).rejects.toThrow(BadRequestException);
   });
 
@@ -237,7 +277,12 @@ describe('SubstitutionsService.set', () => {
       status: 'in_progress',
     });
 
-    await service().set(user.id, assignment.id, movement.id, rungs[1].id);
+    await service().set(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+      rungs[1].id,
+    );
 
     expect(await storedSwaps(assignment.id)).toHaveLength(1);
   });
@@ -247,7 +292,12 @@ describe('SubstitutionsService.set', () => {
     const mallory = await createUser();
 
     await expect(
-      service().set(mallory.id, assignment.id, movement.id, rungs[1].id),
+      service().set(
+        mallory.id,
+        assignment.id,
+        wodKey(movement.id),
+        rungs[1].id,
+      ),
     ).rejects.toThrow(NotFoundException);
     expect(await storedSwaps(assignment.id)).toHaveLength(0);
   });
@@ -262,7 +312,7 @@ describe('SubstitutionsService.set', () => {
       service().set(
         user.id,
         assignment.id,
-        otherWod.movements[0].id,
+        wodKey(otherWod.movements[0].id),
         rungs[1].id,
       ),
     ).rejects.toThrow(NotFoundException);
@@ -272,9 +322,14 @@ describe('SubstitutionsService.set', () => {
 describe('SubstitutionsService.clear', () => {
   it('puts the movement back to what was prescribed', async () => {
     const { user, rungs, assignment, movement } = await pullDay();
-    await service().set(user.id, assignment.id, movement.id, rungs[1].id);
+    await service().set(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+      rungs[1].id,
+    );
 
-    await service().clear(user.id, assignment.id, movement.id);
+    await service().clear(user.id, assignment.id, wodKey(movement.id));
 
     expect(await storedSwaps(assignment.id)).toHaveLength(0);
   });
@@ -283,17 +338,22 @@ describe('SubstitutionsService.clear', () => {
     const { user, assignment, movement } = await pullDay();
 
     await expect(
-      service().clear(user.id, assignment.id, movement.id),
+      service().clear(user.id, assignment.id, wodKey(movement.id)),
     ).resolves.toBeUndefined();
   });
 
   it('404s on an assignment belonging to another athlete', async () => {
     const { user, rungs, assignment, movement } = await pullDay();
-    await service().set(user.id, assignment.id, movement.id, rungs[1].id);
+    await service().set(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+      rungs[1].id,
+    );
     const mallory = await createUser();
 
     await expect(
-      service().clear(mallory.id, assignment.id, movement.id),
+      service().clear(mallory.id, assignment.id, wodKey(movement.id)),
     ).rejects.toThrow(NotFoundException);
     // The guard ran before the delete, so the swap is still there.
     expect(await storedSwaps(assignment.id)).toHaveLength(1);
@@ -322,7 +382,12 @@ describe('SubstitutionsService.proposedRungChanges', () => {
     // The ordinary case for a first swap since DN-86 stopped provisioning
     // everyone at rung 0 — and the first choice worth remembering.
     const { user, rungs, assignment, movement } = await pullDay();
-    await service().set(user.id, assignment.id, movement.id, rungs[1].id);
+    await service().set(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+      rungs[1].id,
+    );
 
     expect(await service().proposedRungChanges(user.id, assignment.id)).toEqual(
       [
@@ -340,7 +405,12 @@ describe('SubstitutionsService.proposedRungChanges', () => {
   it('proposes from the rung on record when there is one', async () => {
     const { user, rungs, assignment, movement } = await pullDay();
     await createSkillLevel(user.id, 'pull', 0);
-    await service().set(user.id, assignment.id, movement.id, rungs[2].id);
+    await service().set(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+      rungs[2].id,
+    );
 
     const [proposal] = await service().proposedRungChanges(
       user.id,
@@ -353,7 +423,12 @@ describe('SubstitutionsService.proposedRungChanges', () => {
     // Remembering what the athlete picked is not the app demoting them.
     const { user, rungs, assignment, movement } = await pullDay();
     await createSkillLevel(user.id, 'pull', 2);
-    await service().set(user.id, assignment.id, movement.id, rungs[0].id);
+    await service().set(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+      rungs[0].id,
+    );
 
     const [proposal] = await service().proposedRungChanges(
       user.id,
@@ -365,7 +440,12 @@ describe('SubstitutionsService.proposedRungChanges', () => {
   it('proposes nothing when the swap matches the standing choice', async () => {
     const { user, rungs, assignment, movement } = await pullDay();
     await createSkillLevel(user.id, 'pull', 1);
-    await service().set(user.id, assignment.id, movement.id, rungs[1].id);
+    await service().set(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+      rungs[1].id,
+    );
 
     expect(await service().proposedRungChanges(user.id, assignment.id)).toEqual(
       [],
@@ -375,7 +455,7 @@ describe('SubstitutionsService.proposedRungChanges', () => {
   it('proposes nothing for a swap to the off-ladder alternative', async () => {
     // It carries no rung, so there is no position on the line to remember.
     const { user, alt, assignment, movement } = await pullDay();
-    await service().set(user.id, assignment.id, movement.id, alt.id);
+    await service().set(user.id, assignment.id, wodKey(movement.id), alt.id);
 
     expect(await service().proposedRungChanges(user.id, assignment.id)).toEqual(
       [],
@@ -404,13 +484,13 @@ describe('SubstitutionsService.proposedRungChanges', () => {
     await service().set(
       user.id,
       assignment.id,
-      wod.movements[0].id,
+      wodKey(wod.movements[0].id),
       rungs[2].id,
     );
     await service().set(
       user.id,
       assignment.id,
-      wod.movements[1].id,
+      wodKey(wod.movements[1].id),
       rungs[1].id,
     );
 
@@ -458,13 +538,13 @@ describe('SubstitutionsService.proposedRungChanges', () => {
     await service().set(
       user.id,
       assignment.id,
-      wod.movements[0].id,
+      wodKey(wod.movements[0].id),
       squat[1].id,
     );
     await service().set(
       user.id,
       assignment.id,
-      wod.movements[1].id,
+      wodKey(wod.movements[1].id),
       pull[1].id,
     );
 
@@ -485,10 +565,15 @@ describe('SubstitutionsService.proposedRungChanges', () => {
     await service().set(
       mallory.id,
       malloryAssignment.id,
-      movement.id,
+      wodKey(movement.id),
       rungs[2].id,
     );
-    await service().set(user.id, assignment.id, movement.id, rungs[1].id);
+    await service().set(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+      rungs[1].id,
+    );
 
     const proposals = await service().proposedRungChanges(
       user.id,
@@ -496,6 +581,284 @@ describe('SubstitutionsService.proposedRungChanges', () => {
     );
     expect(proposals).toHaveLength(1);
     expect(proposals[0]).toMatchObject({ toRung: 1 });
+  });
+});
+
+/**
+ * A prescribed day (DN-125): a program slot authoring `pull, 5x3` and an
+ * assignment pointing at it, with no WOD anywhere in sight.
+ *
+ * `pinned` authors the specific-exercise form instead of the line form -- the
+ * two halves of PlanSlotMovement's xor, and the legality rule reads them
+ * differently.
+ */
+async function prescribedDay(options: { pinned?: string } = {}) {
+  const user = await createUser();
+  const { rungs, alt } = await createLadder(
+    'pull',
+    ['Negative chin-up', 'Chin-up', 'Pull-up'],
+    { altFor: 1 },
+  );
+  const plan = await createPlan({
+    weeks: {
+      create: [
+        {
+          order: 0,
+          phase: 'core',
+          slots: {
+            create: [
+              {
+                dayOfWeek: 3,
+                kind: 'movements',
+                movements: {
+                  create: [
+                    {
+                      order: 0,
+                      line: options.pinned ? null : 'pull',
+                      exerciseId: options.pinned ?? null,
+                      sets: 5,
+                      reps: 3,
+                      restSeconds: 90,
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+  });
+  const slot = await testPrisma().planSlot.findFirstOrThrow({
+    where: { planWeek: { planId: plan.id } },
+    include: { movements: true },
+  });
+  const assignment = await testPrisma().dailyAssignment.create({
+    data: {
+      userId: user.id,
+      date: '2026-09-16',
+      status: 'scheduled',
+      planSlotId: slot.id,
+    },
+  });
+  return { user, rungs, alt: alt!, assignment, movement: slot.movements[0] };
+}
+
+/** The key the endpoint builds for a prescribed movement. */
+function prescribedKey(planSlotMovementId: string) {
+  return { wodMovementId: null, planSlotMovementId };
+}
+
+/**
+ * A prescribed day is swappable on the same terms a WOD day is (DN-125): the
+ * app decides what you do, you decide how hard it is. Everything the service
+ * guards is the same question asked against a different column -- is this
+ * movement part of *today*, and is the target scaling rather than a different
+ * session -- so these say the answers did not change when the day did.
+ */
+describe('SubstitutionsService, on a prescribed day', () => {
+  it('records a swap keyed by the prescribed movement', async () => {
+    const { user, rungs, assignment, movement } = await prescribedDay();
+
+    await service().set(
+      user.id,
+      assignment.id,
+      prescribedKey(movement.id),
+      rungs[2].id,
+    );
+
+    expect(await storedSwaps(assignment.id)).toMatchObject([
+      {
+        wodMovementId: null,
+        planSlotMovementId: movement.id,
+        exerciseId: rungs[2].id,
+      },
+    ]);
+  });
+
+  it('corrects the choice rather than stacking a second row', async () => {
+    const { user, rungs, assignment, movement } = await prescribedDay();
+
+    await service().set(
+      user.id,
+      assignment.id,
+      prescribedKey(movement.id),
+      rungs[2].id,
+    );
+    await service().set(
+      user.id,
+      assignment.id,
+      prescribedKey(movement.id),
+      rungs[0].id,
+    );
+
+    const stored = await storedSwaps(assignment.id);
+    expect(stored).toHaveLength(1);
+    expect(stored[0].exerciseId).toBe(rungs[0].id);
+  });
+
+  it('allows the no-equipment alternative of a rung on the line', async () => {
+    // A line-prescribed row names no exercise, so the whole ladder and every
+    // alternative hanging off it is a legal target -- which is what lets an
+    // athlete dropped off the line by equipment stay off it on purpose.
+    const { user, alt, assignment, movement } = await prescribedDay();
+
+    await service().set(
+      user.id,
+      assignment.id,
+      prescribedKey(movement.id),
+      alt.id,
+    );
+
+    expect(await storedSwaps(assignment.id)).toHaveLength(1);
+  });
+
+  it('refuses a target off the prescribed line', async () => {
+    const { user, assignment, movement } = await prescribedDay();
+    const squat = await createExercise({ name: 'Air squat', line: 'squat' });
+
+    await expect(
+      service().set(
+        user.id,
+        assignment.id,
+        prescribedKey(movement.id),
+        squat.id,
+      ),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it("refuses a movement from a slot today's assignment does not point at", async () => {
+    // The prescribed-day half of "is this movement part of today?". Without
+    // it, any program's slot in the database would be swappable against any
+    // athlete's day.
+    const { user, rungs, assignment } = await prescribedDay();
+    const elsewhere = await prescribedDay();
+
+    await expect(
+      service().set(
+        user.id,
+        assignment.id,
+        prescribedKey(elsewhere.movement.id),
+        rungs[2].id,
+      ),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('refuses a swap on a day already trained', async () => {
+    const { user, rungs, assignment, movement } = await prescribedDay();
+    await testPrisma().dailyAssignment.update({
+      where: { id: assignment.id },
+      data: { status: 'completed' },
+    });
+
+    await expect(
+      service().set(
+        user.id,
+        assignment.id,
+        prescribedKey(movement.id),
+        rungs[2].id,
+      ),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('holds an exercise-pinned row to that exercise own ladder', async () => {
+    // The other half of PlanSlotMovement's xor. A pinned row names an
+    // exercise, so the ladder is read from it exactly as a WOD movement's is.
+    const { rungs } = await createLadder('squat', ['Box squat', 'Air squat']);
+    const {
+      user,
+      rungs: pullRungs,
+      assignment,
+      movement,
+    } = await prescribedDay({ pinned: rungs[0].id });
+
+    await expect(
+      service().set(
+        user.id,
+        assignment.id,
+        prescribedKey(movement.id),
+        pullRungs[2].id,
+      ),
+    ).rejects.toThrow(BadRequestException);
+    await service().set(
+      user.id,
+      assignment.id,
+      prescribedKey(movement.id),
+      rungs[1].id,
+    );
+    expect(await storedSwaps(assignment.id)).toHaveLength(1);
+  });
+
+  it('clears the swap through its own key', async () => {
+    const { user, rungs, assignment, movement } = await prescribedDay();
+    await service().set(
+      user.id,
+      assignment.id,
+      prescribedKey(movement.id),
+      rungs[2].id,
+    );
+
+    await service().clear(user.id, assignment.id, prescribedKey(movement.id));
+
+    expect(await storedSwaps(assignment.id)).toHaveLength(0);
+  });
+
+  it('refuses a row naming neither movement, and one naming both', async () => {
+    // The CHECK, which is the database's half of the rule the request schema
+    // states. A swap attached to nothing is not a swap, and one attached to
+    // two movements cannot say which the athlete tapped.
+    const { user, rungs, assignment, movement } = await prescribedDay();
+    const wod = await createWod({
+      movements: [{ exerciseId: rungs[0].id, reps: 30, order: 0 }],
+    });
+
+    await expect(
+      testPrisma().assignmentSubstitution.create({
+        data: {
+          userId: user.id,
+          assignmentId: assignment.id,
+          exerciseId: rungs[2].id,
+        },
+      }),
+    ).rejects.toThrow(/AssignmentSubstitution_movement_xor/);
+    await expect(
+      testPrisma().assignmentSubstitution.create({
+        data: {
+          userId: user.id,
+          assignmentId: assignment.id,
+          exerciseId: rungs[2].id,
+          planSlotMovementId: movement.id,
+          wodMovementId: wod.movements[0].id,
+        },
+      }),
+    ).rejects.toThrow(/AssignmentSubstitution_movement_xor/);
+  });
+
+  it('holds one swap per prescribed movement per day', async () => {
+    // The composite unique standing in for a partial index. Two prescribed
+    // rows on the same day each carry their own swap; the same row twice
+    // cannot.
+    const { user, rungs, assignment, movement } = await prescribedDay();
+
+    await testPrisma().assignmentSubstitution.create({
+      data: {
+        userId: user.id,
+        assignmentId: assignment.id,
+        planSlotMovementId: movement.id,
+        exerciseId: rungs[2].id,
+      },
+    });
+
+    await expect(
+      testPrisma().assignmentSubstitution.create({
+        data: {
+          userId: user.id,
+          assignmentId: assignment.id,
+          planSlotMovementId: movement.id,
+          exerciseId: rungs[0].id,
+        },
+      }),
+    ).rejects.toThrow(/assignmentId_planSlotMovementId/);
   });
 });
 

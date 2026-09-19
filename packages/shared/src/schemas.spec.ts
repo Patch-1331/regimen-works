@@ -843,6 +843,41 @@ describe("setSubstitutionRequestSchema", () => {
       }).success,
     ).toBe(false);
   });
+
+  it("parses a swap against a prescribed movement instead", () => {
+    // A program's straight-sets day carries no WodMovement at all (DN-125).
+    expect(
+      setSubstitutionRequestSchema.safeParse({
+        planSlotMovementId: "psm-1",
+        exerciseId: "e-2",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects a body naming both kinds of movement", () => {
+    expect(
+      setSubstitutionRequestSchema.safeParse({
+        wodMovementId: "wm-1",
+        planSlotMovementId: "psm-1",
+        exerciseId: "e-2",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a body naming neither", () => {
+    expect(
+      setSubstitutionRequestSchema.safeParse({ exerciseId: "e-2" }).success,
+    ).toBe(false);
+  });
+
+  it("defaults the key it was not given, so a body written before DN-125 still parses", () => {
+    expect(
+      setSubstitutionRequestSchema.parse({
+        wodMovementId: "wm-1",
+        exerciseId: "e-2",
+      }).planSlotMovementId,
+    ).toBeNull();
+  });
 });
 
 describe("proposedRungChangeSchema", () => {
@@ -927,7 +962,9 @@ describe("todayResponseSchema", () => {
       restSeconds: 90,
       line: "pull",
       exercise: movement().exercise,
+      isSwapped: false,
       prescribedName: null,
+      prescribedId: null,
       prescribedReason: null,
     };
     const day = (assignment: Record<string, unknown>) =>

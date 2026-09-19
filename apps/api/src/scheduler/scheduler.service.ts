@@ -88,7 +88,7 @@ export class SchedulerService {
       // row records what happened, this answers what today is.
       const prescription = existing.wod
         ? null
-        : await this.prescriptionFor(userId, day);
+        : await this.prescriptionFor(userId, existing.id, day);
       const assignment =
         existing.status === 'skipped' || (!existing.wod && !prescription)
           ? null
@@ -174,7 +174,9 @@ export class SchedulerService {
     // thing that means something by it. Resolved before the row is written
     // because an empty result is a day to generate a WOD for instead, and by
     // then the row would already say otherwise.
-    const prescription = await this.prescriptionFor(userId, day);
+    // No assignment id to resolve swaps against, and none needed: the row does
+    // not exist yet, so nobody has had a day to swap on.
+    const prescription = await this.prescriptionFor(userId, null, day);
     if (prescription) {
       const created = await this.prisma.dailyAssignment.create({
         data: {
@@ -347,13 +349,23 @@ export class SchedulerService {
    * for a slot with no rows at all: an authoring or library gap should cost
    * somebody the session it described, not the day.
    */
-  private async prescriptionFor(userId: string, day: SettledDay) {
+  private async prescriptionFor(
+    userId: string,
+    assignmentId: string | null,
+    day: SettledDay,
+  ) {
     if (day.kind !== 'prescribed') return null;
     const movements = await this.resolution.resolvePrescription(
       userId,
+      assignmentId,
       day.movements,
     );
-    return movements.length > 0 ? { movements } : null;
+    // Same rendering rule as a WOD day (DN-116): the resolver records what an
+    // automatic layer replaced even on a row the athlete swapped, and the
+    // plate does not show it there.
+    return movements.length > 0
+      ? { movements: hideOverriddenPrescriptions(movements) }
+      : null;
   }
 
   private async wodForDay(
@@ -484,7 +496,15 @@ export class SchedulerService {
     // The makeup hands over whatever the program authored for this weekday,
     // and since DN-19 that can be straight sets rather than a WOD. Resolved
     // the same way `getToday` does, so a day taken late is the same day.
-    const prescription = await this.prescriptionFor(userId, day);
+    // Resolved against the row that is already there, rather than against the
+    // one the upsert below writes: a day the athlete swapped on and then
+    // marked as rest comes back with their swaps still on it. Taking a day
+    // late should not quietly undo the choices made on it.
+    const prescription = await this.prescriptionFor(
+      userId,
+      existing?.id ?? null,
+      day,
+    );
     const wod = prescription
       ? null
       : await this.wodForDay(

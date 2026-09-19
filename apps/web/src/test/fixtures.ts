@@ -2,6 +2,7 @@ import type {
   ChecklistExercise,
   Settings,
   SkillLevel,
+  PrescribedMovement,
   TodayPlan,
   TodayResponse,
   Wod,
@@ -42,6 +43,45 @@ export function movement(overrides: Partial<WodMovement> = {}): WodMovement {
       instructions: "Hands under the shoulders, body in one line.",
       line: "push_horizontal",
       rung: 2,
+      altExerciseId: null,
+      ...overrides.exercise,
+    },
+  };
+}
+
+/**
+ * One movement of a prescribed day (DN-125) — the resolved shape the athlete
+ * is handed, not the authored one. `id` is a PlanSlotMovement's.
+ */
+export function prescribedMovement(
+  // `exercise` partial rather than whole, because the body below spreads it
+  // over a complete default: a spec that wants a hold in seconds should not
+  // have to restate the line, the rung and the kit to say so.
+  overrides: Partial<Omit<PrescribedMovement, "exercise">> & {
+    exercise?: Partial<PrescribedMovement["exercise"]>;
+  } = {},
+): PrescribedMovement {
+  return {
+    id: "plan-slot-movement-1",
+    order: 0,
+    sets: 5,
+    reps: 3,
+    restSeconds: 90,
+    line: "pull",
+    isSwapped: false,
+    prescribedName: null,
+    prescribedId: null,
+    prescribedReason: null,
+    ...overrides,
+    exercise: {
+      id: "exercise-chin-up",
+      name: "Chin-up",
+      pattern: "pull",
+      equipment: [],
+      unit: "reps",
+      instructions: null,
+      line: "pull",
+      rung: 1,
       altExerciseId: null,
       ...overrides.exercise,
     },

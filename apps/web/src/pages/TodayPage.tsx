@@ -5,6 +5,7 @@ import {
   DEFAULT_PLAN_ID,
   effectiveRounds,
   type MakeupOffer as MakeupOfferBlock,
+  type PrescribedMovement,
   type TodayPlan,
 } from "@regimen-works/shared";
 import { api } from "../lib/api";
@@ -63,13 +64,39 @@ export function TodayPage() {
   // open over a row that has already changed reads as though it hadn't.
   async function handleSwap(wodMovementId: string, exerciseId: string) {
     setSwapMovementId(null);
-    await api.setSubstitution(assignmentId, { wodMovementId, exerciseId });
+    await api.setSubstitution(assignmentId, {
+      wodMovementId,
+      planSlotMovementId: null,
+      exerciseId,
+    });
     await queryClient.invalidateQueries({ queryKey: ["today"] });
   }
 
   async function handleRevert(wodMovementId: string) {
     setSwapMovementId(null);
     await api.clearSubstitution(assignmentId, wodMovementId);
+    await queryClient.invalidateQueries({ queryKey: ["today"] });
+  }
+
+  // The same two, against a prescribed day's movements (DN-125). Separate
+  // functions rather than one with a flag, because the two ids come from
+  // different tables and the endpoints say so.
+  async function handlePrescribedSwap(
+    planSlotMovementId: string,
+    exerciseId: string,
+  ) {
+    setSwapMovementId(null);
+    await api.setSubstitution(assignmentId, {
+      wodMovementId: null,
+      planSlotMovementId,
+      exerciseId,
+    });
+    await queryClient.invalidateQueries({ queryKey: ["today"] });
+  }
+
+  async function handlePrescribedRevert(planSlotMovementId: string) {
+    setSwapMovementId(null);
+    await api.clearPrescribedSubstitution(assignmentId, planSlotMovementId);
     await queryClient.invalidateQueries({ queryKey: ["today"] });
   }
 
@@ -104,31 +131,160 @@ export function TodayPage() {
     );
   }
 
-  const { id: assignmentId, wod, status } = data.assignment;
+  const { id: assignmentId, wod, prescription, status } = data.assignment;
 
-  // A prescribed day -- straight sets rather than a WOD (DN-19). The API can
-  // resolve one; nothing here can run one yet, and the runner is its own
-  // issue. Said plainly rather than folded into the rest-day plate above,
-  // because the athlete has a session today and telling them to rest would be
-  // false. No seeded program authors one of these days, so this is a guard
-  // against a hand-authored program rather than a screen anybody reaches.
-  if (!wod) {
+  // A prescribed day -- straight sets rather than a WOD (DN-19). Its own plate
+  // rather than a variant of the one below: a WOD is scored against a clock and
+  // this is not, so the two screens share the panel and almost nothing else.
+  //
+  // The runner is DN-20 and is not built, so there is no way to start one yet.
+  // That is said in a line at the bottom rather than by showing a button that
+  // does nothing -- and everything above it is real: the movements are resolved
+  // to this athlete's rung and equipment, and the swap works.
+  if (prescription) {
     return (
-      <div className="p-6">
+      <div className="flex flex-1 flex-col p-6">
         {program && <ProgramStrip plan={program} date={data.date} />}
         <h1
-          className="text-4xl font-extrabold uppercase leading-none"
-          style={{ fontFamily: "var(--font-display)" }}
+          className="text-5xl font-extrabold uppercase leading-none"
+          style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}
         >
-          Strength day
+          Strength
         </h1>
-        <p className="mt-3 text-[var(--ink-soft)]">
-          Your program prescribes straight sets today. This screen can’t run
-          them yet.
+        <p
+          className="mt-2 text-xs font-semibold tracking-[0.14em] text-[var(--ink-faint)]"
+          style={{ fontFamily: "var(--font-mono)" }}
+        >
+          STRAIGHT SETS
         </p>
+
+        {/* The instrument bank, reading what this day actually has.
+            A prescribed day has no time cap and no rounds, and both of the
+            obvious answers to that are wrong: dimming the WOD readouts says
+            today is a lesser day, and filling them in says something false.
+            So the two slots hold the two numbers a strength session does
+            have — how many movements, and how many working sets in total —
+            lit, because this is a session like any other. */}
+        <div className="mt-5 grid grid-cols-2 gap-2.5">
+          <DigitReadout
+            value={String(prescription.movements.length)}
+            label="Movements"
+            size="lg"
+          />
+          <DigitReadout
+            value={String(totalSets(prescription.movements))}
+            label="Sets"
+            size="lg"
+          />
+        </div>
+
+        <div
+          className="mt-2.5"
+          style={{
+            background: "var(--panel)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          <p
+            className="px-4 pt-3 text-[10px] font-semibold tracking-[0.14em] text-[var(--ink-faint)]"
+            style={{ fontFamily: "var(--font-mono)" }}
+          >
+            {/* Neither "MOVEMENTS", which the readout above already says, nor
+                "PRESCRIBED", which is the swap panel's word for one particular
+                row. A word used twice on one screen makes the reader work out
+                whether the two uses mean the same thing. */}
+            SESSION
+          </p>
+          <div className="divide-y" style={{ borderColor: "var(--border)" }}>
+            {prescription.movements.map((m) => {
+              const instructions = m.exercise.instructions;
+              const isOpen = openMovementId === m.id;
+              const panelId = `movement-instructions-${m.id}`;
+              const swapPanelId = `movement-swap-${m.id}`;
+              const isSwapOpen = swapMovementId === m.id;
+              // Built off the exercise the athlete is actually holding, the
+              // same as the WOD plate: where equipment dropped them off the
+              // program's line, `prescribedId` is what puts it back on offer.
+              const swapOptions = buildSwapOptions(
+                exercises ?? [],
+                m.exercise.line,
+                m.exercise.id,
+                m.prescribedId,
+              );
+              const canSwap = swapOptions.length > 0 || m.isSwapped;
+
+              return (
+                <div key={m.id} style={{ borderColor: "var(--border)" }}>
+                  <div className="flex items-center gap-1 pr-2.5">
+                    <PrescribedName
+                      instructions={instructions}
+                      isOpen={isOpen}
+                      panelId={panelId}
+                      movement={m}
+                      onToggle={() => {
+                        setSwapMovementId(null);
+                        setOpenMovementId(isOpen ? null : m.id);
+                      }}
+                    />
+                    {canSwap ? (
+                      <SwapButton
+                        name={m.exercise.name}
+                        open={isSwapOpen}
+                        panelId={swapPanelId}
+                        onClick={() => {
+                          setOpenMovementId(null);
+                          setSwapMovementId(isSwapOpen ? null : m.id);
+                        }}
+                      />
+                    ) : (
+                      <span
+                        aria-hidden="true"
+                        style={{ width: 44, flexShrink: 0 }}
+                      />
+                    )}
+                  </div>
+                  {isOpen && instructions && (
+                    <InstructionsPanel id={panelId} text={instructions} />
+                  )}
+                  {isSwapOpen && (
+                    <SwapPanel
+                      id={swapPanelId}
+                      options={swapOptions}
+                      isSwapped={m.isSwapped}
+                      prescribedName={m.prescribedName}
+                      prescribedReason={m.prescribedReason}
+                      onPick={(exerciseId) =>
+                        void handlePrescribedSwap(m.id, exerciseId)
+                      }
+                      onRevert={() => void handlePrescribedRevert(m.id)}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-auto pt-6">
+          <p className="text-center text-xs text-[var(--ink-faint)]">
+            Running a strength session isn't built yet — take these as written.
+          </p>
+          <button
+            onClick={handleSkip}
+            className="mt-3 w-full text-center text-xs font-semibold tracking-[0.08em] text-[var(--ink-faint)]"
+            style={{ fontFamily: "var(--font-mono)" }}
+          >
+            MARK TODAY AS REST
+          </button>
+        </div>
       </div>
     );
   }
+
+  // Neither a WOD nor a prescription is a row the API refuses to build --
+  // `todayAssignmentSchema` states the xor -- so there is nothing honest to
+  // render here and nothing to say about it.
+  if (!wod) return null;
 
   const isCompleted = status === "completed";
   const isInProgress = status === "in_progress";
@@ -413,6 +569,127 @@ function movementCount(m: {
   const suffix = m.exercise.unit === "seconds" ? "s" : "";
   if (m.repScheme.length > 0) return `${m.repScheme.join("-")}${suffix}`;
   return `${m.reps}${suffix}`;
+}
+
+/** How many working sets the whole day comes to. */
+function totalSets(movements: PrescribedMovement[]): number {
+  return movements.reduce((sum, m) => sum + m.sets, 0);
+}
+
+/**
+ * One row of a prescribed day's plate (DN-125).
+ *
+ * Deliberately its own component rather than a shape shared with the WOD
+ * plate's rows. The two look alike and are not the same row: this one carries
+ * sets × reps and a prescribed rest, and a WOD's carries a ladder that a rest
+ * interval would have nothing to do with. One component covering both would be
+ * a parameter per difference.
+ *
+ * What it does keep identical is the disclosure behaviour: a movement with no
+ * written copy is an inert label, the row it sits in is not, and the caret's
+ * width is held either way so the two line up.
+ */
+function PrescribedName({
+  instructions,
+  isOpen,
+  panelId,
+  movement,
+  onToggle,
+}: {
+  instructions: string | null;
+  isOpen: boolean;
+  panelId: string;
+  movement: PrescribedMovement;
+  onToggle: () => void;
+}) {
+  const name = (
+    <span className="flex min-w-0 flex-col gap-0.5">
+      <span className="flex min-w-0 items-center gap-2">
+        <span
+          className="truncate font-semibold tracking-wide text-[var(--ink-soft)]"
+          style={{ fontFamily: "var(--font-mono)" }}
+        >
+          {movement.exercise.name.toUpperCase()}
+        </span>
+        {/* Only equipment can move a prescribed movement without the athlete
+            asking (DN-19) — resolving the line through their rung is the
+            prescription rather than a substitution for it — so there is one
+            word here where the WOD plate has two. */}
+        {movement.prescribedName && (
+          <span
+            className="shrink-0 text-[10px] tracking-[0.1em] text-[var(--ink-faint)]"
+            style={{ fontFamily: "var(--font-mono)" }}
+          >
+            NO KIT
+          </span>
+        )}
+      </span>
+      {/* Rest sits under the name rather than beside the count: it is part of
+          the prescription, and a rest interval crammed in next to "5 × 3"
+          stops that being a number anyone reads at a glance. */}
+      <span
+        className="text-[10px] tracking-[0.1em] text-[var(--ink-faint)]"
+        style={{ fontFamily: "var(--font-mono)" }}
+      >
+        {restCopy(movement.restSeconds)}
+      </span>
+    </span>
+  );
+  const count = (
+    <span
+      className="text-lg font-bold"
+      style={{
+        fontFamily: "var(--font-mono)",
+        fontVariantNumeric: "tabular-nums",
+        color: "var(--ink)",
+      }}
+    >
+      {movement.sets} × {movement.reps}
+      {movement.exercise.unit === "seconds" ? "s" : ""}
+    </span>
+  );
+
+  if (!instructions) {
+    return (
+      <div className="flex min-w-0 flex-1 items-center justify-between gap-3 py-3 pl-4">
+        <span className="flex min-w-0 items-center gap-2">
+          <span aria-hidden="true" style={{ width: 12, flexShrink: 0 }} />
+          {name}
+        </span>
+        {count}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={isOpen}
+      aria-controls={panelId}
+      aria-label={`How to do ${movement.exercise.name.toLowerCase()}`}
+      className="flex min-w-0 flex-1 items-center justify-between gap-3 py-3 pl-4 text-left"
+    >
+      <span className="flex min-w-0 items-center gap-2">
+        <InstructionsCaret open={isOpen} />
+        {name}
+      </span>
+      {count}
+    </button>
+  );
+}
+
+/**
+ * The prescribed rest between sets.
+ *
+ * Zero is a prescription rather than an omission — the author meant "straight
+ * through" — so it gets words instead of "REST 0S", which reads as a field
+ * nobody filled in.
+ */
+function restCopy(restSeconds: number): string {
+  if (restSeconds === 0) return "STRAIGHT THROUGH";
+  if (restSeconds % 60 === 0) return `REST ${restSeconds / 60}M`;
+  return `REST ${restSeconds}S`;
 }
 
 function CheckIcon() {

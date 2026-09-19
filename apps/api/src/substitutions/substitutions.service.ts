@@ -21,16 +21,30 @@ export class SubstitutionsService {
   async set(
     userId: string,
     assignmentId: string,
-    wodMovementId: string,
+    key: SwapKey,
     exerciseId: string,
   ) {
     const movement = await this.loadSwappableMovement(
       userId,
       assignmentId,
-      wodMovementId,
+      key,
     );
     await this.assertLegalTarget(userId, movement, exerciseId);
 
+    // Two upserts rather than one write with a variable key, because the two
+    // composite uniques are genuinely different indexes and Prisma names them.
+    if (key.planSlotMovementId !== null) {
+      const planSlotMovementId = key.planSlotMovementId;
+      return this.prisma.assignmentSubstitution.upsert({
+        where: {
+          assignmentId_planSlotMovementId: { assignmentId, planSlotMovementId },
+        },
+        update: { exerciseId },
+        create: { userId, assignmentId, planSlotMovementId, exerciseId },
+      });
+    }
+
+    const wodMovementId = key.wodMovementId!;
     return this.prisma.assignmentSubstitution.upsert({
       where: {
         assignmentId_wodMovementId: { assignmentId, wodMovementId },
@@ -45,7 +59,9 @@ export class SubstitutionsService {
    * lines trained at something other than their standing choice.
    *
    * Read from the substitutions rather than from the WOD, because the WOD says
-   * what was prescribed and these rows say what was chosen. A swap to an
+   * what was prescribed and these rows say what was chosen -- which is why a
+   * prescribed day's swaps (DN-125) count here on exactly the same terms,
+   * with nothing to add: a rung trained is a rung trained. A swap to an
    * off-ladder alternative (the no-equipment substitute) carries no rung, so
    * there is no position on the line to remember and it proposes nothing.
    */
@@ -86,29 +102,35 @@ export class SubstitutionsService {
   }
 
   /** Puts the movement back to what the program prescribed. */
-  async clear(userId: string, assignmentId: string, wodMovementId: string) {
-    await this.loadSwappableMovement(userId, assignmentId, wodMovementId);
+  async clear(userId: string, assignmentId: string, key: SwapKey) {
+    await this.loadSwappableMovement(userId, assignmentId, key);
     await this.prisma.assignmentSubstitution.deleteMany({
-      where: { userId, assignmentId, wodMovementId },
+      where: { userId, assignmentId, ...key },
     });
   }
 
   /**
    * Checks the three things a swap needs: the assignment is this user's, the
-   * day is still open, and the movement is actually part of that day's WOD.
+   * day is still open, and the movement is actually part of today's session.
    *
    * A completed or skipped day is refused because the swap is a statement
    * about what the athlete is *going* to do — rewriting it afterwards would
    * put the record out of step with the session already logged against it.
+   *
+   * Both kinds of day answer the third question the same way, against
+   * different columns (DN-125): a WOD movement belongs to the day's `wodId`,
+   * and a prescribed movement belongs to the day's `planSlotId`. Either way
+   * the row the athlete tapped has to be one this assignment actually holds,
+   * or a swap could be written against somebody else's session entirely.
    */
   private async loadSwappableMovement(
     userId: string,
     assignmentId: string,
-    wodMovementId: string,
-  ) {
+    key: SwapKey,
+  ): Promise<SwappableMovement> {
     const assignment = await this.prisma.dailyAssignment.findFirst({
       where: { id: assignmentId, userId },
-      select: { id: true, status: true, wodId: true },
+      select: { id: true, status: true, wodId: true, planSlotId: true },
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
 
@@ -118,14 +140,48 @@ export class SubstitutionsService {
       );
     }
 
+    if (key.planSlotMovementId !== null) {
+      const movement = await this.prisma.planSlotMovement.findFirst({
+        where: {
+          id: key.planSlotMovementId,
+          planSlotId: assignment.planSlotId ?? undefined,
+        },
+        include: { exercise: true },
+      });
+      if (!movement) {
+        throw new NotFoundException(
+          "Movement is not part of today's prescription",
+        );
+      }
+      // A line-prescribed row has no exercise of its own: the ladder *is* what
+      // it named, and which rung the athlete is standing on is resolved per
+      // read rather than stored. Null current exercise is right for it -- the
+      // legality check then asks only whether the target is on that line.
+      return movement.exercise
+        ? {
+            currentExerciseId: movement.exercise.id,
+            line: movement.exercise.line,
+            altExerciseId: movement.exercise.altExerciseId,
+          }
+        : {
+            currentExerciseId: null,
+            line: movement.line,
+            altExerciseId: null,
+          };
+    }
+
     const movement = await this.prisma.wodMovement.findFirst({
-      where: { id: wodMovementId, wodId: assignment.wodId ?? undefined },
+      where: { id: key.wodMovementId!, wodId: assignment.wodId ?? undefined },
       include: { exercise: true },
     });
     if (!movement) {
       throw new NotFoundException("Movement is not part of today's WOD");
     }
-    return movement;
+    return {
+      currentExerciseId: movement.exerciseId,
+      line: movement.exercise.line,
+      altExerciseId: movement.exercise.altExerciseId,
+    };
   }
 
   /**
@@ -146,17 +202,14 @@ export class SubstitutionsService {
    */
   private async assertLegalTarget(
     userId: string,
-    movement: {
-      exerciseId: string;
-      exercise: { line: string | null; altExerciseId: string | null };
-    },
+    movement: SwappableMovement,
     exerciseId: string,
   ) {
-    if (exerciseId === movement.exerciseId) return;
+    if (exerciseId === movement.currentExerciseId) return;
 
-    const line = movement.exercise.line;
+    const line = movement.line;
     if (!line) {
-      if (exerciseId === movement.exercise.altExerciseId) return;
+      if (exerciseId === movement.altExerciseId) return;
       throw new BadRequestException(
         'This movement is not on a progression line, so it can only be swapped for its alternative',
       );
@@ -180,3 +233,29 @@ export class SubstitutionsService {
     }
   }
 }
+
+/**
+ * Which movement the athlete tapped: exactly one of the two, the same xor the
+ * request schema and the CHECK both state (DN-125).
+ *
+ * Passed around as the pair rather than as a tagged union, because it is also
+ * a valid `where` fragment for the substitution row itself — the delete spreads
+ * it straight in, and one shape means the two halves cannot disagree.
+ */
+export type SwapKey = {
+  wodMovementId: string | null;
+  planSlotMovementId: string | null;
+};
+
+/**
+ * A movement a swap can be made against, reduced to what legality needs.
+ *
+ * The two kinds of day flatten to this before anything decides what a legal
+ * target is, so the ladder rule is written once. `currentExerciseId` is null
+ * only for a line-prescribed row, which names a line and no exercise at all.
+ */
+type SwappableMovement = {
+  currentExerciseId: string | null;
+  line: string | null;
+  altExerciseId: string | null;
+};

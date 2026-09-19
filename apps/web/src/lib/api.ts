@@ -274,6 +274,19 @@ export const api = {
       `/assignments/${assignmentId}/substitutions/${wodMovementId}`,
       { method: "DELETE" },
     ),
+  /**
+   * Undoing a swap on a prescribed day (DN-125). Its own path rather than the
+   * one above, because a bare id in the URL cannot say which kind of movement
+   * it is — see the controller.
+   */
+  clearPrescribedSubstitution: (
+    assignmentId: string,
+    planSlotMovementId: string,
+  ) =>
+    request<void>(
+      `/assignments/${assignmentId}/substitutions/prescribed/${planSlotMovementId}`,
+      { method: "DELETE" },
+    ),
 
   saveLog: (assignmentId: string, body: LogResultRequest) =>
     postJson<WorkoutLog>(`/assignments/${assignmentId}/log`, body),
