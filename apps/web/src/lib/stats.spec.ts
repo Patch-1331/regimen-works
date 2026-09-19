@@ -13,19 +13,45 @@ import {
   trainingDaysThisWeek,
 } from "./stats";
 
-/** A History row with only the fields the stat under test reads spelled out. */
-function log(fields: Partial<WorkoutLogListItem>): WorkoutLogListItem {
+type WodBlock = NonNullable<WorkoutLogListItem["wod"]>;
+
+/**
+ * A WOD row with only the fields the stat under test reads spelled out.
+ *
+ * `wodType` and `dominantPattern` stay flat here and are folded into the
+ * nested `wod` block, so a test that cares about one of them says so in one
+ * word rather than in a nested literal (DN-126).
+ */
+function log({
+  wodType = "for_time",
+  dominantPattern = "pull",
+  ...fields
+}: Partial<Omit<WorkoutLogListItem, "wod">> & {
+  wodType?: WodBlock["type"];
+  dominantPattern?: WodBlock["dominantPattern"];
+}): WorkoutLogListItem {
   return {
     id: "log-1",
     assignmentId: "assignment-1",
     date: "2026-09-14",
-    wodName: "Fran",
-    wodType: "for_time",
-    dominantPattern: "pull",
+    name: "Fran",
+    wod: { type: wodType, dominantPattern },
     resultType: "time_seconds",
     resultValue: "300",
     rpe: null,
     notes: null,
+    ...fields,
+  };
+}
+
+/** A finished prescribed day: a name, no WOD, and a result counted in sets. */
+function strengthLog(fields: Partial<WorkoutLogListItem> = {}): WorkoutLogListItem {
+  return {
+    ...log({}),
+    name: "Strength",
+    wod: null,
+    resultType: "sets_completed",
+    resultValue: "5/5",
     ...fields,
   };
 }
@@ -90,17 +116,30 @@ describe("formatResult", () => {
   it("leaves a whole-round result alone", () => {
     expect(formatResult("rounds_reps", "6")).toBe("6");
   });
+
+  it("leaves a sets result as it stands, slash and all", () => {
+    // The slash is what tells "six of eight sets" apart from "six rounds" at a
+    // glance, so spacing it out the way a rounds result is spaced would take
+    // the one thing distinguishing them (DN-126).
+    expect(formatResult("sets_completed", "6/8")).toBe("6/8");
+  });
 });
 
 describe("computePRs", () => {
+  it("leaves prescribed days out, having no score to be best at", () => {
+    // Every finished strength day reads "5/5", so a table of them would be a
+    // list of ties presented as records (DN-126).
+    expect(computePRs([strengthLog(), strengthLog({ id: "log-2" })])).toEqual([]);
+  });
+
   it("has no records to show before anything is logged", () => {
     expect(computePRs([])).toEqual([]);
   });
 
   it("treats the faster time as the record, not the later one", () => {
     const prs = computePRs([
-      log({ wodName: "Fran", date: "2026-09-01", resultValue: "300" }),
-      log({ wodName: "Fran", date: "2026-09-08", resultValue: "420" }),
+      log({ name: "Fran", date: "2026-09-01", resultValue: "300" }),
+      log({ name: "Fran", date: "2026-09-08", resultValue: "420" }),
     ]);
     expect(prs).toEqual([
       { wodName: "Fran", resultType: "time_seconds", resultValue: "300", date: "2026-09-01" },
@@ -109,33 +148,33 @@ describe("computePRs", () => {
 
   it("treats more rounds as the record for an AMRAP", () => {
     const prs = computePRs([
-      log({ wodName: "Cindy", wodType: "amrap", resultType: "rounds_reps", resultValue: "12+3" }),
-      log({ wodName: "Cindy", wodType: "amrap", resultType: "rounds_reps", resultValue: "11+19" }),
+      log({ name: "Cindy", wodType: "amrap", resultType: "rounds_reps", resultValue: "12+3" }),
+      log({ name: "Cindy", wodType: "amrap", resultType: "rounds_reps", resultValue: "11+19" }),
     ]);
     expect(prs[0].resultValue).toBe("12+3");
   });
 
   it("breaks an equal-rounds tie on the partial reps", () => {
     const prs = computePRs([
-      log({ wodName: "Cindy", resultType: "rounds_reps", resultValue: "12+3" }),
-      log({ wodName: "Cindy", resultType: "rounds_reps", resultValue: "12+14" }),
+      log({ name: "Cindy", resultType: "rounds_reps", resultValue: "12+3" }),
+      log({ name: "Cindy", resultType: "rounds_reps", resultValue: "12+14" }),
     ]);
     expect(prs[0].resultValue).toBe("12+14");
   });
 
   it("keeps the first of two equal results, so a PR needs beating rather than matching", () => {
     const prs = computePRs([
-      log({ wodName: "Fran", date: "2026-09-01", resultValue: "300" }),
-      log({ wodName: "Fran", date: "2026-09-08", resultValue: "300" }),
+      log({ name: "Fran", date: "2026-09-01", resultValue: "300" }),
+      log({ name: "Fran", date: "2026-09-08", resultValue: "300" }),
     ]);
     expect(prs[0].date).toBe("2026-09-01");
   });
 
   it("keeps one record per WOD, listed by name", () => {
     const prs = computePRs([
-      log({ wodName: "Murph" }),
-      log({ wodName: "Angie" }),
-      log({ wodName: "Fran" }),
+      log({ name: "Murph" }),
+      log({ name: "Angie" }),
+      log({ name: "Fran" }),
     ]);
     expect(prs.map((p) => p.wodName)).toEqual(["Angie", "Fran", "Murph"]);
   });
@@ -212,6 +251,15 @@ describe("computePatternBalance", () => {
       { pattern: "squat", count: 1 },
     ]);
   });
+
+  it("leaves a prescribed day out, having no pattern to count it under", () => {
+    // A strength day has no dominant pattern -- it is several movements with
+    // no single shape. Counting it as one would be the chart inventing a fact
+    // about the session (DN-126).
+    expect(computePatternBalance([log({ dominantPattern: "pull" }), strengthLog()])).toEqual([
+      { pattern: "pull", count: 1 },
+    ]);
+  });
 });
 
 describe("computeWodTypeDistribution", () => {
@@ -231,6 +279,23 @@ describe("computeWodTypeDistribution", () => {
       { wodType: "amrap", count: 2, percent: 50 },
       { wodType: "for_time", count: 1, percent: 25 },
       { wodType: "emom", count: 1, percent: 25 },
+    ]);
+  });
+
+  it("takes its shares over the WODs, not over every day trained", () => {
+    // A strength day belongs in neither numerator nor denominator: it has no
+    // WOD type, and leaving it in the denominator makes the shares sum to
+    // less than 100% and says the athlete trained less than they did.
+    const shares = computeWodTypeDistribution([
+      log({ wodType: "amrap" }),
+      log({ wodType: "for_time" }),
+      strengthLog(),
+    ]);
+
+    expect(shares.reduce((sum, s) => sum + s.percent, 0)).toBe(100);
+    expect(shares).toEqual([
+      { wodType: "amrap", count: 1, percent: 50 },
+      { wodType: "for_time", count: 1, percent: 50 },
     ]);
   });
 });
@@ -281,23 +346,23 @@ describe("computePatternVolumeTrend", () => {
 
 describe("computeForTimeTrends", () => {
   it("ignores WODs logged only once, which have no trend yet", () => {
-    expect(computeForTimeTrends([log({ wodName: "Fran" })])).toEqual([]);
+    expect(computeForTimeTrends([log({ name: "Fran" })])).toEqual([]);
   });
 
   it("ignores rounds+reps results, which are not times", () => {
     const logs = [
-      log({ wodName: "Cindy", resultType: "rounds_reps", resultValue: "12+3" }),
-      log({ wodName: "Cindy", resultType: "rounds_reps", resultValue: "13+0" }),
+      log({ name: "Cindy", resultType: "rounds_reps", resultValue: "12+3" }),
+      log({ name: "Cindy", resultType: "rounds_reps", resultValue: "13+0" }),
     ];
     expect(computeForTimeTrends(logs)).toEqual([]);
   });
 
   it("puts each WOD's attempts in date order, WODs by name", () => {
     const logs = [
-      log({ wodName: "Fran", date: "2026-09-08", resultValue: "420" }),
-      log({ wodName: "Fran", date: "2026-09-01", resultValue: "480" }),
-      log({ wodName: "Annie", date: "2026-09-02", resultValue: "600" }),
-      log({ wodName: "Annie", date: "2026-09-09", resultValue: "560" }),
+      log({ name: "Fran", date: "2026-09-08", resultValue: "420" }),
+      log({ name: "Fran", date: "2026-09-01", resultValue: "480" }),
+      log({ name: "Annie", date: "2026-09-02", resultValue: "600" }),
+      log({ name: "Annie", date: "2026-09-09", resultValue: "560" }),
     ];
     expect(computeForTimeTrends(logs)).toEqual([
       {

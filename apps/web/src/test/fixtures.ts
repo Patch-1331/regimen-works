@@ -251,12 +251,35 @@ export function workoutLog(
     id: "log-1",
     assignmentId: ASSIGNMENT_ID,
     date: "2026-09-16",
-    wodName: "Fran",
-    wodType: "for_time",
-    dominantPattern: "push",
+    name: "Fran",
+    wod: { type: "for_time", dominantPattern: "push" },
     resultType: "time_seconds",
     resultValue: "305",
     rpe: 8,
+    notes: null,
+    ...overrides,
+  };
+}
+
+/**
+ * A finished prescribed day, as History reads it back (DN-126).
+ *
+ * Its own fixture rather than an override list, because the interesting thing
+ * about this row is the combination — a name, no `wod`, and a result counted
+ * in sets — and spelling that out at each call site invites two of the three.
+ */
+export function strengthLog(
+  overrides: Partial<WorkoutLogListItem> = {},
+): WorkoutLogListItem {
+  return {
+    id: "log-strength-1",
+    assignmentId: ASSIGNMENT_ID,
+    date: "2026-09-16",
+    name: "Strength",
+    wod: null,
+    resultType: "sets_completed",
+    resultValue: "6/8",
+    rpe: 7,
     notes: null,
     ...overrides,
   };

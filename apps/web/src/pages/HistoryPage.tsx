@@ -42,7 +42,7 @@ export function HistoryPage() {
                   {formatDate(log.date)}
                 </p>
                 <p className="truncate font-semibold uppercase" style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}>
-                  {log.wodName}
+                  {log.name}
                 </p>
                 {log.notes && <p className="mt-0.5 truncate text-sm text-[var(--ink-soft)]">{log.notes}</p>}
               </div>

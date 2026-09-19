@@ -4,6 +4,7 @@ import { testPrisma } from '../test-support/database';
 import {
   createAssignment,
   createLog,
+  createPrescribedDay,
   createUser,
   createWod,
 } from '../test-support/fixtures';
@@ -136,6 +137,101 @@ describe('LogsService.upsert', () => {
     );
     expect((await storedAssignment(restDay.id))?.status).toBe('scheduled');
   });
+
+  it('stores a straight-sets result on a prescribed day (DN-126)', async () => {
+    const user = await createUser();
+    const { assignment } = await createPrescribedDay(user.id);
+
+    const log = await service().upsert(user.id, assignment.id, {
+      resultType: 'sets_completed',
+      resultValue: '5/5',
+      rpe: 8,
+    });
+
+    expect(log).toMatchObject({
+      resultType: 'sets_completed',
+      resultValue: '5/5',
+      rpe: 8,
+    });
+    expect((await storedAssignment(assignment.id))?.status).toBe('completed');
+  });
+
+  it('stores a session the athlete cut short', async () => {
+    // The whole point of carrying both halves: three of five is a real day
+    // and a record worth keeping, not a failure to be refused.
+    const user = await createUser();
+    const { assignment } = await createPrescribedDay(user.id);
+
+    const log = await service().upsert(user.id, assignment.id, {
+      resultType: 'sets_completed',
+      resultValue: '3/5',
+    });
+
+    expect(log.resultValue).toBe('3/5');
+  });
+
+  it('counts the sets across every prescribed movement', async () => {
+    const user = await createUser();
+    const { assignment } = await createPrescribedDay(user.id, { sets: [5, 3] });
+
+    const log = await service().upsert(user.id, assignment.id, {
+      resultType: 'sets_completed',
+      resultValue: '8/8',
+    });
+
+    expect(log.resultValue).toBe('8/8');
+  });
+
+  it('refuses a total that is not what the day prescribed', async () => {
+    // Both halves come from the client, so the denominator is checked rather
+    // than believed -- otherwise a log can claim eight sets of a five-set day
+    // and every later reading measures against a number nobody asked for.
+    const user = await createUser();
+    const { assignment } = await createPrescribedDay(user.id, { sets: [5] });
+
+    await expect(
+      service().upsert(user.id, assignment.id, {
+        resultType: 'sets_completed',
+        resultValue: '5/8',
+      }),
+    ).rejects.toThrow('This day prescribes 5 sets, not 8');
+    expect((await storedAssignment(assignment.id))?.status).toBe('scheduled');
+  });
+
+  it('refuses a result value that is not a sets result at all', async () => {
+    const user = await createUser();
+    const { assignment } = await createPrescribedDay(user.id);
+
+    await expect(
+      service().upsert(user.id, assignment.id, {
+        resultType: 'sets_completed',
+        resultValue: '12+4',
+      }),
+    ).rejects.toThrow('A sets result reads "done/total"');
+  });
+
+  it('refuses a clock result on a prescribed day', async () => {
+    const user = await createUser();
+    const { assignment } = await createPrescribedDay(user.id);
+
+    await expect(
+      service().upsert(user.id, assignment.id, RESULT),
+    ).rejects.toThrow('A prescribed day is scored in sets');
+  });
+
+  it('refuses a sets result on a WOD day', async () => {
+    // The guard in the other direction. Without it a metcon files as a
+    // strength session everywhere downstream.
+    const user = await createUser();
+    const assignment = await createAssignment(user.id);
+
+    await expect(
+      service().upsert(user.id, assignment.id, {
+        resultType: 'sets_completed',
+        resultValue: '5/5',
+      }),
+    ).rejects.toThrow('A WOD is scored against the clock');
+  });
 });
 
 describe('LogsService.getForAssignment', () => {
@@ -211,9 +307,8 @@ describe('LogsService.list', () => {
         id: stored.id,
         assignmentId: assignment.id,
         date: assignment.date,
-        wodName: 'Cindy',
-        wodType: 'amrap',
-        dominantPattern: 'pull',
+        name: 'Cindy',
+        wod: { type: 'amrap', dominantPattern: 'pull' },
         resultType: 'rounds_reps',
         resultValue: '12+4',
         rpe: 9,
@@ -235,20 +330,49 @@ describe('LogsService.list', () => {
     ).toEqual([mine.id]);
   });
 
-  it('drops a log whose day has no WOD', async () => {
-    // The one piece of real logic in the file. Nothing creates this pair
-    // today -- `upsert` refuses a rest day -- but the list types the WOD as
-    // present, so the row has to be filtered rather than read as undefined
-    // and rendered as a nameless workout.
+  it('keeps a prescribed day, which has a name and no WOD (DN-126)', async () => {
+    // This used to be dropped, and dropping it was the worse half of a
+    // half-built feature: the athlete saved a result and History showed them
+    // nothing, which reads as the app having lost it.
     const user = await createUser();
-    const restDay = await createRestDay(user.id, '2026-09-11');
-    await createLog(user.id, restDay.id);
-    const real = await createAssignment(user.id, { date: '2026-09-10' });
-    await createLog(user.id, real.id);
+    const { assignment } = await createPrescribedDay(user.id, {
+      date: '2026-09-11',
+    });
+    await service().upsert(user.id, assignment.id, {
+      resultType: 'sets_completed',
+      resultValue: '4/5',
+      rpe: 8,
+    });
+
+    expect(await service().list(user.id)).toMatchObject([
+      {
+        assignmentId: assignment.id,
+        name: 'Strength',
+        wod: null,
+        resultType: 'sets_completed',
+        resultValue: '4/5',
+        rpe: 8,
+      },
+    ]);
+  });
+
+  it('lists both kinds of day together, newest first', async () => {
+    // The two shapes share one list, so a client reading it gets them
+    // interleaved by date rather than in two blocks.
+    const user = await createUser();
+    const wodDay = await createAssignment(user.id, { date: '2026-09-10' });
+    await createLog(user.id, wodDay.id);
+    const { assignment: strengthDay } = await createPrescribedDay(user.id, {
+      date: '2026-09-11',
+    });
+    await service().upsert(user.id, strengthDay.id, {
+      resultType: 'sets_completed',
+      resultValue: '5/5',
+    });
 
     expect(
-      (await service().list(user.id)).map((row) => row.assignmentId),
-    ).toEqual([real.id]);
+      (await service().list(user.id)).map((row) => row.wod !== null),
+    ).toEqual([false, true]);
   });
 
   it('is empty for an athlete who has not trained', async () => {
