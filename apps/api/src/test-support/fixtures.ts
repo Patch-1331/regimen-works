@@ -94,6 +94,27 @@ export async function createSession(
   });
 }
 
+/** One recorded set on a session (DN-21), as prescribed unless told otherwise. */
+export async function createSetLog(
+  userId: string,
+  sessionId: string,
+  exerciseId: string,
+  overrides: Record<string, unknown> = {},
+) {
+  return testPrisma().workoutSetLog.create({
+    data: {
+      userId,
+      sessionId,
+      exerciseId,
+      movementOrder: 0,
+      setNumber: 1,
+      prescribedReps: 3,
+      actualReps: 3,
+      ...overrides,
+    },
+  });
+}
+
 export async function createLog(
   userId: string,
   assignmentId: string,

@@ -4,7 +4,9 @@ import { testPrisma } from '../test-support/database';
 import {
   createAssignment,
   createPrescribedDay,
+  createExercise,
   createSession,
+  createSetLog,
   createUser,
   createWod,
 } from '../test-support/fixtures';
@@ -196,5 +198,242 @@ describe('HistoryService.movements', () => {
       name: 'Strength',
       reps: 3,
     });
+  });
+});
+
+/**
+ * A session on `date` with `reps` recorded set by set (DN-22).
+ *
+ * No wod and no snapshot: what `movementVolume` reads is the set rows, and a
+ * day that has them is a day it counts, whatever else is stored about it.
+ */
+async function recordedDay(
+  userId: string,
+  date: string,
+  exerciseId: string,
+  reps: number[],
+  options: {
+    status?: string;
+    movementOrder?: number;
+    assignmentId?: string;
+  } = {},
+) {
+  const assignmentId =
+    options.assignmentId ??
+    (
+      await testPrisma().dailyAssignment.create({
+        data: { userId, date, status: 'completed' },
+      })
+    ).id;
+  const session =
+    (await testPrisma().workoutSession.findUnique({
+      where: { assignmentId },
+    })) ??
+    (await createSession(userId, assignmentId, {
+      status: options.status ?? 'completed',
+    }));
+  for (const [i, actualReps] of reps.entries()) {
+    await createSetLog(userId, session.id, exerciseId, {
+      movementOrder: options.movementOrder ?? 0,
+      setNumber: i + 1,
+      actualReps,
+    });
+  }
+  return { assignmentId, session };
+}
+
+describe('HistoryService.movementVolume', () => {
+  it('answers with the sets that were actually recorded', async () => {
+    const user = await createUser();
+    const exercise = await createExercise({ name: 'Chin-up' });
+    const { assignmentId } = await recordedDay(
+      user.id,
+      '2026-09-14',
+      exercise.id,
+      [3, 3, 2],
+    );
+
+    const volume = await service().movementVolume(user.id);
+
+    expect(volume).toEqual([
+      {
+        exerciseId: exercise.id,
+        name: 'Chin-up',
+        unit: 'reps',
+        sessions: [
+          {
+            date: '2026-09-14',
+            assignmentId,
+            sets: [3, 3, 2],
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('reads what was done, not what was prescribed', async () => {
+    // The whole reason this does not come from the session snapshot: the
+    // snapshot says 3 reps five times, and the athlete made 3, 3, 2.
+    const user = await createUser();
+    const exercise = await createExercise();
+    await recordedDay(user.id, '2026-09-14', exercise.id, [3, 3, 2]);
+
+    const [volume] = await service().movementVolume(user.id);
+
+    expect(volume.sessions[0].sets).toEqual([3, 3, 2]);
+  });
+
+  it('reads a movement across the sessions it was trained in, newest first', async () => {
+    const user = await createUser();
+    const exercise = await createExercise();
+    await recordedDay(user.id, '2026-09-07', exercise.id, [3, 3, 2]);
+    await recordedDay(user.id, '2026-09-14', exercise.id, [3, 3, 3]);
+
+    const [volume] = await service().movementVolume(user.id);
+
+    expect(volume.sessions.map((s) => [s.date, s.sets])).toEqual([
+      ['2026-09-14', [3, 3, 3]],
+      ['2026-09-07', [3, 3, 2]],
+    ]);
+  });
+
+  it('counts a movement prescribed twice in a day as one session', async () => {
+    const user = await createUser();
+    const exercise = await createExercise();
+    const { assignmentId } = await recordedDay(
+      user.id,
+      '2026-09-14',
+      exercise.id,
+      [3, 3],
+    );
+    await recordedDay(user.id, '2026-09-14', exercise.id, [2, 2], {
+      assignmentId,
+      movementOrder: 1,
+    });
+
+    const [volume] = await service().movementVolume(user.id);
+
+    expect(volume.sessions).toHaveLength(1);
+    expect(volume.sessions[0].sets).toEqual([3, 3, 2, 2]);
+  });
+
+  it('counts a session that is still running', async () => {
+    // The rows are sets that were done. Waiting for the finish tap would leave
+    // the athlete looking at a chart that is missing the session they are in.
+    const user = await createUser();
+    const exercise = await createExercise();
+    await recordedDay(user.id, '2026-09-14', exercise.id, [3, 3], {
+      status: 'active',
+    });
+
+    const [volume] = await service().movementVolume(user.id);
+
+    expect(volume.sessions[0].sets).toEqual([3, 3]);
+  });
+
+  it("does not read another athlete's sets", async () => {
+    const user = await createUser();
+    const other = await createUser();
+    const exercise = await createExercise();
+    await recordedDay(other.id, '2026-09-14', exercise.id, [3, 3]);
+
+    expect(await service().movementVolume(user.id)).toEqual([]);
+  });
+
+  it('answers nothing for an athlete who has recorded no sets', async () => {
+    const user = await createUser();
+    await trainedDay(user.id, '2026-09-14');
+
+    expect(await service().movementVolume(user.id)).toEqual([]);
+  });
+
+  it('does not let sessions that recorded nothing crowd out the ones that did', async () => {
+    // The bound counts sessions, so a run of WOD days -- which record no sets
+    // -- would fill it and push the strength days the athlete is asking about
+    // out of the answer entirely.
+    const user = await createUser();
+    const exercise = await createExercise();
+    await recordedDay(user.id, '2026-01-01', exercise.id, [3, 3, 2]);
+    const dates = Array.from({ length: 200 }, (_, i) =>
+      new Date(Date.UTC(2026, 1, 1) + i * 86_400_000)
+        .toISOString()
+        .slice(0, 10),
+    );
+    await testPrisma().dailyAssignment.createMany({
+      data: dates.map((date) => ({
+        userId: user.id,
+        date,
+        status: 'completed',
+      })),
+    });
+    const empty = await testPrisma().dailyAssignment.findMany({
+      where: { userId: user.id, date: { in: dates } },
+    });
+    await testPrisma().workoutSession.createMany({
+      data: empty.map((a) => ({
+        userId: user.id,
+        assignmentId: a.id,
+        capSeconds: 720,
+        status: 'completed',
+      })),
+    });
+
+    const [volume] = await service().movementVolume(user.id);
+
+    expect(volume.sessions.map((s) => s.date)).toEqual(['2026-01-01']);
+  });
+
+  it('bounds the answer by session, so the oldest one it reads is whole', async () => {
+    // Bounded by sessions rather than by rows: a limit on set rows would cut
+    // the oldest session off mid-way and report a day that stopped early.
+    const user = await createUser();
+    const exercise = await createExercise();
+    const dates = Array.from({ length: 201 }, (_, i) =>
+      new Date(Date.UTC(2026, 0, 1) + i * 86_400_000)
+        .toISOString()
+        .slice(0, 10),
+    );
+    await testPrisma().dailyAssignment.createMany({
+      data: dates.map((date) => ({
+        userId: user.id,
+        date,
+        status: 'completed',
+      })),
+    });
+    const assignments = await testPrisma().dailyAssignment.findMany({
+      where: { userId: user.id },
+      orderBy: { date: 'asc' },
+    });
+    await testPrisma().workoutSession.createMany({
+      data: assignments.map((a) => ({
+        userId: user.id,
+        assignmentId: a.id,
+        capSeconds: 720,
+        status: 'completed',
+      })),
+    });
+    const sessions = await testPrisma().workoutSession.findMany({
+      where: { userId: user.id },
+    });
+    await testPrisma().workoutSetLog.createMany({
+      data: sessions.flatMap((session) =>
+        [3, 3, 2].map((actualReps, i) => ({
+          userId: user.id,
+          sessionId: session.id,
+          exerciseId: exercise.id,
+          movementOrder: 0,
+          setNumber: i + 1,
+          prescribedReps: 3,
+          actualReps,
+        })),
+      ),
+    });
+
+    const [volume] = await service().movementVolume(user.id);
+
+    expect(volume.sessions).toHaveLength(200);
+    expect(volume.sessions[0].date).toEqual(dates[dates.length - 1]);
+    // Whole, not truncated: the last session in range keeps all three sets.
+    expect(volume.sessions[199].sets).toEqual([3, 3, 2]);
   });
 });

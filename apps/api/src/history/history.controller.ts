@@ -11,4 +11,10 @@ export class HistoryController {
   movements(@CurrentUser() userId: string) {
     return this.historyService.movements(userId);
   }
+
+  /** Per-movement volume, from the sets that were actually recorded (DN-22). */
+  @Get('movement-volume')
+  movementVolume(@CurrentUser() userId: string) {
+    return this.historyService.movementVolume(userId);
+  }
 }

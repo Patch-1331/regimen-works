@@ -41,6 +41,9 @@ export const handlers = [
   // Empty by default: a movement history is something an athlete accrues, and
   // most route tests are about a day rather than about months of them.
   http.get(api("/movement-history"), () => HttpResponse.json([])),
+  // Empty for the same reason, and for one more: a movement's volume only
+  // exists once a prescribed day has been run set by set (DN-22).
+  http.get(api("/movement-volume"), () => HttpResponse.json([])),
   http.get(api("/schedule-rule"), () => HttpResponse.json({ maxDaysPerWeek: 5 })),
   http.get(api("/settings"), () => HttpResponse.json(fixtures.settings())),
   // Not an admin by default: the admin is one hand-set flag on one account,
