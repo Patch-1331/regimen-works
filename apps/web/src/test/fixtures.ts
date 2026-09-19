@@ -122,6 +122,9 @@ export function today(overrides: Partial<TodayResponse> = {}): TodayResponse {
       date: "2026-09-16",
       status: "scheduled",
       wod: wod(),
+      // A WOD day. The prescribed alternative (DN-19) has no screen yet, so
+      // no fixture builds one.
+      prescription: null,
       session: null,
     },
     warmupCooldownEnabled: true,

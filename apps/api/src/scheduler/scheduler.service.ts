@@ -81,18 +81,29 @@ export class SchedulerService {
     const plan = planBlock(day);
 
     if (existing) {
+      // A WOD-less row is either today's prescription (DN-19) or the older
+      // case the column was nullable for: a rest day recorded before anything
+      // was generated. The program day tells them apart, and it is asked
+      // rather than the row, for the same reason `plan` is recomputed -- the
+      // row records what happened, this answers what today is.
+      const prescription = existing.wod
+        ? null
+        : await this.prescriptionFor(userId, day);
       const assignment =
-        existing.status === 'skipped' || !existing.wod
+        existing.status === 'skipped' || (!existing.wod && !prescription)
           ? null
           : {
               id: existing.id,
               date: existing.date,
               status: existing.status,
-              wod: await this.resolveWodForToday(
-                userId,
-                existing.id,
-                existing.wod,
-              ),
+              wod: existing.wod
+                ? await this.resolveWodForToday(
+                    userId,
+                    existing.id,
+                    existing.wod,
+                  )
+                : null,
+              prescription,
               session: existing.session ? toSessionDto(existing.session) : null,
             };
 
@@ -117,7 +128,7 @@ export class SchedulerService {
         ...(await this.getChecklistsFor(
           userId,
           warmupCooldownEnabled,
-          assignment?.wod.dominantPattern,
+          assignment?.wod?.dominantPattern,
         )),
       };
     }
@@ -155,6 +166,49 @@ export class SchedulerService {
         warmupCooldownEnabled,
         warmup: null,
         cooldown: null,
+      };
+    }
+
+    // A prescribed day writes an assignment with no WOD on it -- the column
+    // has been nullable since before programs existed, and this is the first
+    // thing that means something by it. Resolved before the row is written
+    // because an empty result is a day to generate a WOD for instead, and by
+    // then the row would already say otherwise.
+    const prescription = await this.prescriptionFor(userId, day);
+    if (prescription) {
+      const created = await this.prisma.dailyAssignment.create({
+        data: {
+          userId,
+          date: today,
+          status: 'scheduled',
+          enrollmentId: day.kind === 'fallback' ? null : day.day.enrollmentId,
+          planSlotId: day.kind === 'fallback' ? null : day.day.planSlotId,
+          planDayIndex: day.kind === 'fallback' ? null : day.day.planDayIndex,
+        },
+      });
+
+      return {
+        date: today,
+        plan,
+        isRestDay: false,
+        makeup: null,
+        assignment: {
+          id: created.id,
+          date: created.date,
+          status: created.status,
+          wod: null,
+          prescription,
+          session: null,
+        },
+        warmupCooldownEnabled,
+        // The checklists are built from a WOD's dominant pattern, and straight
+        // sets have none to read. Asked through the same helper anyway, so the
+        // "no pattern, no lists" answer lives in one place.
+        ...(await this.getChecklistsFor(
+          userId,
+          warmupCooldownEnabled,
+          undefined,
+        )),
       };
     }
 
@@ -200,6 +254,7 @@ export class SchedulerService {
         status: created.status,
         // wodId was just set from a freshly-picked candidate, so the relation is present.
         wod: scaledWod,
+        prescription: null,
         session: null,
       },
       warmupCooldownEnabled,
@@ -280,6 +335,25 @@ export class SchedulerService {
       trainingDays,
       completedThisWeek,
     });
+  }
+
+  /**
+   * What a prescribed day hands the athlete, or null when today is not one
+   * (DN-19).
+   *
+   * Null also covers a `movements` day whose prescription resolved to nothing
+   * -- every line missing from the library this athlete can see. The caller
+   * then generates a WOD, which is the same refusal `resolveProgramDay` makes
+   * for a slot with no rows at all: an authoring or library gap should cost
+   * somebody the session it described, not the day.
+   */
+  private async prescriptionFor(userId: string, day: SettledDay) {
+    if (day.kind !== 'prescribed') return null;
+    const movements = await this.resolution.resolvePrescription(
+      userId,
+      day.movements,
+    );
+    return movements.length > 0 ? { movements } : null;
   }
 
   private async wodForDay(
@@ -407,13 +481,19 @@ export class SchedulerService {
     const day = await this.settleProgramDay(
       resolveProgramDay(program, EVERY_WEEKDAY, today),
     );
-    const wod = await this.wodForDay(
-      userId,
-      today,
-      day,
-      rule?.patternCooldownDays ?? DEFAULT_PATTERN_COOLDOWN_DAYS,
-      rule?.equipment ?? [...DEFAULT_EQUIPMENT],
-    );
+    // The makeup hands over whatever the program authored for this weekday,
+    // and since DN-19 that can be straight sets rather than a WOD. Resolved
+    // the same way `getToday` does, so a day taken late is the same day.
+    const prescription = await this.prescriptionFor(userId, day);
+    const wod = prescription
+      ? null
+      : await this.wodForDay(
+          userId,
+          today,
+          day,
+          rule?.patternCooldownDays ?? DEFAULT_PATTERN_COOLDOWN_DAYS,
+          rule?.equipment ?? [...DEFAULT_EQUIPMENT],
+        );
 
     // Upsert rather than create: a day the athlete marked as rest already has
     // a row, and the unique key on (userId, date) means there is exactly one
@@ -422,7 +502,10 @@ export class SchedulerService {
       where: { userId_date: { userId, date: today } },
       update: {
         status: 'scheduled',
-        wodId: wod.id,
+        // Explicitly nulled on a prescribed day rather than left alone: the
+        // row being updated is a rest day that may already carry a WOD, and a
+        // day cannot be both.
+        wodId: wod?.id ?? null,
         enrollmentId: day.kind === 'fallback' ? null : day.day.enrollmentId,
         planSlotId: day.kind === 'fallback' ? null : day.day.planSlotId,
         planDayIndex: day.kind === 'fallback' ? null : day.day.planDayIndex,
@@ -430,7 +513,7 @@ export class SchedulerService {
       create: {
         userId,
         date: today,
-        wodId: wod.id,
+        wodId: wod?.id ?? null,
         status: 'scheduled',
         enrollmentId: day.kind === 'fallback' ? null : day.day.enrollmentId,
         planSlotId: day.kind === 'fallback' ? null : day.day.planSlotId,
@@ -450,18 +533,17 @@ export class SchedulerService {
         id: assignment.id,
         date: assignment.date,
         status: assignment.status,
-        wod: await this.resolveWodForToday(
-          userId,
-          assignment.id,
-          assignment.wod!,
-        ),
+        wod: assignment.wod
+          ? await this.resolveWodForToday(userId, assignment.id, assignment.wod)
+          : null,
+        prescription,
         session: null,
       },
       warmupCooldownEnabled,
       ...(await this.getChecklistsFor(
         userId,
         warmupCooldownEnabled,
-        assignment.wod!.dominantPattern,
+        assignment.wod?.dominantPattern,
       )),
     };
   }

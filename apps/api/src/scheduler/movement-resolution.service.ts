@@ -4,6 +4,8 @@ import type { SubstitutionReason } from '@regimen-works/shared';
 import type { Exercise } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { libraryVisibleTo } from '../library/visible-to';
+import { attachPrescribedExercises } from '../plans/prescription';
+import type { ProgramSlotMovement } from '../plans/program-day';
 import {
   applyEquipmentAvailability,
   applyRememberedChoice,
@@ -159,6 +161,80 @@ export class MovementResolutionService {
         prescribedName: replacement?.name ?? null,
         prescribedId: replacement?.id ?? null,
         prescribedReason: replacement?.reason ?? null,
+      };
+    });
+  }
+
+  /**
+   * Turns what a program prescribed into what this athlete performs today
+   * (DN-19): the line resolved to their rung, then dropped to its alternative
+   * where they own nothing for it.
+   *
+   * Two of `resolve`'s three layers, and the third left out on purpose. The
+   * remembered choice *is* the rung here rather than an override of it, so
+   * nothing is reported as a substitution for it -- a program that asks for
+   * "pull" and hands over a ring row has done exactly what it said. Only
+   * equipment replaced something the athlete was told about, so only equipment
+   * is named. The day's swap is missing because it cannot be made yet:
+   * `AssignmentSubstitution` keys off a `WodMovement`, and a prescribed day
+   * has none.
+   *
+   * Returns fewer rows than it was given where the library cannot answer, and
+   * possibly none -- see `attachPrescribedExercises`. The caller treats an
+   * empty result as a day with nothing prescribed.
+   */
+  async resolvePrescription(userId: string, movements: ProgramSlotMovement[]) {
+    const [skillLevels, linedExercises, pinned, rule] = await Promise.all([
+      this.prisma.skillLevel.findMany({ where: { userId } }),
+      this.prisma.exercise.findMany({
+        where: { ...libraryVisibleTo(userId), line: { not: null } },
+      }),
+      this.prisma.exercise.findMany({
+        where: {
+          ...libraryVisibleTo(userId),
+          id: {
+            in: movements
+              .map((m) => m.exerciseId)
+              .filter((id): id is string => id !== null),
+          },
+        },
+      }),
+      this.prisma.scheduleRule.findUnique({
+        where: { userId },
+        select: { equipment: true },
+      }),
+    ]);
+
+    const prescribed = attachPrescribedExercises(
+      movements,
+      new Map(skillLevels.map((s) => [s.line, s.rung])),
+      new Map(linedExercises.map((e) => [`${e.line}:${e.rung}`, e])),
+      new Map(pinned.map((e) => [e.id, e])),
+    );
+
+    // Same missing-rule reading as `resolve`: no row is the baseline, not
+    // owning nothing.
+    const available = await this.applyOwnership(
+      userId,
+      prescribed,
+      rule?.equipment ?? DEFAULT_EQUIPMENT,
+    );
+
+    return available.map((m, i) => {
+      const replaced = m.exercise.id !== prescribed[i].exercise.id;
+      return {
+        id: m.movement.id,
+        order: m.movement.order,
+        sets: m.movement.sets,
+        reps: m.movement.reps,
+        restSeconds: m.movement.restSeconds,
+        // What the *program* asked for, kept even where equipment moved the
+        // athlete off it: the line is the session's intent, and a screen that
+        // showed only the substitute could not say what the day was for.
+        line: m.movement.line,
+        exercise: m.exercise,
+        prescribedName: replaced ? prescribed[i].exercise.name : null,
+        prescribedReason: replaced ? ('equipment' as const) : null,
       };
     });
   }

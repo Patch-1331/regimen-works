@@ -8,6 +8,45 @@ import {
   wodType,
 } from "./enums.js";
 
+/**
+ * The exercise as a training screen is handed it: what it is, what it needs,
+ * and where it sits on its ladder.
+ *
+ * Narrower than `exerciseSchema` on purpose -- no `ownerId`, no `archivedAt`,
+ * no `phase`. Those answer questions the library management screen asks, and
+ * a plate that carried them would invite a client to make training decisions
+ * out of library bookkeeping.
+ *
+ * Shared by the WOD plate and the prescribed-movements day (DN-19), so the
+ * two describe a movement the same way rather than drifting apart.
+ */
+export const movementExerciseSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  pattern: movementPattern,
+  // What performing it needs, in the place `needsBar` held: carried on
+  // every movement the client is handed, so a screen can mark one the
+  // athlete has no equipment for without a second request. Empty for the
+  // bodyweight baseline, which is most of the pool.
+  equipment: z.array(equipment),
+  unit: exerciseUnit,
+  // How the movement is performed, in prose — carried on the movement so
+  // every screen that lists a WOD can offer it without a second request.
+  // Null on exercises added outside the seed.
+  instructions: z.string().nullable(),
+  // Progression tracking (Feature #2) — null for exercises not on a
+  // tracked ladder (e.g. cardio). See ProgressionLine for why this is
+  // finer-grained than `pattern`.
+  line: progressionLine.nullable(),
+  // Where this exercise sits on that ladder, and its no-equipment
+  // substitute. Carried on the movement so the Today plate's swap panel
+  // (WOD-5) can mark the current rung and offer the alternative without
+  // a second request. Both null off a tracked line.
+  rung: z.number().int().nonnegative().nullable(),
+  altExerciseId: z.string().nullable(),
+});
+export type MovementExercise = z.infer<typeof movementExerciseSchema>;
+
 export const wodMovementSchema = z
   .object({
     id: z.string(),
@@ -56,31 +95,7 @@ export const wodMovementSchema = z
     // Defaulted rather than required for the same reason `prescribedName` is:
     // a client reading an older payload should degrade to silence, not fail.
     prescribedReason: substitutionReason.nullable().default(null),
-    exercise: z.object({
-      id: z.string(),
-      name: z.string(),
-      pattern: movementPattern,
-      // What performing it needs, in the place `needsBar` held: carried on
-      // every movement the client is handed, so a screen can mark one the
-      // athlete has no equipment for without a second request. Empty for the
-      // bodyweight baseline, which is most of the pool.
-      equipment: z.array(equipment),
-      unit: exerciseUnit,
-      // How the movement is performed, in prose — carried on the movement so
-      // every screen that lists a WOD can offer it without a second request.
-      // Null on exercises added outside the seed.
-      instructions: z.string().nullable(),
-      // Progression tracking (Feature #2) — null for exercises not on a
-      // tracked ladder (e.g. cardio). See ProgressionLine for why this is
-      // finer-grained than `pattern`.
-      line: progressionLine.nullable(),
-      // Where this exercise sits on that ladder, and its no-equipment
-      // substitute. Carried on the movement so the Today plate's swap panel
-      // (WOD-5) can mark the current rung and offer the alternative without
-      // a second request. Both null off a tracked line.
-      rung: z.number().int().nonnegative().nullable(),
-      altExerciseId: z.string().nullable(),
-    }),
+    exercise: movementExerciseSchema,
   })
   // Mirrors the CHECK constraint on WodMovement. A scheme that doesn't sum to
   // `reps` would have the screen counting one workout while the record credits

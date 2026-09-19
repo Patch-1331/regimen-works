@@ -87,6 +87,9 @@ model Exercise {
 
   wodMovements  WodMovement[]
   substitutedIn AssignmentSubstitution[]
+  // The program slots that pin this exercise by name rather than by line
+  // (DN-19).
+  prescribedIn  PlanSlotMovement[]
 
   // Soft delete (DN-25). Archiving hides the row from every pool and picker --
   // `libraryVisibleTo` filters it out, so the scheduler, the ladder and the
@@ -558,9 +561,53 @@ model PlanSlot {
   allowNamed        Boolean @default(false)
   maxTimeCapMinutes Int?
 
+  // The prescription, on a `movements` slot (DN-19). Empty on every other
+  // kind. The database cannot hold that rule -- `kind` lives on this table
+  // and the rows on another, which no CHECK can span -- so `resolveProgramDay`
+  // is where it is read, and a `movements` slot with nothing prescribed falls
+  // back rather than handing the athlete an empty day.
+  movements PlanSlotMovement[]
+
   assignments DailyAssignment[]
 
   @@unique([planWeekId, dayOfWeek])
+}
+
+// One prescribed movement on a `movements` day: "pull, 5x3, rest 90s"
+// (DN-19). The shape a program uses where the session is straight sets rather
+// than a WOD.
+//
+// Sets and reps sit here directly -- no multiplier and no progression rule.
+// An author wanting escalation writes a core block that already waves
+// (3x5 / 4x5 / 5x5), which `expandPlanWeeks` then repeats as a wave. A
+// multiplier would put the same fact in two places and let them disagree.
+model PlanSlotMovement {
+  id         String   @id @default(cuid())
+  planSlotId String
+  planSlot   PlanSlot @relation(fields: [planSlotId], references: [id], onDelete: Cascade)
+  // Position in the session, 0-based, the way WodMovement.order is.
+  order      Int
+
+  // **Exactly one of these two.** A CHECK in this model's migration holds it.
+  //
+  // `line` is the one to reach for: naming the progression line rather than a
+  // specific exercise is what lets one program fit every athlete, because the
+  // day resolves through the rung they own. `exerciseId` is for the cases
+  // where the specific variation is the point -- a program teaching the
+  // negative names the negative, and an athlete further up the line should
+  // still train it that day.
+  line       String? // push_horizontal | push_vertical | pull | squat | ... (see progressionLine)
+  exerciseId String?
+  exercise   Exercise? @relation(fields: [exerciseId], references: [id])
+
+  sets        Int
+  reps        Int
+  // Prescribed rest between sets. Not nullable and not defaulted: rest is
+  // part of the prescription rather than a detail an author forgot, and 0
+  // says "straight through" out loud. A CHECK keeps it non-negative.
+  restSeconds Int
+
+  @@unique([planSlotId, order])
 }
 
 // One athlete's run at one program.

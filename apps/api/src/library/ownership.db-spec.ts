@@ -70,7 +70,7 @@ describe('what an athlete can see', () => {
 
     const today = await scheduler().getToday(alice.id, TODAY);
 
-    expect(today.assignment!.wod.name).toBe('Alice’s Own');
+    expect(today.assignment!.wod!.name).toBe('Alice’s Own');
   });
 });
 

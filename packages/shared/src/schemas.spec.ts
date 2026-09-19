@@ -879,6 +879,7 @@ describe("todayResponseSchema", () => {
       date: "2026-09-16",
       status: "scheduled",
       wod: wod(),
+      prescription: null,
       session: null,
     },
     warmupCooldownEnabled: true,
@@ -917,6 +918,58 @@ describe("todayResponseSchema", () => {
     ).toBe(true);
   });
 
+  describe("a day that is a prescription rather than a WOD (DN-19)", () => {
+    const prescribed = {
+      id: "psm-1",
+      order: 0,
+      sets: 5,
+      reps: 3,
+      restSeconds: 90,
+      line: "pull",
+      exercise: movement().exercise,
+      prescribedName: null,
+      prescribedReason: null,
+    };
+    const day = (assignment: Record<string, unknown>) =>
+      todayResponseSchema.safeParse(
+        todayPayload({
+          assignment: {
+            id: "a-1",
+            date: "2026-09-16",
+            status: "scheduled",
+            session: null,
+            ...assignment,
+          },
+        }),
+      );
+
+    it("parses a prescribed day", () => {
+      expect(
+        day({ wod: null, prescription: { movements: [prescribed] } }).success,
+      ).toBe(true);
+    });
+
+    it("rejects a day carrying both", () => {
+      // Two workouts and no way to choose between them.
+      expect(
+        day({ wod: wod(), prescription: { movements: [prescribed] } }).success,
+      ).toBe(false);
+    });
+
+    it("rejects a day carrying neither", () => {
+      // What a WOD-less assignment looked like before DN-19 gave the column a
+      // meaning: an assignment with no session in it, which is a bug and not
+      // a day.
+      expect(day({ wod: null, prescription: null }).success).toBe(false);
+    });
+
+    it("rejects a prescription with nothing in it", () => {
+      expect(day({ wod: null, prescription: { movements: [] } }).success).toBe(
+        false,
+      );
+    });
+  });
+
   it("rejects a malformed WOD nested inside it", () => {
     // The refinements have to survive nesting, or the API's outermost
     // response is the one place they stop applying.
@@ -931,6 +984,7 @@ describe("todayResponseSchema", () => {
             date: "2026-09-16",
             status: "scheduled",
             wod: badWod,
+            prescription: null,
             session: null,
           },
         }),
@@ -1406,6 +1460,95 @@ describe("planSlotSchema's pinned-WOD refinement", () => {
 
   it("accepts Sunday, which is 0 and not 7", () => {
     expect(planSlotSchema.safeParse(slot({ dayOfWeek: 0 })).success).toBe(true);
+  });
+});
+
+describe("planSlotSchema's prescription refinement", () => {
+  const prescribed = (overrides: Record<string, unknown> = {}) => ({
+    id: "psm-1",
+    order: 0,
+    line: "pull",
+    exerciseId: null,
+    sets: 5,
+    reps: 3,
+    restSeconds: 90,
+    ...overrides,
+  });
+  const movementDay = (movements: unknown[]) =>
+    slot({ kind: "movements", pattern: null, maxTimeCapMinutes: null, movements });
+
+  it("accepts a movements day that prescribes something", () => {
+    expect(planSlotSchema.safeParse(movementDay([prescribed()])).success).toBe(
+      true,
+    );
+  });
+
+  it("rejects a movements day that prescribes nothing", () => {
+    // The rule no CHECK can hold: `kind` is on the slot and the rows are on
+    // another table (DN-19). A day of this kind with an empty prescription is
+    // a screen with nothing on it.
+    const result = planSlotSchema.safeParse(movementDay([]));
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0].path).toEqual(["movements"]);
+  });
+
+  it("rejects a rest day carrying a prescription", () => {
+    // The same biconditional as the pinned-WOD rule, refused for the same
+    // reason: two halves of one row describing different days.
+    expect(
+      planSlotSchema.safeParse(slot({ kind: "rest", movements: [prescribed()] }))
+        .success,
+    ).toBe(false);
+  });
+
+  it("leaves every other kind with an empty prescription by default", () => {
+    // Why the field is defaulted rather than required: every slot authored
+    // before DN-19 still parses as the WOD day it describes.
+    const parsed = planSlotSchema.parse(slot());
+    expect(parsed.movements).toEqual([]);
+  });
+
+  it("accepts a prescription pinned to an exercise instead of a line", () => {
+    expect(
+      planSlotSchema.safeParse(
+        movementDay([prescribed({ line: null, exerciseId: "ex-1" })]),
+      ).success,
+    ).toBe(true);
+  });
+
+  it("rejects a prescribed movement naming both a line and an exercise", () => {
+    expect(
+      planSlotSchema.safeParse(movementDay([prescribed({ exerciseId: "ex-1" })]))
+        .success,
+    ).toBe(false);
+  });
+
+  it("rejects a prescribed movement naming neither", () => {
+    // Sets and reps attached to nothing.
+    expect(
+      planSlotSchema.safeParse(movementDay([prescribed({ line: null })])).success,
+    ).toBe(false);
+  });
+
+  it("rejects zero sets and zero reps", () => {
+    expect(
+      planSlotSchema.safeParse(movementDay([prescribed({ sets: 0 })])).success,
+    ).toBe(false);
+    expect(
+      planSlotSchema.safeParse(movementDay([prescribed({ reps: 0 })])).success,
+    ).toBe(false);
+  });
+
+  it("accepts no rest but refuses negative rest", () => {
+    // 0 is a prescription -- straight through -- rather than an omission.
+    expect(
+      planSlotSchema.safeParse(movementDay([prescribed({ restSeconds: 0 })]))
+        .success,
+    ).toBe(true);
+    expect(
+      planSlotSchema.safeParse(movementDay([prescribed({ restSeconds: -1 })]))
+        .success,
+    ).toBe(false);
   });
 });
 

@@ -24,6 +24,7 @@ function slot(overrides: Partial<ProgramSlot> = {}): ProgramSlot {
     wodType: null,
     allowNamed: false,
     maxTimeCapMinutes: null,
+    movements: [],
     ...overrides,
   };
 }

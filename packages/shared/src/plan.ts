@@ -3,6 +3,7 @@ import {
   movementPattern,
   planPhase,
   planSlotKind,
+  progressionLine,
   scheduleMode,
   wodType,
 } from "./enums.js";
@@ -18,6 +19,51 @@ import { SATURDAY, SUNDAY } from "./schedule.js";
  * choose. Today's program strip and its rest-day copy both key off this.
  */
 export const DEFAULT_PLAN_ID = "plan_just_wods";
+
+/**
+ * One movement a `movements` day prescribes, as authored (DN-19).
+ *
+ * The authoring shape. What the athlete is handed is
+ * `prescribedMovementSchema`, where the line has already resolved to an
+ * exercise at their rung — an author writes "pull", an athlete reads
+ * "chin-up", and keeping the two shapes apart is what stops a client
+ * resolving rungs for itself.
+ *
+ * Sets and reps sit here directly: no multiplier, no progression rule. An
+ * author wanting escalation writes a core block that already waves
+ * (3x5 / 4x5 / 5x5), which `expandPlanWeeks` repeats as a wave. A multiplier
+ * would put the same fact in two places and let them disagree.
+ */
+export const planSlotMovementSchema = z
+  .object({
+    id: z.string(),
+    /** Position in the session, 0-based, the way `WodMovement.order` is. */
+    order: z.number().int().nonnegative(),
+    /**
+     * The progression line to resolve through the athlete's rung — the one to
+     * reach for, because it is what lets one program fit every athlete.
+     */
+    line: progressionLine.nullable(),
+    /**
+     * A specific exercise instead, for the cases where the variation is the
+     * point: a program teaching the negative names the negative, and an
+     * athlete further up the line should still train it that day.
+     */
+    exerciseId: z.string().nullable(),
+    sets: z.number().int().positive(),
+    reps: z.number().int().positive(),
+    /** 0 is a prescription — "straight through" — rather than an omission. */
+    restSeconds: z.number().int().nonnegative(),
+  })
+  // Mirrors the PlanSlotMovement_line_xor_exercise CHECK. Neither set is a
+  // rep count attached to nothing; both set is two different instructions in
+  // one row, and a reader picking one would be guessing at the author.
+  .refine((m) => (m.line !== null) !== (m.exerciseId !== null), {
+    message:
+      "a prescribed movement names a line or an exercise — one of them, not both and not neither",
+    path: ["line"],
+  });
+export type PlanSlotMovement = z.infer<typeof planSlotMovementSchema>;
 
 /**
  * One authored day (DN-9).
@@ -55,6 +101,15 @@ export const planSlotSchema = z
     wodType: wodType.nullable(),
     allowNamed: z.boolean(),
     maxTimeCapMinutes: z.number().int().positive().nullable(),
+    /**
+     * The prescription, on a `movements` slot and empty on every other kind
+     * — see the second refinement.
+     *
+     * Defaulted rather than required so a payload written before DN-19 still
+     * parses as the WOD day it describes, which is every slot authored so
+     * far.
+     */
+    movements: z.array(planSlotMovementSchema).default([]),
   })
   // Mirrors the PlanSlot_pinned_wod_present CHECK, and mirrors it as the
   // biconditional the constraint actually is rather than as the weaker "a
@@ -66,7 +121,27 @@ export const planSlotSchema = z
     message:
       "a wod_pinned slot needs a wodId, and no other kind may carry one",
     path: ["wodId"],
-  });
+  })
+  // The rule no CHECK can hold, because `kind` and the prescription rows live
+  // in different tables (DN-19). Stated as the same biconditional for the same
+  // reason as the one above: a rest day carrying sets and reps and a
+  // `movements` day carrying none are both slots whose two halves describe
+  // different days.
+  //
+  // The API is the other half of this. It resolves a `movements` slot with
+  // nothing prescribed back to a generated WOD rather than handing the
+  // athlete an empty screen — refusing to author the row here, and refusing
+  // to crash on one that got in anyway.
+  .refine(
+    (slot) =>
+      (slot.kind === planSlotKind.enum.movements) ===
+      (slot.movements.length > 0),
+    {
+      message:
+        "a movements slot needs at least one prescribed movement, and no other kind may carry any",
+      path: ["movements"],
+    },
+  );
 export type PlanSlot = z.infer<typeof planSlotSchema>;
 
 /**

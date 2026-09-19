@@ -219,7 +219,7 @@ describe('GET /today', () => {
       warmupCooldownEnabled: false,
       assignment: { status: 'scheduled' },
     });
-    expect(today.assignment?.wod.movements).toHaveLength(1);
+    expect(today.assignment?.wod!.movements).toHaveLength(1);
   });
 
   it('fails loudly on an empty WOD library rather than reading as a rest day', async () => {
@@ -300,7 +300,7 @@ describe('GET /today', () => {
         .expect(200),
     );
 
-    const movement = today.assignment!.wod.movements[0];
+    const movement = today.assignment!.wod!.movements[0];
     expect(movement.exercise.name).toBe('Row under table');
     expect(movement.prescribedName).toBe('Pull-up');
     expect(movement.prescribedReason).toBe('equipment');

@@ -11,6 +11,24 @@ import { expandPlanWeeks, resolveSlotForDate } from './plan.logic';
  * rows, and asking this what today is.
  */
 
+/**
+ * One movement a `movements` slot prescribes, as authored (DN-19).
+ *
+ * Still authored: `line` is a progression line, not an exercise. Resolving it
+ * to the exercise this athlete trains today needs their rung and their
+ * equipment, neither of which belongs in a pure function — so this stays as
+ * written and `PrescriptionService` does the rest.
+ */
+export type ProgramSlotMovement = {
+  id: string;
+  order: number;
+  line: string | null;
+  exerciseId: string | null;
+  sets: number;
+  reps: number;
+  restSeconds: number;
+};
+
 /** Enough of an authored slot to decide and then record the day. */
 export type ProgramSlot = {
   id: string;
@@ -21,6 +39,8 @@ export type ProgramSlot = {
   wodType: string | null;
   allowNamed: boolean;
   maxTimeCapMinutes: number | null;
+  /** Empty on every kind but `movements` — see `resolveProgramDay`. */
+  movements: ProgramSlotMovement[];
 };
 
 export type ProgramWeek = {
@@ -86,6 +106,12 @@ export type ProgramDay =
   | { kind: 'completed'; enrollmentId: string }
   | { kind: 'rest'; day: ProgramDayContext }
   | { kind: 'pinned'; day: ProgramDayContext; wodId: string }
+  /** A `movements` day: straight sets rather than a WOD (DN-19). */
+  | {
+      kind: 'prescribed';
+      day: ProgramDayContext;
+      movements: ProgramSlotMovement[];
+    }
   | { kind: 'generated'; day: ProgramDayContext; constraints: SlotConstraints };
 
 const UNCONSTRAINED: SlotConstraints = {
@@ -169,17 +195,25 @@ export function resolveProgramDay(
     return { kind: 'pinned', day, wodId: slot.wodId };
   }
 
-  // Everything else generates, which covers three cases on purpose:
+  if (slot.kind === 'movements' && slot.movements.length > 0) {
+    // Ordered here rather than trusted from the query, so a caller that
+    // forgets an `orderBy` still hands the athlete the session in the order
+    // it was written -- which is the whole content of `order`.
+    return {
+      kind: 'prescribed',
+      day,
+      movements: [...slot.movements].sort((a, b) => a.order - b.order),
+    };
+  }
+
+  // Everything else generates, which covers these cases on purpose:
   //
   //   - `wod_generated`, the ordinary one, with the slot's constraints.
-  //   - `movements`, the Phase 4 kind that cannot be authored yet -- PlanSlot
-  //     carries no prescription columns until DN-19. Stubbed as an
-  //     unconstrained WOD so an athlete on such a day still trains; `slotKind`
-  //     still reports `movements`, so the screen that learns to render it does
-  //     not have to be told twice.
-  //   - a `wod_pinned` slot whose WOD is somehow null. A CHECK makes that
-  //     unrepresentable, so this is not a case so much as a refusal to turn an
-  //     impossible row into a crash on the athlete's Today screen.
+  //   - a `movements` slot with nothing prescribed, and a `wod_pinned` slot
+  //     whose WOD is somehow null. A CHECK makes the second unrepresentable
+  //     and `planSlotSchema`'s refinement refuses to author the first, so
+  //     neither is a case so much as a refusal to turn an impossible row into
+  //     an empty screen. An athlete on such a day still trains.
   return {
     kind: 'generated',
     day,

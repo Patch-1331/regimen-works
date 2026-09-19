@@ -29,7 +29,17 @@ export async function loadActiveProgram(
         include: {
           weeks: {
             orderBy: { order: 'asc' },
-            include: { slots: { orderBy: { dayOfWeek: 'asc' } } },
+            include: {
+              slots: {
+                orderBy: { dayOfWeek: 'asc' },
+                // The prescription a `movements` day carries (DN-19). Loaded
+                // with the slots rather than on demand: the day is decided
+                // before anyone knows which kind it turned out to be, and a
+                // second round trip to find out would be one per request for
+                // the one program in ten that uses them.
+                include: { movements: { orderBy: { order: 'asc' } } },
+              },
+            },
           },
         },
       },
