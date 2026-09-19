@@ -55,6 +55,30 @@ export type TodayPlan = z.infer<typeof todayPlanSchema>;
  * used up, which made rest days depend on the order the week was trained in;
  * since DN-12 it is a property of the date alone.
  */
+/**
+ * The offer to train on a rest day while the week is still short (DN-17).
+ *
+ * The week is the unit of completion: training days say when the app expects
+ * the athlete, not when they are allowed. Missing Wednesday should not mean
+ * Wednesday is gone.
+ *
+ * Null whenever there is nothing to offer -- today is a training day, the
+ * week's sessions are already done, or a fixed program is running and its
+ * slot layout *is* the schedule (DN-118). Null rather than a flag with zeroes
+ * in it, so a client cannot render "0 short" at anybody.
+ *
+ * Both counts are reported rather than the difference alone: the screen says
+ * how short the week is, and a bare number with no denominator cannot also
+ * say how much of it is done.
+ */
+export const makeupOfferSchema = z.object({
+  /** How many sessions this week expects, counted from the athlete's training days. */
+  sessionsThisWeek: z.number().int().nonnegative(),
+  /** How many they have finished since Monday. Never carried in from last week. */
+  completedThisWeek: z.number().int().nonnegative(),
+});
+export type MakeupOffer = z.infer<typeof makeupOfferSchema>;
+
 export const todayResponseSchema = z.object({
   date: z.string(),
   isRestDay: z.boolean(),
@@ -76,5 +100,11 @@ export const todayResponseSchema = z.object({
    * makes the block safe to add before anything reads it.
    */
   plan: todayPlanSchema.nullable(),
+  /**
+   * The makeup offer (DN-17), or null when there is none to make. Like
+   * `plan`, nullable rather than a second response shape: a client that
+   * ignores it still renders the rest day correctly.
+   */
+  makeup: makeupOfferSchema.nullable(),
 });
 export type TodayResponse = z.infer<typeof todayResponseSchema>;

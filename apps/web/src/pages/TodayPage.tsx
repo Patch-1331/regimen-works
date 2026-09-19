@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DEFAULT_PLAN_ID,
   effectiveRounds,
+  type MakeupOffer as MakeupOfferBlock,
   type TodayPlan,
 } from "@regimen-works/shared";
 import { api } from "../lib/api";
@@ -53,6 +54,11 @@ export function TodayPage() {
     await queryClient.invalidateQueries({ queryKey: ["today"] });
   }
 
+  async function handleMakeup() {
+    await api.trainMakeup();
+    await queryClient.invalidateQueries({ queryKey: ["today"] });
+  }
+
   // Both close the panel first: the choice is made, and leaving the ladder
   // open over a row that has already changed reads as though it hadn't.
   async function handleSwap(wodMovementId: string, exerciseId: string) {
@@ -90,6 +96,10 @@ export function TodayPage() {
           <DigitReadout value="--:--" label="Time cap" dim />
           <DigitReadout value="--" label="Rounds" dim />
         </div>
+
+        {data.makeup && (
+          <MakeupOffer offer={data.makeup} onTrain={handleMakeup} />
+        )}
       </div>
     );
   }
@@ -452,6 +462,43 @@ function namedProgram(plan: TodayPlan | null): TodayPlan | null {
  */
 function dayOfProgramWeek(date: string): number {
   return ((new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
+}
+
+/**
+ * The offer to train on a rest day while the week is still short (DN-17).
+ *
+ * The week is the unit of completion: training days say when the app expects
+ * the athlete, not when they are allowed. Rendered only when the API offers
+ * it, which is never under a fixed program and never once the week is done.
+ *
+ * The copy is careful. "Short" is a fact about the week, not about the
+ * athlete, and there is no debt language anywhere in it: nothing here says
+ * behind, owed, missed or caught up. An athlete who simply rests has been
+ * told nothing except that the door is open.
+ */
+function MakeupOffer({
+  offer,
+  onTrain,
+}: {
+  offer: MakeupOfferBlock;
+  onTrain: () => void;
+}) {
+  const short = offer.sessionsThisWeek - offer.completedThisWeek;
+  return (
+    <div className="mt-8">
+      <button
+        onClick={onTrain}
+        className="w-full rounded-sm border border-[var(--ink-faint)] py-3 text-center text-xs font-semibold tracking-[0.14em] text-[var(--ink)]"
+        style={{ fontFamily: "var(--font-mono)" }}
+      >
+        TRAIN ANYWAY
+      </button>
+      <p className="mt-2 text-center text-xs text-[var(--ink-faint)]">
+        {short} {short === 1 ? "session" : "sessions"} short this week — they
+        count whichever day you do them.
+      </p>
+    </div>
+  );
 }
 
 function restDayCopy(program: TodayPlan | null, date: string): string {

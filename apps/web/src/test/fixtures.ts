@@ -129,6 +129,8 @@ export function today(overrides: Partial<TodayResponse> = {}): TodayResponse {
     cooldown: [checklistItem({ id: "checklist-2", name: "Hamstring stretch" })],
     // Not on a program. Overridden by the tests that are (DN-10).
     plan: null,
+    // No makeup offered: a training day has a session already (DN-17).
+    makeup: null,
     ...overrides,
   };
 }

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import type { Exercise } from '@prisma/client';
 import {
   DEFAULT_EQUIPMENT,
@@ -17,9 +17,12 @@ import {
   type ResolvedMovement,
 } from './movement-resolution.service';
 import { loadActiveProgram } from '../plans/active-program';
+import { resolveScheduleLock } from '../plans/schedule-lock';
+import { EVERY_WEEKDAY, resolveMakeup } from './makeup';
 import {
   narrowToSlot,
   resolveProgramDay,
+  type ActiveProgram,
   type ProgramDay,
   type SlotConstraints,
 } from '../plans/program-day';
@@ -27,6 +30,7 @@ import {
   applyEquipmentFloor,
   applyRememberedChoice,
   dominantMovement,
+  getWeekRange,
   isRestDay,
   pickWod,
   RecentAssignment,
@@ -100,6 +104,15 @@ export class SchedulerService {
         plan,
         isRestDay: existing.status === 'skipped',
         assignment,
+        // A day marked as rest can still be trained: the athlete changed
+        // their mind, and the week is the unit of completion (DN-17).
+        makeup: await this.makeupFor(
+          userId,
+          today,
+          existing.status === 'skipped',
+          program,
+          trainingDays,
+        ),
         warmupCooldownEnabled,
         ...(await this.getChecklistsFor(
           userId,
@@ -109,10 +122,10 @@ export class SchedulerService {
       };
     }
 
-    // The week-so-far count this used to run went with the quota: once the
-    // rest-day check is a weekday lookup, nothing reads the number, and a
-    // query whose answer is discarded is how dead code starts. DN-17 wants a
-    // count of this shape back for makeup days, with a different meaning.
+    // The week-so-far count is back (DN-17), in `makeupFor` and with the
+    // different meaning DN-16 predicted: the quota version decided whether
+    // the athlete was *allowed* to train, this one only decides whether to
+    // offer a day they already have.
     const cooldownDays =
       rule?.patternCooldownDays ?? DEFAULT_PATTERN_COOLDOWN_DAYS;
 
@@ -132,6 +145,13 @@ export class SchedulerService {
         plan,
         isRestDay: true,
         assignment: null,
+        makeup: await this.makeupFor(
+          userId,
+          today,
+          true,
+          program,
+          trainingDays,
+        ),
         warmupCooldownEnabled,
         warmup: null,
         cooldown: null,
@@ -172,6 +192,8 @@ export class SchedulerService {
       date: today,
       plan,
       isRestDay: false,
+      // Nothing to make up on a day that already has a session.
+      makeup: null,
       assignment: {
         id: created.id,
         date: created.date,
@@ -219,6 +241,47 @@ export class SchedulerService {
   }
 
   /** The day's WOD: the one the program pinned, or one picked for its slot. */
+  /**
+   * The makeup offer for today, counting only this Monday-to-Sunday week.
+   *
+   * Scoping the count to `getWeekRange` is what makes "nothing rolls over"
+   * true rather than merely intended: an unfinished week simply stops being
+   * asked about on Monday. Carrying debt forward would turn the app into
+   * something the athlete is behind on, which fights the decision that every
+   * completed session is what gets celebrated.
+   *
+   * Only `completed` counts. A scheduled day is the app's expectation, not
+   * the athlete's work, and counting it would quietly make every week look
+   * finished before it was.
+   */
+  private async makeupFor(
+    userId: string,
+    today: string,
+    resting: boolean,
+    program: ActiveProgram | null,
+    trainingDays: number[],
+  ) {
+    // The offer is refused for two reasons that cost nothing to check, so
+    // neither the week query nor the lock resolution runs on a training day.
+    if (!resting) return null;
+
+    const week = getWeekRange(today);
+    const completedThisWeek = await this.prisma.dailyAssignment.count({
+      where: {
+        userId,
+        status: 'completed',
+        date: { gte: week.start, lte: week.end },
+      },
+    });
+
+    return resolveMakeup({
+      resting,
+      scheduleFixed: resolveScheduleLock(program, today) !== null,
+      trainingDays,
+      completedThisWeek,
+    });
+  }
+
   private async wodForDay(
     userId: string,
     today: string,
@@ -304,6 +367,117 @@ export class SchedulerService {
   }
 
   /** Marks today as a rest day — upserts so this works whether or not a WOD was already generated. */
+  /**
+   * Takes the makeup offer: trains today although today is a rest day (DN-17).
+   *
+   * Refuses rather than quietly generating when there is no offer standing.
+   * The screen only shows the control when `makeup` is non-null, so a request
+   * that arrives without one is a stale screen or a direct caller, and
+   * answering 200 would train an athlete on a day a fixed program deliberately
+   * kept clear.
+   *
+   * The day is resolved against a full week rather than the athlete's
+   * training days, so a flexible program hands over the session it authored
+   * for this weekday instead of an unrelated WOD. That is the whole
+   * distinction DN-16 kept between an authored rest and a day the athlete
+   * chose off: only the second one has a session waiting behind it.
+   */
+  async trainMakeup(userId: string, today: string) {
+    const [rule, existing, program] = await Promise.all([
+      this.prisma.scheduleRule.findUnique({ where: { userId } }),
+      this.prisma.dailyAssignment.findUnique({
+        where: { userId_date: { userId, date: today } },
+      }),
+      loadActiveProgram(this.prisma, userId),
+    ]);
+
+    const trainingDays = rule?.trainingDays ?? [...DEFAULT_TRAINING_DAYS];
+    const scheduled = existing !== null && existing.status !== 'skipped';
+    const offer = await this.makeupFor(
+      userId,
+      today,
+      !scheduled && this.restsToday(program, trainingDays, today),
+      program,
+      trainingDays,
+    );
+    if (!offer) {
+      throw new ConflictException('There is no makeup session to take today.');
+    }
+
+    const day = await this.settleProgramDay(
+      resolveProgramDay(program, EVERY_WEEKDAY, today),
+    );
+    const wod = await this.wodForDay(
+      userId,
+      today,
+      day,
+      rule?.patternCooldownDays ?? DEFAULT_PATTERN_COOLDOWN_DAYS,
+      rule?.equipment ?? [...DEFAULT_EQUIPMENT],
+    );
+
+    // Upsert rather than create: a day the athlete marked as rest already has
+    // a row, and the unique key on (userId, date) means there is exactly one
+    // to turn back into a training day.
+    const assignment = await this.prisma.dailyAssignment.upsert({
+      where: { userId_date: { userId, date: today } },
+      update: {
+        status: 'scheduled',
+        wodId: wod.id,
+        enrollmentId: day.kind === 'fallback' ? null : day.day.enrollmentId,
+        planSlotId: day.kind === 'fallback' ? null : day.day.planSlotId,
+        planDayIndex: day.kind === 'fallback' ? null : day.day.planDayIndex,
+      },
+      create: {
+        userId,
+        date: today,
+        wodId: wod.id,
+        status: 'scheduled',
+        enrollmentId: day.kind === 'fallback' ? null : day.day.enrollmentId,
+        planSlotId: day.kind === 'fallback' ? null : day.day.planSlotId,
+        planDayIndex: day.kind === 'fallback' ? null : day.day.planDayIndex,
+      },
+      include: { wod: { include: wodInclude } },
+    });
+
+    const warmupCooldownEnabled = rule?.warmupCooldownEnabled ?? false;
+    return {
+      date: today,
+      plan: planBlock(day),
+      isRestDay: false,
+      // Taken, so there is nothing left to offer.
+      makeup: null,
+      assignment: {
+        id: assignment.id,
+        date: assignment.date,
+        status: assignment.status,
+        wod: await this.resolveWodForToday(
+          userId,
+          assignment.id,
+          assignment.wod!,
+        ),
+        session: null,
+      },
+      warmupCooldownEnabled,
+      ...(await this.getChecklistsFor(
+        userId,
+        warmupCooldownEnabled,
+        assignment.wod!.dominantPattern,
+      )),
+    };
+  }
+
+  /** Today's rest-day answer, on the same fork `getToday` uses. */
+  private restsToday(
+    program: ActiveProgram | null,
+    trainingDays: number[],
+    today: string,
+  ): boolean {
+    const day = resolveProgramDay(program, trainingDays, today);
+    return day.kind === 'fallback'
+      ? isRestDay(today, trainingDays)
+      : day.kind === 'rest';
+  }
+
   async skipToday(userId: string, today: string) {
     await this.prisma.dailyAssignment.upsert({
       where: { userId_date: { userId, date: today } },
@@ -330,6 +504,15 @@ export class SchedulerService {
       plan,
       isRestDay: true,
       assignment: null,
+      // Marking the day as rest does not close it: the week is still the unit
+      // of completion, so the offer to train anyway stands (DN-17).
+      makeup: await this.makeupFor(
+        userId,
+        today,
+        true,
+        program,
+        rule?.trainingDays ?? [...DEFAULT_TRAINING_DAYS],
+      ),
       warmupCooldownEnabled: rule?.warmupCooldownEnabled ?? false,
       warmup: null,
       cooldown: null,
