@@ -832,7 +832,10 @@ describe('POST/DELETE /assignments/:id/substitutions, on a prescribed day', () =
   }
 
   it('takes the swap by the prescribed movement, and gives it back', async () => {
-    await http().get('/exercises').set(...asUser(ALICE)).expect(200);
+    await http()
+      .get('/exercises')
+      .set(...asUser(ALICE))
+      .expect(200);
     const alice = await testPrisma().user.findFirstOrThrow();
     const { rungs, assignment, movement } = await prescribedDay(alice.id);
 
@@ -848,7 +851,9 @@ describe('POST/DELETE /assignments/:id/substitutions, on a prescribed day', () =
     ).toBe(1);
 
     await http()
-      .delete(`/assignments/${assignment.id}/substitutions/prescribed/${movement.id}`)
+      .delete(
+        `/assignments/${assignment.id}/substitutions/prescribed/${movement.id}`,
+      )
       .set(...asUser(ALICE))
       .expect(204);
 
@@ -856,7 +861,10 @@ describe('POST/DELETE /assignments/:id/substitutions, on a prescribed day', () =
   });
 
   it('refuses a body naming neither kind of movement', async () => {
-    await http().get('/exercises').set(...asUser(ALICE)).expect(200);
+    await http()
+      .get('/exercises')
+      .set(...asUser(ALICE))
+      .expect(200);
     const alice = await testPrisma().user.findFirstOrThrow();
     const { rungs, assignment } = await prescribedDay(alice.id);
 
