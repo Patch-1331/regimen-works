@@ -1,17 +1,40 @@
 import { z } from "zod";
 import { checklistExerciseSchema } from "./checklist.js";
 import { assignmentStatus, planSlotKind } from "./enums.js";
+import { prescriptionSchema } from "./prescription.js";
 import { wodSchema } from "./wod.js";
 import { workoutSessionSchema } from "./session.js";
 
-export const todayAssignmentSchema = z.object({
-  id: z.string(),
-  date: z.string(),
-  status: assignmentStatus,
-  wod: wodSchema,
-  /** Present once a workout has been started — lets a reloaded/locked screen resume the timer. */
-  session: workoutSessionSchema.nullable(),
-});
+/**
+ * Today's session, which is either a WOD or a prescription (DN-19).
+ *
+ * The two are alternatives rather than one shape with optional halves: a WOD
+ * day is scored against the clock and a prescribed day is straight sets, and
+ * the screens that run them share nothing but the header. `wod` was the only
+ * possibility until programs could author a `movements` day, which is why it
+ * is a nullable field on the existing shape rather than a new response — every
+ * client path that reads a WOD day keeps working untouched.
+ */
+export const todayAssignmentSchema = z
+  .object({
+    id: z.string(),
+    date: z.string(),
+    status: assignmentStatus,
+    /** The WOD, on a WOD day. Null on a prescribed one — see the refinement. */
+    wod: wodSchema.nullable(),
+    /** The prescription, on a `movements` day. Null on a WOD day. */
+    prescription: prescriptionSchema.nullable(),
+    /** Present once a workout has been started — lets a reloaded/locked screen resume the timer. */
+    session: workoutSessionSchema.nullable(),
+  })
+  // Exactly one, the same shape of rule as PlanSlotMovement's line/exercise
+  // xor. Neither set is an assignment with no session in it, which is what a
+  // WOD-less row looked like before DN-19 and is still a bug rather than a
+  // day. Both set is two workouts and no way to choose.
+  .refine((a) => (a.wod !== null) !== (a.prescription !== null), {
+    message: "today is a WOD or a prescription — one of them, not both and not neither",
+    path: ["wod"],
+  });
 export type TodayAssignment = z.infer<typeof todayAssignmentSchema>;
 
 /**

@@ -3,6 +3,7 @@ import {
   resolveProgramDay,
   type ActiveProgram,
   type ProgramSlot,
+  type ProgramSlotMovement,
   type SlotConstraints,
 } from './program-day';
 
@@ -25,6 +26,22 @@ function slot(overrides: Partial<ProgramSlot> = {}): ProgramSlot {
     wodType: null,
     allowNamed: false,
     maxTimeCapMinutes: null,
+    movements: [],
+    ...overrides,
+  };
+}
+
+function prescribed(
+  overrides: Partial<ProgramSlotMovement> = {},
+): ProgramSlotMovement {
+  return {
+    id: 'psm_1',
+    order: 0,
+    line: 'pull',
+    exerciseId: null,
+    sets: 5,
+    reps: 3,
+    restSeconds: 90,
     ...overrides,
   };
 }
@@ -193,15 +210,56 @@ describe('resolveProgramDay', () => {
       });
     });
 
-    it('stubs a movements day as an unconstrained WOD, still reporting its kind', () => {
-      // PlanSlot carries no prescription columns until DN-19, so this cannot
-      // be authored yet. The athlete still trains; the screen that learns to
-      // render it can tell what it is looking at.
+    it('hands over what a movements day prescribes', () => {
+      expect(
+        dayOfKind('movements', { movements: [prescribed()] }),
+      ).toMatchObject({
+        kind: 'prescribed',
+        day: { slotKind: 'movements', planSlotId: 'slot_1' },
+        movements: [{ line: 'pull', sets: 5, reps: 3, restSeconds: 90 }],
+      });
+    });
+
+    it('prescribes in the authored order whatever order the rows arrive in', () => {
+      // `order` is the only thing that says what comes first, so it is applied
+      // here rather than left to whichever query fetched the rows.
+      //
+      // Three rows, shuffled rather than merely reversed: with two, simply
+      // flipping the list produces the right answer and the test proves
+      // nothing about sorting.
+      const day = dayOfKind('movements', {
+        movements: [
+          prescribed({ id: 'psm_2', order: 1, line: 'squat' }),
+          prescribed({ id: 'psm_3', order: 2, line: 'hinge' }),
+          prescribed({ id: 'psm_1', order: 0, line: 'pull' }),
+        ],
+      });
+
+      expect(day.kind).toBe('prescribed');
+      expect(
+        day.kind === 'prescribed' ? day.movements.map((m) => m.line) : [],
+      ).toEqual(['pull', 'squat', 'hinge']);
+    });
+
+    it('generates rather than showing an empty screen when a movements day prescribes nothing', () => {
+      // `planSlotSchema` refuses to author this and the API refuses to crash
+      // on it -- the same stance as the pinned slot with nothing pinned. The
+      // athlete still trains, and `slotKind` still says what the row claimed
+      // to be.
       expect(dayOfKind('movements')).toMatchObject({
         kind: 'generated',
         day: { slotKind: 'movements' },
         constraints: { pattern: null, allowNamed: true },
       });
+    });
+
+    it('ignores a prescription hanging off a kind that is not movements', () => {
+      // No CHECK can hold that rule, so the reader holds it: the slot's kind
+      // is what decides the day, and a stray row does not turn a WOD day into
+      // straight sets.
+      expect(
+        dayOfKind('wod_generated', { movements: [prescribed()] }),
+      ).toMatchObject({ kind: 'generated' });
     });
 
     it('generates rather than crashing on a pinned slot with nothing pinned', () => {

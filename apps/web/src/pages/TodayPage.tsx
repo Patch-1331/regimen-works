@@ -105,6 +105,31 @@ export function TodayPage() {
   }
 
   const { id: assignmentId, wod, status } = data.assignment;
+
+  // A prescribed day -- straight sets rather than a WOD (DN-19). The API can
+  // resolve one; nothing here can run one yet, and the runner is its own
+  // issue. Said plainly rather than folded into the rest-day plate above,
+  // because the athlete has a session today and telling them to rest would be
+  // false. No seeded program authors one of these days, so this is a guard
+  // against a hand-authored program rather than a screen anybody reaches.
+  if (!wod) {
+    return (
+      <div className="p-6">
+        {program && <ProgramStrip plan={program} date={data.date} />}
+        <h1
+          className="text-4xl font-extrabold uppercase leading-none"
+          style={{ fontFamily: "var(--font-display)" }}
+        >
+          Strength day
+        </h1>
+        <p className="mt-3 text-[var(--ink-soft)]">
+          Your program prescribes straight sets today. This screen can’t run
+          them yet.
+        </p>
+      </div>
+    );
+  }
+
   const isCompleted = status === "completed";
   const isInProgress = status === "in_progress";
   // A session already exists once in progress, so the warm-up checklist —

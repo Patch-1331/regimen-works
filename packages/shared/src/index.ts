@@ -7,6 +7,7 @@ export * from "./interval.js";
 export * from "./schedule.js";
 export * from "./assignment.js";
 export * from "./plan.js";
+export * from "./prescription.js";
 export * from "./plan-enrollment.js";
 export * from "./today.js";
 export * from "./session.js";

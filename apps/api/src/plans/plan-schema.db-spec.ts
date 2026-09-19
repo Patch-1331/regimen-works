@@ -2,6 +2,7 @@ import { testPrisma, withSeparateConnections } from '../test-support/database';
 import {
   createAssignment,
   createEnrollment,
+  createExercise,
   createPlan,
   createUser,
   createWod,
@@ -283,5 +284,124 @@ describe("an assignment cannot claim another athlete's enrollment", () => {
     await expect(
       testPrisma().planSlot.delete({ where: { id: planSlot.id } }),
     ).rejects.toThrow();
+  });
+});
+
+/**
+ * The prescription on a `movements` day (DN-19).
+ *
+ * Two CHECKs, both of them about rows nothing in the app can produce yet:
+ * there is no program editor, and no seeded plan authors a `movements` slot.
+ * That is exactly why they are written now -- the first author of one of
+ * these rows will be a migration or a seed script, and neither gets a code
+ * review that catches "sets: 0".
+ */
+describe('a prescribed movement names one movement and prescribes work', () => {
+  /** A prescription row on a throwaway slot, so each call stands alone. */
+  async function prescribe(overrides: Record<string, unknown> = {}) {
+    const plan = await createPlan({
+      weeks: {
+        create: [
+          {
+            order: 0,
+            phase: 'core',
+            slots: { create: [{ dayOfWeek: 1, kind: 'movements' }] },
+          },
+        ],
+      },
+    });
+    const planSlot = await testPrisma().planSlot.findFirstOrThrow({
+      where: { planWeek: { planId: plan.id } },
+    });
+    return testPrisma().planSlotMovement.create({
+      data: {
+        planSlotId: planSlot.id,
+        order: 0,
+        line: 'pull',
+        sets: 5,
+        reps: 3,
+        restSeconds: 90,
+        ...overrides,
+      },
+    });
+  }
+
+  it('accepts a movement prescribed by line', async () => {
+    await expect(prescribe()).resolves.toMatchObject({ line: 'pull' });
+  });
+
+  it('accepts a movement pinned to a specific exercise', async () => {
+    const exercise = await createExercise();
+    await expect(
+      prescribe({ line: null, exerciseId: exercise.id }),
+    ).resolves.toMatchObject({ exerciseId: exercise.id });
+  });
+
+  it('refuses a prescription naming no movement at all', async () => {
+    // Sets and reps for nothing. The athlete would be handed a count with no
+    // instruction attached.
+    await expect(prescribe({ line: null })).rejects.toThrow(CHECK_VIOLATION);
+  });
+
+  it('refuses a prescription naming both a line and an exercise', async () => {
+    // "Pull at your rung" and "this exact exercise" are different
+    // instructions, and a reader picking one would be guessing at the author.
+    const exercise = await createExercise();
+    await expect(
+      prescribe({ line: 'pull', exerciseId: exercise.id }),
+    ).rejects.toThrow(CHECK_VIOLATION);
+  });
+
+  it('refuses zero sets, and zero reps', async () => {
+    await expect(prescribe({ sets: 0 })).rejects.toThrow(CHECK_VIOLATION);
+    await expect(prescribe({ reps: 0 })).rejects.toThrow(CHECK_VIOLATION);
+  });
+
+  it('refuses negative rest, and accepts none at all', async () => {
+    // 0 says "straight through" out loud, which is a real prescription; -30
+    // is arithmetic the rest of the stack would carry.
+    await expect(prescribe({ restSeconds: -30 })).rejects.toThrow(
+      CHECK_VIOLATION,
+    );
+    await expect(prescribe({ restSeconds: 0 })).resolves.toBeDefined();
+  });
+
+  it('refuses two movements in the same position', async () => {
+    const first = await prescribe();
+    await expect(
+      testPrisma().planSlotMovement.create({
+        data: {
+          planSlotId: first.planSlotId,
+          order: 0,
+          line: 'squat',
+          sets: 3,
+          reps: 8,
+          restSeconds: 60,
+        },
+      }),
+    ).rejects.toThrow(UNIQUE_VIOLATION);
+  });
+
+  it('refuses to delete an exercise a slot has pinned', async () => {
+    // Same shape as the pinned-WOD rule above: the foreign key is ON DELETE
+    // SET NULL, and the CHECK turns that nulling into a refusal. Archiving is
+    // the answer here too.
+    const exercise = await createExercise();
+    await prescribe({ line: null, exerciseId: exercise.id });
+
+    await expect(
+      testPrisma().exercise.delete({ where: { id: exercise.id } }),
+    ).rejects.toThrow(CHECK_VIOLATION);
+  });
+
+  it('takes the prescription with the slot when a program is deleted', async () => {
+    // Cascade here, unlike the assignment rules: a slot's prescription is
+    // part of the slot rather than a record of anything the athlete did.
+    const row = await prescribe();
+    await testPrisma().planSlot.delete({ where: { id: row.planSlotId } });
+
+    expect(
+      await testPrisma().planSlotMovement.findUnique({ where: { id: row.id } }),
+    ).toBeNull();
   });
 });

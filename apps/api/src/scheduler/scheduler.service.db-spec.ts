@@ -112,7 +112,7 @@ async function assignedDay(
 /** The single movement as the athlete is served it today. */
 async function servedMovement(userId: string) {
   const today = await service().getToday(userId, TODAY);
-  return today.assignment!.wod.movements[0];
+  return today.assignment!.wod!.movements[0];
 }
 
 /**
@@ -309,8 +309,8 @@ describe('SchedulerService equipment resolution', () => {
 
     const today = await service().getToday(user.id, TODAY);
 
-    expect(today.assignment!.wod.movements).toHaveLength(1);
-    expect(today.assignment!.wod.movements[0].exercise.name).toBe(
+    expect(today.assignment!.wod!.movements).toHaveLength(1);
+    expect(today.assignment!.wod!.movements[0].exercise.name).toBe(
       'Bar muscle-up',
     );
   });
@@ -421,7 +421,7 @@ describe('SchedulerService.getToday', () => {
     const stored = await testPrisma().dailyAssignment.findUnique({
       where: { userId_date: { userId: user.id, date: TODAY } },
     });
-    expect(stored?.wodId).toBe(today.assignment!.wod.id);
+    expect(stored?.wodId).toBe(today.assignment!.wod!.id);
   });
 
   it('resolves equipment on a newly generated assignment too', async () => {
@@ -439,7 +439,7 @@ describe('SchedulerService.getToday', () => {
 
     const today = await service().getToday(user.id, TODAY);
 
-    expect(today.assignment!.wod.movements[0].exercise.name).toBe(
+    expect(today.assignment!.wod!.movements[0].exercise.name).toBe(
       'Row under table',
     );
   });
@@ -450,7 +450,7 @@ describe('SchedulerService.getToday', () => {
 
     const today = await service().getToday(user.id, TODAY);
 
-    expect(today.assignment!.wod.id).toBe(wod.id);
+    expect(today.assignment!.wod!.id).toBe(wod.id);
     expect(
       await testPrisma().dailyAssignment.count({ where: { userId: user.id } }),
     ).toBe(1);
@@ -684,7 +684,7 @@ describe('SchedulerService equipment floor', () => {
 
     // Only one candidate survives the floor, so this holds whatever `pickWod`
     // would otherwise have rolled.
-    expect(today.assignment!.wod.name).toBe(squatWod.name);
+    expect(today.assignment!.wod!.name).toBe(squatWod.name);
   });
 
   it('offers it once they own the piece', async () => {
@@ -694,9 +694,9 @@ describe('SchedulerService equipment floor', () => {
 
     const today = await service().getToday(user.id, TODAY);
 
-    expect(today.assignment!.wod.name).toBe(ropeWod.name);
+    expect(today.assignment!.wod!.name).toBe(ropeWod.name);
     // And nothing is substituted away from them.
-    expect(today.assignment!.wod.movements[0].exercise.name).toBe(
+    expect(today.assignment!.wod!.movements[0].exercise.name).toBe(
       doubleUnders.name,
     );
   });
@@ -712,8 +712,8 @@ describe('SchedulerService equipment floor', () => {
 
     const today = await service().getToday(user.id, TODAY);
 
-    expect(today.assignment!.wod.name).toBe(ropeWod.name);
-    expect(today.assignment!.wod.movements[0].exercise.name).toBe(
+    expect(today.assignment!.wod!.name).toBe(ropeWod.name);
+    expect(today.assignment!.wod!.movements[0].exercise.name).toBe(
       highKnees.name,
     );
   });
@@ -748,8 +748,8 @@ describe('SchedulerService equipment floor', () => {
     const random = jest.spyOn(Math, 'random').mockReturnValue(0);
     try {
       const today = await service().getToday(user.id, TODAY);
-      expect(today.assignment!.wod.name).toBe(pullWod.name);
-      expect(today.assignment!.wod.movements[0].exercise.name).toBe(
+      expect(today.assignment!.wod!.name).toBe(pullWod.name);
+      expect(today.assignment!.wod!.movements[0].exercise.name).toBe(
         negative.name,
       );
     } finally {
@@ -815,7 +815,7 @@ describe('SchedulerService reads the stored pattern cooldown', () => {
 
     // Helen is out by name and Alpha Wod by pattern, both inside the 5-day
     // window, so the squat WOD cannot come round again today.
-    expect(today.assignment!.wod.name).toBe(bravo.name);
+    expect(today.assignment!.wod!.name).toBe(bravo.name);
   });
 
   it('rolls the randomness it was given, not Math.random', async () => {
@@ -843,7 +843,7 @@ describe('SchedulerService reads the stored pattern cooldown', () => {
 
     // Off means yesterday's squat pattern is eligible again, so the pool is
     // both AMRAPs and the pinned roll takes the first by name.
-    expect(today.assignment!.wod.name).toBe(alpha.name);
+    expect(today.assignment!.wod!.name).toBe(alpha.name);
   });
 });
 
@@ -1008,7 +1008,7 @@ describe('SchedulerService.getToday, under a program', () => {
 
     const today = await programService().getToday(user.id, MONDAY);
 
-    expect(today.assignment?.wod.id).toBe(pinned.id);
+    expect(today.assignment?.wod!.id).toBe(pinned.id);
     expect(today.plan?.slotKind).toBe('wod_pinned');
   });
 
@@ -1028,7 +1028,7 @@ describe('SchedulerService.getToday, under a program', () => {
 
     const today = await programService().getToday(user.id, MONDAY);
 
-    expect(today.assignment?.wod.id).toBe(pull.id);
+    expect(today.assignment?.wod!.id).toBe(pull.id);
   });
 
   it('would rather break the slot than hand over kit the athlete lacks', async () => {
@@ -1073,7 +1073,7 @@ describe('SchedulerService.getToday, under a program', () => {
 
     const today = await programService().getToday(user.id, MONDAY);
 
-    expect(today.assignment?.wod.id).toBe(push.id);
+    expect(today.assignment?.wod!.id).toBe(push.id);
   });
 
   it('keeps a named WOD off a slot that did not ask for one', async () => {
@@ -1091,7 +1091,7 @@ describe('SchedulerService.getToday, under a program', () => {
 
     const today = await programService().getToday(user.id, MONDAY);
 
-    expect(today.assignment?.wod.id).toBe(plain.id);
+    expect(today.assignment?.wod!.id).toBe(plain.id);
   });
 
   it('records which slot of which run produced the day', async () => {
@@ -1441,7 +1441,7 @@ describe('SchedulerService makeup days (DN-17)', () => {
 
       expect(today.isRestDay).toBe(false);
       expect(today.assignment).toMatchObject({ status: 'scheduled' });
-      expect(today.assignment.wod.id).toBe(wod.id);
+      expect(today.assignment.wod!.id).toBe(wod.id);
       // Taken, so there is nothing left to offer.
       expect(today.makeup).toBeNull();
     });
@@ -1551,8 +1551,8 @@ describe('SchedulerService makeup days (DN-17)', () => {
         SATURDAY,
       );
 
-      expect(taken.assignment.wod.id).toBe(authored.id);
-      expect(taken.assignment.wod.id).not.toBe(rolled.id);
+      expect(taken.assignment.wod!.id).toBe(authored.id);
+      expect(taken.assignment.wod!.id).not.toBe(rolled.id);
       expect(taken.plan).toMatchObject({ name: plan.name });
     });
 
@@ -1575,5 +1575,218 @@ describe('SchedulerService makeup days (DN-17)', () => {
       expect(row?.enrollmentId).not.toBeNull();
       expect(row?.planSlotId).not.toBeNull();
     });
+  });
+});
+
+/**
+ * A prescribed day: straight sets rather than a WOD (DN-19).
+ *
+ * Through the real resolver and a real database, because what is worth
+ * pinning down is the same thing the rest of this file is about — wiring. The
+ * pure decisions (which rung, what happens when the library cannot answer)
+ * are fixed in `prescription.spec.ts`; these say that a program authoring a
+ * line ends up handing this athlete a movement with a name on it, and that
+ * the day is recorded as a day.
+ */
+describe('SchedulerService.getToday, on a prescribed day', () => {
+  /** A pull ladder whose upper rung needs a bar and falls back off the line. */
+  async function pullRungs() {
+    const alt = await createExercise({
+      name: 'Row under table',
+      pattern: 'pull',
+      line: null,
+      rung: null,
+    });
+    const ring = await createExercise({
+      name: 'Ring row',
+      pattern: 'pull',
+      line: 'pull',
+      rung: 0,
+    });
+    const chinUp = await createExercise({
+      name: 'Chin-up',
+      pattern: 'pull',
+      line: 'pull',
+      rung: 1,
+      equipment: ['pull_up_bar'],
+      altExerciseId: alt.id,
+    });
+    return { alt, ring, chinUp };
+  }
+
+  /** A program that prescribes `pull, 5x3, rest 90s` every day of the week. */
+  async function prescribingPlan(
+    movements: Record<string, unknown>[] = [
+      { order: 0, line: 'pull', sets: 5, reps: 3, restSeconds: 90 },
+    ],
+  ) {
+    return everyDayPlan('movements', { movements: { create: movements } });
+  }
+
+  async function enrolled(user: { id: string }, planId: string) {
+    return createEnrollment(user.id, {
+      planId,
+      startDate: MONDAY,
+      weeks: null,
+    });
+  }
+
+  it('hands over the prescription instead of a WOD', async () => {
+    const { ring } = await pullRungs();
+    const user = await athlete();
+    await enrolled(user, (await prescribingPlan()).id);
+
+    const today = await programService().getToday(user.id, TODAY);
+
+    expect(today.isRestDay).toBe(false);
+    expect(today.assignment!.wod).toBeNull();
+    expect(today.assignment!.prescription).toMatchObject({
+      movements: [
+        {
+          line: 'pull',
+          sets: 5,
+          reps: 3,
+          restSeconds: 90,
+          exercise: { id: ring.id, name: ring.name },
+          // The rung is not a substitution. A program that asked for "pull"
+          // and handed over a ring row did exactly what it said, and naming
+          // it as a replacement would tell the athlete something was taken
+          // away from them.
+          prescribedName: null,
+          prescribedReason: null,
+        },
+      ],
+    });
+  });
+
+  it('meets the athlete at the rung they train the line at', async () => {
+    // The whole reason a program authors a line: one program, written once,
+    // fits the athlete on rung 0 and the one on rung 1.
+    const { chinUp } = await pullRungs();
+    const user = await athlete();
+    await createSkillLevel(user.id, 'pull', 1);
+    await testPrisma().scheduleRule.update({
+      where: { userId: user.id },
+      data: { equipment: ['pull_up_bar'] },
+    });
+    await enrolled(user, (await prescribingPlan()).id);
+
+    const today = await programService().getToday(user.id, TODAY);
+
+    expect(today.assignment!.prescription!.movements[0].exercise.id).toBe(
+      chinUp.id,
+    );
+  });
+
+  it('drops off the line for an athlete who owns none of the kit, and says so', async () => {
+    // Equipment is the one layer that replaced something the athlete was told
+    // about, so it is the one that gets named. The rung is not a substitution:
+    // a program that asked for "pull" and handed over a row did what it said.
+    const { alt, chinUp } = await pullRungs();
+    const user = await athlete();
+    await createSkillLevel(user.id, 'pull', 1);
+    await enrolled(user, (await prescribingPlan()).id);
+
+    const today = await programService().getToday(user.id, TODAY);
+
+    expect(today.assignment!.prescription!.movements[0]).toMatchObject({
+      exercise: { id: alt.id },
+      prescribedName: chinUp.name,
+      prescribedReason: 'equipment',
+      // What the *program* asked for survives the fallback: the line is the
+      // session's intent, and a screen showing only the substitute could not
+      // say what the day was for.
+      line: 'pull',
+    });
+  });
+
+  it('records the day as an assignment with no WOD on it', async () => {
+    const { ring } = await pullRungs();
+    const user = await athlete();
+    await enrolled(user, (await prescribingPlan()).id);
+
+    const today = await programService().getToday(user.id, TODAY);
+
+    const row = await testPrisma().dailyAssignment.findUnique({
+      where: { id: today.assignment!.id },
+    });
+    expect(row).toMatchObject({ wodId: null, status: 'scheduled' });
+    expect(row?.planSlotId).not.toBeNull();
+    expect(row?.enrollmentId).not.toBeNull();
+    expect(ring.id).toBeTruthy();
+  });
+
+  it('reads the recorded day back rather than writing a second one', async () => {
+    // The WOD-less row used to collapse to `assignment: null` on the way
+    // back out, which would have turned a prescribed day into a blank screen
+    // on every reload.
+    await pullRungs();
+    const user = await athlete();
+    await enrolled(user, (await prescribingPlan()).id);
+
+    const first = await programService().getToday(user.id, TODAY);
+    const again = await programService().getToday(user.id, TODAY);
+
+    expect(again.assignment!.id).toBe(first.assignment!.id);
+    expect(again.assignment!.prescription!.movements).toHaveLength(1);
+    expect(
+      await testPrisma().dailyAssignment.count({ where: { userId: user.id } }),
+    ).toBe(1);
+  });
+
+  it('prescribes the movements in the order they were authored', async () => {
+    await pullRungs();
+    await createExercise({
+      name: 'Air squat',
+      pattern: 'squat',
+      line: 'squat',
+      rung: 0,
+    });
+    const user = await athlete();
+    await enrolled(
+      user,
+      (
+        await prescribingPlan([
+          { order: 1, line: 'squat', sets: 3, reps: 10, restSeconds: 60 },
+          { order: 0, line: 'pull', sets: 5, reps: 3, restSeconds: 90 },
+        ])
+      ).id,
+    );
+
+    const today = await programService().getToday(user.id, TODAY);
+
+    expect(
+      today.assignment!.prescription!.movements.map((m) => m.line),
+    ).toEqual(['pull', 'squat']);
+  });
+
+  it('generates a WOD rather than an empty day when nothing resolves', async () => {
+    // The line exists in the enum but not in this athlete's library. An
+    // authoring or library gap costs them the session it described, not the
+    // day.
+    const wod = await createWod();
+    const user = await athlete();
+    await enrolled(user, (await prescribingPlan()).id);
+
+    const today = await programService().getToday(user.id, TODAY);
+
+    expect(today.assignment!.prescription).toBeNull();
+    expect(today.assignment!.wod!.id).toBe(wod.id);
+  });
+
+  it('hands over the prescription when the day is taken as a makeup', async () => {
+    // A makeup resolves against the whole week (DN-17), so a flexible
+    // program's Saturday session is whatever it authored -- including straight
+    // sets.
+    const { ring } = await pullRungs();
+    const user = await athlete();
+    await enrolled(user, (await prescribingPlan()).id);
+
+    const taken = await programService().trainMakeup(user.id, SATURDAY);
+
+    expect(taken.assignment.wod).toBeNull();
+    expect(taken.assignment.prescription!.movements[0].exercise.id).toBe(
+      ring.id,
+    );
   });
 });
