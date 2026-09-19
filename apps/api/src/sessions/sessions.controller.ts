@@ -5,10 +5,12 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
 } from '@nestjs/common';
 import {
   advanceIntervalSchema,
+  editSetLogsSchema,
   logRoundSplitSchema,
   logSetSchema,
   setRoundSplitRequestSchema,
@@ -55,6 +57,29 @@ export class SessionsController {
   ) {
     const next = validateBody(logSetSchema, body);
     return this.sessionsService.logSet(userId, assignmentId, next);
+  }
+
+  /**
+   * The sets recorded against this session (DN-21) -- read by the log screen,
+   * which lets the athlete correct what the runner tracked.
+   */
+  @Get('sets')
+  setLogs(
+    @CurrentUser() userId: string,
+    @Param('assignmentId') assignmentId: string,
+  ) {
+    return this.sessionsService.setLogs(userId, assignmentId);
+  }
+
+  /** Corrections to sets already recorded. Updates only -- see `editSetLogs`. */
+  @Patch('sets')
+  editSetLogs(
+    @CurrentUser() userId: string,
+    @Param('assignmentId') assignmentId: string,
+    @Body() body: unknown,
+  ) {
+    const edits = validateBody(editSetLogsSchema, body);
+    return this.sessionsService.editSetLogs(userId, assignmentId, edits);
   }
 
   @Post('interval')

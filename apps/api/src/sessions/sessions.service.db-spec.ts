@@ -1062,6 +1062,277 @@ describe('SessionsService.logSet', () => {
   });
 });
 
+describe('SessionsService.logSet, the rows it writes (DN-21)', () => {
+  /** A started straight-sets session: 5 x 3 on the pull ladder, then 3 x 8 push-ups. */
+  async function running() {
+    const day = await prescribedDay();
+    const session = await service().start(day.user.id, day.assignment.id);
+    return { ...day, session };
+  }
+
+  function storedSetLogs(sessionId: string) {
+    return testPrisma().workoutSetLog.findMany({
+      where: { sessionId },
+      orderBy: [{ movementOrder: 'asc' }, { setNumber: 'asc' }],
+    });
+  }
+
+  it('writes the set it finished, against what the snapshot prescribed', async () => {
+    const { user, assignment, session } = await running();
+
+    await service().logSet(user.id, assignment.id, {
+      setsCompleted: 1,
+      restStartedAtSeconds: 90,
+    });
+
+    expect(await storedSetLogs(session.id)).toMatchObject([
+      {
+        movementOrder: 0,
+        setNumber: 1,
+        // Read off the session's own snapshot rather than sent: a client that
+        // reported its own reading of the prescription could disagree with
+        // the server about what the day asked for.
+        exerciseId: session.movements[0].exercise.id,
+        prescribedReps: 3,
+        actualReps: 3,
+      },
+    ]);
+  });
+
+  it('crosses into the next movement, carrying its own prescription', async () => {
+    const { user, assignment, session } = await running();
+    for (let n = 1; n <= 6; n++) {
+      await service().logSet(user.id, assignment.id, {
+        setsCompleted: n,
+        restStartedAtSeconds: null,
+      });
+    }
+
+    // Six sets in: the five pull sets are behind, so this is the first set of
+    // the second movement rather than a sixth of the first.
+    expect((await storedSetLogs(session.id))[5]).toMatchObject({
+      movementOrder: 1,
+      setNumber: 1,
+      exerciseId: session.movements[1].exercise.id,
+      prescribedReps: 8,
+      actualReps: 8,
+    });
+  });
+
+  it('does not record the set twice when a tap is replayed', async () => {
+    const { user, assignment, session } = await running();
+    await service().logSet(user.id, assignment.id, {
+      setsCompleted: 1,
+      restStartedAtSeconds: 90,
+    });
+
+    // The same tap arriving again after a flaky connection. Two rows for one
+    // set would make every later count of the work double it.
+    await service().logSet(user.id, assignment.id, {
+      setsCompleted: 1,
+      restStartedAtSeconds: 90,
+    });
+
+    expect(await storedSetLogs(session.id)).toHaveLength(1);
+  });
+
+  it('writes nothing when the call is the screen skipping a rest', async () => {
+    const { user, assignment, session } = await running();
+    await service().logSet(user.id, assignment.id, {
+      setsCompleted: 1,
+      restStartedAtSeconds: 90,
+    });
+    const [written] = await storedSetLogs(session.id);
+
+    // The rest screen posts the *current* count to clear the rest. It
+    // finished no set, so there is no second row to write.
+    await service().logSet(user.id, assignment.id, {
+      setsCompleted: 1,
+      restStartedAtSeconds: null,
+    });
+
+    const after = await storedSetLogs(session.id);
+    expect(after).toHaveLength(1);
+    // Not touched, rather than rewritten with the same values: the upsert
+    // would hide a redundant write behind an unchanged row, and a set
+    // rewritten by a rest-skip is a set whose correction a rest-skip undoes.
+    expect(after[0].updatedAt).toEqual(written.updatedAt);
+  });
+
+  it('writes nothing for a call that arrives late with an earlier count', async () => {
+    const { user, assignment, session } = await running();
+    for (const n of [1, 2]) {
+      await service().logSet(user.id, assignment.id, {
+        setsCompleted: n,
+        restStartedAtSeconds: null,
+      });
+    }
+
+    await service().logSet(user.id, assignment.id, {
+      setsCompleted: 1,
+      restStartedAtSeconds: 90,
+    });
+
+    // Both rows stand as they were recorded -- the late call is a replay of a
+    // tap already written, not a set of its own.
+    expect(await storedSetLogs(session.id)).toMatchObject([
+      { setNumber: 1, actualReps: 3 },
+      { setNumber: 2, actualReps: 3 },
+    ]);
+  });
+
+  it('writes no row for a set past the end of the session', async () => {
+    const { user, assignment, session } = await running();
+
+    await expect(
+      service().logSet(user.id, assignment.id, {
+        setsCompleted: 9,
+        restStartedAtSeconds: null,
+      }),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(await storedSetLogs(session.id)).toEqual([]);
+  });
+
+  it('keeps the counter and the rows as one reading of the same tap', async () => {
+    // Written in one transaction, so there is no state where the session says
+    // it is on set two and the row for set one was never recorded.
+    const { user, assignment, session } = await running();
+    for (const n of [1, 2, 3]) {
+      await service().logSet(user.id, assignment.id, {
+        setsCompleted: n,
+        restStartedAtSeconds: null,
+      });
+    }
+
+    expect((await storedSession(assignment.id))?.setsCompleted).toBe(3);
+    expect(await storedSetLogs(session.id)).toHaveLength(3);
+  });
+});
+
+describe('SessionsService.setLogs', () => {
+  async function trained(sets: number) {
+    const day = await prescribedDay();
+    const session = await service().start(day.user.id, day.assignment.id);
+    for (let n = 1; n <= sets; n++) {
+      await service().logSet(day.user.id, day.assignment.id, {
+        setsCompleted: n,
+        restStartedAtSeconds: null,
+      });
+    }
+    return { ...day, session };
+  }
+
+  it('reads the sets back in the order they were done', async () => {
+    // Five sets of the first movement, then one of the second -- so this is
+    // also where an ordering by `completedAt`, or by id, would still look
+    // right and a movement-major layout would not.
+    const { user, assignment } = await trained(6);
+
+    expect(
+      (await service().setLogs(user.id, assignment.id)).map((row) => [
+        row.movementOrder,
+        row.setNumber,
+        row.prescribedReps,
+      ]),
+    ).toEqual([
+      [0, 1, 3],
+      [0, 2, 3],
+      [0, 3, 3],
+      [0, 4, 3],
+      [0, 5, 3],
+      [1, 1, 8],
+    ]);
+  });
+
+  it('is empty for a session that has recorded nothing yet', async () => {
+    const { user, assignment } = await trained(0);
+
+    expect(await service().setLogs(user.id, assignment.id)).toEqual([]);
+  });
+
+  it('still reads after the session is finished, which is when the log screen asks', async () => {
+    const { user, assignment } = await trained(2);
+    await service().finish(user.id, assignment.id);
+
+    expect(await service().setLogs(user.id, assignment.id)).toHaveLength(2);
+  });
+
+  it("reads another athlete's session as not found", async () => {
+    const { assignment } = await trained(2);
+    const stranger = await createUser();
+
+    await expect(service().setLogs(stranger.id, assignment.id)).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+});
+
+describe('SessionsService.editSetLogs', () => {
+  async function trained(sets = 3) {
+    const day = await prescribedDay();
+    const session = await service().start(day.user.id, day.assignment.id);
+    for (let n = 1; n <= sets; n++) {
+      await service().logSet(day.user.id, day.assignment.id, {
+        setsCompleted: n,
+        restStartedAtSeconds: null,
+      });
+    }
+    return { ...day, session };
+  }
+
+  it('corrects a set the runner recorded, and leaves the rest alone', async () => {
+    const { user, assignment } = await trained();
+
+    const rows = await service().editSetLogs(user.id, assignment.id, {
+      sets: [{ movementOrder: 0, setNumber: 2, actualReps: 1 }],
+    });
+
+    expect(rows.map((row) => row.actualReps)).toEqual([3, 1, 3]);
+  });
+
+  it('corrects several sets at once', async () => {
+    const { user, assignment } = await trained();
+
+    const rows = await service().editSetLogs(user.id, assignment.id, {
+      sets: [
+        { movementOrder: 0, setNumber: 1, actualReps: 2 },
+        { movementOrder: 0, setNumber: 3, actualReps: 0 },
+      ],
+    });
+
+    expect(rows.map((row) => row.actualReps)).toEqual([2, 3, 0]);
+  });
+
+  it('will not conjure a set no session recorded', async () => {
+    // The runner is what creates these rows. An edit that could create one
+    // would let the log screen claim work on a day the athlete walked out --
+    // "I did five" on a session that recorded three.
+    const { user, assignment } = await trained();
+
+    const rows = await service().editSetLogs(user.id, assignment.id, {
+      sets: [{ movementOrder: 0, setNumber: 5, actualReps: 3 }],
+    });
+
+    expect(rows).toHaveLength(3);
+  });
+
+  it("leaves another athlete's sets untouched", async () => {
+    const { user, assignment } = await trained();
+    const stranger = await createUser();
+
+    await expect(
+      service().editSetLogs(stranger.id, assignment.id, {
+        sets: [{ movementOrder: 0, setNumber: 1, actualReps: 0 }],
+      }),
+    ).rejects.toThrow(NotFoundException);
+
+    expect(
+      (await service().setLogs(user.id, assignment.id))[0].actualReps,
+    ).toBe(3);
+  });
+});
+
 describe('SessionsService.finish, on an untimed session', () => {
   it('records how long it took rather than clamping to a cap it has not got', async () => {
     const { user, assignment } = await prescribedDay();

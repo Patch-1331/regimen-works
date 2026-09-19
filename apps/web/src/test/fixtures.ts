@@ -10,6 +10,7 @@ import type {
   WodMovement,
   WorkoutLogListItem,
   WorkoutSession,
+  WorkoutSetLog,
 } from "@regimen-works/shared";
 import type { ApiExercise, ApiWod } from "../lib/api";
 
@@ -175,6 +176,21 @@ export function session(
     cooldownCompletedAt: null,
     intervalIndex: null,
     intervalStartedAtSeconds: null,
+    ...overrides,
+  };
+}
+
+/** One set as the runner recorded it (DN-21): the first set of the first movement, as prescribed. */
+export function workoutSetLog(
+  overrides: Partial<WorkoutSetLog> = {},
+): WorkoutSetLog {
+  return {
+    id: "set-log-1",
+    movementOrder: 0,
+    setNumber: 1,
+    exerciseId: "exercise-1",
+    prescribedReps: 3,
+    actualReps: 3,
     ...overrides,
   };
 }

@@ -6,6 +6,7 @@ import type {
   RoundSplit,
   SessionMovement,
   WorkoutSession,
+  WorkoutSetLog as WorkoutSetLogDto,
 } from '@regimen-works/shared';
 
 /**
@@ -41,5 +42,30 @@ export function toSessionDto(session: PrismaWorkoutSession): WorkoutSession {
     intervalStartedAtSeconds: session.intervalStartedAtSeconds,
     setsCompleted: session.setsCompleted,
     restStartedAtSeconds: session.restStartedAtSeconds,
+  };
+}
+
+/**
+ * A stored set, as a client reads it (DN-21).
+ *
+ * `userId`, `sessionId` and the timestamps are dropped: the caller asked for
+ * one session's sets and already knows whose they are, and a row's identity to
+ * the screen is its position, not when it was written.
+ */
+export function toSetLogDto(row: {
+  id: string;
+  movementOrder: number;
+  setNumber: number;
+  exerciseId: string;
+  prescribedReps: number;
+  actualReps: number;
+}): WorkoutSetLogDto {
+  return {
+    id: row.id,
+    movementOrder: row.movementOrder,
+    setNumber: row.setNumber,
+    exerciseId: row.exerciseId,
+    prescribedReps: row.prescribedReps,
+    actualReps: row.actualReps,
   };
 }

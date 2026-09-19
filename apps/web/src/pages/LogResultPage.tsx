@@ -10,6 +10,7 @@ import {
   type ResultType,
   type WorkoutLog,
   type WorkoutSession,
+  type WorkoutSetLog,
   type Wod,
 } from "@regimen-works/shared";
 import { api } from "../lib/api";
@@ -125,6 +126,20 @@ function LogResultForm({
   const [rpe, setRpe] = useState<number | null>(existingLog?.rpe ?? null);
   const [notes, setNotes] = useState(existingLog?.notes ?? "");
 
+  // The sets the runner wrote down (DN-21). Only a prescribed day has any,
+  // and only once a session exists -- there is nothing to read back on a day
+  // the athlete is logging from memory without having run it.
+  const { data: setLogs } = useQuery({
+    queryKey: ["set-logs", assignmentId],
+    queryFn: () => api.setLogs(assignmentId),
+    enabled: day.kind === "prescribed" && session !== null,
+  });
+
+  // Corrections, keyed by position, and only for the sets actually touched.
+  // Pre-filling this from the rows would make every set look edited and send
+  // the whole session back on save; absent means "as it was recorded".
+  const [editedReps, setEditedReps] = useState<Record<string, number>>({});
+
   // What today's swaps offer to make permanent (WOD-6). Declining is
   // remembered per assignment, so coming back to edit a note doesn't re-ask a
   // question already answered.
@@ -152,7 +167,21 @@ function LogResultForm({
   });
 
   const saveMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
+      // Before the result, because the result is what navigates away: a
+      // correction lost to a failed request would be lost silently, and the
+      // athlete would have no way to tell it had not been written.
+      const corrections = (setLogs ?? [])
+        .filter((row) => keyOf(row) in editedReps)
+        .map((row) => ({
+          movementOrder: row.movementOrder,
+          setNumber: row.setNumber,
+          actualReps: editedReps[keyOf(row)],
+        }));
+      if (corrections.length > 0) {
+        await api.editSetLogs(assignmentId, { sets: corrections });
+      }
+
       const resultValue =
         resultType === "time_seconds"
           ? String(minutes * 60 + seconds)
@@ -164,6 +193,7 @@ function LogResultForm({
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["today"] });
       await queryClient.invalidateQueries({ queryKey: ["logs"] });
+      await queryClient.invalidateQueries({ queryKey: ["set-logs", assignmentId] });
       navigate("/history");
     },
   });
@@ -279,6 +309,33 @@ function LogResultForm({
         </div>
       )}
 
+      {day.kind === "prescribed" && (setLogs ?? []).length > 0 && (
+        <>
+          <p className="mt-6 text-xs font-semibold tracking-[0.14em] text-[var(--ink-faint)]" style={{ fontFamily: "var(--font-mono)" }}>
+            REPS PER SET
+          </p>
+          {/* Pre-filled with what the runner recorded, which is the day as
+              prescribed: the screen asks for a tap per set, not a count. This
+              is where "I said three and did two" gets written down, and it is
+              asked here rather than mid-workout because the athlete counting
+              reps into a form between sets costs more than the reading is
+              worth. Left alone, every set saves exactly as it was run. */}
+          <div className="mt-3 flex flex-col gap-2">
+            {(setLogs ?? []).map((row) => (
+              <SetRepsRow
+                key={row.id}
+                row={row}
+                name={movementName(day.prescription, row.movementOrder)}
+                value={editedReps[keyOf(row)] ?? row.actualReps}
+                onChange={(n) =>
+                  setEditedReps((edits) => ({ ...edits, [keyOf(row)]: n }))
+                }
+              />
+            ))}
+          </div>
+        </>
+      )}
+
       <p className="mt-6 text-xs font-semibold tracking-[0.14em] text-[var(--ink-faint)]" style={{ fontFamily: "var(--font-mono)" }}>
         EFFORT (RPE)
       </p>
@@ -319,6 +376,62 @@ function LogResultForm({
       >
         SAVE RESULT
       </button>
+    </div>
+  );
+}
+
+/** A set's position, which is what identifies it — the row id is the server's. */
+function keyOf(row: { movementOrder: number; setNumber: number }) {
+  return `${row.movementOrder}:${row.setNumber}`;
+}
+
+/**
+ * What the movement at this position is called.
+ *
+ * `movementOrder` indexes the session's own snapshot, and the prescription is
+ * that same list read live, so a program that has since reordered the slot
+ * can leave a row with no match. Named by its position in that case rather
+ * than dropped: the set was done, and hiding it would lose a correction the
+ * athlete can still make.
+ */
+function movementName(prescription: Prescription, movementOrder: number): string {
+  const movement = prescription.movements.find((m) => m.order === movementOrder);
+  return movement?.exercise.name ?? `Movement ${movementOrder + 1}`;
+}
+
+function SetRepsRow({
+  row,
+  name,
+  value,
+  onChange,
+}: {
+  row: WorkoutSetLog;
+  name: string;
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 border px-3 py-2" style={inputStyle}>
+      <span className="flex-1 truncate text-sm" style={{ color: "var(--ink-soft)" }}>
+        <span className="uppercase">{name}</span>
+        <span className="text-[var(--ink-faint)]" style={{ fontFamily: "var(--font-mono)" }}>
+          {" "}· SET {row.setNumber}
+        </span>
+      </span>
+      <input
+        type="number"
+        min={0}
+        value={value}
+        // Named with the set it belongs to, because a column of bare number
+        // boxes says nothing about which set a reading is for.
+        aria-label={`${name} set ${row.setNumber} reps`}
+        onChange={(e) => onChange(Math.max(0, Number(e.target.value)))}
+        className="w-16 border px-2 py-1 text-center text-sm"
+        style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
+      />
+      <span className="w-14 text-right text-xs text-[var(--ink-faint)]" style={{ fontFamily: "var(--font-mono)" }}>
+        of {row.prescribedReps}
+      </span>
     </div>
   );
 }

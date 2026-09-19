@@ -193,3 +193,45 @@ export const logSetSchema = z.object({
   restStartedAtSeconds: z.number().int().nonnegative().nullable(),
 });
 export type LogSet = z.infer<typeof logSetSchema>;
+
+/**
+ * One working set, as it was actually done (DN-21).
+ *
+ * `prescribedReps` is carried beside `actualReps` rather than looked up,
+ * because the two answer different questions and the first one moves: the
+ * prescription lives on a slot a program can edit, so a set recorded as "2"
+ * with nothing beside it would be scored next year against whatever that day
+ * says then. Together they say "2 of a prescribed 3", which stays true.
+ */
+export const workoutSetLogSchema = z.object({
+  id: z.string(),
+  /** Position in the session's own snapshot, 0-based — see `straightSetsStateAt`. */
+  movementOrder: z.number().int().nonnegative(),
+  /** 1-based within that movement, the way `straightSetsStateAt` counts. */
+  setNumber: z.number().int().positive(),
+  exerciseId: z.string(),
+  prescribedReps: z.number().int().positive(),
+  /** 0 is a real answer: a set attempted and not made is a fact about the session. */
+  actualReps: z.number().int().nonnegative(),
+});
+export type WorkoutSetLog = z.infer<typeof workoutSetLogSchema>;
+
+/**
+ * Corrections to sets already recorded, made at log time (DN-21).
+ *
+ * Updates only — every row named here must already exist. The runner is what
+ * creates them, and a correction that could conjure a set would let the log
+ * screen claim work that no session ever recorded.
+ */
+export const editSetLogsSchema = z.object({
+  sets: z
+    .array(
+      z.object({
+        movementOrder: z.number().int().nonnegative(),
+        setNumber: z.number().int().positive(),
+        actualReps: z.number().int().nonnegative(),
+      }),
+    )
+    .min(1),
+});
+export type EditSetLogs = z.infer<typeof editSetLogsSchema>;
