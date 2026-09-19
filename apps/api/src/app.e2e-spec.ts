@@ -11,6 +11,9 @@ import {
   workoutSessionSchema,
   movementVolumeSchema,
   workoutSetLogSchema,
+  meSchema,
+  setupOptionsSchema,
+  DEFAULT_PLAN_ID,
 } from '@regimen-works/shared';
 import { z } from 'zod';
 import { asUser, createE2eApp } from './test-support/e2e-app';
@@ -19,6 +22,7 @@ import { testPrisma } from './test-support/database';
 import {
   createAssignment,
   createExercise,
+  createFixedPlan,
   createLadder,
   createPlan,
   createWod,
@@ -1073,5 +1077,165 @@ describe('the straight-sets session, end to end', () => {
     expect(volume[0].sessions).toEqual([
       expect.objectContaining({ assignmentId: assignment.id, sets: [2, 3] }),
     ]);
+  });
+});
+
+/**
+ * The first-run wizard, end to end (DN-15).
+ *
+ * The whole point of this issue is that a brand-new athlete answers three
+ * questions and is training, so the journey is worth having at this layer:
+ * the gate the client reads, the questions the API offers, and the commit
+ * that has to leave every one of those answers in place at once.
+ */
+describe('first-run setup, end to end', () => {
+  it('walks a new athlete from un-onboarded to training their own program', async () => {
+    const plan = await createPlan({
+      name: 'Pull-Up Builder',
+      minDaysPerWeek: 3,
+      maxDaysPerWeek: 5,
+      minWeeks: 4,
+      maxWeeks: 8,
+    });
+
+    // The gate. A fresh athlete has answered nothing, and this is the only
+    // field the client's own route guard reads.
+    const before = parsed(
+      meSchema,
+      await http()
+        .get('/me')
+        .set(...asUser(ALICE))
+        .expect(200),
+    );
+    expect(before.onboardedAt).toBeNull();
+
+    const options = parsed(
+      setupOptionsSchema,
+      await http()
+        .get('/setup')
+        .set(...asUser(ALICE))
+        .expect(200),
+    );
+    // Just WODs is what provisioning already put them on, so it leads the
+    // picker rather than appearing as an alternative to itself.
+    expect(options.programs[0].id).toBe(DEFAULT_PLAN_ID);
+    expect(options.programs.map((p) => p.id)).toContain(plan.id);
+    // Nothing trained yet, so this morning is still available to start on.
+    expect(options.earliestStartDate).toBe(todayIsoDate());
+
+    // An answer the program will not take, refused in its own words. This is
+    // the sentence the cadence screen shows, so it is worth pinning here
+    // rather than only in the unit spec.
+    const refused = parsed(
+      z.object({ message: z.string() }),
+      await http()
+        .post('/setup')
+        .set(...asUser(ALICE))
+        .send({
+          planId: plan.id,
+          trainingDays: [1, 3],
+          weeks: 6,
+          startDate: todayIsoDate(),
+        })
+        .expect(400),
+    );
+    expect(refused.message).toBe(
+      'Pull-Up Builder needs at least 3 days a week.',
+    );
+
+    // And the refusal left them exactly where they were: still un-onboarded,
+    // so they come back to the wizard rather than to a half-chosen program.
+    expect(
+      parsed(
+        meSchema,
+        await http()
+          .get('/me')
+          .set(...asUser(ALICE))
+          .expect(200),
+      ).onboardedAt,
+    ).toBeNull();
+
+    await http()
+      .post('/setup')
+      .set(...asUser(ALICE))
+      .send({
+        planId: plan.id,
+        trainingDays: [1, 3, 5],
+        weeks: 6,
+        startDate: todayIsoDate(),
+      })
+      .expect(201);
+
+    // Stamped last, and stamped: the gate now lets them through.
+    expect(
+      parsed(
+        meSchema,
+        await http()
+          .get('/me')
+          .set(...asUser(ALICE))
+          .expect(200),
+      ).onboardedAt,
+    ).not.toBeNull();
+
+    // And the days they picked are the days the app now runs on, read back
+    // through the screen that owns them rather than out of the database.
+    const settings = parsed(
+      settingsSchema,
+      await http()
+        .get('/settings')
+        .set(...asUser(ALICE))
+        .expect(200),
+    );
+    expect(settings.trainingDays).toEqual([1, 3, 5]);
+    // Flexible, so the athlete's own days are in effect rather than locked.
+    expect(settings.scheduleLock).toBeNull();
+  });
+
+  it('locks the week to a fixed program the athlete chose', async () => {
+    // The other half of the cadence screen: no day picker at all, and the
+    // program's days reported back as the reason (DN-118's lock, reached
+    // through the wizard).
+    const fixed = await createFixedPlan([1, 2, 4, 5], {
+      name: 'Bar Muscle-Up',
+      minWeeks: 6,
+      maxWeeks: 6,
+    });
+
+    const options = parsed(
+      setupOptionsSchema,
+      await http()
+        .get('/setup')
+        .set(...asUser(ALICE))
+        .expect(200),
+    );
+    const program = options.programs.find((p) => p.id === fixed.id)!;
+    expect(program.scheduleMode).toBe('fixed');
+    expect(program.fixedDays).toEqual([1, 2, 4, 5]);
+
+    await http()
+      .post('/setup')
+      .set(...asUser(ALICE))
+      .send({
+        planId: fixed.id,
+        trainingDays: null,
+        weeks: 6,
+        startDate: todayIsoDate(),
+      })
+      .expect(201);
+
+    const settings = parsed(
+      settingsSchema,
+      await http()
+        .get('/settings')
+        .set(...asUser(ALICE))
+        .expect(200),
+    );
+    expect(settings.scheduleLock).toEqual({
+      planId: fixed.id,
+      planName: 'Bar Muscle-Up',
+      days: [1, 2, 4, 5],
+    });
+    // Asleep, not overwritten -- this is what comes back when the run ends.
+    expect(settings.trainingDays).toEqual([1, 2, 3, 4, 5]);
   });
 });

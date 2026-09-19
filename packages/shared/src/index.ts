@@ -22,3 +22,4 @@ export * from "./substitution.js";
 export * from "./rung-change.js";
 export * from "./history.js";
 export * from "./straight-sets.js";
+export * from "./setup.js";

@@ -11,8 +11,11 @@ import type {
   WorkoutLogListItem,
   WorkoutSession,
   MovementVolume,
+  SetupOptions,
+  SetupProgram,
   WorkoutSetLog,
 } from "@regimen-works/shared";
+import { DEFAULT_PLAN_ID } from "@regimen-works/shared";
 import type { ApiExercise, ApiWod } from "../lib/api";
 
 /**
@@ -342,6 +345,89 @@ export function settings(overrides: Partial<Settings> = {}): Settings {
     // No program is driving this athlete's week, which is the ordinary case:
     // Just WODs is flexible, so it defers to the days above (DN-118).
     scheduleLock: null,
+    ...overrides,
+  };
+}
+
+/**
+ * Just WODs, as the first-run picker shows it (DN-15): flexible, open-ended,
+ * and the program every athlete is already on.
+ */
+export function setupProgram(
+  overrides: Partial<SetupProgram> = {},
+): SetupProgram {
+  return {
+    id: DEFAULT_PLAN_ID,
+    name: "Just WODs",
+    summary: "A workout a day, picked for you.",
+    goal: null,
+    scheduleMode: "flexible",
+    minDaysPerWeek: 1,
+    maxDaysPerWeek: 7,
+    defaultDays: [1, 2, 3, 4, 5],
+    minWeeks: null,
+    maxWeeks: null,
+    defaultWeeks: null,
+    fixedDays: [],
+    ...overrides,
+  };
+}
+
+/**
+ * A program with both a length and day bounds worth bumping into -- the
+ * shape the cadence and length screens have anything to say about.
+ */
+export function boundedProgram(
+  overrides: Partial<SetupProgram> = {},
+): SetupProgram {
+  return setupProgram({
+    id: "plan-pull-up-builder",
+    name: "Pull-Up Builder",
+    summary: "Your first chin-up, six weeks.",
+    goal: "Your first unassisted chin-up",
+    minDaysPerWeek: 3,
+    maxDaysPerWeek: 5,
+    defaultDays: [1, 3, 5],
+    minWeeks: 4,
+    maxWeeks: 8,
+    defaultWeeks: 6,
+    ...overrides,
+  });
+}
+
+/** A program whose slots are its schedule: no day picker, a readout instead. */
+export function fixedProgram(
+  overrides: Partial<SetupProgram> = {},
+): SetupProgram {
+  return setupProgram({
+    id: "plan-bar-muscle-up",
+    name: "Bar Muscle-Up",
+    summary: "Four days a week, spaced on purpose.",
+    goal: "A bar muscle-up",
+    scheduleMode: "fixed",
+    minDaysPerWeek: null,
+    maxDaysPerWeek: null,
+    defaultDays: [],
+    minWeeks: 6,
+    maxWeeks: 6,
+    defaultWeeks: 6,
+    fixedDays: [1, 2, 4, 5],
+    ...overrides,
+  });
+}
+
+/**
+ * The wizard's questions. TODAY is a Wednesday, and nothing has been trained
+ * on it -- the case where the athlete may start this morning.
+ */
+export function setupOptions(
+  overrides: Partial<SetupOptions> = {},
+): SetupOptions {
+  return {
+    programs: [setupProgram(), boundedProgram(), fixedProgram()],
+    trainingDays: [1, 2, 3, 4, 5],
+    earliestStartDate: "2026-09-16",
+    latestStartDate: "2026-10-06",
     ...overrides,
   };
 }

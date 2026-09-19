@@ -18,6 +18,7 @@ import { LogsModule } from './logs/logs.module';
 import { SkillLevelsModule } from './skill-levels/skill-levels.module';
 import { SettingsModule } from './settings/settings.module';
 import { MeModule } from './me/me.module';
+import { SetupModule } from './setup/setup.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { MeModule } from './me/me.module';
     SkillLevelsModule,
     SettingsModule,
     MeModule,
+    SetupModule,
   ],
   controllers: [AppController],
   providers: [
