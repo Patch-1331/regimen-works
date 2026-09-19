@@ -460,6 +460,7 @@ describe('settings and skill levels', () => {
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
+      scheduleLock: null,
     });
   });
 
@@ -485,6 +486,7 @@ describe('settings and skill levels', () => {
       equipment: ['bar'],
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
+      scheduleLock: null,
     });
   });
 

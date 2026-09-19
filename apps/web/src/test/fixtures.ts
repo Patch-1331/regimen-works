@@ -74,7 +74,9 @@ export function apiWod(overrides: Partial<ApiWod> = {}): ApiWod {
   return { ...wod(), ownerId: null, archivedAt: null, ...overrides };
 }
 
-export function session(overrides: Partial<WorkoutSession> = {}): WorkoutSession {
+export function session(
+  overrides: Partial<WorkoutSession> = {},
+): WorkoutSession {
   return {
     id: "session-1",
     assignmentId: ASSIGNMENT_ID,
@@ -100,7 +102,9 @@ export function session(overrides: Partial<WorkoutSession> = {}): WorkoutSession
   };
 }
 
-export function checklistItem(overrides: Partial<ChecklistExercise> = {}): ChecklistExercise {
+export function checklistItem(
+  overrides: Partial<ChecklistExercise> = {},
+): ChecklistExercise {
   return {
     id: "checklist-1",
     name: "Arm circles",
@@ -131,7 +135,12 @@ export function today(overrides: Partial<TodayResponse> = {}): TodayResponse {
 
 /** A rest day: today is not one of the athlete's training days, so there is no assignment at all. */
 export function restDay(): TodayResponse {
-  return today({ isRestDay: true, assignment: null, warmup: null, cooldown: null });
+  return today({
+    isRestDay: true,
+    assignment: null,
+    warmup: null,
+    cooldown: null,
+  });
 }
 
 /**
@@ -153,7 +162,9 @@ export function todayPlan(overrides: Partial<TodayPlan> = {}): TodayPlan {
   };
 }
 
-export function workoutLog(overrides: Partial<WorkoutLogListItem> = {}): WorkoutLogListItem {
+export function workoutLog(
+  overrides: Partial<WorkoutLogListItem> = {},
+): WorkoutLogListItem {
   return {
     id: "log-1",
     assignmentId: ASSIGNMENT_ID,
@@ -206,6 +217,9 @@ export function settings(overrides: Partial<Settings> = {}): Settings {
     equipment: ["bar"],
     trainingDays: [1, 2, 3, 4, 5],
     patternCooldownDays: 5,
+    // No program is driving this athlete's week, which is the ordinary case:
+    // Just WODs is flexible, so it defers to the days above (DN-118).
+    scheduleLock: null,
     ...overrides,
   };
 }

@@ -140,9 +140,20 @@ describe('per-user query scoping', () => {
     }
   });
 
+  it('scopes the enrollment the schedule lock is read from', async () => {
+    // Settings reaches for the active enrollment too (DN-118), on its own
+    // path rather than through the scheduler. Unscoped it would report
+    // somebody else's program as the thing locking this athlete's week.
+    const prisma = recordingPrisma();
+    await new SettingsService(prisma).get(ALICE, '2026-09-07');
+    for (const where of whereOf(prisma, 'planEnrollment.findFirst')) {
+      expect(where).toContain(ALICE);
+    }
+  });
+
   it('scopes settings reads', async () => {
     const prisma = recordingPrisma();
-    await new SettingsService(prisma).get(ALICE);
+    await new SettingsService(prisma).get(ALICE, '2026-09-07');
     for (const where of whereOf(prisma, 'scheduleRule.findUnique')) {
       expect(where).toContain(ALICE);
     }

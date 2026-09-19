@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import {
   DEFAULT_EQUIPMENT,
   DEFAULT_PATTERN_COOLDOWN_DAYS,
@@ -7,10 +7,13 @@ import {
 } from '@regimen-works/shared';
 import type {
   Equipment,
+  ScheduleLock,
   Settings,
   UpdateSettings,
 } from '@regimen-works/shared';
 import type { ScheduleRule } from '@prisma/client';
+import { loadActiveProgram } from '../plans/active-program';
+import { resolveScheduleLock } from '../plans/schedule-lock';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -45,11 +48,19 @@ const DEFAULTS: Settings = {
   equipment: [...DEFAULT_EQUIPMENT],
   trainingDays: [...DEFAULT_TRAINING_DAYS],
   patternCooldownDays: DEFAULT_PATTERN_COOLDOWN_DAYS,
+  // Not a default so much as the shape's null: whether a program is driving
+  // the week is never a property of the ScheduleRule row, so every caller
+  // fills this in from the enrollment afterwards.
+  scheduleLock: null,
 };
 
-function toSettings(rule: ScheduleRule | null): Settings {
-  if (!rule) return DEFAULTS;
+function toSettings(
+  rule: ScheduleRule | null,
+  scheduleLock: ScheduleLock | null,
+): Settings {
+  if (!rule) return { ...DEFAULTS, scheduleLock };
   return {
+    scheduleLock,
     warmupCooldownEnabled: rule.warmupCooldownEnabled,
     autoStopAtCapEnabled: rule.autoStopAtCapEnabled,
     equipment: ownedEquipment(rule.equipment),
@@ -62,11 +73,18 @@ function toSettings(rule: ScheduleRule | null): Settings {
 export class SettingsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async get(userId: string): Promise<Settings> {
-    const rule = await this.prisma.scheduleRule.findUnique({
-      where: { userId },
-    });
-    return toSettings(rule);
+  /**
+   * `today` comes from the caller's clock rather than this service's, the way
+   * `getToday` takes it: which week of a program the athlete is in decides
+   * which days are locked, and a service that read the date itself could not
+   * be tested on the week where the answer changes.
+   */
+  async get(userId: string, today: string): Promise<Settings> {
+    const [rule, program] = await Promise.all([
+      this.prisma.scheduleRule.findUnique({ where: { userId } }),
+      loadActiveProgram(this.prisma, userId),
+    ]);
+    return toSettings(rule, resolveScheduleLock(program, today));
   }
 
   /**
@@ -83,13 +101,37 @@ export class SettingsService {
    * Returns the row as written rather than echoing the patch — with a partial
    * body that's the only answer that includes the fields left alone.
    */
-  async update(userId: string, patch: UpdateSettings): Promise<Settings> {
+  async update(
+    userId: string,
+    patch: UpdateSettings,
+    today: string,
+  ): Promise<Settings> {
+    const lock = resolveScheduleLock(
+      await loadActiveProgram(this.prisma, userId),
+      today,
+    );
+
+    // Refused rather than stored-and-ignored. A write that returns 200 and
+    // then has no effect on a single training day is the worst of the three
+    // available answers: the athlete believes they have changed their week,
+    // the database agrees with them, and the scheduler does not. Refusing
+    // costs them one dialog and tells them the truth.
+    //
+    // `equipment` and the two toggles stay writable throughout, because a
+    // fixed program has an opinion about *when* the athlete trains and none
+    // at all about what they own or how their timer behaves.
+    if (lock !== null && patch.trainingDays !== undefined) {
+      throw new ConflictException(
+        `${lock.planName} sets your training days while it is running. End the program to choose your own again.`,
+      );
+    }
+
     const rule = await this.prisma.scheduleRule.upsert({
       where: { userId },
       update: patch,
       create: { userId, ...patch },
     });
 
-    return toSettings(rule);
+    return toSettings(rule, lock);
   }
 }

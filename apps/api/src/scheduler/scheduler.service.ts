@@ -16,10 +16,10 @@ import {
   resolvableMovementInclude,
   type ResolvedMovement,
 } from './movement-resolution.service';
+import { loadActiveProgram } from '../plans/active-program';
 import {
   narrowToSlot,
   resolveProgramDay,
-  type ActiveProgram,
   type ProgramDay,
   type SlotConstraints,
 } from '../plans/program-day';
@@ -66,7 +66,7 @@ export class SchedulerService {
         where: { userId_date: { userId, date: today } },
         include: { wod: { include: wodInclude }, session: true },
       }),
-      this.loadActiveProgram(userId),
+      loadActiveProgram(this.prisma, userId),
     ]);
 
     const warmupCooldownEnabled = rule?.warmupCooldownEnabled ?? false;
@@ -186,43 +186,6 @@ export class SchedulerService {
         warmupCooldownEnabled,
         scaledWod.dominantPattern,
       )),
-    };
-  }
-
-  /**
-   * The athlete's active run, flattened for `resolveProgramDay`.
-   *
-   * Null is an ordinary answer, not a missing row to repair: an athlete who
-   * has just finished a program has none until provisioning enrolls them in
-   * Just WODs again on a later request, and `getToday` must render their day
-   * either way.
-   */
-  private async loadActiveProgram(
-    userId: string,
-  ): Promise<ActiveProgram | null> {
-    const enrollment = await this.prisma.planEnrollment.findFirst({
-      where: { userId, status: 'active' },
-      include: {
-        plan: {
-          include: {
-            weeks: {
-              orderBy: { order: 'asc' },
-              include: { slots: { orderBy: { dayOfWeek: 'asc' } } },
-            },
-          },
-        },
-      },
-    });
-    if (!enrollment) return null;
-
-    return {
-      enrollmentId: enrollment.id,
-      planId: enrollment.planId,
-      planName: enrollment.plan.name,
-      scheduleMode: enrollment.plan.scheduleMode,
-      startDate: enrollment.startDate,
-      weeks: enrollment.weeks,
-      authoredWeeks: enrollment.plan.weeks,
     };
   }
 
@@ -349,7 +312,7 @@ export class SchedulerService {
     });
     const [rule, program] = await Promise.all([
       this.prisma.scheduleRule.findUnique({ where: { userId } }),
-      this.loadActiveProgram(userId),
+      loadActiveProgram(this.prisma, userId),
     ]);
     // Resolved rather than hardcoded null: skipping a day does not leave the
     // program, so the strip that says which week the athlete is in is still
