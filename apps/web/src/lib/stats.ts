@@ -1,5 +1,19 @@
 import type { WorkoutLogListItem } from "@regimen-works/shared";
 
+/**
+ * A row the WOD-shaped charts can read.
+ *
+ * A prescribed day (DN-126) has no `wod`, and every function below that keys
+ * on a type or a pattern needs one. Narrowed in one place rather than by a
+ * `?.` at each use, so the rule is "these charts are about WODs" stated once
+ * instead of a scattering of optional chains that each look like an oversight.
+ */
+type WodLog = WorkoutLogListItem & { wod: NonNullable<WorkoutLogListItem["wod"]> };
+
+function wodLogs(logs: WorkoutLogListItem[]): WodLog[] {
+  return logs.filter((log): log is WodLog => log.wod !== null);
+}
+
 export function formatResult(resultType: WorkoutLogListItem["resultType"], resultValue: string): string {
   if (resultType === "time_seconds") {
     const total = Number(resultValue) || 0;
@@ -7,6 +21,9 @@ export function formatResult(resultType: WorkoutLogListItem["resultType"], resul
     const s = total % 60;
     return `${m}:${String(s).padStart(2, "0")}`;
   }
+  // "6/8" already reads as itself, and the slash is what tells it apart from
+  // a round count at a glance.
+  if (resultType === "sets_completed") return resultValue;
   return resultValue.replace("+", " + ");
 }
 
@@ -27,14 +44,20 @@ export type PersonalRecord = {
   date: string;
 };
 
-/** Best logged result per named WOD, keyed by wodName. */
+/**
+ * Best logged result per named WOD, keyed by wodName.
+ *
+ * WOD days only. A strength session has no score to be best at — every
+ * finished one reads "5/5", so a table of them would be a list of ties
+ * presented as records (DN-126).
+ */
 export function computePRs(logs: WorkoutLogListItem[]): PersonalRecord[] {
   const best = new Map<string, PersonalRecord>();
-  for (const log of logs) {
-    const current = best.get(log.wodName);
+  for (const log of wodLogs(logs)) {
+    const current = best.get(log.name);
     if (!current || resultScore(log.resultType, log.resultValue) > resultScore(current.resultType, current.resultValue)) {
-      best.set(log.wodName, {
-        wodName: log.wodName,
+      best.set(log.name, {
+        wodName: log.name,
         resultType: log.resultType,
         resultValue: log.resultValue,
         date: log.date,
@@ -84,24 +107,32 @@ function daysBetween(isoA: string, isoB: string): number {
 
 export function computePatternBalance(logs: WorkoutLogListItem[]): Array<{ pattern: string; count: number }> {
   const counts = new Map<string, number>();
-  for (const log of logs) {
-    counts.set(log.dominantPattern, (counts.get(log.dominantPattern) ?? 0) + 1);
+  for (const log of wodLogs(logs)) {
+    counts.set(log.wod.dominantPattern, (counts.get(log.wod.dominantPattern) ?? 0) + 1);
   }
   return Array.from(counts.entries())
     .map(([pattern, count]) => ({ pattern, count }))
     .sort((a, b) => b.count - a.count);
 }
 
-export type WodTypeShare = { wodType: WorkoutLogListItem["wodType"]; count: number; percent: number };
+export type WodTypeShare = {
+  wodType: NonNullable<WorkoutLogListItem["wod"]>["type"];
+  count: number;
+  percent: number;
+};
 
 /** Share of logged workouts per WOD type (amrap/for_time/emom/tabata) — surfaces the scheduler's format-alternation rule as an outcome. */
 export function computeWodTypeDistribution(logs: WorkoutLogListItem[]): WodTypeShare[] {
-  const counts = new Map<WorkoutLogListItem["wodType"], number>();
-  for (const log of logs) {
-    counts.set(log.wodType, (counts.get(log.wodType) ?? 0) + 1);
+  const counted = wodLogs(logs);
+  const counts = new Map<WodTypeShare["wodType"], number>();
+  for (const log of counted) {
+    counts.set(log.wod.type, (counts.get(log.wod.type) ?? 0) + 1);
   }
   return Array.from(counts.entries())
-    .map(([wodType, count]) => ({ wodType, count, percent: (count / logs.length) * 100 }))
+    // Over the WODs counted, not over every log: a share of days that puts
+    // strength sessions in the denominator and nowhere in the numerator adds
+    // up to less than 100% and says the athlete trained less than they did.
+    .map(([wodType, count]) => ({ wodType, count, percent: (count / counted.length) * 100 }))
     .sort((a, b) => b.count - a.count);
 }
 
@@ -142,10 +173,10 @@ export type PatternWeekVolume = { weekStart: string; counts: Record<string, numb
  */
 export function computePatternVolumeTrend(logs: WorkoutLogListItem[]): PatternWeekVolume[] {
   const byWeek = new Map<string, Record<string, number>>();
-  for (const log of logs) {
+  for (const log of wodLogs(logs)) {
     const weekStart = isoWeekStart(log.date);
     const counts = byWeek.get(weekStart) ?? {};
-    counts[log.dominantPattern] = (counts[log.dominantPattern] ?? 0) + 1;
+    counts[log.wod.dominantPattern] = (counts[log.wod.dominantPattern] ?? 0) + 1;
     byWeek.set(weekStart, counts);
   }
   return Array.from(byWeek.entries())
@@ -166,9 +197,9 @@ export function computeForTimeTrends(logs: WorkoutLogListItem[]): ForTimeTrend[]
   const byWod = new Map<string, ForTimeTrendPoint[]>();
   for (const log of logs) {
     if (log.resultType !== "time_seconds") continue;
-    const points = byWod.get(log.wodName) ?? [];
+    const points = byWod.get(log.name) ?? [];
     points.push({ date: log.date, seconds: Number(log.resultValue) || 0 });
-    byWod.set(log.wodName, points);
+    byWod.set(log.name, points);
   }
   return Array.from(byWod.entries())
     .map(([wodName, points]) => ({ wodName, points: points.sort((a, b) => a.date.localeCompare(b.date)) }))

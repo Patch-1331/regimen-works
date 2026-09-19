@@ -3,6 +3,7 @@ import type { PrismaService } from '../prisma/prisma.service';
 import { testPrisma } from '../test-support/database';
 import {
   createAssignment,
+  createPrescribedDay,
   createSession,
   createUser,
   createWod,
@@ -83,7 +84,7 @@ describe('HistoryService.movements', () => {
     });
     // Each day names the workout it came from, so the history reads as
     // training rather than as a column of numbers.
-    expect(history[0].days.at(-1)!.wodName).toBe('Cindy');
+    expect(history[0].days.at(-1)!.name).toBe('Cindy');
   });
 
   it('leaves out a session that was never finished', async () => {
@@ -163,6 +164,37 @@ describe('HistoryService.movements', () => {
     expect(byId.get('chin-up')!.days[0]).toMatchObject({
       isSwapped: true,
       prescribedName: null,
+    });
+  });
+
+  it('keeps a prescribed day, and names it (DN-126)', async () => {
+    // This used to be dropped for want of a WOD name, so every strength day an
+    // athlete trained was absent from the one screen that claims to report
+    // what they have trained.
+    const user = await createUser();
+    const { assignment } = await createPrescribedDay(user.id, {
+      date: '2026-09-16',
+    });
+    await createSession(user.id, assignment.id, {
+      status: 'completed',
+      movements: [
+        snapshot({
+          wodMovementId: null,
+          planSlotMovementId: 'psm-1',
+          sets: 5,
+          restSeconds: 90,
+          reps: 3,
+        }),
+      ],
+    });
+
+    const history = await service().movements(user.id);
+
+    expect(history).toHaveLength(1);
+    expect(history[0].days[0]).toMatchObject({
+      date: '2026-09-16',
+      name: 'Strength',
+      reps: 3,
     });
   });
 });

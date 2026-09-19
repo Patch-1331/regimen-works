@@ -107,7 +107,23 @@ export type AssignmentStatus = z.infer<typeof assignmentStatus>;
 export const sessionStatus = z.enum(["in_progress", "completed", "abandoned"]);
 export type SessionStatus = z.infer<typeof sessionStatus>;
 
-export const resultType = z.enum(["time_seconds", "rounds_reps", "total_reps"]);
+/**
+ * What kind of number a finished session produced.
+ *
+ * The first three are metcon scores, and all three are a clock or a count
+ * under one. `sets_completed` is the prescribed day's (DN-126), and is the
+ * odd one out on purpose: a straight-sets session has no clock over it and no
+ * single scalar, so what it produced is the sets that got done against the
+ * sets that were asked for. `resultValue` carries both halves as
+ * `"done/total"` -- see `formatSetsResult` in `log.ts` for why the
+ * denominator is not optional.
+ */
+export const resultType = z.enum([
+  "time_seconds",
+  "rounds_reps",
+  "total_reps",
+  "sets_completed",
+]);
 export type ResultType = z.infer<typeof resultType>;
 
 /**

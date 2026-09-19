@@ -276,20 +276,22 @@ export function TodayPage() {
 
         <div className="mt-auto pt-6">
           {isPrescriptionCompleted ? (
-            // No VIEW RESULT, because there is no result: logging a strength
-            // session is its own slice and the log screen reads a WOD. Saying
-            // the work is done is true and is all this can honestly say.
-            <div
+            // The WOD plate's control, word for word. This said SESSION
+            // COMPLETE and did nothing while a strength day had no result to
+            // view (DN-126); now it has one, and a finished day is a finished
+            // day whichever kind it was.
+            <button
+              onClick={() => navigate(`/log/${assignmentId}`)}
               className="flex w-full items-center justify-center gap-2 py-4 text-sm font-bold tracking-[0.14em]"
               style={{
                 fontFamily: "var(--font-mono)",
                 background: "var(--panel-2)",
                 border: "1px solid var(--border)",
-                color: "var(--ink-soft)",
+                color: "var(--ink)",
               }}
             >
-              <CheckIcon /> SESSION COMPLETE
-            </div>
+              <CheckIcon /> VIEW RESULT
+            </button>
           ) : (
             <>
               <ToggleStart
