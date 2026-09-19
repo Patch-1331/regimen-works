@@ -44,12 +44,21 @@ export function useWorkoutSession(assignmentId: string) {
 
   const hasCooldown = today?.warmupCooldownEnabled && (today?.cooldown?.length ?? 0) > 0;
 
+  /**
+   * Where a finish lets out. A straight-sets session (DN-20) has no result
+   * screen -- the log reads a WOD to know what kind of number to ask for, and
+   * a strength day has none -- so it ends on Today. The cool-down still runs,
+   * and lets out in the same place; see CooldownPage.
+   */
+  const finishPath =
+    activeSession?.setsCompleted != null ? "/" : `/log/${assignmentId}`;
+
   const finishMutation = useMutation({
     mutationFn: () => api.finishSession(assignmentId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["today"] });
       finishCue();
-      navigate(hasCooldown ? `/cooldown/${assignmentId}` : `/log/${assignmentId}`);
+      navigate(hasCooldown ? `/cooldown/${assignmentId}` : finishPath);
     },
   });
 

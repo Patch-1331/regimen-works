@@ -192,7 +192,7 @@ export function IntervalWorkout({
           </p>
         )}
         <div className="mt-1 text-[11px]" style={{ color: "var(--ink-faint)", fontFamily: "var(--font-mono)" }}>
-          ELAPSED {formatClock(elapsedSeconds)} · CAP {formatClock(session.capSeconds)}
+          ELAPSED {formatClock(elapsedSeconds)} · CAP {formatClock(session.capSeconds ?? wod.timeCapMinutes * 60)}
         </div>
       </div>
 

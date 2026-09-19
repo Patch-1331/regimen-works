@@ -41,6 +41,11 @@ export function snapshotMovements(
     .sort((a, b) => a.order - b.order)
     .map((m) => ({
       wodMovementId: m.id,
+      planSlotMovementId: null,
+      // A WOD movement has rounds, not sets. Null rather than zero, which
+      // would read as a movement nobody was asked to do.
+      sets: null,
+      restSeconds: null,
       order: m.order,
       reps: m.reps,
       repScheme: [...m.repScheme],
@@ -109,4 +114,68 @@ export function advanceInterval(
     intervalIndex: next.intervalIndex,
     intervalStartedAtSeconds: next.atSeconds,
   };
+}
+
+/** The resolved prescribed movement, as `resolvePrescription` hands it over. */
+export type ResolvedPrescribedInput = {
+  id: string;
+  order: number;
+  sets: number;
+  reps: number;
+  restSeconds: number;
+  isSwapped: boolean;
+  prescribedName: string | null;
+  prescribedReason: SubstitutionReason | null;
+  exercise: {
+    id: string;
+    name: string;
+    unit: string;
+    line: string | null;
+    rung: number | null;
+  };
+};
+
+/**
+ * The same snapshot for a straight-sets day (DN-20), against the prescription
+ * rather than a WOD.
+ *
+ * DN-90's argument applies unchanged -- the rung, the swap rows and the
+ * exercise names all keep moving, so a past day re-read through them describes
+ * today's settings rather than that day's training. It is load-bearing for a
+ * second reason here: the session's progress is stored as a count of sets, and
+ * a count only means anything against a list that cannot move under it. A swap
+ * made after the session started would otherwise shift which movement the
+ * athlete resumes on.
+ *
+ * `reps` is the count in one set, not the movement's total. Everything that
+ * reads a snapshot -- the runner, history -- asks what one set is, and the
+ * total is `sets * reps` for anything that wants it.
+ */
+export function snapshotPrescribedMovements(
+  movements: ResolvedPrescribedInput[],
+): SessionMovement[] {
+  return [...movements]
+    .sort((a, b) => a.order - b.order)
+    .map((m) => ({
+      wodMovementId: null,
+      planSlotMovementId: m.id,
+      sets: m.sets,
+      restSeconds: m.restSeconds,
+      order: m.order,
+      reps: m.reps,
+      // A prescribed movement is the same count every set, so there is no
+      // ladder to record. Empty rather than [reps] repeated: a repScheme means
+      // "the counts descend as written", which this is not.
+      repScheme: [],
+      isSwapped: m.isSwapped,
+      prescribedName: m.prescribedName,
+      prescribedReason: m.prescribedReason,
+      exercise: {
+        id: m.exercise.id,
+        name: m.exercise.name,
+        unit: m.exercise.unit as ExerciseUnit,
+        line: m.exercise.line as ProgressionLine | null,
+        rung: m.exercise.rung,
+      },
+    }));
 }

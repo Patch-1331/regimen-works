@@ -771,6 +771,57 @@ describe('validation and not-found', () => {
   });
 });
 
+/** A slot prescribing `pull, 5x3`, and today's assignment pointing at it. */
+async function prescribedDay(userId: string) {
+  const { rungs } = await createLadder('pull', [
+    'Negative chin-up',
+    'Chin-up',
+    'Pull-up',
+  ]);
+  const plan = await createPlan({
+    weeks: {
+      create: [
+        {
+          order: 0,
+          phase: 'core',
+          slots: {
+            create: [
+              {
+                dayOfWeek: 3,
+                kind: 'movements',
+                movements: {
+                  create: [
+                    {
+                      order: 0,
+                      line: 'pull',
+                      sets: 5,
+                      reps: 3,
+                      restSeconds: 90,
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+  });
+  const slot = await testPrisma().planSlot.findFirstOrThrow({
+    where: { planWeek: { planId: plan.id } },
+    include: { movements: true },
+  });
+  const assignment = await testPrisma().dailyAssignment.create({
+    data: {
+      userId,
+      date: todayIsoDate(),
+      status: 'scheduled',
+      planSlotId: slot.id,
+    },
+  });
+  return { rungs, assignment, movement: slot.movements[0] };
+}
+
 /**
  * Swapping a movement on a program's straight-sets day (DN-125).
  *
@@ -780,57 +831,6 @@ describe('validation and not-found', () => {
  * in place and a 204 saying otherwise.
  */
 describe('POST/DELETE /assignments/:id/substitutions, on a prescribed day', () => {
-  /** A slot prescribing `pull, 5x3`, and today's assignment pointing at it. */
-  async function prescribedDay(userId: string) {
-    const { rungs } = await createLadder('pull', [
-      'Negative chin-up',
-      'Chin-up',
-      'Pull-up',
-    ]);
-    const plan = await createPlan({
-      weeks: {
-        create: [
-          {
-            order: 0,
-            phase: 'core',
-            slots: {
-              create: [
-                {
-                  dayOfWeek: 3,
-                  kind: 'movements',
-                  movements: {
-                    create: [
-                      {
-                        order: 0,
-                        line: 'pull',
-                        sets: 5,
-                        reps: 3,
-                        restSeconds: 90,
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    });
-    const slot = await testPrisma().planSlot.findFirstOrThrow({
-      where: { planWeek: { planId: plan.id } },
-      include: { movements: true },
-    });
-    const assignment = await testPrisma().dailyAssignment.create({
-      data: {
-        userId,
-        date: todayIsoDate(),
-        status: 'scheduled',
-        planSlotId: slot.id,
-      },
-    });
-    return { rungs, assignment, movement: slot.movements[0] };
-  }
-
   it('takes the swap by the prescribed movement, and gives it back', async () => {
     await http()
       .get('/exercises')
@@ -872,6 +872,119 @@ describe('POST/DELETE /assignments/:id/substitutions, on a prescribed day', () =
       .post(`/assignments/${assignment.id}/substitutions`)
       .set(...asUser(ALICE))
       .send({ exerciseId: rungs[2].id })
+      .expect(400);
+  });
+});
+
+/**
+ * A prescribed day, run end to end (DN-20).
+ *
+ * The other half of `the workout, end to end`, and here for the same reason:
+ * every layer this crosses is exercised elsewhere, but nothing else proves the
+ * untimed path holds together from `start` to a logged result. It is also the
+ * one route where the session has no WOD at all, so a `capSeconds` or a
+ * `wodId` assumed non-null anywhere between the controller and the log would
+ * surface here and nowhere else.
+ */
+describe('the straight-sets session, end to end', () => {
+  it('starts, counts sets, finishes, and logs a result', async () => {
+    await http()
+      .get('/exercises')
+      .set(...asUser(ALICE))
+      .expect(200);
+    const alice = await testPrisma().user.findFirstOrThrow();
+    const { assignment, movement } = await prescribedDay(alice.id);
+
+    const started = parsed(
+      workoutSessionSchema,
+      await http()
+        .post(`/assignments/${assignment.id}/session`)
+        .set(...asUser(ALICE))
+        .expect(201),
+    );
+    // Untimed, and counting from zero rather than from nothing: null would be
+    // a WOD day, which is what the runner forks on.
+    expect(started).toMatchObject({
+      status: 'in_progress',
+      capSeconds: null,
+      autoStopAtCap: false,
+      setsCompleted: 0,
+    });
+    expect(started.movements).toHaveLength(1);
+    expect(started.movements[0]).toMatchObject({
+      wodMovementId: null,
+      planSlotMovementId: movement.id,
+      sets: 5,
+      restSeconds: 90,
+      // One set's count, not the day's fifteen reps.
+      reps: 3,
+    });
+
+    const afterFirst = parsed(
+      workoutSessionSchema,
+      await http()
+        .post(`/assignments/${assignment.id}/session/sets`)
+        .set(...asUser(ALICE))
+        .send({ setsCompleted: 1, restStartedAtSeconds: 42 })
+        .expect(201),
+    );
+    expect(afterFirst).toMatchObject({
+      setsCompleted: 1,
+      restStartedAtSeconds: 42,
+    });
+
+    // The tap that did not reach the API the first time. An absolute count, so
+    // replaying it is where the athlete already was rather than a sixth set.
+    const replayed = parsed(
+      workoutSessionSchema,
+      await http()
+        .post(`/assignments/${assignment.id}/session/sets`)
+        .set(...asUser(ALICE))
+        .send({ setsCompleted: 1, restStartedAtSeconds: 42 })
+        .expect(201),
+    );
+    expect(replayed.setsCompleted).toBe(1);
+
+    // Past the last set is not a set the day has.
+    await http()
+      .post(`/assignments/${assignment.id}/session/sets`)
+      .set(...asUser(ALICE))
+      .send({ setsCompleted: 6, restStartedAtSeconds: null })
+      .expect(400);
+
+    const done = parsed(
+      workoutSessionSchema,
+      await http()
+        .post(`/assignments/${assignment.id}/session/sets`)
+        .set(...asUser(ALICE))
+        .send({ setsCompleted: 5, restStartedAtSeconds: null })
+        .expect(201),
+    );
+    expect(done).toMatchObject({
+      setsCompleted: 5,
+      restStartedAtSeconds: null,
+    });
+
+    const finished = parsed(
+      workoutSessionSchema,
+      await http()
+        .post(`/assignments/${assignment.id}/session/finish`)
+        .set(...asUser(ALICE))
+        .expect(201),
+    );
+    expect(finished.status).toBe('completed');
+    // No cap to have been stopped by, however long the session ran.
+    expect(finished.capSeconds).toBeNull();
+
+    // And there the day ends, for now: logging a strength result is its own
+    // slice, and `POST /log` reads the assignment's WOD to know what kind of
+    // number it is being handed. Asserted rather than left out, because the
+    // screens route around this boundary and a test is where it should be
+    // written down — when the result lands, this is the line that moves.
+    await http()
+      .post(`/assignments/${assignment.id}/log`)
+      .set(...asUser(ALICE))
+      .send({ resultType: 'rounds_reps', resultValue: '5', rpe: 7 })
       .expect(400);
   });
 });

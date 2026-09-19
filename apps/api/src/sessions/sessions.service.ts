@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type {
   AdvanceInterval,
+  LogSet,
   RoundSplit,
   WodType,
   WorkoutSession,
@@ -13,17 +14,23 @@ import {
   finishSecondsAt,
   hasRepScheme,
   resolveIntervalConfig,
+  straightSetsStateAt,
 } from '@regimen-works/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   MovementResolutionService,
   resolvableMovementInclude,
 } from '../scheduler/movement-resolution.service';
-import { toRoundSplits, toSessionDto } from './session.mapper';
+import {
+  toRoundSplits,
+  toSessionDto,
+  toSessionMovements,
+} from './session.mapper';
 import {
   advanceInterval,
   mergeRoundSplit,
   snapshotMovements,
+  snapshotPrescribedMovements,
 } from './session.logic';
 
 @Injectable()
@@ -57,7 +64,16 @@ export class SessionsService {
       include: { wod: { include: resolvableMovementInclude } },
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
-    if (!assignment.wod)
+
+    // A day with no WOD is either a prescribed one -- straight sets from a
+    // program slot (DN-20) -- or a rest day. The prescription is loaded from
+    // the slot the assignment already records rather than by resolving the
+    // program day again: the assignment is what decided which slot today was,
+    // and asking twice is two chances to disagree.
+    const prescribed = assignment.wod
+      ? null
+      : await this.loadPrescribedSlot(assignment.planSlotId);
+    if (!assignment.wod && !prescribed)
       throw new BadRequestException('Rest days have no workout to start');
 
     // Read once here and copied onto the session, exactly like capSeconds: the
@@ -73,23 +89,41 @@ export class SessionsService {
     // (DN-90). Nothing else records it: the rung and the swap rows both keep
     // moving after today, so without this a past day re-reads as whatever
     // the settings say now.
-    const movements = snapshotMovements(
-      await this.resolution.resolve(
-        userId,
-        assignmentId,
-        assignment.wod.movements,
-      ),
-    );
+    const movements = assignment.wod
+      ? snapshotMovements(
+          await this.resolution.resolve(
+            userId,
+            assignmentId,
+            assignment.wod.movements,
+          ),
+        )
+      : snapshotPrescribedMovements(
+          await this.resolution.resolvePrescription(
+            userId,
+            assignmentId,
+            prescribed!.movements,
+          ),
+        );
 
     await this.prisma.workoutSession.createMany({
       data: [
         {
           assignmentId,
           userId,
-          capSeconds: assignment.wod.timeCapMinutes * 60,
-          autoStopAtCap: rule?.autoStopAtCapEnabled ?? true,
+          // Null on a straight-sets day, which is untimed: there is no clock
+          // over it to stop, so the athlete's own setting has nothing to act
+          // on either.
+          capSeconds: assignment.wod
+            ? assignment.wod.timeCapMinutes * 60
+            : null,
+          autoStopAtCap: assignment.wod
+            ? (rule?.autoStopAtCapEnabled ?? true)
+            : false,
           roundSplits: [],
           movements,
+          // 0, not null: the session has started and the athlete is on set
+          // one. Null would say this is not a straight-sets session at all.
+          setsCompleted: assignment.wod ? null : 0,
           status: 'in_progress',
         },
       ],
@@ -141,7 +175,11 @@ export class SessionsService {
     // to have tapped in. The screen swaps its round button out when the cap
     // lands; this is the same rule for a client that hasn't caught up with it
     // yet. With the opt-out the clock runs on, and so do the rounds.
-    if (session.autoStopAtCap && round.atSeconds > session.capSeconds) {
+    if (
+      session.capSeconds !== null &&
+      session.autoStopAtCap &&
+      round.atSeconds > session.capSeconds
+    ) {
       throw new BadRequestException(
         `Round ${round.round} is past this workout's time cap`,
       );
@@ -153,6 +191,84 @@ export class SessionsService {
     const updated = await this.prisma.workoutSession.update({
       where: { assignmentId },
       data: { roundSplits: updatedSplits },
+    });
+
+    return toSessionDto(updated);
+  }
+
+  /**
+   * The prescribed movements of the slot this assignment records, or null
+   * where the slot is not a straight-sets day (DN-20).
+   *
+   * `kind` is checked rather than inferred from the movements being there,
+   * because a slot the athlete's own schedule turned into a rest day still
+   * carries its authored movements. `resolveProgramDay` makes the same two
+   * checks before it calls a day prescribed, and this is the same rule at the
+   * other end of the request.
+   */
+  private async loadPrescribedSlot(planSlotId: string | null) {
+    if (planSlotId === null) return null;
+
+    const slot = await this.prisma.planSlot.findUnique({
+      where: { id: planSlotId },
+      include: { movements: { orderBy: { order: 'asc' } } },
+    });
+    if (!slot || slot.kind !== 'movements' || slot.movements.length === 0) {
+      return null;
+    }
+    return slot;
+  }
+
+  /**
+   * Records a completed set on a straight-sets session (DN-20) -- the
+   * autosave the round tap and the interval rollover already have, at the one
+   * moment this screen has to write.
+   *
+   * `setsCompleted` is absolute rather than an increment, so a tap replayed
+   * after a flaky connection writes the same number instead of counting the
+   * set twice. That makes this idempotent by construction rather than by a
+   * merge, which is what `mergeRoundSplit` needs a whole function for.
+   */
+  async logSet(
+    userId: string,
+    assignmentId: string,
+    next: LogSet,
+  ): Promise<WorkoutSession> {
+    const session = await this.prisma.workoutSession.findFirst({
+      where: { assignmentId, userId },
+    });
+    if (!session)
+      throw new NotFoundException('No active session for this assignment');
+    if (session.status !== 'in_progress') {
+      throw new BadRequestException('Session is no longer in progress');
+    }
+    if (session.setsCompleted === null) {
+      throw new BadRequestException('This session has no sets to log');
+    }
+
+    // The session's own snapshot, which is what the count indexes into --
+    // the reason it is snapshotted at all. Past the last set is a client
+    // bug rather than a state worth keeping, and the same refusal
+    // `advanceInterval` makes one past the end of a sequence.
+    const movements = toSessionMovements(session.movements);
+    const { totalSets } = straightSetsStateAt(
+      movements.map((m) => ({ sets: m.sets ?? 0 })),
+      0,
+    );
+    if (next.setsCompleted > totalSets) {
+      throw new BadRequestException(
+        `Set ${next.setsCompleted} is past the end of this session`,
+      );
+    }
+
+    // Never backwards. Two taps racing on a reconnect can arrive out of
+    // order, and the later-arriving earlier count would otherwise put the
+    // athlete back on a set they have already done.
+    const setsCompleted = Math.max(session.setsCompleted, next.setsCompleted);
+
+    const updated = await this.prisma.workoutSession.update({
+      where: { assignmentId },
+      data: { setsCompleted, restStartedAtSeconds: next.restStartedAtSeconds },
     });
 
     return toSessionDto(updated);
@@ -263,9 +379,14 @@ export class SessionsService {
     // which is where the athlete's clock stopped. With the opt-out there was no
     // stop to score, so the wall clock is the honest answer.
     const elapsedSeconds = (Date.now() - session.startedAt.getTime()) / 1000;
-    const finishedAtSeconds = session.autoStopAtCap
-      ? finishSecondsAt(elapsedSeconds, session.capSeconds)
-      : Math.floor(elapsedSeconds);
+    const finishedAtSeconds =
+      session.autoStopAtCap && session.capSeconds !== null
+        ? finishSecondsAt(elapsedSeconds, session.capSeconds)
+        : // Nothing stopped this clock -- either the athlete opted out, or the
+          // session is untimed (DN-20) and never had one. How long they took is
+          // the honest answer in both cases; it is not a score on a straight-sets
+          // day, but it is still what happened.
+          Math.floor(elapsedSeconds);
 
     const updated = await this.prisma.workoutSession.update({
       where: { assignmentId },

@@ -23,51 +23,86 @@ export type RoundSplit = z.infer<typeof roundSplitSchema>;
  * The exercise fields are copied, not referenced, for the same reason: a
  * renamed exercise or a re-rung ladder must not rewrite August.
  */
-export const sessionMovementSchema = z.object({
-  /** The WodMovement this row stood in for -- the join back to the template. */
-  wodMovementId: z.string(),
-  order: z.number().int().nonnegative(),
-  /** Total count, in the exercise's own unit; with a repScheme this is the ladder's sum. */
-  reps: z.number().int().positive(),
-  repScheme: z.array(z.number().int().positive()),
-  /** True when this is the athlete's own swap for the day rather than their standing choice. */
-  isSwapped: z.boolean(),
-  /**
-   * What the library prescribed, where the athlete's remembered choice
-   * (DN-88) or their equipment (DN-79) replaced it. Defaults to null so
-   * sessions snapshotted before the field existed still parse — they predate
-   * it, and there is no honest way to fill it in after the fact.
-   *
-   * Recorded on a row the athlete swapped, too (DN-116) — the Today plate
-   * hides it there, history keeps it. So on a session written before that
-   * change, a null beside `isSwapped: true` means *not recorded* rather than
-   * "nothing replaced it", and reading it as the latter would invent a fact
-   * about a day nobody can go back to.
-   */
-  prescribedName: z.string().nullable().default(null),
-  /**
-   * Why it was replaced. Null for the same reasons `prescribedName` is, and
-   * additionally on a session snapshotted between DN-88 and DN-79, where the
-   * name was recorded and the reason was not — every such row was a
-   * remembered choice, but guessing that here would bake an assumption into
-   * history rather than leave the gap visible.
-   */
-  prescribedReason: substitutionReason.nullable().default(null),
-  exercise: z.object({
-    id: z.string(),
-    name: z.string(),
-    unit: exerciseUnit,
-    line: progressionLine.nullable(),
-    rung: z.number().int().nonnegative().nullable(),
-  }),
-});
+export const sessionMovementSchema = z
+  .object({
+    /**
+     * The WodMovement this row stood in for -- the join back to the template.
+     * Null on a straight-sets session (DN-20), where the day was prescribed by
+     * a program slot and there is no WOD; `planSlotMovementId` names the row
+     * instead. Exactly one of the two, the same xor `AssignmentSubstitution`
+     * carries for the same reason.
+     */
+    wodMovementId: z.string().nullable().default(null),
+    /** The PlanSlotMovement this row stood in for, on a prescribed day (DN-20). */
+    planSlotMovementId: z.string().nullable().default(null),
+    /**
+     * How many working sets this movement prescribes, on a straight-sets
+     * session. Null on a WOD day, which has rounds rather than sets -- not zero,
+     * which would read as a movement nobody was asked to do.
+     */
+    sets: z.number().int().positive().nullable().default(null),
+    /** Seconds of rest between those sets; 0 means straight through. */
+    restSeconds: z.number().int().nonnegative().nullable().default(null),
+    order: z.number().int().nonnegative(),
+    /** Total count, in the exercise's own unit; with a repScheme this is the ladder's sum. */
+    reps: z.number().int().positive(),
+    repScheme: z.array(z.number().int().positive()),
+    /** True when this is the athlete's own swap for the day rather than their standing choice. */
+    isSwapped: z.boolean(),
+    /**
+     * What the library prescribed, where the athlete's remembered choice
+     * (DN-88) or their equipment (DN-79) replaced it. Defaults to null so
+     * sessions snapshotted before the field existed still parse — they predate
+     * it, and there is no honest way to fill it in after the fact.
+     *
+     * Recorded on a row the athlete swapped, too (DN-116) — the Today plate
+     * hides it there, history keeps it. So on a session written before that
+     * change, a null beside `isSwapped: true` means *not recorded* rather than
+     * "nothing replaced it", and reading it as the latter would invent a fact
+     * about a day nobody can go back to.
+     */
+    prescribedName: z.string().nullable().default(null),
+    /**
+     * Why it was replaced. Null for the same reasons `prescribedName` is, and
+     * additionally on a session snapshotted between DN-88 and DN-79, where the
+     * name was recorded and the reason was not — every such row was a
+     * remembered choice, but guessing that here would bake an assumption into
+     * history rather than leave the gap visible.
+     */
+    prescribedReason: substitutionReason.nullable().default(null),
+    exercise: z.object({
+      id: z.string(),
+      name: z.string(),
+      unit: exerciseUnit,
+      line: progressionLine.nullable(),
+      rung: z.number().int().nonnegative().nullable(),
+    }),
+  })
+  .refine(
+    (m) => (m.wodMovementId !== null) !== (m.planSlotMovementId !== null),
+    {
+      message:
+        "a snapshotted movement joins back to a WOD movement or a prescribed one — one of them, not both and not neither",
+      path: ["wodMovementId"],
+    },
+  );
 export type SessionMovement = z.infer<typeof sessionMovementSchema>;
 
 export const workoutSessionSchema = z.object({
   id: z.string(),
   assignmentId: z.string(),
   startedAt: z.string().datetime(),
-  capSeconds: z.number().int().positive(),
+  /**
+   * Where this session's clock stops, copied from the WOD's cap when it
+   * started. Null on a straight-sets session (DN-20), which is untimed on
+   * purpose -- the athlete works at their own pace, and the only clock on
+   * that screen is the rest between sets.
+   *
+   * Null rather than zero. A zero cap is a cap that has already been reached,
+   * so `wasCappedFinish` would call every prescribed session capped and the
+   * log screen would report a clock that stopped at 0:00.
+   */
+  capSeconds: z.number().int().positive().nullable(),
   roundSplits: z.array(roundSplitSchema),
   /**
    * What the athlete actually trained, resolved once when the session started
@@ -98,6 +133,22 @@ export const workoutSessionSchema = z.object({
   intervalIndex: z.number().int().nonnegative().nullable(),
   /** Elapsed seconds (from `startedAt`) at which `intervalIndex` began. */
   intervalStartedAtSeconds: z.number().int().nonnegative().nullable(),
+  // DN-20 -- how far a straight-sets session has got. Both are null on a WOD,
+  // and `setsCompleted` is 0 rather than null on a prescribed session that
+  // has started but has no set behind it yet: the athlete is on set 1, which
+  // is a different fact from a session that is not this kind at all.
+  //
+  // One counter, resolved to "movement 2, set 3 of 5" against the session's
+  // own `movements` by `straightSetsStateAt`. See that function for why the
+  // position is derived rather than stored.
+  setsCompleted: z.number().int().nonnegative().nullable(),
+  /**
+   * Elapsed seconds at which the rest after the last set began, or null while
+   * the athlete is working. Stored as when it started rather than how much is
+   * left so a locked phone resumes the countdown at the right second -- see
+   * `restStateAt`.
+   */
+  restStartedAtSeconds: z.number().int().nonnegative().nullable(),
 });
 export type WorkoutSession = z.infer<typeof workoutSessionSchema>;
 
@@ -126,3 +177,19 @@ export const advanceIntervalSchema = z.object({
   atSeconds: z.number().int().nonnegative(),
 });
 export type AdvanceInterval = z.infer<typeof advanceIntervalSchema>;
+
+/**
+ * Sent on every completed set, so a locked or refreshed screen picks the
+ * session back up where it was -- the straight-sets counterpart to
+ * `logRoundSplit` and `advanceInterval` (DN-20).
+ *
+ * `setsCompleted` is the absolute count behind the athlete, not an increment.
+ * A tap replayed after a flaky connection then writes the same number rather
+ * than counting the set twice.
+ */
+export const logSetSchema = z.object({
+  setsCompleted: z.number().int().nonnegative(),
+  /** When the rest after that set began, or null where it needs no rest. */
+  restStartedAtSeconds: z.number().int().nonnegative().nullable(),
+});
+export type LogSet = z.infer<typeof logSetSchema>;

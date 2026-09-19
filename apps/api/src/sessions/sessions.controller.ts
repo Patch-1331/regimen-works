@@ -10,6 +10,7 @@ import {
 import {
   advanceIntervalSchema,
   logRoundSplitSchema,
+  logSetSchema,
   setRoundSplitRequestSchema,
 } from '@regimen-works/shared';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -44,6 +45,16 @@ export class SessionsController {
   ) {
     const round = validateBody(logRoundSplitSchema, body);
     return this.sessionsService.logRound(userId, assignmentId, round);
+  }
+
+  @Post('sets')
+  logSet(
+    @CurrentUser() userId: string,
+    @Param('assignmentId') assignmentId: string,
+    @Body() body: unknown,
+  ) {
+    const next = validateBody(logSetSchema, body);
+    return this.sessionsService.logSet(userId, assignmentId, next);
   }
 
   @Post('interval')

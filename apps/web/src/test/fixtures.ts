@@ -3,6 +3,7 @@ import type {
   Settings,
   SkillLevel,
   PrescribedMovement,
+  SessionMovement,
   TodayPlan,
   TodayResponse,
   Wod,
@@ -88,6 +89,40 @@ export function prescribedMovement(
   };
 }
 
+/**
+ * One movement as a session snapshotted it (DN-90) — here, the prescribed
+ * kind: it joins back to a PlanSlotMovement rather than a WodMovement, and
+ * carries the sets and rest a straight-sets day is run from (DN-20). `reps` is
+ * one set's count, not the day's total.
+ */
+export function sessionMovement(
+  overrides: Partial<Omit<SessionMovement, "exercise">> & {
+    exercise?: Partial<SessionMovement["exercise"]>;
+  } = {},
+): SessionMovement {
+  return {
+    wodMovementId: null,
+    planSlotMovementId: "plan-slot-movement-1",
+    sets: 5,
+    restSeconds: 90,
+    order: 0,
+    reps: 3,
+    repScheme: [],
+    isSwapped: false,
+    prescribedName: null,
+    prescribedReason: null,
+    ...overrides,
+    exercise: {
+      id: "exercise-chin-up",
+      name: "Chin-up",
+      unit: "reps",
+      line: "pull",
+      rung: 1,
+      ...overrides.exercise,
+    },
+  };
+}
+
 export function wod(overrides: Partial<Wod> = {}): Wod {
   return {
     id: "wod-1",
@@ -128,6 +163,8 @@ export function session(
     // and both began rendering the finish view instead (DN-111).
     startedAt: new Date(Date.now() - 5_000).toISOString(),
     capSeconds: 12 * 60,
+    setsCompleted: null,
+    restStartedAtSeconds: null,
     roundSplits: [],
     movements: [],
     status: "in_progress",
@@ -162,8 +199,8 @@ export function today(overrides: Partial<TodayResponse> = {}): TodayResponse {
       date: "2026-09-16",
       status: "scheduled",
       wod: wod(),
-      // A WOD day. The prescribed alternative (DN-19) has no screen yet, so
-      // no fixture builds one.
+      // A WOD day. `prescribing()` in the prescribed specs builds the other
+      // kind, which carries a prescription and no WOD.
       prescription: null,
       session: null,
     },

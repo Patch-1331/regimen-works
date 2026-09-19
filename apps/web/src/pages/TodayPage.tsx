@@ -137,11 +137,20 @@ export function TodayPage() {
   // rather than a variant of the one below: a WOD is scored against a clock and
   // this is not, so the two screens share the panel and almost nothing else.
   //
-  // The runner is DN-20 and is not built, so there is no way to start one yet.
-  // That is said in a line at the bottom rather than by showing a button that
-  // does nothing -- and everything above it is real: the movements are resolved
-  // to this athlete's rung and equipment, and the swap works.
+  // The control row at the bottom is the WOD plate's, because starting a day
+  // is the one thing the two kinds of day do identically: the same warm-up,
+  // the same session, the same rest-day escape. Which runner it lands on is
+  // decided by the session (DN-20), not here.
   if (prescription) {
+    const isPrescriptionCompleted = status === "completed";
+    const isPrescriptionInProgress = status === "in_progress";
+    const prescribedStartPath =
+      !isPrescriptionInProgress &&
+      data.warmupCooldownEnabled &&
+      (data.warmup?.length ?? 0) > 0
+        ? `/warmup/${assignmentId}`
+        : `/workout/${assignmentId}`;
+
     return (
       <div className="flex flex-1 flex-col p-6">
         {program && <ProgramStrip plan={program} date={data.date} />}
@@ -266,16 +275,41 @@ export function TodayPage() {
         </div>
 
         <div className="mt-auto pt-6">
-          <p className="text-center text-xs text-[var(--ink-faint)]">
-            Running a strength session isn't built yet — take these as written.
-          </p>
-          <button
-            onClick={handleSkip}
-            className="mt-3 w-full text-center text-xs font-semibold tracking-[0.08em] text-[var(--ink-faint)]"
-            style={{ fontFamily: "var(--font-mono)" }}
-          >
-            MARK TODAY AS REST
-          </button>
+          {isPrescriptionCompleted ? (
+            // No VIEW RESULT, because there is no result: logging a strength
+            // session is its own slice and the log screen reads a WOD. Saying
+            // the work is done is true and is all this can honestly say.
+            <div
+              className="flex w-full items-center justify-center gap-2 py-4 text-sm font-bold tracking-[0.14em]"
+              style={{
+                fontFamily: "var(--font-mono)",
+                background: "var(--panel-2)",
+                border: "1px solid var(--border)",
+                color: "var(--ink-soft)",
+              }}
+            >
+              <CheckIcon /> SESSION COMPLETE
+            </div>
+          ) : (
+            <>
+              <ToggleStart
+                onClick={() => navigate(prescribedStartPath)}
+                label={
+                  isPrescriptionInProgress ? "RESUME SESSION" : "START SESSION"
+                }
+                energized={isPrescriptionInProgress}
+              />
+              {!isPrescriptionInProgress && (
+                <button
+                  onClick={handleSkip}
+                  className="mt-3 w-full text-center text-xs font-semibold tracking-[0.08em] text-[var(--ink-faint)]"
+                  style={{ fontFamily: "var(--font-mono)" }}
+                >
+                  MARK TODAY AS REST
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
     );

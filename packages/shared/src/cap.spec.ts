@@ -62,6 +62,19 @@ describe("wasCappedFinish", () => {
     expect(wasCappedFinish({ ...stopping, finishedAtSeconds: null })).toBe(false);
   });
 
+  it("is false for an untimed session, whenever it finished", () => {
+    // A straight-sets day (DN-20) has no cap. Read as a zero this is the one
+    // case that inverts: every finish is at or past second zero, so the log
+    // screen would tell the athlete a clock they never saw had stopped them.
+    expect(
+      wasCappedFinish({
+        capSeconds: null,
+        autoStopAtCap: true,
+        finishedAtSeconds: 2400,
+      }),
+    ).toBe(false);
+  });
+
   it("is false with the auto-stop off, however long the session ran", () => {
     // Nothing stopped this clock: the athlete ran past the cap by choice, so
     // 22:00 is their real finish time and not a cap.
