@@ -35,6 +35,26 @@ const PUSH_UP = fixtures.sessionMovement({
   exercise: { id: "exercise-push-up", name: "Push-up", line: "push_horizontal", rung: 2 },
 });
 
+/**
+ * The same two movements as the day prescribes them.
+ *
+ * The runner reads the session's snapshot and the log screen reads today's
+ * prescription, so a test that walks from one to the other needs both to
+ * describe the same eight sets (DN-126).
+ */
+const PRESCRIBED = [
+  fixtures.prescribedMovement(),
+  fixtures.prescribedMovement({
+    id: "plan-slot-movement-2",
+    order: 1,
+    sets: 3,
+    reps: 8,
+    restSeconds: 60,
+    line: "push_horizontal",
+    exercise: { id: "exercise-push-up", name: "Push-up", line: "push_horizontal", rung: 2 },
+  }),
+];
+
 /** Every `sets` body the screen posted, in order. */
 type Posted = LogSet[];
 
@@ -66,7 +86,7 @@ function running(
         assignment: {
           ...day.assignment!,
           wod: null,
-          prescription: { movements: [] },
+          prescription: { movements: PRESCRIBED },
           status: "in_progress",
           session,
         },
@@ -213,33 +233,32 @@ describe("the straight-sets runner", () => {
     expect(screen.queryByText("SET DONE")).not.toBeInTheDocument();
   });
 
-  it("ends on Today, because a strength session has no result screen", async () => {
-    // The WOD runner lands on the log. That screen reads a WOD to know what
-    // kind of number to ask for, so a strength day would sit there loading —
-    // this ends somewhere real instead.
+  it("ends at the log, the same as every other finished session", async () => {
+    // This used to end on Today. The log screen read a WOD to know what kind
+    // of number to ask for and a strength day has none, so it would have sat
+    // there loading -- the day ended with nothing written down, which is the
+    // hole DN-126 closed.
     running({ setsCompleted: 8 }, { warmupCooldownEnabled: false });
     renderRoute(`/workout/${ID}`);
 
     await userEvent.click(await screen.findByText("FINISH SESSION"));
 
-    // Today's prescribed plate, which is where a strength day belongs.
     expect(
-      await screen.findByRole("heading", { name: "Strength" }),
+      await screen.findByRole("button", { name: "SAVE RESULT" }),
     ).toBeInTheDocument();
   });
 
-  it("runs the cool-down first where there is one, and that ends on Today too", async () => {
+  it("runs the cool-down first where there is one, and that ends at the log too", async () => {
     // The cool-down is the athlete's, not the WOD's, so a strength day keeps
-    // it — but its own exit leads to the log, and had to learn the same thing.
+    // it -- and its exit is now the same one a WOD day takes.
     running({ setsCompleted: 8 });
     renderRoute(`/workout/${ID}`);
 
     await userEvent.click(await screen.findByText("FINISH SESSION"));
-    // Not "LOG RESULT", which is what this button says on a WOD day.
-    await userEvent.click(await screen.findByRole("button", { name: "DONE" }));
+    await userEvent.click(await screen.findByRole("button", { name: "LOG RESULT" }));
 
     expect(
-      await screen.findByRole("heading", { name: "Strength" }),
+      await screen.findByRole("button", { name: "SAVE RESULT" }),
     ).toBeInTheDocument();
   });
 

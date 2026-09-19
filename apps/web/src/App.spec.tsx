@@ -97,8 +97,8 @@ describe("data rendering", () => {
     server.use(
       http.get("/api/logs", () =>
         HttpResponse.json([
-          fixtures.workoutLog({ id: "log-1", wodName: "Fran", resultValue: "305" }),
-          fixtures.workoutLog({ id: "log-2", wodName: "Cindy", resultType: "rounds_reps", resultValue: "18+7" }),
+          fixtures.workoutLog({ id: "log-1", name: "Fran", resultValue: "305" }),
+          fixtures.workoutLog({ id: "log-2", name: "Cindy", resultType: "rounds_reps", resultValue: "18+7" }),
         ]),
       ),
     );
@@ -108,6 +108,22 @@ describe("data rendering", () => {
     // Rendered through formatResult, not printed raw.
     expect(screen.getByText("5:05")).toBeInTheDocument();
     expect(screen.getByText("18 + 7")).toBeInTheDocument();
+  });
+
+  it("shows a prescribed day in History, which has a name and no WOD", async () => {
+    // The list used to drop these -- the athlete saved a result and History
+    // showed them nothing, which reads as the app having lost it (DN-126).
+    server.use(
+      http.get("/api/logs", () =>
+        HttpResponse.json([fixtures.strengthLog({ resultValue: "6/8" })]),
+      ),
+    );
+    renderRoute("/history");
+
+    expect(await screen.findByText("Strength")).toBeInTheDocument();
+    // The slash is what tells a set count apart from a round count at a glance,
+    // so formatResult leaves it alone rather than spacing it like "18 + 7".
+    expect(screen.getByText("6/8")).toBeInTheDocument();
   });
 
   it("shows the API-unreachable message rather than a blank screen when a query fails", async () => {
@@ -172,7 +188,7 @@ describe("navigation", () => {
     const user = userEvent.setup();
     server.use(
       http.get("/api/logs", () =>
-        HttpResponse.json([fixtures.workoutLog({ assignmentId: ID, wodName: "Cindy" })]),
+        HttpResponse.json([fixtures.workoutLog({ assignmentId: ID, name: "Cindy" })]),
       ),
     );
     renderRoute("/history");

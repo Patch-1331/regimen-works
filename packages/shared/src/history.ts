@@ -16,7 +16,8 @@ import { exerciseUnit, progressionLine, substitutionReason } from "./enums.js";
 export const movementHistoryDaySchema = z.object({
   /** The assignment's date, not the session's timestamp — history is by training day. */
   date: z.string(),
-  wodName: z.string(),
+  /** The WOD's name, or what the day was — `"Strength"` on a prescribed one (DN-126). */
+  name: z.string(),
   /** Count in the movement's own unit, as prescribed that day. */
   reps: z.number().int().positive(),
   /** True where the athlete swapped into this movement themselves that day. */

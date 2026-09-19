@@ -492,9 +492,8 @@ describe("workoutLogListItemSchema", () => {
     id: "log-1",
     assignmentId: "assignment-1",
     date: "2026-09-16",
-    wodName: "Fran",
-    wodType: "for_time",
-    dominantPattern: "push",
+    name: "Fran",
+    wod: { type: "for_time", dominantPattern: "push" },
     resultType: "time_seconds",
     resultValue: "305",
     rpe: null,
@@ -506,10 +505,32 @@ describe("workoutLogListItemSchema", () => {
     expect(workoutLogListItemSchema.safeParse(listItem()).success).toBe(true);
   });
 
+  it("parses a prescribed day, which has a name and no WOD", () => {
+    expect(
+      workoutLogListItemSchema.safeParse(
+        listItem({
+          name: "Strength",
+          wod: null,
+          resultType: "sets_completed",
+          resultValue: "8/8",
+        }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it("requires the WOD block to be present or explicitly absent", () => {
+    // Nullable, not optional: a row that simply omits it is a row that forgot
+    // to say which kind of day it was, which is the state this shape exists
+    // to make unrepresentable.
+    const { wod: _wod, ...withoutWod } = listItem();
+    expect(workoutLogListItemSchema.safeParse(withoutWod).success).toBe(false);
+  });
+
   it("rejects an unknown movement pattern", () => {
     expect(
-      workoutLogListItemSchema.safeParse(listItem({ dominantPattern: "grip" }))
-        .success,
+      workoutLogListItemSchema.safeParse(
+        listItem({ wod: { type: "for_time", dominantPattern: "grip" } }),
+      ).success,
     ).toBe(false);
   });
 
@@ -1231,7 +1252,7 @@ describe("movementHistorySchema", () => {
       days: [
         {
           date: "2026-09-14",
-          wodName: "Cindy",
+          name: "Cindy",
           reps: 30,
           isSwapped: false,
           prescribedName: null,
@@ -1245,7 +1266,7 @@ describe("movementHistorySchema", () => {
   it("parses a movement the athlete has trained", () => {
     const parsed = movementHistorySchema.parse(history());
     expect(parsed).toMatchObject({ sessions: 2, total: 50, unit: "reps" });
-    expect(parsed.days[0].wodName).toBe("Cindy");
+    expect(parsed.days[0].name).toBe("Cindy");
   });
 
   it("accepts a movement that sits off every progression line", () => {
@@ -1272,7 +1293,7 @@ describe("movementHistorySchema", () => {
         days: [
           {
             date: "2026-09-14",
-            wodName: "Rope Trick",
+            name: "Rope Trick",
             reps: 100,
             isSwapped: false,
             prescribedName: "Double-unders",
@@ -1290,7 +1311,7 @@ describe("movementHistorySchema", () => {
         days: [
           {
             date: "2026-09-14",
-            wodName: "Cindy",
+            name: "Cindy",
             reps: 30,
             isSwapped: true,
             prescribedName: null,

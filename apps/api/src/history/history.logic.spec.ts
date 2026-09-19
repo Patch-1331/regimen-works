@@ -44,9 +44,9 @@ function movement(
 function day(
   date: string,
   movements: SessionMovement[],
-  wodName = 'Cindy',
+  name = 'Cindy',
 ): TrainedDay {
-  return { date, wodName, movements };
+  return { date, name, movements };
 }
 
 describe('buildMovementHistory', () => {
@@ -191,7 +191,7 @@ describe('buildMovementHistory', () => {
     const history = buildMovementHistory([
       day('2026-09-16', [movement()], 'Fran'),
     ]);
-    expect(history[0].days[0].wodName).toBe('Fran');
+    expect(history[0].days[0].name).toBe('Fran');
   });
 
   it('counts seconds and reps in their own units without mixing them', () => {

@@ -17,15 +17,11 @@ export function CooldownPage() {
 
   const cooldown = today?.cooldown ?? [];
 
-  /**
-   * Where the cool-down lets out. A straight-sets session (DN-20) has no
-   * result screen: the log reads a WOD to know what kind of number it is
-   * asking for, and a strength day has none. So that day ends on Today rather
-   * than on a screen stuck loading, and the copy below stops promising a
-   * result form that is not there.
-   */
-  const isStraightSets = today?.assignment?.session?.setsCompleted != null;
-  const exitPath = isStraightSets ? "/" : `/log/${assignmentId}`;
+  // The cool-down lets out at the log on both kinds of day (DN-126). It used
+  // to send a straight-sets session home instead, because there was no result
+  // screen that could read one; now there is, and the button below can promise
+  // the same thing to everybody.
+  const exitPath = `/log/${assignmentId}`;
 
   const proceedMutation = useMutation({
     mutationFn: async (allChecked: boolean) => {
@@ -66,9 +62,7 @@ export function CooldownPage() {
         Cool-down
       </h1>
       <p className="mt-2 text-sm text-[var(--ink-faint)]">
-        {isStraightSets
-          ? "Check off each item to finish the session."
-          : "Check off each item before logging your result."}
+        Check off each item before logging your result.
       </p>
 
       <div className="mt-5" style={{ background: "var(--panel)", border: "1px solid var(--border)" }}>
@@ -127,7 +121,7 @@ export function CooldownPage() {
           className="flex w-full items-center justify-center gap-3 py-4 text-sm font-bold tracking-[0.14em]"
           style={{ fontFamily: "var(--font-mono)", background: "var(--glow)", color: "var(--bg)" }}
         >
-          {isStraightSets ? "DONE" : "LOG RESULT"}
+          LOG RESULT
         </button>
         <button
           onClick={() => proceedMutation.mutate(false)}

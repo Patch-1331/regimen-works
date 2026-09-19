@@ -976,15 +976,50 @@ describe('the straight-sets session, end to end', () => {
     // No cap to have been stopped by, however long the session ran.
     expect(finished.capSeconds).toBeNull();
 
-    // And there the day ends, for now: logging a strength result is its own
-    // slice, and `POST /log` reads the assignment's WOD to know what kind of
-    // number it is being handed. Asserted rather than left out, because the
-    // screens route around this boundary and a test is where it should be
-    // written down — when the result lands, this is the line that moves.
+    // The line DN-126 moved. This was a 400 — `POST /log` read the
+    // assignment's WOD to know what kind of number it was being handed, and a
+    // strength day has none — so the screens routed around it and the day
+    // ended with nothing written down.
+    const log = parsed(
+      workoutLogSchema,
+      await http()
+        .post(`/assignments/${assignment.id}/log`)
+        .set(...asUser(ALICE))
+        .send({ resultType: 'sets_completed', resultValue: '5/5', rpe: 7 })
+        .expect(201),
+    );
+    expect(log).toMatchObject({
+      resultType: 'sets_completed',
+      resultValue: '5/5',
+      rpe: 7,
+    });
+
+    // A clock score on a day that has no clock. Both guards matter because
+    // the two kinds of result are stored in the same two columns: without
+    // this one a strength day could file a time, and Stats would chart it
+    // against metcons.
     await http()
       .post(`/assignments/${assignment.id}/log`)
       .set(...asUser(ALICE))
       .send({ resultType: 'rounds_reps', resultValue: '5', rpe: 7 })
       .expect(400);
+
+    // And it reaches History, which used to drop it. The round trip is the
+    // point: saved, then read back by the screen that claims to show it.
+    const history = parsed(
+      z.array(workoutLogListItemSchema),
+      await http()
+        .get('/logs')
+        .set(...asUser(ALICE))
+        .expect(200),
+    );
+    expect(history).toContainEqual(
+      expect.objectContaining({
+        assignmentId: assignment.id,
+        name: 'Strength',
+        wod: null,
+        resultValue: '5/5',
+      }),
+    );
   });
 });

@@ -70,3 +70,17 @@ export const prescriptionSchema = z.object({
   movements: z.array(prescribedMovementSchema).min(1),
 });
 export type Prescription = z.infer<typeof prescriptionSchema>;
+
+/**
+ * What a prescribed day is called, wherever one needs a name (DN-126).
+ *
+ * A WOD carries its own; a prescribed day is authored as a slot and has none,
+ * so History, the logs list and the Today plate would each have invented one.
+ * A constant rather than three string literals, because the athlete seeing
+ * "Strength" on Today and something else in History would reasonably think
+ * they were two different things.
+ *
+ * Not the program's name and not the week's: those answer "which program am I
+ * running", and a history row wants to say what the *day* was.
+ */
+export const PRESCRIBED_DAY_NAME = "Strength";

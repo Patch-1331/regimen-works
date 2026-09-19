@@ -7,7 +7,8 @@ import type {
 /** One training day as the service loads it: the snapshot plus what it belongs to. */
 export type TrainedDay = {
   date: string;
-  wodName: string;
+  /** The WOD's name, or `PRESCRIBED_DAY_NAME` on a strength day (DN-126). */
+  name: string;
   movements: SessionMovement[];
 };
 
@@ -41,7 +42,7 @@ export function buildMovementHistory(days: TrainedDay[]): MovementHistory[] {
     for (const movement of day.movements) {
       const entry: MovementHistoryDay = {
         date: day.date,
-        wodName: day.wodName,
+        name: day.name,
         reps: movement.reps,
         isSwapped: movement.isSwapped,
         prescribedName: movement.prescribedName,

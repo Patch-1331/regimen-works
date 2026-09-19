@@ -226,20 +226,21 @@ describe("the prescribed plate", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("says the session is done, and offers no result to read", async () => {
-    // A WOD day offers VIEW RESULT here. Logging a strength session is its own
-    // slice, so this says the true thing rather than opening a screen that
-    // reads a WOD and would sit there loading.
+  it("opens the result on a finished day, the same as the WOD plate", async () => {
+    // This said SESSION COMPLETE and did nothing, because there was no result
+    // to read: the log screen needed a WOD to know what kind of number to ask
+    // for. Now there is one, and a finished day is a finished day (DN-126).
     prescribing([fixtures.prescribedMovement()], "completed");
     renderRoute("/");
 
-    expect(await screen.findByText("SESSION COMPLETE")).toBeInTheDocument();
+    await userEvent.click(
+      await screen.findByRole("button", { name: /view result/i }),
+    );
+
     expect(
-      screen.queryByRole("button", { name: /view result/i }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /start session/i }),
-    ).not.toBeInTheDocument();
+      await screen.findByRole("button", { name: "SAVE RESULT" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("STRAIGHT SETS · 5 SETS")).toBeInTheDocument();
   });
 
   it("says start rather than start workout, because this day is not one", async () => {

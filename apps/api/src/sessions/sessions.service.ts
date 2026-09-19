@@ -16,6 +16,7 @@ import {
   resolveIntervalConfig,
   straightSetsStateAt,
 } from '@regimen-works/shared';
+import { loadPrescribedSlot } from '../plans/prescribed-slot';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   MovementResolutionService,
@@ -72,7 +73,7 @@ export class SessionsService {
     // and asking twice is two chances to disagree.
     const prescribed = assignment.wod
       ? null
-      : await this.loadPrescribedSlot(assignment.planSlotId);
+      : await loadPrescribedSlot(this.prisma, assignment.planSlotId);
     if (!assignment.wod && !prescribed)
       throw new BadRequestException('Rest days have no workout to start');
 
@@ -206,18 +207,6 @@ export class SessionsService {
    * checks before it calls a day prescribed, and this is the same rule at the
    * other end of the request.
    */
-  private async loadPrescribedSlot(planSlotId: string | null) {
-    if (planSlotId === null) return null;
-
-    const slot = await this.prisma.planSlot.findUnique({
-      where: { id: planSlotId },
-      include: { movements: { orderBy: { order: 'asc' } } },
-    });
-    if (!slot || slot.kind !== 'movements' || slot.movements.length === 0) {
-      return null;
-    }
-    return slot;
-  }
 
   /**
    * Records a completed set on a straight-sets session (DN-20) -- the

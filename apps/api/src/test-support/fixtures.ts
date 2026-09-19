@@ -196,3 +196,52 @@ export async function createEnrollment(
     },
   });
 }
+
+/**
+ * A prescribed day: an assignment with no WOD, pointing at a `movements` slot.
+ *
+ * The shape `createAssignment` cannot make, because that one always builds a
+ * WOD. `sets` is a list so a caller can prescribe several movements and the
+ * total the log is checked against is theirs to choose — the default is one
+ * movement of five, which is the common case and the one most specs want.
+ */
+export async function createPrescribedDay(
+  userId: string,
+  { date = '2026-09-16', sets = [5] }: { date?: string; sets?: number[] } = {},
+) {
+  const plan = await createPlan({
+    weeks: {
+      create: [
+        {
+          order: 0,
+          phase: 'core',
+          slots: {
+            create: [
+              {
+                dayOfWeek: 3,
+                kind: 'movements',
+                movements: {
+                  create: sets.map((count, order) => ({
+                    order,
+                    line: 'pull',
+                    sets: count,
+                    reps: 3,
+                    restSeconds: 90,
+                  })),
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+  });
+  const slot = await testPrisma().planSlot.findFirstOrThrow({
+    where: { planWeek: { planId: plan.id } },
+    include: { movements: { orderBy: { order: 'asc' } } },
+  });
+  const assignment = await testPrisma().dailyAssignment.create({
+    data: { userId, date, status: 'scheduled', planSlotId: slot.id },
+  });
+  return { plan, slot, assignment, movements: slot.movements };
+}

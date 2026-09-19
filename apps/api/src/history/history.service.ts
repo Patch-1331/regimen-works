@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+  PRESCRIBED_DAY_NAME,
   sessionMovementSchema,
   type MovementHistory,
 } from '@regimen-works/shared';
@@ -33,11 +34,12 @@ export class HistoryService {
     });
 
     const days = sessions.flatMap<TrainedDay>((session) => {
-      const wodName = session.assignment.wod?.name;
-      // A session always belongs to a WOD; a rest day has none and has nothing
-      // to start. Skipped rather than named "unknown", which would put a
-      // fiction in the history to avoid an if.
-      if (!wodName) return [];
+      // A session belongs to a WOD or to a prescribed day (DN-126), and the
+      // second kind has no name of its own. Named rather than skipped: the
+      // work was done, and a history that quietly omits every strength day is
+      // telling the athlete they did not train on it. "Strength" is what
+      // Today calls the day, so the two screens agree.
+      const name = session.assignment.wod?.name ?? PRESCRIBED_DAY_NAME;
 
       // Parsed rather than cast: the column is jsonb written by this app, but
       // it holds rows written by older versions of it. A snapshot that no
@@ -47,9 +49,7 @@ export class HistoryService {
       const parsed = sessionMovementSchema.array().safeParse(session.movements);
       if (!parsed.success || parsed.data.length === 0) return [];
 
-      return [
-        { date: session.assignment.date, wodName, movements: parsed.data },
-      ];
+      return [{ date: session.assignment.date, name, movements: parsed.data }];
     });
 
     return buildMovementHistory(days);

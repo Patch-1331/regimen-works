@@ -29,7 +29,7 @@ function movement(
     ...overrides,
     days: dates.map((date) => ({
       date,
-      wodName: "Cindy",
+      name: "Cindy",
       reps: 30,
       isSwapped: false,
       prescribedName: null,
