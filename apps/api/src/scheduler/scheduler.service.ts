@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
 import type { Exercise } from '@prisma/client';
 import {
   DEFAULT_EQUIPMENT,
@@ -24,8 +24,8 @@ import {
   narrowToSlot,
   resolveProgramDay,
   type ActiveProgram,
+  type ConstrainableWod,
   type ProgramDay,
-  type SlotConstraints,
 } from '../plans/program-day';
 import {
   applyEquipmentFloor,
@@ -42,6 +42,9 @@ const wodInclude = resolvableMovementInclude;
 /** A program day that has been acted on: a finished run is already retired. */
 type SettledDay = Exclude<ProgramDay, { kind: 'completed' }>;
 
+/** A day whose WOD the program constrained rather than pinned. */
+type GeneratedDay = Extract<ProgramDay, { kind: 'generated' }>;
+
 @Injectable()
 export class SchedulerService {
   constructor(
@@ -55,6 +58,44 @@ export class SchedulerService {
     // production's randomness unless they deliberately pin it (DN-119).
     @Inject(RNG) private readonly rng: Rng = Math.random,
   ) {}
+
+  private readonly logger = new Logger(SchedulerService.name);
+
+  /**
+   * Narrows to the slot, and says so out loud when the slot did not get what
+   * it asked for (DN-14).
+   *
+   * The athlete is told nothing: they asked for today's workout and they have
+   * one, and "this is not quite the session your program wanted" is an
+   * apology for a decision they cannot act on. The person who *can* act on it
+   * is whoever tends the library, and the only channel this app has to them
+   * is the log -- Render captures stdout, so a warn here is greppable without
+   * any further infrastructure.
+   *
+   * Warn rather than log: the ladder firing is not normal. It means the
+   * library cannot satisfy a slot somebody authored, which is a content bug
+   * with a fix (seed the missing WODs -- DN-23) rather than a fact of life.
+   * The line names the plan, the week and the axes given up, because the
+   * question it has to answer is "which slot, and what is missing".
+   */
+  private narrowed<C extends ConstrainableWod>(
+    candidates: C[],
+    slot: GeneratedDay,
+  ): C[] {
+    const { candidates: pool, relaxed } = narrowToSlot(
+      candidates,
+      slot.constraints,
+    );
+    if (relaxed.length > 0) {
+      this.logger.warn(
+        `Slot relaxed for "${slot.day.planName}" week ${slot.day.week} ` +
+          `(plan ${slot.day.planId}): nothing in the library satisfies ` +
+          `${relaxed.join(', ')}, so ${relaxed.length === 1 ? 'it was' : 'they were'} ` +
+          `given up to find ${pool.length} candidate${pool.length === 1 ? '' : 's'}.`,
+      );
+    }
+    return pool;
+  }
 
   /**
    * Returns today's assignment, generating one if the day hasn't been decided
@@ -399,7 +440,7 @@ export class SchedulerService {
       today,
       cooldownDays,
       equipment,
-      day.kind === 'generated' ? day.constraints : null,
+      day.kind === 'generated' ? day : null,
     );
   }
 
@@ -635,7 +676,7 @@ export class SchedulerService {
     today: string,
     cooldownDays: number,
     equipment: string[],
-    constraints: SlotConstraints | null,
+    slot: GeneratedDay | null,
   ) {
     const [wods, recentAssignments, skillLevels, linedExercises] =
       await Promise.all([
@@ -740,10 +781,7 @@ export class SchedulerService {
     // order that cannot hand someone a workout they own no gear for. Both
     // relax rather than empty, so the pool handed to `pickWod` is never bare.
     const performable = applyEquipmentFloor(candidates, owned);
-    const pool =
-      constraints === null
-        ? performable
-        : narrowToSlot(performable, constraints);
+    const pool = slot === null ? performable : this.narrowed(performable, slot);
 
     return pickWod(pool, history, today, cooldownDays, this.rng);
   }

@@ -368,25 +368,30 @@ describe('narrowToSlot', () => {
     };
   }
 
-  it('keeps everything when the slot constrains nothing', () => {
-    expect(narrowToSlot(pool, constraints())).toEqual(pool);
+  it('keeps everything, and reports nothing given up, when the slot constrains nothing', () => {
+    expect(narrowToSlot(pool, constraints())).toEqual({
+      candidates: pool,
+      relaxed: [],
+    });
   });
 
   it('filters on each axis', () => {
-    expect(narrowToSlot(pool, constraints({ pattern: 'push' }))).toEqual([
-      pushForTime,
-    ]);
-    expect(narrowToSlot(pool, constraints({ wodType: 'amrap' }))).toEqual([
-      pullAmrap,
-    ]);
-    expect(narrowToSlot(pool, constraints({ maxTimeCapMinutes: 10 }))).toEqual([
-      pullAmrap,
-      namedPull,
-    ]);
-    expect(narrowToSlot(pool, constraints({ allowNamed: false }))).toEqual([
-      pullAmrap,
-      pushForTime,
-    ]);
+    expect(narrowToSlot(pool, constraints({ pattern: 'push' }))).toEqual({
+      candidates: [pushForTime],
+      relaxed: [],
+    });
+    expect(narrowToSlot(pool, constraints({ wodType: 'amrap' }))).toEqual({
+      candidates: [pullAmrap],
+      relaxed: [],
+    });
+    expect(narrowToSlot(pool, constraints({ maxTimeCapMinutes: 10 }))).toEqual({
+      candidates: [pullAmrap, namedPull],
+      relaxed: [],
+    });
+    expect(narrowToSlot(pool, constraints({ allowNamed: false }))).toEqual({
+      candidates: [pullAmrap, pushForTime],
+      relaxed: [],
+    });
   });
 
   it('drops the time cap before the format, and the format before the pattern', () => {
@@ -397,19 +402,25 @@ describe('narrowToSlot', () => {
       constraints({ pattern: 'pull', wodType: 'tabata', maxTimeCapMinutes: 1 }),
     );
 
-    expect(kept).toEqual([pullAmrap, namedPull]);
+    expect(kept).toEqual({
+      candidates: [pullAmrap, namedPull],
+      relaxed: ['maxTimeCapMinutes', 'wodType'],
+    });
   });
 
   it('protects allowNamed longest, dropping even the pattern before it', () => {
     // An author who turned benchmarks off meant it: a named WOD landing in
     // the middle of a progression block is the surprise that default exists
-    // to prevent.
+    // to prevent. The argument this beat is recorded on SLOT_AXES.
     const kept = narrowToSlot(
       [namedPull, pushForTime],
       constraints({ pattern: 'pull', allowNamed: false }),
     );
 
-    expect(kept).toEqual([pushForTime]);
+    expect(kept).toEqual({
+      candidates: [pushForTime],
+      relaxed: ['pattern'],
+    });
   });
 
   it('hands back the whole pool rather than nothing, once every axis is spent', () => {
@@ -417,6 +428,134 @@ describe('narrowToSlot', () => {
     // library is small, and no workout at all is worse than an off-pattern one.
     const kept = narrowToSlot([namedPull], constraints({ allowNamed: false }));
 
-    expect(kept).toEqual([namedPull]);
+    expect(kept).toEqual({
+      candidates: [namedPull],
+      relaxed: ['allowNamed'],
+    });
+  });
+
+  describe('reporting what it gave up', () => {
+    // One rung at a time: each case constrains every axis, and stocks the
+    // library with exactly the WOD that survives down to the rung under test.
+    // What is asserted is the report as much as the pool, because the report
+    // is the only evidence anyone gets that the library has a hole (DN-14).
+    const everything = constraints({
+      pattern: 'pull',
+      wodType: 'amrap',
+      allowNamed: false,
+      maxTimeCapMinutes: 10,
+    });
+
+    it('reports nothing when the slot is satisfied exactly as authored', () => {
+      expect(narrowToSlot([pullAmrap], everything)).toEqual({
+        candidates: [pullAmrap],
+        relaxed: [],
+      });
+    });
+
+    it('reports the time cap when only an over-long WOD fits the rest', () => {
+      const longPullAmrap = { ...pullAmrap, timeCapMinutes: 30 };
+
+      expect(narrowToSlot([longPullAmrap], everything)).toEqual({
+        candidates: [longPullAmrap],
+        relaxed: ['maxTimeCapMinutes'],
+      });
+    });
+
+    it('reports the cap and the format when only another format fits', () => {
+      const longPullEmom = {
+        ...pullAmrap,
+        type: 'emom',
+        timeCapMinutes: 30,
+      };
+
+      expect(narrowToSlot([longPullEmom], everything)).toEqual({
+        candidates: [longPullEmom],
+        relaxed: ['maxTimeCapMinutes', 'wodType'],
+      });
+    });
+
+    it('reports the pattern too when the library has none of it -- the squat hole DN-23 fills', () => {
+      // The library today: no squat-dominant WOD exists at all, so a squat
+      // slot walks the whole ladder down to the pattern and gets a pull day.
+      const longPullEmom = { ...pullAmrap, type: 'emom', timeCapMinutes: 30 };
+
+      expect(
+        narrowToSlot(
+          [longPullEmom],
+          constraints({
+            pattern: 'squat',
+            wodType: 'amrap',
+            allowNamed: false,
+            maxTimeCapMinutes: 10,
+          }),
+        ),
+      ).toEqual({
+        candidates: [longPullEmom],
+        relaxed: ['maxTimeCapMinutes', 'wodType', 'pattern'],
+      });
+    });
+
+    it('reports every axis when even the benchmark ban has to go', () => {
+      const longNamedSquatEmom = {
+        dominantPattern: 'squat',
+        type: 'emom',
+        isNamed: true,
+        timeCapMinutes: 30,
+      };
+
+      expect(narrowToSlot([longNamedSquatEmom], everything)).toEqual({
+        candidates: [longNamedSquatEmom],
+        relaxed: ['maxTimeCapMinutes', 'wodType', 'pattern', 'allowNamed'],
+      });
+    });
+
+    it('reports only the axes the slot actually asked for', () => {
+      // A null axis asked for nothing, so giving it up costs nothing. Counting
+      // it would bury the real holes under noise from every loose slot.
+      const longPushForTime = { ...pushForTime, timeCapMinutes: 30 };
+
+      expect(
+        narrowToSlot(
+          [longPushForTime],
+          constraints({ pattern: 'pull', maxTimeCapMinutes: 10 }),
+        ),
+      ).toEqual({
+        candidates: [longPushForTime],
+        relaxed: ['maxTimeCapMinutes', 'pattern'],
+      });
+    });
+
+    it('never counts allowNamed: true as relaxed, since it forbids nothing', () => {
+      const longNamedPush = {
+        ...namedPull,
+        dominantPattern: 'push',
+        timeCapMinutes: 30,
+      };
+
+      expect(
+        narrowToSlot([longNamedPush], constraints({ pattern: 'pull' })),
+      ).toEqual({ candidates: [longNamedPush], relaxed: ['pattern'] });
+
+      // And still not when the ladder runs past that rung entirely, which is
+      // the only place a slot that forbade nothing could be reported as
+      // having given something up.
+      expect(
+        narrowToSlot(
+          [],
+          constraints({ pattern: 'pull', maxTimeCapMinutes: 10 }),
+        ),
+      ).toEqual({ candidates: [], relaxed: ['maxTimeCapMinutes', 'pattern'] });
+    });
+
+    it('reports an empty pool as everything given up rather than a satisfied slot', () => {
+      // Nothing to pick from is not the same fact as "the library had it all
+      // along", and a caller that saw [] with relaxed: [] would conclude the
+      // wrong one.
+      expect(narrowToSlot([], everything)).toEqual({
+        candidates: [],
+        relaxed: ['maxTimeCapMinutes', 'wodType', 'pattern', 'allowNamed'],
+      });
+    });
   });
 });

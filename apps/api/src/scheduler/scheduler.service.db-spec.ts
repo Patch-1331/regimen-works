@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
 import { testPrisma } from '../test-support/database';
@@ -1094,6 +1095,82 @@ describe('SchedulerService.getToday, under a program', () => {
     const today = await programService().getToday(user.id, MONDAY);
 
     expect(today.assignment?.wod!.id).toBe(plain.id);
+  });
+
+  describe('reporting a slot it could not satisfy (DN-14)', () => {
+    // The athlete is told nothing -- they asked for a workout and they have
+    // one. The person who can act on a library hole is whoever tends the
+    // library, and the log is the only channel this app has to them.
+    let warn: jest.SpyInstance;
+
+    beforeEach(() => {
+      warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    });
+
+    afterEach(() => warn.mockRestore());
+
+    it('warns with the plan, the week and the axes it gave up', async () => {
+      // No squat-dominant WOD exists in the library, which is true of the
+      // seeded library today and is exactly what DN-23 fixes. Until then this
+      // fires on every squat slot, and that firing is how anyone finds out.
+      const user = await athlete();
+      const pull = await createWod({
+        name: 'Pull day',
+        dominantPattern: 'pull',
+      });
+      const plan = await everyDayPlan('wod_generated', {
+        pattern: 'squat',
+        allowNamed: true,
+      });
+      await createEnrollment(user.id, {
+        planId: plan.id,
+        startDate: MONDAY,
+        weeks: null,
+      });
+
+      const today = await programService().getToday(user.id, MONDAY);
+
+      // The athlete still trains: the ladder relaxes rather than emptying.
+      expect(today.assignment?.wod!.id).toBe(pull.id);
+      expect(warn).toHaveBeenCalledTimes(1);
+      // The four things the line has to answer: what is missing, and which
+      // slot of which program asked for it.
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('pattern'));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining(plan.name));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining(plan.id));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('week 1'));
+    });
+
+    it('stays quiet when the library has what the slot asked for', async () => {
+      // The ordinary case, and the reason this is a warn rather than a log: a
+      // line every day would make the one that matters unfindable.
+      const user = await athlete();
+      await createWod({ name: 'Pull day', dominantPattern: 'pull' });
+      const plan = await everyDayPlan('wod_generated', {
+        pattern: 'pull',
+        allowNamed: true,
+      });
+      await createEnrollment(user.id, {
+        planId: plan.id,
+        startDate: MONDAY,
+        weeks: null,
+      });
+
+      await programService().getToday(user.id, MONDAY);
+
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('says nothing for an athlete on no program at all', async () => {
+      // Nothing was asked for, so nothing was given up. A slotless day must
+      // never look like a library hole.
+      const user = await athlete();
+      await createWod({ dominantPattern: 'pull' });
+
+      await programService().getToday(user.id, MONDAY);
+
+      expect(warn).not.toHaveBeenCalled();
+    });
   });
 
   it('records which slot of which run produced the day', async () => {
