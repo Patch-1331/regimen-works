@@ -12,6 +12,7 @@ import {
 } from '../test-support/fixtures';
 import { WodsService } from '../wods/wods.service';
 import { MovementResolutionService } from './movement-resolution.service';
+import { EnrollmentsService } from '../enrollments/enrollments.service';
 import { SchedulerService } from './scheduler.service';
 
 /**
@@ -37,6 +38,7 @@ function service(
     prisma,
     new WodsService(prisma),
     new MovementResolutionService(prisma),
+    new EnrollmentsService(prisma),
     rng,
   );
 }

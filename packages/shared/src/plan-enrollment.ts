@@ -113,3 +113,25 @@ export const createEnrollmentSchema = z.object({
   weeks: z.number().int().positive().nullable().default(null),
 });
 export type CreateEnrollment = z.infer<typeof createEnrollmentSchema>;
+
+/**
+ * A program the athlete finished, as the completion card and the Completed
+ * list both render it (DN-18).
+ *
+ * The plan's name is carried rather than the plan, for the same reason
+ * `todayPlanSchema` carries a heading rather than a program definition: both
+ * screens want a line of text, and a program that was edited or archived since
+ * should still name what the athlete actually ran.
+ *
+ * The figures come from `summary`, which is non-null by construction here --
+ * an enrollment with no summary is one that was retired before this issue
+ * existed, and there is nothing to show for it.
+ */
+export const completedProgramSchema = z.object({
+  enrollmentId: z.string(),
+  planId: z.string(),
+  planName: z.string(),
+  completedAt: z.string().datetime(),
+  summary: enrollmentSummarySchema,
+});
+export type CompletedProgram = z.infer<typeof completedProgramSchema>;

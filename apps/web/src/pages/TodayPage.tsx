@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ProgramCompletionCard } from "../components/ProgramCompletionCard";
 import {
   DEFAULT_PLAN_ID,
   effectiveRounds,
@@ -108,6 +109,9 @@ export function TodayPage() {
   if (data.isRestDay || !data.assignment) {
     return (
       <div className="p-6">
+        {data.completedProgram && (
+          <ProgramCompletionCard program={data.completedProgram} />
+        )}
         <h1
           className="text-4xl font-extrabold uppercase leading-none"
           style={{ fontFamily: "var(--font-display)" }}
@@ -153,7 +157,10 @@ export function TodayPage() {
 
     return (
       <div className="flex flex-1 flex-col p-6">
-        {program && <ProgramStrip plan={program} date={data.date} />}
+        {data.completedProgram && (
+        <ProgramCompletionCard program={data.completedProgram} />
+      )}
+      {program && <ProgramStrip plan={program} date={data.date} />}
         <h1
           className="text-5xl font-extrabold uppercase leading-none"
           style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}
@@ -344,6 +351,9 @@ export function TodayPage() {
 
   return (
     <div className="flex flex-1 flex-col p-6">
+      {data.completedProgram && (
+        <ProgramCompletionCard program={data.completedProgram} />
+      )}
       {program && <ProgramStrip plan={program} date={data.date} />}
       <h1
         className="text-5xl font-extrabold uppercase leading-none"

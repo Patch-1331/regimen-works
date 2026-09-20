@@ -31,6 +31,7 @@ import { setSubstitutionRequestSchema } from "./substitution.js";
 import { createWodSchema, updateWodSchema } from "./wod.js";
 import { planDetailSchema, planSchema, planSlotSchema } from "./plan.js";
 import {
+  completedProgramSchema,
   createEnrollmentSchema,
   planEnrollmentSchema,
 } from "./plan-enrollment.js";
@@ -1002,7 +1003,30 @@ describe("todayResponseSchema", () => {
     warmup: [{ id: "c-1", name: "Arm circles", instructions: null }],
     cooldown: [],
     plan: null,
+    completedProgram: null,
     makeup: null,
+    ...overrides,
+  });
+
+  const completedProgramBlock = (overrides: Record<string, unknown> = {}) => ({
+    enrollmentId: "enrollment-1",
+    planId: "plan-1",
+    planName: "Pull-Up Builder",
+    completedAt: "2026-09-15T09:00:00.000Z",
+    summary: {
+      weeks: 6,
+      sessions: 24,
+      rungChanges: [
+        {
+          line: "pull",
+          fromRung: 0,
+          toRung: 2,
+          fromName: "Negative chin-up",
+          toName: "Chin-up",
+        },
+      ],
+      ...(overrides.summary as Record<string, unknown> | undefined),
+    },
     ...overrides,
   });
 
@@ -1015,6 +1039,19 @@ describe("todayResponseSchema", () => {
     weekLabel: "Deload",
     slotKind: "wod_generated",
     ...overrides,
+  });
+
+  it("carries the completion card when one is owed (DN-18)", () => {
+    expect(
+      todayResponseSchema.safeParse(
+        todayPayload({ completedProgram: completedProgramBlock() }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it("refuses the card field being absent, so a client cannot forget it", () => {
+    const { completedProgram: _omitted, ...rest } = todayPayload();
+    expect(todayResponseSchema.safeParse(rest).success).toBe(false);
   });
 
   it("parses a day with an assignment", () => {
@@ -1924,5 +1961,127 @@ describe("createEnrollmentSchema", () => {
     });
     expect(result.success).toBe(true);
     expect(result.data).not.toHaveProperty("startingRungs");
+  });
+});
+
+/**
+ * What a finished program is handed back as (DN-18).
+ *
+ * The figures are snapshotted when the run ends, so this shape is read far
+ * more often than it is written and the rules that matter are the ones about
+ * what may be absent: an open-ended run has no length, and a program nobody
+ * trained has no sessions and nothing that moved.
+ */
+describe("completedProgramSchema", () => {
+  const program = (overrides: Record<string, unknown> = {}) => ({
+    enrollmentId: "enrollment-1",
+    planId: "plan-1",
+    planName: "Pull-Up Builder",
+    completedAt: "2026-09-15T09:00:00.000Z",
+    summary: {
+      weeks: 6,
+      sessions: 24,
+      rungChanges: [
+        {
+          line: "pull",
+          fromRung: 0,
+          toRung: 2,
+          fromName: "Negative chin-up",
+          toName: "Chin-up",
+        },
+      ],
+    },
+    ...overrides,
+  });
+
+  it("parses a finished program", () => {
+    expect(completedProgramSchema.safeParse(program()).success).toBe(true);
+  });
+
+  it("accepts a run that had no length to report", () => {
+    expect(
+      completedProgramSchema.safeParse(
+        program({ summary: { weeks: null, sessions: 12, rungChanges: [] } }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it("accepts a program nobody trained", () => {
+    expect(
+      completedProgramSchema.safeParse(
+        program({ summary: { weeks: 6, sessions: 0, rungChanges: [] } }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it("refuses zero weeks, which is not a run that happened", () => {
+    expect(
+      completedProgramSchema.safeParse(
+        program({ summary: { weeks: 0, sessions: 0, rungChanges: [] } }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it("refuses a negative session count", () => {
+    expect(
+      completedProgramSchema.safeParse(
+        program({ summary: { weeks: 6, sessions: -1, rungChanges: [] } }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it("refuses a rung change on a line the app does not have", () => {
+    expect(
+      completedProgramSchema.safeParse(
+        program({
+          summary: {
+            weeks: 6,
+            sessions: 24,
+            rungChanges: [
+              {
+                line: "sorcery",
+                fromRung: 0,
+                toRung: 1,
+                fromName: "Wand",
+                toName: "Staff",
+              },
+            ],
+          },
+        }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it("refuses a rung change with no name at one end", () => {
+    // A name is the only part of this an athlete can read, and a card that
+    // renders "pull: negative → " is worse than one that omits the line.
+    expect(
+      completedProgramSchema.safeParse(
+        program({
+          summary: {
+            weeks: 6,
+            sessions: 24,
+            rungChanges: [
+              { line: "pull", fromRung: 0, toRung: 2, fromName: "Negative" },
+            ],
+          },
+        }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it("refuses a date with no time on it", () => {
+    // `completedAt` is a timestamp, unlike the ISO dates elsewhere in the
+    // program vocabulary -- two programs can finish on the same day.
+    expect(
+      completedProgramSchema.safeParse(program({ completedAt: "2026-09-15" }))
+        .success,
+    ).toBe(false);
+  });
+
+  it("refuses a run that has not finished", () => {
+    expect(
+      completedProgramSchema.safeParse(program({ completedAt: null })).success,
+    ).toBe(false);
   });
 });

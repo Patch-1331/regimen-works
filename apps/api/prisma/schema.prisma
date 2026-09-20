@@ -768,6 +768,12 @@ model PlanEnrollment {
   // program is still running, which is also how "has this been completed" reads
   // without a join.
   summary       Json?
+  // When the athlete dismissed the completion card (DN-18). Null while the
+  // card is still owed -- which, with `summary`, is the whole rule for showing
+  // it. A column rather than browser storage because dismissing on a phone
+  // should not leave the same card waiting on a laptop, and this is a
+  // once-per-program event rather than a notification.
+  summaryDismissedAt DateTime?
 
   assignments DailyAssignment[]
 

@@ -16,6 +16,7 @@ import {
   resolvableMovementInclude,
   type ResolvedMovement,
 } from './movement-resolution.service';
+import { EnrollmentsService } from '../enrollments/enrollments.service';
 import { loadActiveProgram } from '../plans/active-program';
 import { resolveScheduleLock } from '../plans/schedule-lock';
 import { EVERY_WEEKDAY, resolveMakeup } from './makeup';
@@ -47,6 +48,9 @@ export class SchedulerService {
     private readonly prisma: PrismaService,
     private readonly wodsService: WodsService,
     private readonly resolution: MovementResolutionService,
+    // The completion card rides on today's response (DN-18), and retiring a
+    // finished run is what puts it there.
+    private readonly enrollments: EnrollmentsService,
     // Defaulted so the db specs that build this service by hand still get
     // production's randomness unless they deliberately pin it (DN-119).
     @Inject(RNG) private readonly rng: Rng = Math.random,
@@ -77,6 +81,7 @@ export class SchedulerService {
     const trainingDays = rule?.trainingDays ?? [...DEFAULT_TRAINING_DAYS];
     const day = await this.settleProgramDay(
       resolveProgramDay(program, trainingDays, today),
+      userId,
     );
     const plan = planBlock(day);
 
@@ -113,6 +118,7 @@ export class SchedulerService {
         // record what produced the day and are history; this answers "where am
         // I today", which is a question about the enrollment as it stands now.
         plan,
+        completedProgram: await this.enrollments.cardFor(userId),
         isRestDay: existing.status === 'skipped',
         assignment,
         // A day marked as rest can still be trained: the athlete changed
@@ -154,6 +160,7 @@ export class SchedulerService {
       return {
         date: today,
         plan,
+        completedProgram: await this.enrollments.cardFor(userId),
         isRestDay: true,
         assignment: null,
         makeup: await this.makeupFor(
@@ -192,6 +199,7 @@ export class SchedulerService {
       return {
         date: today,
         plan,
+        completedProgram: await this.enrollments.cardFor(userId),
         isRestDay: false,
         makeup: null,
         assignment: {
@@ -247,6 +255,7 @@ export class SchedulerService {
     return {
       date: today,
       plan,
+      completedProgram: await this.enrollments.cardFor(userId),
       isRestDay: false,
       // Nothing to make up on a day that already has a session.
       makeup: null,
@@ -276,24 +285,21 @@ export class SchedulerService {
    * a nightly job: the day an athlete's program ends is a day they open Today,
    * and nobody needs the row flipped before then.
    *
-   * `status: 'active'` on the update is deliberately redundant and no test
-   * kills it: `loadActiveProgram` already reads only active enrollments, so
-   * nothing that reaches this line can be anything else. It is here for the
-   * one case that read cannot rule out -- two requests landing together, both
-   * finding the run still active -- where it makes the loser a no-op instead
-   * of a second, later `completedAt` overwriting the first.
+   * The figures are computed and stored by `EnrollmentsService` in the same
+   * breath (DN-18), because the moment a run is retired is the only moment
+   * they are all still true -- the ladder grows, days get deleted with a user,
+   * and a record of what somebody finished should not change afterwards
+   * because the library did.
    */
   private async settleProgramDay(
     day: ProgramDay,
+    userId: string,
     // Excluding `completed` from the return type is the point of this
     // function: past that line every caller is dealing with a day that has
     // already been dealt with, and the compiler says so.
   ): Promise<SettledDay> {
     if (day.kind !== 'completed') return day;
-    await this.prisma.planEnrollment.updateMany({
-      where: { id: day.enrollmentId, status: 'active' },
-      data: { status: 'completed', completedAt: new Date() },
-    });
+    await this.enrollments.completeRun(userId, day.enrollmentId);
     return { kind: 'fallback', reason: 'no-enrollment' };
   }
 
@@ -492,6 +498,7 @@ export class SchedulerService {
 
     const day = await this.settleProgramDay(
       resolveProgramDay(program, EVERY_WEEKDAY, today),
+      userId,
     );
     // The makeup hands over whatever the program authored for this weekday,
     // and since DN-19 that can be straight sets rather than a WOD. Resolved
@@ -546,6 +553,7 @@ export class SchedulerService {
     return {
       date: today,
       plan: planBlock(day),
+      completedProgram: await this.enrollments.cardFor(userId),
       isRestDay: false,
       // Taken, so there is nothing left to offer.
       makeup: null,
@@ -604,6 +612,7 @@ export class SchedulerService {
     return {
       date: today,
       plan,
+      completedProgram: await this.enrollments.cardFor(userId),
       isRestDay: true,
       assignment: null,
       // Marking the day as rest does not close it: the week is still the unit

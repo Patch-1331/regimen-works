@@ -6,6 +6,7 @@ import type {
   LogResultRequest,
   LogSet,
   CommitSetup,
+  CompletedProgram,
   Me,
   MovementHistory,
   MovementVolume,
@@ -345,6 +346,22 @@ export const api = {
    */
   commitSetup: (body: CommitSetup) =>
     postJson<{ onboardedAt: string }>("/setup", body),
+
+  /**
+   * Every program the athlete has finished (DN-18), most recent first.
+   *
+   * The completion *card* is not fetched here -- it rides on `GET /today`, so
+   * a finished program and the day that follows it arrive together. This is
+   * the list on History, which is a different question asked at a different
+   * time.
+   */
+  completedPrograms: () => request<CompletedProgram[]>("/programs/completed"),
+  /** Puts the completion card away. Idempotent. */
+  dismissCompletedProgram: (enrollmentId: string) =>
+    postJson<{ dismissed: true }>(`/programs/${enrollmentId}/dismiss`),
+  /** Starts the same program over: same plan, same length, from today. */
+  runProgramAgain: (enrollmentId: string) =>
+    postJson<{ enrollmentId: string }>(`/programs/${enrollmentId}/run-again`),
 
   settings: () => request<Settings>("/settings"),
   updateSettings: (body: UpdateSettings) =>

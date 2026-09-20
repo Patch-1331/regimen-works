@@ -1,6 +1,7 @@
 import type { PrismaService } from '../prisma/prisma.service';
 import { ExercisesService } from '../exercises/exercises.service';
 import { MovementResolutionService } from '../scheduler/movement-resolution.service';
+import { EnrollmentsService } from '../enrollments/enrollments.service';
 import { SchedulerService } from '../scheduler/scheduler.service';
 import { testPrisma } from '../test-support/database';
 import {
@@ -36,6 +37,7 @@ function scheduler(): SchedulerService {
     prisma,
     new WodsService(prisma),
     new MovementResolutionService(prisma),
+    new EnrollmentsService(prisma),
   );
 }
 

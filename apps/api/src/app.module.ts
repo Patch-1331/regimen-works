@@ -19,6 +19,7 @@ import { SkillLevelsModule } from './skill-levels/skill-levels.module';
 import { SettingsModule } from './settings/settings.module';
 import { MeModule } from './me/me.module';
 import { SetupModule } from './setup/setup.module';
+import { EnrollmentsModule } from './enrollments/enrollments.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { SetupModule } from './setup/setup.module';
     SettingsModule,
     MeModule,
     SetupModule,
+    EnrollmentsModule,
   ],
   controllers: [AppController],
   providers: [

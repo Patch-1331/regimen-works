@@ -11,6 +11,7 @@ import type {
 } from '@regimen-works/shared';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { snapshotRungs } from '../enrollments/starting-rungs';
 import { fixedDaysOf, setupRejection, startDateRange } from './setup.logic';
 
 /**
@@ -144,10 +145,15 @@ export class SetupService {
         where: { userId, status: 'active' },
         select: { id: true },
       });
+      // Where every ladder stands as the run begins, so the completion card
+      // can say what moved rather than only how many sessions were trained
+      // (DN-18). Taken inside the transaction, against the same instant the
+      // enrollment is written.
       const enrollment = {
         planId: body.planId,
         startDate: body.startDate,
         weeks: body.weeks,
+        startingRungs: await snapshotRungs(tx, userId),
       };
       if (active) {
         await tx.planEnrollment.update({
@@ -172,6 +178,13 @@ export class SetupService {
           where: { userId, date: range.today, session: null, log: null },
         });
       }
+
+      // A card still sitting above Today after the athlete has started
+      // something new would be offering a choice they have just made (DN-18).
+      await tx.planEnrollment.updateMany({
+        where: { userId, status: 'completed', summaryDismissedAt: null },
+        data: { summaryDismissedAt: new Date() },
+      });
 
       const user = await tx.user.update({
         where: { id: userId },

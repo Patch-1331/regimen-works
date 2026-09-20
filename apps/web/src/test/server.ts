@@ -22,6 +22,16 @@ const api = (path: string) => `/api${path}`;
 export const handlers = [
   http.get(api("/today"), () => HttpResponse.json(fixtures.today())),
   http.get(api("/logs"), () => HttpResponse.json([fixtures.workoutLog()])),
+  // Nothing finished by default (DN-18) -- the same default as `today()`'s
+  // null card, so a spec that is not about program completion never has to
+  // say so.
+  http.get(api("/programs/completed"), () => HttpResponse.json([])),
+  http.post(api("/programs/:enrollmentId/dismiss"), () =>
+    HttpResponse.json({ dismissed: true }),
+  ),
+  http.post(api("/programs/:enrollmentId/run-again"), ({ params }) =>
+    HttpResponse.json({ enrollmentId: `re-${String(params.enrollmentId)}` }),
+  ),
   http.get(api("/exercises"), ({ request }) => {
     // The library page asks the same endpoint for retired rows too (DN-28).
     // Matched on the query here rather than as a second handler, because msw

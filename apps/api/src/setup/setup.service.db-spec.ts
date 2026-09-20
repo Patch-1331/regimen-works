@@ -10,6 +10,7 @@ import {
   createLog,
   createPlan,
   createSession,
+  createSkillLevel,
   createUser,
 } from '../test-support/fixtures';
 import { upsertJustWods } from '../plans/just-wods';
@@ -218,6 +219,56 @@ describe('SetupService.commit', () => {
     expect(await testPrisma().planEnrollment.count({ where: { userId } })).toBe(
       1,
     );
+  });
+
+  it('snapshots where every ladder stands as the run begins', async () => {
+    // The completion card diffs against this (DN-18). Without it a finished
+    // program can count sessions but cannot say what changed, which is the
+    // half of the card worth reading.
+    const { userId } = await provisionedAthlete();
+    await createSkillLevel(userId, 'pull', 2);
+    await createSkillLevel(userId, 'squat', 1);
+    const plan = await createPlan();
+
+    await service().commit(userId, answers({ planId: plan.id }), TODAY);
+
+    expect((await activeEnrollment(userId)).startingRungs).toEqual({
+      pull: 2,
+      squat: 1,
+    });
+  });
+
+  it('snapshots nothing for an athlete who has trained nothing', async () => {
+    // The ordinary first run: DN-86 provisions no SkillLevel rows, so every
+    // line starts absent and reads as rung 0 wherever it is diffed.
+    const { userId } = await provisionedAthlete();
+    const plan = await createPlan();
+
+    await service().commit(userId, answers({ planId: plan.id }), TODAY);
+
+    expect((await activeEnrollment(userId)).startingRungs).toEqual({});
+  });
+
+  it('puts away a completion card the athlete has just answered', async () => {
+    // Choosing a program in the wizard answers "what next?". A card still
+    // offering that choice afterwards would be asking a question the athlete
+    // has already settled.
+    const { userId } = await provisionedAthlete();
+    const finished = await createEnrollment(userId, {
+      status: 'completed',
+      completedAt: new Date('2026-09-15T09:00:00.000Z'),
+      summary: { weeks: 6, sessions: 24, rungChanges: [] },
+    });
+    const plan = await createPlan();
+
+    await service().commit(userId, answers({ planId: plan.id }), TODAY);
+
+    const after = await testPrisma().planEnrollment.findUniqueOrThrow({
+      where: { id: finished.id },
+    });
+    expect(after.summaryDismissedAt).not.toBeNull();
+    // The record stays a record -- only the prompt was answered.
+    expect(after.status).toBe('completed');
   });
 
   it('enrolls an athlete who has no active program', async () => {
