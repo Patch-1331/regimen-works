@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { Logger } from 'nestjs-pino';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { NoContentInterceptor } from './common/no-content.interceptor';
@@ -16,7 +17,12 @@ async function bootstrap() {
     );
   }
 
-  const app = await NestFactory.create(AppModule);
+  // bufferLogs holds Nest's own startup lines until the pino logger below is
+  // resolved, so they come out in the same structured format as everything
+  // else instead of as the default console output (DN-41). Without it the
+  // lines that say the app started are the only ones Render cannot search.
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  app.useLogger(app.get(Logger));
 
   // Response hardening. Mostly it drops `x-powered-by`, which advertises the
   // framework to anyone scanning, and adds nosniff/frame headers.
