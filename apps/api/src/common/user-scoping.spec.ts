@@ -5,6 +5,7 @@ import { SettingsService } from '../settings/settings.service';
 import { SkillLevelsService } from '../skill-levels/skill-levels.service';
 import { SchedulerService } from '../scheduler/scheduler.service';
 import { MovementResolutionService } from '../scheduler/movement-resolution.service';
+import { EnrollmentsService } from '../enrollments/enrollments.service';
 import { WodsService } from '../wods/wods.service';
 import type { PrismaService } from '../prisma/prisma.service';
 
@@ -182,6 +183,7 @@ describe('per-user query scoping', () => {
       prisma,
       wods,
       new MovementResolutionService(prisma),
+      new EnrollmentsService(prisma),
     )
       .getToday(ALICE, '2026-09-07')
       .catch(() => undefined);
@@ -210,6 +212,7 @@ describe('per-user query scoping', () => {
       prisma,
       wods,
       new MovementResolutionService(prisma),
+      new EnrollmentsService(prisma),
     )
       .getToday(ALICE, '2026-09-19')
       .catch(() => undefined);
@@ -264,6 +267,7 @@ describe('library ownership scoping', () => {
       prisma,
       wods,
       new MovementResolutionService(prisma),
+      new EnrollmentsService(prisma),
     )
       .getToday(ALICE, '2026-09-07')
       .catch(() => undefined);
@@ -289,6 +293,7 @@ describe('library ownership scoping', () => {
       prisma,
       wods,
       new MovementResolutionService(prisma),
+      new EnrollmentsService(prisma),
     )
       .getToday(ALICE, '2026-09-07')
       .catch(() => undefined);

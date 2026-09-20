@@ -14,6 +14,8 @@ import type {
   SetupOptions,
   SetupProgram,
   WorkoutSetLog,
+  CompletedProgram,
+  RungChange,
 } from "@regimen-works/shared";
 import { DEFAULT_PLAN_ID } from "@regimen-works/shared";
 import type { ApiExercise, ApiWod } from "../lib/api";
@@ -229,8 +231,47 @@ export function today(overrides: Partial<TodayResponse> = {}): TodayResponse {
     cooldown: [checklistItem({ id: "checklist-2", name: "Hamstring stretch" })],
     // Not on a program. Overridden by the tests that are (DN-10).
     plan: null,
+    // No program has just ended, which is almost always true (DN-18).
+    completedProgram: null,
     // No makeup offered: a training day has a session already (DN-17).
     makeup: null,
+    ...overrides,
+  };
+}
+
+/**
+ * A program the athlete just finished (DN-18), as the card and the Completed
+ * list both read it.
+ *
+ * One rung change by default, because a card with nothing to say about the
+ * ladder is the exception rather than the shape most specs want -- pass
+ * `{ rungChanges: [] }` through `summary` for the program nobody trained.
+ */
+export function completedProgram(
+  overrides: Partial<CompletedProgram> = {},
+): CompletedProgram {
+  return {
+    enrollmentId: "enrollment-done-1",
+    planId: "plan-1",
+    planName: "Pull-Up Builder",
+    completedAt: "2026-09-15T09:00:00.000Z",
+    ...overrides,
+    summary: {
+      weeks: 6,
+      sessions: 24,
+      rungChanges: [rungChange()],
+      ...overrides.summary,
+    },
+  };
+}
+
+export function rungChange(overrides: Partial<RungChange> = {}): RungChange {
+  return {
+    line: "pull",
+    fromRung: 0,
+    toRung: 2,
+    fromName: "Negative chin-up",
+    toName: "Chin-up",
     ...overrides,
   };
 }

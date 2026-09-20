@@ -1,0 +1,11 @@
+-- The completion card's dismissal (DN-18).
+--
+-- Null means the card is still owed. Together with a non-null "summary" that
+-- is the whole rule for showing it, so no second flag is needed to say whether
+-- a program has been completed at all.
+--
+-- Nothing to backfill: no enrollment has a summary yet, because nothing wrote
+-- one before this issue. Every existing row is either still running or was
+-- retired by DN-16's completion-on-read with no figures attached, and neither
+-- has a card to dismiss.
+ALTER TABLE "PlanEnrollment" ADD COLUMN "summaryDismissedAt" TIMESTAMP(3);

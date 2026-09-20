@@ -13,6 +13,8 @@ import {
   workoutSetLogSchema,
   meSchema,
   setupOptionsSchema,
+  completedProgramSchema,
+  addIsoDays,
   DEFAULT_PLAN_ID,
 } from '@regimen-works/shared';
 import { z } from 'zod';
@@ -1237,5 +1239,199 @@ describe('first-run setup, end to end', () => {
     });
     // Asleep, not overwritten -- this is what comes back when the run ends.
     expect(settings.trainingDays).toEqual([1, 2, 3, 4, 5]);
+  });
+});
+
+describe('a program ending, end to end', () => {
+  // Alice only: Mallory never trains here, she only tries the doors, and the
+  // throttle counts every request this suite makes.
+  beforeEach(() => trainsEveryDay(ALICE));
+
+  /**
+   * A program that trains every day, so "is today a program day?" is decided
+   * by the run's dates alone. A plan with no authored weeks resolves as
+   * finished whatever the date, which would make every assertion below pass
+   * for the wrong reason.
+   */
+  async function everyDayPlan(overrides: Record<string, unknown> = {}) {
+    // Something for the Just WODs fallback to hand back once the program is
+    // over -- the library is empty unless a test puts a WOD in it.
+    await seedLibrary();
+    return createPlan({
+      weeks: {
+        create: [
+          {
+            order: 0,
+            phase: 'core',
+            slots: {
+              create: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+                dayOfWeek,
+                kind: 'wod_generated',
+              })),
+            },
+          },
+        ],
+      },
+      ...overrides,
+    });
+  }
+
+  /**
+   * Puts the athlete on a program that ran out last week.
+   *
+   * Provisioning has already given them an active Just WODs enrollment, and
+   * the partial unique index allows only one active run, so the way to be
+   * mid-program in a test is to repoint the run they already have rather than
+   * to add a second.
+   */
+  async function ranOutLastWeek(userId: string, planId: string) {
+    const startDate = addIsoDays(todayIsoDate(), -14);
+    await testPrisma().planEnrollment.updateMany({
+      where: { userId, status: 'active' },
+      data: { planId, startDate, weeks: 1, startingRungs: { pull: 0 } },
+    });
+    const enrollment = await testPrisma().planEnrollment.findFirstOrThrow({
+      where: { userId, status: 'active' },
+      select: { id: true },
+    });
+    await createAssignment(userId, {
+      enrollmentId: enrollment.id,
+      status: 'completed',
+      date: startDate,
+    });
+    return enrollment.id;
+  }
+
+  it('hands back the card, a workout, and the finished run', async () => {
+    // seedLibrary's pull ladder is the one the rung change is read off.
+    const plan = await everyDayPlan({ name: 'Pull-Up Builder' });
+    const enrollmentId = await ranOutLastWeek(ALICE, plan.id);
+    await testPrisma().skillLevel.create({
+      data: { userId: ALICE, line: 'pull', rung: 2 },
+    });
+
+    const today = parsed(
+      todayResponseSchema,
+      await http()
+        .get('/today')
+        .set(...asUser(ALICE))
+        .expect(200),
+    );
+
+    // The whole point of DN-18: a prompt never blocks a workout. The program
+    // is over, the card is owed, and there is still something to train.
+    expect(today.assignment).not.toBeNull();
+    expect(today.plan).toBeNull();
+    expect(today.completedProgram).toMatchObject({
+      enrollmentId,
+      planId: plan.id,
+      planName: 'Pull-Up Builder',
+      summary: {
+        weeks: 1,
+        sessions: 1,
+        rungChanges: [expect.objectContaining({ line: 'pull', toRung: 2 })],
+      },
+    });
+
+    // And reading today is what retired the run, so it is now on the list.
+    const completed = parsed(
+      z.array(completedProgramSchema),
+      await http()
+        .get('/programs/completed')
+        .set(...asUser(ALICE))
+        .expect(200),
+    );
+    expect(completed.map((p) => p.enrollmentId)).toEqual([enrollmentId]);
+
+    await http()
+      .post(`/programs/${enrollmentId}/dismiss`)
+      .set(...asUser(ALICE))
+      .expect(201);
+
+    // Dismissed puts the prompt away, not the record.
+    const after = parsed(
+      todayResponseSchema,
+      await http()
+        .get('/today')
+        .set(...asUser(ALICE))
+        .expect(200),
+    );
+    expect(after.completedProgram).toBeNull();
+    expect(after.assignment).not.toBeNull();
+    expect(
+      parsed(
+        z.array(completedProgramSchema),
+        await http()
+          .get('/programs/completed')
+          .set(...asUser(ALICE))
+          .expect(200),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('runs the same program again from today', async () => {
+    const plan = await everyDayPlan({ name: 'Pull-Up Builder' });
+    const enrollmentId = await ranOutLastWeek(ALICE, plan.id);
+    await http()
+      .get('/today')
+      .set(...asUser(ALICE))
+      .expect(200);
+
+    const { enrollmentId: again } = parsed(
+      z.object({ enrollmentId: z.string() }),
+      await http()
+        .post(`/programs/${enrollmentId}/run-again`)
+        .set(...asUser(ALICE))
+        .expect(201),
+    );
+
+    expect(again).not.toBe(enrollmentId);
+    const started = await testPrisma().planEnrollment.findUniqueOrThrow({
+      where: { id: again },
+    });
+    expect(started).toMatchObject({
+      planId: plan.id,
+      weeks: 1,
+      status: 'active',
+      startDate: todayIsoDate(),
+    });
+
+    // Answering the prompt by doing what it asked also puts it away.
+    expect(
+      parsed(
+        todayResponseSchema,
+        await http()
+          .get('/today')
+          .set(...asUser(ALICE))
+          .expect(200),
+      ).completedProgram,
+    ).toBeNull();
+  });
+
+  it('will not dismiss or re-run a program that is not yours', async () => {
+    const plan = await everyDayPlan();
+    const enrollmentId = await ranOutLastWeek(ALICE, plan.id);
+    await http()
+      .get('/today')
+      .set(...asUser(ALICE))
+      .expect(200);
+
+    await http()
+      .post(`/programs/${enrollmentId}/dismiss`)
+      .set(...asUser(MALLORY))
+      .expect(404);
+    await http()
+      .post(`/programs/${enrollmentId}/run-again`)
+      .set(...asUser(MALLORY))
+      .expect(404);
+    expect(
+      parsed(
+        z.array(completedProgramSchema),
+        await http()
+          .get('/programs/completed')
+          .set(...asUser(MALLORY))
+          .expect(200),
+      ),
+    ).toEqual([]);
   });
 });

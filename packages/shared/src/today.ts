@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { checklistExerciseSchema } from "./checklist.js";
+import { completedProgramSchema } from "./plan-enrollment.js";
 import { assignmentStatus, planSlotKind } from "./enums.js";
 import { prescriptionSchema } from "./prescription.js";
 import { wodSchema } from "./wod.js";
@@ -123,6 +124,18 @@ export const todayResponseSchema = z.object({
    * makes the block safe to add before anything reads it.
    */
   plan: todayPlanSchema.nullable(),
+  /**
+   * The program that just finished, if one has and the athlete has not yet
+   * dismissed the card (DN-18). Null the rest of the time, which is almost
+   * always.
+   *
+   * Here rather than behind its own request because the card sits above
+   * today and both arrive together or the screen assembles itself in front
+   * of the athlete. Nullable like `plan` and `makeup`, which is also what
+   * keeps "a prompt never blocks a workout" structural rather than
+   * intended: a client that ignores this field still renders today.
+   */
+  completedProgram: completedProgramSchema.nullable(),
   /**
    * The makeup offer (DN-17), or null when there is none to make. Like
    * `plan`, nullable rather than a second response shape: a client that
