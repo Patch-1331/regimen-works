@@ -6,6 +6,10 @@ import { PrismaClient } from '@prisma/client';
 import { GLOBAL_LIBRARY } from '../src/library/visible-to';
 import { upsertJustWods } from '../src/plans/just-wods';
 import {
+  FIRST_PROGRAMS,
+  upsertFirstPrograms,
+} from '../src/plans/first-programs';
+import {
   assertSubstitutesReachable,
   assertSubstituteUnitsMatch,
 } from '../src/seed/substitute-guard';
@@ -180,13 +184,19 @@ async function main() {
   console.log('Seeding the Just WODs program...');
   await upsertJustWods(prisma);
 
+  console.log('Seeding the first programs...');
+  await upsertFirstPrograms(prisma);
+
   // Enrollments are not seeded. They are per-user rows, and the users this
   // would backfill are exactly the ones UserProvisioningService reaches on
   // their next authenticated request -- through the very code path that
   // enrolls a new athlete, rather than a second one written once and never
   // exercised again. An athlete who never signs in again gets no enrollment
   // and needs none, having no Today to render.
-  console.log(`Done: ${exercises.length} exercises, ${wods.length} WODs.`);
+  console.log(
+    `Done: ${exercises.length} exercises, ${wods.length} WODs, ` +
+      `${FIRST_PROGRAMS.length + 1} programs.`,
+  );
 }
 
 main()
