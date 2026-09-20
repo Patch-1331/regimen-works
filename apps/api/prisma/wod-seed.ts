@@ -435,4 +435,543 @@ export const wods: WodSeed[] = [
       { exercise: 'Suitcase carry', reps: 20 },
     ],
   },
+
+  // ---------------------------------------------------------------------
+  // DN-23: the batch that fills the pattern x format grid.
+  //
+  // DN-34 and DN-114 gave every pattern a WOD; what they did not give it was
+  // every *format*. Ten of the twenty-four cells were empty -- tabata existed
+  // only for cardio, squat and hinge had no EMOM, push had no AMRAP -- and an
+  // authored slot asks for a pattern and a format together, so an empty cell
+  // is a slot the library cannot satisfy. DN-14 made that visible: every one
+  // of these was relaxing `wodType` or `pattern` and warning about it.
+  //
+  // Two per cell rather than one, because a single WOD in a cell is a slot
+  // that hands over the same workout every time it comes round, and the
+  // cooldown in `pickWod` has nothing to choose between.
+  //
+  // Tabata is `intervalCount` 8 per movement -- the format is eight rounds of
+  // 20 on, 10 off -- so the cap is the work plus a little for changing over.
+  // `reps: 1` on a tabata movement is nominal: the athlete does as many as
+  // the twenty seconds allow, and the count is there because a movement row
+  // has to carry one.
+  // ---------------------------------------------------------------------
+
+  {
+    name: 'Engine Room',
+    type: 'amrap',
+    timeCapMinutes: 12,
+    rounds: null,
+    isNamed: false,
+    dominantPattern: 'cardio',
+    description:
+      'As many rounds as possible in 12 minutes: 10 burpees, 20 mountain climbers, 30 high knees. Nothing here is hard; the order they come in is.',
+    movements: [
+      { exercise: 'Burpee', reps: 10 },
+      { exercise: 'Mountain climber', reps: 20 },
+      { exercise: 'High knees', reps: 30 },
+    ],
+  },
+  {
+    name: 'Skip Work',
+    type: 'amrap',
+    timeCapMinutes: 10,
+    rounds: null,
+    isNamed: false,
+    dominantPattern: 'cardio',
+    description:
+      'As many rounds as possible in 10 minutes: 40 single-unders, 10 squat thrusts, 10 sit-ups. Trip on the rope and pick it straight back up -- the clock does not care.',
+    movements: [
+      { exercise: 'Single-unders', reps: 40 },
+      { exercise: 'Squat thrust', reps: 10 },
+      { exercise: 'Sit-up', reps: 10 },
+    ],
+  },
+
+  {
+    name: 'Midline Five',
+    type: 'for_time',
+    timeCapMinutes: 14,
+    rounds: 5,
+    isNamed: false,
+    dominantPattern: 'core',
+    description:
+      'Five rounds: 20 sit-ups, 10 tuck-ups, 10 mountain climbers. The midline never gets a round off, which is the point.',
+    movements: [
+      { exercise: 'Sit-up', reps: 20 },
+      { exercise: 'Tuck-up', reps: 10 },
+      { exercise: 'Mountain climber', reps: 10 },
+    ],
+  },
+  {
+    name: 'Toes and Tens',
+    type: 'for_time',
+    timeCapMinutes: 15,
+    rounds: null,
+    isNamed: false,
+    dominantPattern: 'core',
+    description:
+      '21-15-9: toes-to-bar and air squats, descending. One pass, for time. If the toes-to-bar go, break them early rather than late.',
+    movements: [
+      { exercise: 'Toes-to-bar', repScheme: [21, 15, 9] },
+      { exercise: 'Air squat', repScheme: [21, 15, 9] },
+    ],
+  },
+
+  {
+    name: 'Tabata Midline',
+    type: 'tabata',
+    timeCapMinutes: 14,
+    rounds: 24,
+    workSeconds: 20,
+    restSeconds: 10,
+    intervalCount: 24,
+    isNamed: false,
+    dominantPattern: 'core',
+    description:
+      'Eight rounds each of sit-ups, hollow hold and lying leg raises, 20 seconds on and 10 off. The hold is scored by staying in it, not by reps.',
+    movements: [
+      { exercise: 'Sit-up', reps: 1 },
+      { exercise: 'Hollow hold', reps: 1 },
+      { exercise: 'Lying leg raise', reps: 1 },
+    ],
+  },
+  {
+    name: 'Hollow Eight',
+    type: 'tabata',
+    timeCapMinutes: 10,
+    rounds: 16,
+    workSeconds: 20,
+    restSeconds: 10,
+    intervalCount: 16,
+    isNamed: false,
+    dominantPattern: 'core',
+    description:
+      'Eight rounds of hollow hold, then eight of V-ups, 20 seconds on and 10 off. Come out of the hold before the shape goes, not after.',
+    movements: [
+      { exercise: 'Hollow hold', reps: 1 },
+      { exercise: 'V-up', reps: 1 },
+    ],
+  },
+
+  {
+    name: 'Hinge Minute',
+    type: 'emom',
+    timeCapMinutes: 12,
+    rounds: 12,
+    workSeconds: 60,
+    restSeconds: 0,
+    intervalCount: 12,
+    isNamed: false,
+    dominantPattern: 'hinge',
+    description:
+      'Every minute on the minute for twelve: 12 glute bridges, then 8 supermans. Whatever is left of the minute is your rest.',
+    movements: [
+      { exercise: 'Glute bridge', reps: 12 },
+      { exercise: 'Superman', reps: 8 },
+    ],
+  },
+  {
+    name: 'Swing Clock',
+    type: 'emom',
+    timeCapMinutes: 14,
+    rounds: 14,
+    workSeconds: 60,
+    restSeconds: 0,
+    intervalCount: 14,
+    isNamed: false,
+    dominantPattern: 'hinge',
+    description:
+      'Every minute on the minute for fourteen: 12 kettlebell swings, then 6 burpees. The hips do the swing -- if the arms start lifting the bell, the minute is too heavy.',
+    movements: [
+      { exercise: 'Kettlebell swing', reps: 12 },
+      { exercise: 'Burpee', reps: 6 },
+    ],
+  },
+
+  {
+    name: 'Tabata Hinge',
+    type: 'tabata',
+    timeCapMinutes: 14,
+    rounds: 24,
+    workSeconds: 20,
+    restSeconds: 10,
+    intervalCount: 24,
+    isNamed: false,
+    dominantPattern: 'hinge',
+    description:
+      'Eight rounds each of glute bridges, supermans and mountain climbers, 20 seconds on and 10 off. Squeeze at the top of every bridge; the twenty seconds are short enough to earn it.',
+    movements: [
+      { exercise: 'Glute bridge', reps: 1 },
+      { exercise: 'Superman', reps: 1 },
+      { exercise: 'Mountain climber', reps: 1 },
+    ],
+  },
+  {
+    name: 'Bridge Work',
+    type: 'tabata',
+    timeCapMinutes: 10,
+    rounds: 16,
+    workSeconds: 20,
+    restSeconds: 10,
+    intervalCount: 16,
+    isNamed: false,
+    dominantPattern: 'hinge',
+    description:
+      'Eight rounds of single-leg glute bridges, then eight of broad jumps, 20 seconds on and 10 off. Alternate legs on the bridges -- each interval is one side.',
+    movements: [
+      { exercise: 'Single-leg glute bridge', reps: 1 },
+      { exercise: 'Broad jump', reps: 1 },
+    ],
+  },
+
+  {
+    name: 'Tabata Pull',
+    type: 'tabata',
+    timeCapMinutes: 10,
+    rounds: 16,
+    workSeconds: 20,
+    restSeconds: 10,
+    intervalCount: 16,
+    isNamed: false,
+    dominantPattern: 'pull',
+    description:
+      'Eight rounds of pull-ups, then eight of sit-ups, 20 seconds on and 10 off. One pull-up in an interval still counts as an interval.',
+    movements: [
+      { exercise: 'Pull-up', reps: 1 },
+      { exercise: 'Sit-up', reps: 1 },
+    ],
+  },
+  {
+    name: 'Angel Intervals',
+    type: 'tabata',
+    timeCapMinutes: 14,
+    rounds: 24,
+    workSeconds: 20,
+    restSeconds: 10,
+    intervalCount: 24,
+    isNamed: false,
+    dominantPattern: 'pull',
+    description:
+      'Eight rounds each of supermans with reverse snow angels, tuck-ups and high knees, 20 seconds on and 10 off. A pulling workout that never leaves the floor.',
+    movements: [
+      { exercise: 'Supermans + reverse snow angels', reps: 1 },
+      { exercise: 'Tuck-up', reps: 1 },
+      { exercise: 'High knees', reps: 1 },
+    ],
+  },
+
+  {
+    name: 'Press On',
+    type: 'amrap',
+    timeCapMinutes: 12,
+    rounds: null,
+    isNamed: false,
+    dominantPattern: 'push',
+    description:
+      'As many rounds as possible in 12 minutes: 10 push-ups, 15 sit-ups, 20 air squats. Break the push-ups before you have to, not after.',
+    movements: [
+      { exercise: 'Push-up', reps: 10 },
+      { exercise: 'Sit-up', reps: 15 },
+      { exercise: 'Air squat', reps: 20 },
+    ],
+  },
+  {
+    name: 'Pike Rounds',
+    type: 'amrap',
+    timeCapMinutes: 15,
+    rounds: null,
+    isNamed: false,
+    dominantPattern: 'push',
+    description:
+      'As many rounds as possible in 15 minutes: 8 pike push-ups, 12 reverse lunges, 10 tuck-ups. The lunges are six a side.',
+    movements: [
+      { exercise: 'Pike push-up', reps: 8 },
+      { exercise: 'Reverse lunge', reps: 12 },
+      { exercise: 'Tuck-up', reps: 10 },
+    ],
+  },
+
+  {
+    name: 'Tabata Press',
+    type: 'tabata',
+    timeCapMinutes: 10,
+    rounds: 16,
+    workSeconds: 20,
+    restSeconds: 10,
+    intervalCount: 16,
+    isNamed: false,
+    dominantPattern: 'push',
+    description:
+      'Eight rounds of push-ups, then eight of diamond push-ups, 20 seconds on and 10 off. Drop to the knees rather than drop the interval.',
+    movements: [
+      { exercise: 'Push-up', reps: 1 },
+      { exercise: 'Diamond push-up', reps: 1 },
+    ],
+  },
+  {
+    name: 'Press and Carry',
+    type: 'tabata',
+    timeCapMinutes: 14,
+    rounds: 24,
+    workSeconds: 20,
+    restSeconds: 10,
+    intervalCount: 24,
+    isNamed: false,
+    dominantPattern: 'push',
+    description:
+      'Eight rounds each of dumbbell floor press, push-ups and high knees, 20 seconds on and 10 off. Pick a weight you can still press on the eighth round.',
+    movements: [
+      { exercise: 'Dumbbell floor press', reps: 1 },
+      { exercise: 'Push-up', reps: 1 },
+      { exercise: 'High knees', reps: 1 },
+    ],
+  },
+
+  {
+    name: 'Squat Minute',
+    type: 'emom',
+    timeCapMinutes: 12,
+    rounds: 12,
+    workSeconds: 60,
+    restSeconds: 0,
+    intervalCount: 12,
+    isNamed: false,
+    dominantPattern: 'squat',
+    description:
+      'Every minute on the minute for twelve: 15 air squats, then 10 mountain climbers. The first four minutes will feel like too few reps. They are not.',
+    movements: [
+      { exercise: 'Air squat', reps: 15 },
+      { exercise: 'Mountain climber', reps: 10 },
+    ],
+  },
+  {
+    name: 'Lunge Clock',
+    type: 'emom',
+    timeCapMinutes: 16,
+    rounds: 16,
+    workSeconds: 60,
+    restSeconds: 0,
+    intervalCount: 16,
+    isNamed: false,
+    dominantPattern: 'squat',
+    description:
+      'Every minute on the minute for sixteen: 10 walking lunge steps, then 8 push-ups. Ten steps is five a side.',
+    movements: [
+      { exercise: 'Walking lunge', reps: 10 },
+      { exercise: 'Push-up', reps: 8 },
+    ],
+  },
+
+  {
+    name: 'Tabata Squat',
+    type: 'tabata',
+    timeCapMinutes: 10,
+    rounds: 16,
+    workSeconds: 20,
+    restSeconds: 10,
+    intervalCount: 16,
+    isNamed: false,
+    dominantPattern: 'squat',
+    description:
+      'Eight rounds of air squats, then eight of jump squats, 20 seconds on and 10 off. The second half is where the first half is decided.',
+    movements: [
+      { exercise: 'Air squat', reps: 1 },
+      { exercise: 'Jump squat', reps: 1 },
+    ],
+  },
+  {
+    name: 'Legs Every Twenty',
+    type: 'tabata',
+    timeCapMinutes: 14,
+    rounds: 24,
+    workSeconds: 20,
+    restSeconds: 10,
+    intervalCount: 24,
+    isNamed: false,
+    dominantPattern: 'squat',
+    description:
+      'Eight rounds each of reverse lunges, jump squats and high knees, 20 seconds on and 10 off. Land the jumps quietly for as long as you can.',
+    movements: [
+      { exercise: 'Reverse lunge', reps: 1 },
+      { exercise: 'Jump squat', reps: 1 },
+      { exercise: 'High knees', reps: 1 },
+    ],
+  },
+
+  // Four cells the grid above filled only for an equipped athlete: their sole
+  // entries are led by a rope, a box, a kettlebell and a pair of dumbbells.
+  // DN-82 drops a WOD whose dominant movement the athlete cannot perform, so
+  // for the day-one athlete -- a bar and nothing else, which is
+  // `DEFAULT_EQUIPMENT` -- those cells were still empty and their slots still
+  // relaxed. These four are led from the floor, so the grid is complete for
+  // everybody rather than for whoever bought the most kit.
+
+  {
+    name: 'Burpee Clock',
+    type: 'emom',
+    timeCapMinutes: 10,
+    rounds: 10,
+    workSeconds: 60,
+    restSeconds: 0,
+    intervalCount: 10,
+    isNamed: false,
+    dominantPattern: 'cardio',
+    description:
+      'Every minute on the minute for ten: 8 burpees, then 10 air squats. No equipment, nowhere to hide.',
+    movements: [
+      { exercise: 'Burpee', reps: 8 },
+      { exercise: 'Air squat', reps: 10 },
+    ],
+  },
+  {
+    name: 'Midline Minute',
+    type: 'emom',
+    timeCapMinutes: 10,
+    rounds: 10,
+    workSeconds: 60,
+    restSeconds: 0,
+    intervalCount: 10,
+    isNamed: false,
+    dominantPattern: 'core',
+    description:
+      'Every minute on the minute for ten: 12 sit-ups, then 8 tuck-ups. Lie back down in the rest; sitting up to wait is its own workout.',
+    movements: [
+      { exercise: 'Sit-up', reps: 12 },
+      { exercise: 'Tuck-up', reps: 8 },
+    ],
+  },
+  {
+    name: 'Bridge and Back',
+    type: 'for_time',
+    timeCapMinutes: 12,
+    rounds: 4,
+    isNamed: false,
+    dominantPattern: 'hinge',
+    description:
+      'Four rounds: 20 glute bridges, 15 supermans, 20 mountain climbers. The whole posterior chain, none of the equipment.',
+    movements: [
+      { exercise: 'Glute bridge', reps: 20 },
+      { exercise: 'Superman', reps: 15 },
+      { exercise: 'Mountain climber', reps: 20 },
+    ],
+  },
+  {
+    name: 'Air Time',
+    type: 'amrap',
+    timeCapMinutes: 14,
+    rounds: null,
+    isNamed: false,
+    dominantPattern: 'squat',
+    description:
+      'As many rounds as possible in 14 minutes: 15 reverse lunges, 10 jump squats, 20 mountain climbers. The lunges are the recovery, which tells you about the jump squats.',
+    movements: [
+      { exercise: 'Reverse lunge', reps: 15 },
+      { exercise: 'Jump squat', reps: 10 },
+      { exercise: 'Mountain climber', reps: 20 },
+    ],
+  },
+
+  // Six cells that held exactly one WOD before this batch, none of them cells
+  // DN-23 set out to fill. A cell with one entry is a slot that hands over
+  // the same workout every time it comes round, and `pickWod`'s pattern
+  // cooldown has nothing to choose between -- which is the same complaint as
+  // an empty cell, one step quieter.
+
+  {
+    name: 'Ten Rounds Down',
+    type: 'for_time',
+    timeCapMinutes: 15,
+    rounds: 5,
+    isNamed: false,
+    dominantPattern: 'cardio',
+    description:
+      'Five rounds: 10 burpees, 20 high knees, 10 sit-ups. The burpees are the whole workout; the rest is bookkeeping.',
+    movements: [
+      { exercise: 'Burpee', reps: 10 },
+      { exercise: 'High knees', reps: 20 },
+      { exercise: 'Sit-up', reps: 10 },
+    ],
+  },
+  {
+    name: 'Tabata Engine',
+    type: 'tabata',
+    timeCapMinutes: 10,
+    rounds: 16,
+    workSeconds: 20,
+    restSeconds: 10,
+    intervalCount: 16,
+    isNamed: false,
+    dominantPattern: 'cardio',
+    description:
+      'Eight rounds of burpees, then eight of mountain climbers, 20 seconds on and 10 off. Pick a pace you can hold for eight and hold it for eight.',
+    movements: [
+      { exercise: 'Burpee', reps: 1 },
+      { exercise: 'Mountain climber', reps: 1 },
+    ],
+  },
+  {
+    name: 'Deadlift Rounds',
+    type: 'amrap',
+    timeCapMinutes: 15,
+    rounds: null,
+    isNamed: false,
+    dominantPattern: 'hinge',
+    description:
+      'As many rounds as possible in 15 minutes: 12 Romanian deadlifts, 10 push-ups, 15 sit-ups. Hinge at the hips and keep the back flat -- if it rounds, the weight is wrong.',
+    movements: [
+      { exercise: 'Romanian deadlift', reps: 12 },
+      { exercise: 'Push-up', reps: 10 },
+      { exercise: 'Sit-up', reps: 15 },
+    ],
+  },
+  {
+    name: 'Four by Pull',
+    type: 'for_time',
+    timeCapMinutes: 18,
+    rounds: 4,
+    isNamed: false,
+    dominantPattern: 'pull',
+    description:
+      'Four rounds: 10 pull-ups, 15 sit-ups, 20 air squats. Come off the bar with one left in the tank in round one.',
+    movements: [
+      { exercise: 'Pull-up', reps: 10 },
+      { exercise: 'Sit-up', reps: 15 },
+      { exercise: 'Air squat', reps: 20 },
+    ],
+  },
+  {
+    name: 'Row Minute',
+    type: 'emom',
+    timeCapMinutes: 12,
+    rounds: 12,
+    workSeconds: 60,
+    restSeconds: 0,
+    intervalCount: 12,
+    isNamed: false,
+    dominantPattern: 'pull',
+    description:
+      'Every minute on the minute for twelve: 10 dumbbell rows, then 8 sit-ups. Ten rows is five a side.',
+    movements: [
+      { exercise: 'Dumbbell row', reps: 10 },
+      { exercise: 'Sit-up', reps: 8 },
+    ],
+  },
+  {
+    name: 'Pike Minute',
+    type: 'emom',
+    timeCapMinutes: 12,
+    rounds: 12,
+    workSeconds: 60,
+    restSeconds: 0,
+    intervalCount: 12,
+    isNamed: false,
+    dominantPattern: 'push',
+    description:
+      'Every minute on the minute for twelve: 6 pike push-ups, then 10 air squats. Six is few enough to do them properly, which is the point of six.',
+    movements: [
+      { exercise: 'Pike push-up', reps: 6 },
+      { exercise: 'Air squat', reps: 10 },
+    ],
+  },
 ];
