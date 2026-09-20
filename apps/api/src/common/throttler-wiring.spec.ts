@@ -25,6 +25,7 @@ describe('ThrottlerGuard wiring', () => {
       .useValue({
         $connect: jest.fn(),
         $disconnect: jest.fn(),
+        $queryRaw: jest.fn().mockResolvedValue([{ '?column?': 1 }]),
         exercise: { findMany: jest.fn().mockResolvedValue([]) },
       })
       .overrideProvider(UserProvisioningService)
@@ -66,7 +67,10 @@ describe('ThrottlerGuard wiring', () => {
     await get('/exercises', '203.0.113.21').expect(200);
   });
 
-  it("leaves Render's health check unthrottled", async () => {
+  it('leaves the public front door unthrottled', async () => {
+    // Not the health check any more -- that moved to /health in DN-76, where
+    // `health-wiring.spec` proves the same exemption. This route keeps it
+    // because anything pointed at the bare host still lands here.
     const ip = '203.0.113.30';
     for (let i = 0; i < 45; i++) {
       await request(app.getHttpServer())

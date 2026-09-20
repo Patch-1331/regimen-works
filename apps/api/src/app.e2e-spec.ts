@@ -185,8 +185,21 @@ describe('auth', () => {
       .expect(200);
   });
 
-  it('leaves the health check public for Render', async () => {
+  it('leaves the front door public', async () => {
     await http().get('/').expect(200);
+  });
+
+  it('leaves the health check public for Render, and reaches the database', async () => {
+    // Public because the probe cannot send an auth header; a real round-trip
+    // because a check that only proves the process is listening reports a
+    // service with an unreachable database as healthy (DN-76).
+    const health = await http().get('/health').expect(200);
+
+    expect(health.body).toEqual({
+      status: 'ok',
+      database: 'up',
+      consecutiveFailures: 0,
+    });
   });
 
   it('provisions the athlete on their first authenticated request', async () => {

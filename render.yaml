@@ -144,7 +144,17 @@ projects:
             # Not dist/main: prisma/seed.ts sits inside the compile scope, so nest
             # build emits to dist/src/ rather than flattening to dist/.
             startCommand: node apps/api/dist/src/main
-            healthCheckPath: /
+            # /health, not /: `GET /` returns a constant string, so it proved the Node
+            # process was listening and nothing more -- the API could be up with Postgres
+            # unreachable, every real route 500ing, and this probe still green (DN-76).
+            # /health does a `SELECT 1` round-trip and answers 503 when it fails.
+            # It does NOT answer 503 on the first failure. Render restarts an instance
+            # whose health check goes red, so a probe failing on one bad round-trip lets a
+            # transient database hiccup restart a working service; the route reports
+            # "degraded" with a 200 and only goes red after three consecutive failures
+            # (FAILURES_BEFORE_DOWN in apps/api/src/health/health.logic.ts). Tune there,
+            # not here -- this path carries no threshold of its own.
+            healthCheckPath: /health
             # Custom domain. Render issues and renews the certificate itself, so the
             # Cloudflare record for this host must stay DNS-only (grey cloud) until the
             # certificate is issued — proxying first is the usual cause of a cert that
