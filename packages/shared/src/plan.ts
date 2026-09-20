@@ -185,6 +185,17 @@ const planFields = z.object({
    * of training rather than a target — Just WODs is exactly that.
    */
   goal: z.string().nullable(),
+  /**
+   * Why the week is laid out the way it is, in the author's own words — "Two
+   * heavy pull days, 48 hours apart." (DN-124).
+   *
+   * This is what lets a fixed program's locked week read as design rather
+   * than as a restriction: an athlete told "the spacing is part of the
+   * programming" has been given a rule, and one told why the gap is there has
+   * been given a reason. Null where the program has nothing particular to
+   * say, which is most of them.
+   */
+  scheduleNote: z.string().nullable(),
   scheduleMode,
   minDaysPerWeek: z.number().int().min(1).max(7).nullable(),
   maxDaysPerWeek: z.number().int().min(1).max(7).nullable(),

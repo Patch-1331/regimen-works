@@ -72,6 +72,7 @@ type ProgramSeed = {
   name: string;
   summary: string;
   goal: string | null;
+  scheduleNote: string | null;
   scheduleMode: ScheduleMode;
   minDaysPerWeek: number | null;
   maxDaysPerWeek: number | null;
@@ -139,6 +140,12 @@ export const PULL_UP_BUILDER: ProgramSeed = {
   // does not score anybody, and a goal that reads as a verdict on today would
   // be scoring them in the picker before they have trained once.
   goal: 'More pull-ups than you started the six weeks with.',
+  // The reason the week is locked, said before it is locked (DN-124). Written
+  // as the program's design rather than as a rule the athlete is under: the
+  // gap is a training decision, and an athlete who knows why Wednesday is off
+  // has been let in on the programming rather than fenced out of it.
+  scheduleNote:
+    'Two heavy pull days, 48 hours apart. The gap is what makes the second one heavy.',
   scheduleMode: 'fixed',
   // Both null and `defaultDays` empty: the migration's CHECK holds fixed and
   // flexible apart, and the slot layout above already answers which days.
@@ -314,6 +321,9 @@ export const FOUNDATIONS: ProgramSeed = {
   // No single nameable thing to finish with -- this is a way of training, and
   // claiming a target it does not deliver would be worse than claiming none.
   goal: null,
+  // Nothing to explain: this program's whole claim is that it fits the week
+  // the athlete already has, so the week's shape is theirs and not its.
+  scheduleNote: null,
   scheduleMode: 'flexible',
   minDaysPerWeek: 3,
   maxDaysPerWeek: 5,

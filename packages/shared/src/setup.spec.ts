@@ -23,6 +23,7 @@ function program(overrides: Record<string, unknown> = {}) {
     name: "Pull-Up Builder",
     summary: "Six weeks to your first unassisted chin-up.",
     goal: "your first unassisted chin-up",
+    scheduleNote: null,
     scheduleMode: "flexible",
     minDaysPerWeek: 3,
     maxDaysPerWeek: 5,

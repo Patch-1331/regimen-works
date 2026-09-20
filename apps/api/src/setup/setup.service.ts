@@ -44,6 +44,7 @@ function toSetupProgram(plan: PlanForPicker): SetupProgram {
     name: plan.name,
     summary: plan.summary,
     goal: plan.goal,
+    scheduleNote: plan.scheduleNote,
     // A plain string column, narrowed at the read site the way `unit` is --
     // the CHECK in DN-9's migration is what keeps it to the two values.
     scheduleMode: plan.scheduleMode as SetupProgram['scheduleMode'],

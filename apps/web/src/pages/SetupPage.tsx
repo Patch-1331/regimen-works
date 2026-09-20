@@ -6,11 +6,12 @@ import { api } from "../lib/api";
 import {
   dayCountWarning,
   formatStartDate,
+  listDays,
   startDateChoices,
   weekdayOf,
   weeksChoice,
 } from "../lib/setup";
-import { WEEKDAYS, localIsoDate, weekdayName } from "../lib/weekdays";
+import { WEEKDAYS, localIsoDate } from "../lib/weekdays";
 
 /**
  * The first-run wizard (DN-15): three questions, then training.
@@ -394,8 +395,9 @@ function CadenceStep({
       <Title>{isFixed ? "Your training week" : "Which days do you train?"}</Title>
       {isFixed ? (
         <Lede>
-          {program.name} sets its own days. The spacing is part of the
-          programming, so it isn't yours to move while the program runs.
+          {program.name} trains {listDays(program.fixedDays)} — the same days
+          every week. They're part of the programming rather than a starting
+          point, so they stay put while it runs.
         </Lede>
       ) : (
         <Lede>Tap the days you can train. You can change these later.</Lede>
@@ -442,6 +444,37 @@ function CadenceStep({
           Set by {program.name}
         </p>
       )}
+
+      {/* The author's own reason for the layout (DN-124). Shown here, where
+          the locked picker first appears, because a disabled control with no
+          reason beside it reads as something taken away — and the reason is
+          the difference between a rule and a piece of programming. Most
+          programs have nothing to say and show nothing. */}
+      {program.scheduleNote && (
+        <p
+          className="mt-3 p-3 text-sm text-[var(--ink-soft)]"
+          style={{
+            background: "var(--panel)",
+            borderLeft: "2px solid var(--glow)",
+          }}
+        >
+          {program.scheduleNote}
+        </p>
+      )}
+
+      {/* What picking fewer days than the program can run actually costs
+          (DN-128). Only below the maximum, and only once the count is one the
+          program will accept -- two messages about the same picker, one of
+          them a warning, is a screen arguing with itself. */}
+      {!isFixed &&
+        warning === null &&
+        program.maxDaysPerWeek !== null &&
+        days.length < program.maxDaysPerWeek && (
+          <p className="mt-3 text-sm text-[var(--ink-soft)]">
+            At {days.length} days you get {program.name}'s main sessions — it
+            gives its lighter days away first.
+          </p>
+        )}
 
       {warning && (
         <p className="mt-3 text-sm text-[var(--danger)]" role="status">
@@ -630,16 +663,15 @@ function ReadyStep({
         style={{ background: "var(--panel)", border: "1px solid var(--border)" }}
       >
         <Readout label="Program" value={program.name} />
-        <Readout
-          label="Days"
-          value={days.map((d) => weekdayName(d)).join(", ")}
-        />
+        <Readout label="Days" value={listDays(days)} />
         <Readout
           label="Length"
           value={weeks === null ? "Open-ended" : `${weeks} weeks`}
         />
         <Readout label="Starts" value={formatStartDate(startDate)} />
       </dl>
+
+      {program.scheduleMode === "fixed" && <WhileItRuns program={program} />}
 
       {error && (
         <p className="mt-3 text-sm text-[var(--danger)]" role="alert">
@@ -652,6 +684,47 @@ function ReadyStep({
       </PrimaryButton>
       <BackButton onClick={onBack} />
     </div>
+  );
+}
+
+/**
+ * The two things a fixed program takes over, said before the athlete agrees
+ * to it rather than when they bite (DN-124).
+ *
+ * Both are real losses — the day picker stops working and the rest-day makeup
+ * offer never appears — and both are currently only discoverable by walking
+ * into them. The last screen before the commit is where they belong: on the
+ * cadence step the athlete is still choosing, and a warning beside a choice
+ * they have not made yet reads as a reason not to make it.
+ *
+ * Written as what the program does, never as what the athlete may not do. The
+ * distinction is the whole issue: "your days are locked" is a restriction,
+ * and "it trains these four days and hands yours back at the end" is the same
+ * fact told by someone who thinks the programming is worth having.
+ */
+function WhileItRuns({ program }: { program: SetupProgram }) {
+  return (
+    <section
+      className="mt-4 p-4"
+      style={{ background: "var(--panel)", border: "1px solid var(--border)" }}
+    >
+      <h2 className="text-xs uppercase tracking-[0.1em] text-[var(--ink-faint)]">
+        While {program.name} runs
+      </h2>
+      {program.scheduleNote && (
+        <p className="mt-2 text-sm text-[var(--ink)]">{program.scheduleNote}</p>
+      )}
+      <ul className="mt-2 flex flex-col gap-2 text-sm text-[var(--ink-soft)]">
+        <li>
+          It trains {listDays(program.fixedDays)}. Your own training days sit
+          out the run and come back when it finishes.
+        </li>
+        <li>
+          Rest days stay rest days — nothing will offer to move a missed
+          session onto one. The gaps are as much the program as the sessions.
+        </li>
+      </ul>
+    </section>
   );
 }
 

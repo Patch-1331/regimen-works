@@ -82,6 +82,26 @@ describe('the first programs', () => {
     },
   );
 
+  it('makes every fixed program explain the week it takes over', () => {
+    // A fixed program overrides the athlete's own training days and, since
+    // DN-17, never offers a rest-day makeup. DN-124 says both at enrollment,
+    // and both read as things done *to* the athlete unless the program says
+    // why in its own words. So a fixed program without a note is unshippable
+    // -- not a style rule, the missing half of a screen that already exists.
+    for (const program of FIRST_PROGRAMS.filter(
+      (p) => p.scheduleMode === 'fixed',
+    )) {
+      expect(program.scheduleNote).toEqual(expect.any(String));
+    }
+  });
+
+  it('leaves the note off a program that takes nothing away', () => {
+    // A flexible program keeps the athlete's days and offers the makeup, so
+    // there is nothing to justify. The wizard shows the panel only when it
+    // has something to put in it.
+    expect(FOUNDATIONS.scheduleNote).toBeNull();
+  });
+
   it('ships both schedule modes, because they are different code paths', () => {
     // Not a taste question. `resolveProgramDay` branches on `scheduleMode`:
     // a flexible program defers to the athlete's training days and a fixed
