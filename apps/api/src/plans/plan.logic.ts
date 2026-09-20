@@ -198,3 +198,96 @@ function daysBetween(from: string, to: string): number {
       MS_PER_DAY,
   );
 }
+
+/** A slot the author has ranked. `priority` is lower-is-kept-first. */
+export type RankedSlot = AuthoredSlot & {
+  /** Which days survive when the run is shorter than the week was authored. */
+  priority: number;
+};
+
+/**
+ * The athlete's training days inside the calendar week `date` falls in, in
+ * calendar order — Monday first, Sunday last.
+ *
+ * Days before `startDate` are left out, because a mid-week start gives a short
+ * first week (`resolveSlotForDate`) and the days before it belong to Just WODs.
+ * That matters here rather than being a detail: an athlete who starts on a
+ * Thursday trains once that week, and it should be the session the author
+ * ranked first, not whichever one the calendar happened to leave.
+ *
+ * Nothing is trimmed off the end for the same reason there is nothing to trim:
+ * a run's length is counted in whole calendar weeks, so only the first week is
+ * ever short.
+ */
+export function trainingWeekdaysInWeek(
+  trainingDays: number[],
+  startDate: string,
+  date: string,
+): number[] {
+  const monday = Date.parse(`${getWeekRange(date).start}T00:00:00Z`);
+  const days: number[] = [];
+  for (let offset = 0; offset < 7; offset++) {
+    const iso = new Date(monday + offset * MS_PER_DAY)
+      .toISOString()
+      .slice(0, 10);
+    if (iso < startDate) continue;
+    const weekday = new Date(`${iso}T00:00:00Z`).getUTCDay();
+    if (trainingDays.includes(weekday)) days.push(weekday);
+  }
+  return days;
+}
+
+/**
+ * Lays a flexible week's authored slots onto the days the athlete actually
+ * trains (DN-128).
+ *
+ * The bug this replaces intersected the two by weekday: a program authored on
+ * Mon/Wed/Fri handed a Tue/Thu/Sat athlete whatever it happened to have
+ * written on Tuesday and Thursday, and nothing on Saturday. For Foundations
+ * that is the conditioning day, the accessory leg day, and no pressing,
+ * pulling or primary squat at all — the program silently stops being the
+ * program. A flexible program does not own the calendar; that is what
+ * flexible *means*, and the weekday it was authored on is a slot key rather
+ * than an appointment.
+ *
+ * Two decisions, kept separate on purpose:
+ *
+ *   - **Which slots survive** is `priority`, lowest first. That is the
+ *     column's whole documented job and the only question it is ever asked.
+ *   - **What order the survivors are played in** is their authored weekday.
+ *     Ranking says which sessions matter, not which comes first in the week,
+ *     and an author who put legs after pressing meant it.
+ *
+ * Ties in `priority` are broken towards the weekday the athlete already
+ * trains. An author who ranked two days equally said nothing about which to
+ * keep, so keeping the one that needs no remap at all is the answer that
+ * disturbs least — it is what leaves Just WODs, seven identical priority-0
+ * slots, resolving every day to its own slot exactly as before.
+ *
+ * Returns weekday → slot. A weekday with no entry is a day the athlete
+ * trains and the program has run out of sessions for; the caller decides what
+ * to do with it, because "this program has nothing more for you this week" is
+ * not the same fact as "you took today off".
+ */
+export function assignSlotsToTrainingDays<S extends RankedSlot>(
+  slots: S[],
+  weekdays: number[],
+): Map<number, S> {
+  const trained = new Set(weekdays);
+  const survivors = [...slots]
+    .sort(
+      (a, b) =>
+        a.priority - b.priority ||
+        Number(!trained.has(a.dayOfWeek)) - Number(!trained.has(b.dayOfWeek)) ||
+        weekOrder(a.dayOfWeek) - weekOrder(b.dayOfWeek),
+    )
+    .slice(0, weekdays.length)
+    .sort((a, b) => weekOrder(a.dayOfWeek) - weekOrder(b.dayOfWeek));
+
+  return new Map(survivors.map((slot, i) => [weekdays[i], slot]));
+}
+
+/** Monday 0 … Sunday 6, because a program week is Monday-first and 0 is Sunday. */
+function weekOrder(dayOfWeek: number): number {
+  return (dayOfWeek + 6) % 7;
+}

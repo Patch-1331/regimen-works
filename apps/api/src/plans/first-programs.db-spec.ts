@@ -292,6 +292,11 @@ describe('the first programs, seeded', () => {
       for (const trainingDays of [
         [1, 3, 5],
         [1, 2, 3, 4, 5],
+        // The athlete whose week does not match the author's at all (DN-128).
+        // Before the remap this one trained conditioning and accessory legs
+        // and nothing else -- the loop passed on the two cases above while the
+        // program quietly stopped being the program for everyone else.
+        [2, 4, 6],
       ]) {
         const week = await walk(FOUNDATIONS.id, {
           weeks: 8,
@@ -315,6 +320,84 @@ describe('the first programs, seeded', () => {
           'squat',
         ]);
       }
+    });
+
+    it('gives its ranked sessions to an athlete whose week it never authored', async () => {
+      // DN-128. Foundations authors Mon/Wed/Fri/Tue/Thu ranked 0..4; this
+      // athlete trains none of the top three weekdays. Intersecting by weekday
+      // handed them Tuesday's conditioning, Thursday's accessory legs and
+      // nothing on Saturday. They now get the three sessions the author ranked
+      // first, played in the order they were written.
+      const week = await walk(FOUNDATIONS.id, {
+        weeks: 8,
+        startDate: MONDAY_START,
+        trainingDays: [2, 4, 6],
+        days: 7,
+      });
+
+      expect(week.map((d) => d.kind)).toEqual([
+        'rest', // Mon -- theirs, not the program's
+        'prescribed', // Tue
+        'rest', // Wed
+        'prescribed', // Thu
+        'rest', // Fri
+        'prescribed', // Sat
+        'rest',
+      ]);
+      expect(
+        week
+          .filter((d) => d.kind === 'prescribed')
+          .map((d) => (d.kind === 'prescribed' ? d.movements[0].line : null)),
+      ).toEqual(['push_horizontal', 'squat', 'push_vertical']);
+    });
+
+    it('trains a seven-day athlete every day, five of them on the program', async () => {
+      // Two days past what the week has sessions for. They said they train
+      // then, so they train: an unconstrained WOD, which is exactly what Just
+      // WODs would have handed them.
+      const week = await walk(FOUNDATIONS.id, {
+        weeks: 8,
+        startDate: MONDAY_START,
+        trainingDays: ALL_WEEKDAYS,
+        days: 7,
+      });
+
+      expect(week.map((d) => d.kind)).toEqual([
+        'prescribed',
+        'generated', // Tue -- the authored conditioning day
+        'prescribed',
+        'prescribed',
+        'prescribed',
+        'generated', // Sat -- beside the program, not part of it
+        'generated', // Sun -- likewise
+      ]);
+      // The program authored nothing on Saturday, and says so rather than
+      // dressing a spare day up as one of its own.
+      expect(week[5].kind === 'generated' && week[5].day.slotKind).toBeNull();
+      expect(week[5].kind === 'generated' && week[5].constraints).toEqual({
+        pattern: null,
+        wodType: null,
+        allowNamed: true,
+        maxTimeCapMinutes: null,
+      });
+    });
+
+    it('spends a short first week on the sessions that matter most', async () => {
+      // Starting on a Thursday leaves two training days in week one. They go
+      // to the two top-ranked sessions rather than to whichever days the
+      // calendar happened to leave standing.
+      const week = await walk(FOUNDATIONS.id, {
+        weeks: 8,
+        startDate: '2026-10-08', // a Thursday
+        trainingDays: [1, 3, 5],
+        days: 2,
+      });
+
+      expect(
+        week.map((d) =>
+          d.kind === 'prescribed' ? d.movements[0].line : d.kind,
+        ),
+      ).toEqual(['rest', 'push_horizontal']);
     });
 
     it('runs for as long as the athlete asked, and then completes', async () => {

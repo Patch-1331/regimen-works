@@ -346,12 +346,11 @@ describe('the first programs', () => {
      * slots sharing a rank are two slots a shortened run has no way to choose
      * between.
      *
-     * Worth being plain about what this spec does and does not prove. The
-     * data is ranked correctly here; nothing in production reads `priority`
-     * yet, so a flexible run at fewer days than authored still keeps whichever
-     * days the athlete trains rather than the highest-ranked ones. That
-     * remainder is its own issue (DN-128) -- and when it lands, this ranking
-     * is what it will read.
+     * This checks the data only. What reads it is
+     * `assignSlotsToTrainingDays` (DN-128), which lays the highest-ranked
+     * sessions onto whichever days the athlete trains; the walk that proves a
+     * Tue/Thu/Sat athlete gets this program rather than its leftovers lives in
+     * `first-programs.db-spec.ts`.
      */
     it('ranks its days totally, with no ties to guess at', () => {
       for (const week of FOUNDATIONS.weeks) {

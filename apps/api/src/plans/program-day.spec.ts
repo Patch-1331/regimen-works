@@ -20,6 +20,7 @@ function slot(overrides: Partial<ProgramSlot> = {}): ProgramSlot {
   return {
     id: `slot_${overrides.dayOfWeek ?? 1}`,
     dayOfWeek: 1,
+    priority: 0,
     kind: 'wod_generated',
     wodId: null,
     pattern: null,
@@ -155,6 +156,98 @@ describe('resolveProgramDay', () => {
       const day = resolveProgramDay(program(), WEEKDAYS, SATURDAY);
 
       expect(day).toMatchObject({ kind: 'rest', day: { slotKind: null } });
+    });
+  });
+
+  /**
+   * Laying a flexible week onto the days the athlete actually trains (DN-128).
+   *
+   * `assignSlotsToTrainingDays` owns the rules and `plan.logic.spec` covers
+   * them; what is checked here is the resolver's half -- which day the remap
+   * is asked about, and what the two day-shaped answers with no session on
+   * them record.
+   */
+  describe('a flexible week on the athlete’s own days', () => {
+    const TUESDAY = '2026-09-15';
+    const THURSDAY = '2026-09-17';
+
+    /** Foundations' shape in miniature: three ranked days, Mon/Wed/Fri. */
+    function ranked(overrides: Partial<ActiveProgram> = {}) {
+      return program({
+        authoredWeeks: [
+          {
+            order: 0,
+            phase: 'core',
+            label: null,
+            slots: [
+              slot({ dayOfWeek: 1, priority: 0, id: 'press' }),
+              slot({ dayOfWeek: 3, priority: 1, id: 'squat' }),
+              slot({ dayOfWeek: 5, priority: 2, id: 'vertical' }),
+            ],
+          },
+        ],
+        ...overrides,
+      });
+    }
+
+    it('gives the top-ranked session to the first day the athlete trains', () => {
+      // Before DN-128 a Tue/Thu/Sat athlete got whatever the author happened
+      // to write on Tuesday, which for Foundations was the conditioning day.
+      const day = resolveProgramDay(ranked(), [2, 4, 6], TUESDAY);
+
+      expect(day).toMatchObject({ day: { planSlotId: 'press' } });
+    });
+
+    it('keeps the authored order across the athlete’s week', () => {
+      const day = resolveProgramDay(ranked(), [2, 4, 6], THURSDAY);
+
+      expect(day).toMatchObject({ day: { planSlotId: 'squat' } });
+    });
+
+    it('records no slot against a day the athlete chose off', () => {
+      // The session this week would have authored here is being trained on
+      // another day now; recording it against a rest day would count it twice.
+      const day = resolveProgramDay(ranked(), [2, 4, 6], MONDAY);
+
+      expect(day).toMatchObject({
+        kind: 'rest',
+        day: { slotKind: null, planSlotId: null },
+      });
+    });
+
+    it('still trains a day the program has run out of sessions for', () => {
+      // They said they train today. An unconstrained WOD is what Just WODs
+      // would have given them, and it beats the app overruling a choice it
+      // asked them to make -- but `slotKind` stays null, because this is a day
+      // beside the program rather than a day of it.
+      const day = resolveProgramDay(ranked(), [1, 2, 3, 4, 5], THURSDAY);
+
+      expect(day).toMatchObject({
+        kind: 'generated',
+        day: { slotKind: null, planSlotId: null },
+        constraints: {
+          pattern: null,
+          wodType: null,
+          allowNamed: true,
+          maxTimeCapMinutes: null,
+        },
+      });
+    });
+
+    it('leaves a fixed program’s ranking entirely alone', () => {
+      // A fixed program's slot layout is the schedule. Remapping it would undo
+      // the one thing it is for: 48 hours between heavy pull days is a
+      // statement about the calendar, and there is nothing to rank.
+      const day = resolveProgramDay(
+        ranked({ scheduleMode: 'fixed' }),
+        [2, 4, 6],
+        TUESDAY,
+      );
+
+      expect(day).toMatchObject({
+        kind: 'rest',
+        day: { slotKind: null, planSlotId: null },
+      });
     });
   });
 
