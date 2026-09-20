@@ -1654,6 +1654,164 @@ describe('SchedulerService makeup days (DN-17)', () => {
       expect(row?.enrollmentId).not.toBeNull();
       expect(row?.planSlotId).not.toBeNull();
     });
+
+    describe('and the rest of the week (DN-123)', () => {
+      const TUESDAY = '2026-09-15';
+      const WEDNESDAY = '2026-09-16';
+      const THURSDAY = '2026-09-17';
+
+      /**
+       * Three ranked sessions on Mon/Wed/Fri, each pinned to its own WOD so
+       * the row can say which one was handed over.
+       */
+      async function rankedWeek() {
+        const wods = {
+          press: await createWod({ name: 'Press day' }),
+          squat: await createWod({ name: 'Squat day' }),
+          vertical: await createWod({ name: 'Vertical day' }),
+        };
+        const plan = await createPlan({
+          weeks: {
+            create: [
+              {
+                order: 0,
+                phase: 'core',
+                slots: {
+                  create: [
+                    {
+                      dayOfWeek: 1,
+                      priority: 0,
+                      kind: 'wod_pinned',
+                      wodId: wods.press.id,
+                    },
+                    {
+                      dayOfWeek: 3,
+                      priority: 1,
+                      kind: 'wod_pinned',
+                      wodId: wods.squat.id,
+                    },
+                    {
+                      dayOfWeek: 5,
+                      priority: 2,
+                      kind: 'wod_pinned',
+                      wodId: wods.vertical.id,
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        });
+        return { plan, wods };
+      }
+
+      async function enrolled() {
+        const user = await athlete([1, 3, 5]);
+        const { plan, wods } = await rankedWeek();
+        await createEnrollment(user.id, {
+          planId: plan.id,
+          startDate: MONDAY,
+          weeks: null,
+        });
+        return { user, plan, wods };
+      }
+
+      it('hands over the session that was missed, not the next one along', async () => {
+        // DN-123 in one case. Monday's press is done, Wednesday went by, and
+        // Thursday is taken as a makeup: what is owed is the squat. DN-17
+        // resolved this against a seven-day week, which handed back whatever
+        // the author happened to write on a Thursday -- for a three-day
+        // athlete, a session their own week never offers at all.
+        const { user, wods } = await enrolled();
+        await createAssignment(user.id, {
+          date: MONDAY,
+          status: 'completed',
+          wodId: wods.press.id,
+        });
+
+        const taken = await programService().trainMakeup(user.id, THURSDAY);
+
+        expect(taken.assignment.wod!.id).toBe(wods.squat.id);
+      });
+
+      it('does not hand back a session the athlete already did', async () => {
+        const { user, wods } = await enrolled();
+        for (const [date, wodId] of [
+          [MONDAY, wods.press.id],
+          [WEDNESDAY, wods.squat.id],
+        ] as const) {
+          await createAssignment(user.id, {
+            date,
+            status: 'completed',
+            wodId,
+          });
+        }
+
+        const taken = await programService().trainMakeup(user.id, THURSDAY);
+
+        expect(taken.assignment.wod!.id).toBe(wods.vertical.id);
+      });
+
+      it('keeps planDayIndex on the calendar while planSlotId names the session', async () => {
+        // The two are different questions and DN-123 makes the difference
+        // visible: Thursday is day 3 of the run whatever it delivers, and the
+        // slot id is what says which authored session that was.
+        const { user, wods } = await enrolled();
+        await createAssignment(user.id, {
+          date: MONDAY,
+          status: 'completed',
+          wodId: wods.press.id,
+        });
+
+        const taken = await programService().trainMakeup(user.id, THURSDAY);
+
+        const row = await testPrisma().dailyAssignment.findUnique({
+          where: { id: taken.assignment.id },
+          include: { planSlot: true },
+        });
+        expect(row).toMatchObject({ planDayIndex: 3 });
+        expect(row?.planSlot?.dayOfWeek).toBe(3);
+      });
+
+      it('lets the rest of the week flow on past the makeup', async () => {
+        // Not a separate mechanism: the makeup took the squat, so Friday --
+        // an ordinary training day, no makeup involved -- reads the week as
+        // it now stands and finds the vertical day still waiting.
+        const { user, wods } = await enrolled();
+        await createAssignment(user.id, {
+          date: MONDAY,
+          status: 'completed',
+          wodId: wods.press.id,
+        });
+        await programService().trainMakeup(user.id, THURSDAY);
+        await testPrisma().dailyAssignment.updateMany({
+          where: { userId: user.id, date: THURSDAY },
+          data: { status: 'completed' },
+        });
+
+        const friday = await programService().getToday(user.id, '2026-09-18');
+
+        expect(friday.isRestDay).toBe(false);
+        expect(friday.assignment?.wod?.id).toBe(wods.vertical.id);
+      });
+
+      it('does not offer a fixed program’s session early', async () => {
+        // Task four of the issue, end to end: a fixed program never makes the
+        // offer, so nothing here can move its week.
+        const user = await athlete([1, 3, 5]);
+        await createWod();
+        const plan = await fixedPlan('rest');
+        await createEnrollment(user.id, {
+          planId: plan.id,
+          startDate: MONDAY,
+          weeks: null,
+        });
+
+        expect(
+          (await programService().getToday(user.id, TUESDAY)).makeup,
+        ).toBeNull();
+      });
+    });
   });
 });
 

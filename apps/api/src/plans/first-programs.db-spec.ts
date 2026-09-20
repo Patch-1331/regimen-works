@@ -8,6 +8,7 @@ import {
   upsertFirstPrograms,
 } from './first-programs';
 import { resolveProgramDay, type ProgramDay } from './program-day';
+import { getWeekRange } from '../scheduler/scheduler.logic';
 
 /**
  * The two programs as rows, and as weeks an athlete actually walks (DN-24).
@@ -37,6 +38,12 @@ function addDays(date: string, days: number): string {
  * being walked is the row shape `getToday` sees -- a slot whose prescription
  * failed to write reads here as a generated day, exactly as it would in
  * production, rather than as data that looks right in TypeScript.
+ *
+ * The athlete trains every day they are given one (DN-123). Since a week's
+ * sessions are laid onto the days actually trained, a walk that reported
+ * nothing completed would be walking an athlete who missed everything, and
+ * each day would be handed the top-ranked session again. `missed` is how a
+ * test says otherwise: those weekdays are offered and left undone.
  */
 async function walk(
   planId: string,
@@ -45,19 +52,48 @@ async function walk(
     startDate,
     trainingDays = ALL_WEEKDAYS,
     days,
+    missed = [],
   }: {
     weeks: number;
     startDate: string;
     trainingDays?: number[];
     days: number;
+    /** Weekdays the athlete is offered a session on and does not do. */
+    missed?: number[];
   },
 ): Promise<ProgramDay[]> {
   const user = await createUser();
   await createEnrollment(user.id, { planId, startDate, weeks });
   const program = await loadActiveProgram(testPrisma(), user.id);
 
-  return Array.from({ length: days }, (_, i) =>
-    resolveProgramDay(program, trainingDays, addDays(startDate, i)),
+  /** Weekday -> the Monday of the week it was completed in. */
+  const completedIn = new Map<number, string>();
+  const run: ProgramDay[] = [];
+
+  for (let i = 0; i < days; i++) {
+    const date = addDays(startDate, i);
+    const monday = getWeekRange(date).start;
+    const completed = [...completedIn]
+      .filter(([, week]) => week === monday)
+      .map(([weekday]) => weekday);
+
+    const day = resolveProgramDay(program, trainingDays, date, completed);
+    run.push(day);
+
+    const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+    if (trained(day) && !missed.includes(weekday)) {
+      completedIn.set(weekday, monday);
+    }
+  }
+  return run;
+}
+
+/** Whether the day handed the athlete something to do. */
+function trained(day: ProgramDay): boolean {
+  return (
+    day.kind === 'pinned' ||
+    day.kind === 'prescribed' ||
+    day.kind === 'generated'
   );
 }
 
@@ -214,6 +250,7 @@ describe('the first programs, seeded', () => {
             await programOf(PULL_UP_BUILDER.id, weeks),
             ALL_WEEKDAYS,
             addDays(MONDAY_START, 7 * weeks),
+            [],
           ).kind,
         ).toBe('completed');
       }
@@ -265,6 +302,32 @@ describe('the first programs, seeded', () => {
       // Their own decision, not the program's: `slotKind` stays null so the
       // rest-day copy does not take credit for a day they chose off.
       expect(week[1].kind === 'rest' && week[1].day.slotKind).toBeNull();
+    });
+
+    it('carries a missed session on to the next day they train (DN-123)', async () => {
+      // Skipping Monday does not cost the athlete Monday's session; it costs
+      // them the last one in the week. The week is a sequence, and a day that
+      // went by untrained never took its place in it.
+      const options = {
+        weeks: 8,
+        startDate: MONDAY_START,
+        trainingDays: [1, 3, 5],
+        days: 7,
+      };
+      const lines = (week: ProgramDay[]) =>
+        week.flatMap((d) =>
+          d.kind === 'prescribed' ? [d.movements[0].line] : [],
+        );
+
+      const kept = lines(await walk(FOUNDATIONS.id, options));
+      const missed = lines(
+        await walk(FOUNDATIONS.id, { ...options, missed: [1] }),
+      );
+
+      expect(kept).toHaveLength(3);
+      // Monday is still offered; Wednesday re-offers it, and the third
+      // session is the one that falls off the end of the week.
+      expect(missed).toEqual([kept[0], kept[0], kept[1]]);
     });
 
     it('gives a five-day athlete all five authored days', async () => {
@@ -404,11 +467,12 @@ describe('the first programs, seeded', () => {
       for (const weeks of [FOUNDATIONS.minWeeks, 8, 16]) {
         const program = await programOf(FOUNDATIONS.id, weeks);
         const lastDay = addDays(MONDAY_START, 7 * weeks - 1);
-        expect(resolveProgramDay(program, ALL_WEEKDAYS, lastDay).kind).not.toBe(
-          'completed',
-        );
         expect(
-          resolveProgramDay(program, ALL_WEEKDAYS, addDays(lastDay, 1)).kind,
+          resolveProgramDay(program, ALL_WEEKDAYS, lastDay, []).kind,
+        ).not.toBe('completed');
+        expect(
+          resolveProgramDay(program, ALL_WEEKDAYS, addDays(lastDay, 1), [])
+            .kind,
         ).toBe('completed');
       }
     });
@@ -421,7 +485,7 @@ describe('the first programs, seeded', () => {
         const startDate = addDays(MONDAY_START, offset);
         const program = await programOf(FOUNDATIONS.id, 8, startDate);
         const run = Array.from({ length: 7 * 8 }, (_, i) =>
-          resolveProgramDay(program, ALL_WEEKDAYS, addDays(startDate, i)),
+          resolveProgramDay(program, ALL_WEEKDAYS, addDays(startDate, i), []),
         );
         const last = run.findLast((d) => d.kind === 'prescribed');
         expect(last?.kind === 'prescribed' && last.day.week).toBe(8);

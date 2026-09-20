@@ -2,7 +2,7 @@ import {
   assignSlotsToTrainingDays,
   expandPlanWeeks,
   resolveSlotForDate,
-  trainingWeekdaysInWeek,
+  sessionDaysInWeek,
 } from './plan.logic';
 
 /**
@@ -137,6 +137,17 @@ export function resolveProgramDay(
   program: ActiveProgram | null,
   trainingDays: number[],
   date: string,
+  /**
+   * Weekdays of `date`'s calendar week the athlete has already completed a
+   * session on (DN-123). Read only by a flexible program, and only to work
+   * out which days this week still carry one of its sessions.
+   *
+   * Required rather than defaulted. An empty array is a real answer -- "this
+   * week is untrained so far" -- and defaulting to it would let a caller that
+   * forgot the query silently tell every athlete they had missed the first
+   * half of their week.
+   */
+  completedWeekdays: number[],
 ): ProgramDay {
   if (!program) return { kind: 'fallback', reason: 'no-enrollment' };
 
@@ -188,7 +199,13 @@ export function resolveProgramDay(
         resolution.status === 'scheduled'
         ? resolution.slot
         : 'off'
-      : flexibleSlot(program, week.slots, trainingDays, date);
+      : flexibleSlot(
+          program,
+          week.slots,
+          trainingDays,
+          completedWeekdays,
+          date,
+        );
 
   if (slot === 'off') {
     return {
@@ -269,27 +286,32 @@ export function resolveProgramDay(
 type NoSlot = 'off' | 'spare';
 
 /**
- * A flexible program's week, laid onto the days the athlete actually trains
- * (DN-128). The weekday a slot was authored on is a slot key, not an
- * appointment; `assignSlotsToTrainingDays` holds the rules.
+ * A flexible program's week, laid onto the days that carry its sessions
+ * (DN-128, re-flowed by DN-123). The weekday a slot was authored on is a slot
+ * key, not an appointment; `sessionDaysInWeek` decides which days are in play
+ * and `assignSlotsToTrainingDays` deals the sessions onto them.
+ *
+ * Today being one of those days is what replaces the old "is today a training
+ * day" test. It is the same question asked once instead of twice, and it is
+ * the more truthful one: a day the athlete trained as a makeup is not a rest
+ * day afterwards just because it is missing from their standing schedule.
  */
 function flexibleSlot(
   program: ActiveProgram,
   slots: ProgramSlot[],
   trainingDays: number[],
+  completedWeekdays: number[],
   date: string,
 ): ProgramSlot | NoSlot {
-  if (!trainsOn(trainingDays, date)) return 'off';
-
-  const assigned = assignSlotsToTrainingDays(
-    slots,
-    trainingWeekdaysInWeek(trainingDays, program.startDate, date),
+  const days = sessionDaysInWeek(
+    trainingDays,
+    completedWeekdays,
+    program.startDate,
+    date,
   );
-  return assigned.get(weekdayOf(date)) ?? 'spare';
-}
+  if (!days.includes(weekdayOf(date))) return 'off';
 
-function trainsOn(trainingDays: number[], date: string): boolean {
-  return trainingDays.includes(weekdayOf(date));
+  return assignSlotsToTrainingDays(slots, days).get(weekdayOf(date)) ?? 'spare';
 }
 
 function weekdayOf(date: string): number {

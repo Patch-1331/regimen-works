@@ -50,13 +50,24 @@ export function resolveMakeup({
 }
 
 /**
- * Every weekday, for resolving what the program would have made of today if
- * the athlete trained on it.
+ * The athlete's training days, with `date`'s own weekday added.
  *
- * A flexible program rests only because `resolveProgramDay` finds today
- * outside the athlete's training days; handing it a full week makes it resolve
- * the authored slot instead, which is exactly the session a makeup should
- * deliver. A fixed program never reaches here -- it opts out above -- so this
- * cannot override a schedule that meant what it said.
+ * What a makeup means, said exactly (DN-123). The athlete is training on a
+ * day they had off, so for this week that day is one of theirs, and the
+ * program's week is dealt out accordingly: the day takes its place in the
+ * sequence and the sessions either side of it flow around it.
+ *
+ * This replaces DN-17's `EVERY_WEEKDAY`, which passed a full seven-day week
+ * to get the same effect. That was right while a slot belonged to the weekday
+ * it was authored on; since DN-128 it resolves *a seven-day athlete's* week
+ * instead, which handed a three-day athlete sessions their own week drops.
+ *
+ * A fixed program never reaches here -- it opts out of the offer entirely --
+ * so this cannot override a schedule that meant what it said.
  */
-export const EVERY_WEEKDAY = [0, 1, 2, 3, 4, 5, 6];
+export function alsoTraining(trainingDays: number[], date: string): number[] {
+  const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+  return trainingDays.includes(weekday)
+    ? trainingDays
+    : [...trainingDays, weekday];
+}

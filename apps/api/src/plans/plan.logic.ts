@@ -206,8 +206,30 @@ export type RankedSlot = AuthoredSlot & {
 };
 
 /**
- * The athlete's training days inside the calendar week `date` falls in, in
- * calendar order — Monday first, Sunday last.
+ * The days of `date`'s calendar week that carry one of the week's sessions,
+ * in calendar order — Monday first, Sunday last.
+ *
+ * ## The rule (DN-123)
+ *
+ * **A day carries a session if the athlete completed it, or if it is
+ * today-or-later and one of their training days.**
+ *
+ * Two halves, and each is doing work:
+ *
+ *   - *completed* keeps a day the athlete actually trained, wherever it
+ *     falls. That is how a makeup takes a place in the week rather than
+ *     happening beside it.
+ *   - *today-or-later* drops a training day that has already gone by
+ *     untrained. Without it a missed Wednesday would still hold its place in
+ *     the sequence, and the session behind it could never be reached again --
+ *     which is DN-123's original complaint, that the athlete can meet the
+ *     same slot twice and never see the one they skipped.
+ *
+ * "Completed" here means what it means to `resolveMakeup`: a finished
+ * session, not a day the app merely generated. One definition, used by the
+ * thing that decides whether to offer a makeup and by the thing that decides
+ * what the makeup hands over, so the two cannot disagree about whether the
+ * week is short.
  *
  * Days before `startDate` are left out, because a mid-week start gives a short
  * first week (`resolveSlotForDate`) and the days before it belong to Just WODs.
@@ -219,8 +241,9 @@ export type RankedSlot = AuthoredSlot & {
  * a run's length is counted in whole calendar weeks, so only the first week is
  * ever short.
  */
-export function trainingWeekdaysInWeek(
+export function sessionDaysInWeek(
   trainingDays: number[],
+  completedWeekdays: number[],
   startDate: string,
   date: string,
 ): number[] {
@@ -232,7 +255,12 @@ export function trainingWeekdaysInWeek(
       .slice(0, 10);
     if (iso < startDate) continue;
     const weekday = new Date(`${iso}T00:00:00Z`).getUTCDay();
-    if (trainingDays.includes(weekday)) days.push(weekday);
+    if (
+      completedWeekdays.includes(weekday) ||
+      (iso >= date && trainingDays.includes(weekday))
+    ) {
+      days.push(weekday);
+    }
   }
   return days;
 }

@@ -19,7 +19,7 @@ import {
 import { EnrollmentsService } from '../enrollments/enrollments.service';
 import { loadActiveProgram } from '../plans/active-program';
 import { resolveScheduleLock } from '../plans/schedule-lock';
-import { EVERY_WEEKDAY, resolveMakeup } from './makeup';
+import { alsoTraining, resolveMakeup } from './makeup';
 import {
   narrowToSlot,
   resolveProgramDay,
@@ -109,19 +109,20 @@ export class SchedulerService {
    * `if (enrolled) ... else ...` spreading through the scheduler.
    */
   async getToday(userId: string, today: string) {
-    const [rule, existing, program] = await Promise.all([
+    const [rule, existing, program, completed] = await Promise.all([
       this.prisma.scheduleRule.findUnique({ where: { userId } }),
       this.prisma.dailyAssignment.findUnique({
         where: { userId_date: { userId, date: today } },
         include: { wod: { include: wodInclude }, session: true },
       }),
       loadActiveProgram(this.prisma, userId),
+      this.completedWeekdays(userId, today),
     ]);
 
     const warmupCooldownEnabled = rule?.warmupCooldownEnabled ?? false;
     const trainingDays = rule?.trainingDays ?? [...DEFAULT_TRAINING_DAYS];
     const day = await this.settleProgramDay(
-      resolveProgramDay(program, trainingDays, today),
+      resolveProgramDay(program, trainingDays, today, completed),
       userId,
     );
     const plan = planBlock(day);
@@ -164,12 +165,12 @@ export class SchedulerService {
         assignment,
         // A day marked as rest can still be trained: the athlete changed
         // their mind, and the week is the unit of completion (DN-17).
-        makeup: await this.makeupFor(
-          userId,
-          today,
+        makeup: this.makeupFor(
           existing.status === 'skipped',
           program,
+          today,
           trainingDays,
+          completed,
         ),
         warmupCooldownEnabled,
         ...(await this.getChecklistsFor(
@@ -204,13 +205,7 @@ export class SchedulerService {
         completedProgram: await this.enrollments.cardFor(userId),
         isRestDay: true,
         assignment: null,
-        makeup: await this.makeupFor(
-          userId,
-          today,
-          true,
-          program,
-          trainingDays,
-        ),
+        makeup: this.makeupFor(true, program, today, trainingDays, completed),
         warmupCooldownEnabled,
         warmup: null,
         cooldown: null,
@@ -358,32 +353,53 @@ export class SchedulerService {
    * the athlete's work, and counting it would quietly make every week look
    * finished before it was.
    */
-  private async makeupFor(
-    userId: string,
-    today: string,
+  private makeupFor(
     resting: boolean,
     program: ActiveProgram | null,
+    today: string,
     trainingDays: number[],
+    completedWeekdays: number[],
   ) {
-    // The offer is refused for two reasons that cost nothing to check, so
-    // neither the week query nor the lock resolution runs on a training day.
-    if (!resting) return null;
+    return resolveMakeup({
+      resting,
+      scheduleFixed: resolveScheduleLock(program, today) !== null,
+      trainingDays,
+      // The same completions `resolveProgramDay` lays the week's sessions
+      // onto (DN-123). One query, one definition: whether the week is short
+      // and what the makeup then hands over cannot disagree.
+      completedThisWeek: completedWeekdays.length,
+    });
+  }
 
+  /**
+   * Weekdays of this Monday-to-Sunday week the athlete has finished a session
+   * on (DN-123).
+   *
+   * Scoping to `getWeekRange` is what makes "nothing rolls over" true rather
+   * than merely intended: an unfinished week simply stops being asked about
+   * on Monday. Carrying debt forward would turn the app into something the
+   * athlete is behind on, which fights the decision that every completed
+   * session is what gets celebrated.
+   *
+   * Only `completed` counts. A scheduled day is the app's expectation, not
+   * the athlete's work, and counting it would quietly make every week look
+   * finished before it was -- and, since DN-123, would hold a place in the
+   * week for a session that was never done.
+   */
+  private async completedWeekdays(
+    userId: string,
+    today: string,
+  ): Promise<number[]> {
     const week = getWeekRange(today);
-    const completedThisWeek = await this.prisma.dailyAssignment.count({
+    const days = await this.prisma.dailyAssignment.findMany({
       where: {
         userId,
         status: 'completed',
         date: { gte: week.start, lte: week.end },
       },
+      select: { date: true },
     });
-
-    return resolveMakeup({
-      resting,
-      scheduleFixed: resolveScheduleLock(program, today) !== null,
-      trainingDays,
-      completedThisWeek,
-    });
+    return days.map(({ date }) => new Date(`${date}T00:00:00Z`).getUTCDay());
   }
 
   /**
@@ -516,29 +532,35 @@ export class SchedulerService {
    * chose off: only the second one has a session waiting behind it.
    */
   async trainMakeup(userId: string, today: string) {
-    const [rule, existing, program] = await Promise.all([
+    const [rule, existing, program, completed] = await Promise.all([
       this.prisma.scheduleRule.findUnique({ where: { userId } }),
       this.prisma.dailyAssignment.findUnique({
         where: { userId_date: { userId, date: today } },
       }),
       loadActiveProgram(this.prisma, userId),
+      this.completedWeekdays(userId, today),
     ]);
 
     const trainingDays = rule?.trainingDays ?? [...DEFAULT_TRAINING_DAYS];
     const scheduled = existing !== null && existing.status !== 'skipped';
-    const offer = await this.makeupFor(
-      userId,
-      today,
-      !scheduled && this.restsToday(program, trainingDays, today),
+    const offer = this.makeupFor(
+      !scheduled && this.restsToday(program, trainingDays, today, completed),
       program,
+      today,
       trainingDays,
+      completed,
     );
     if (!offer) {
       throw new ConflictException('There is no makeup session to take today.');
     }
 
     const day = await this.settleProgramDay(
-      resolveProgramDay(program, EVERY_WEEKDAY, today),
+      resolveProgramDay(
+        program,
+        alsoTraining(trainingDays, today),
+        today,
+        completed,
+      ),
       userId,
     );
     // The makeup hands over whatever the program authored for this weekday,
@@ -622,8 +644,14 @@ export class SchedulerService {
     program: ActiveProgram | null,
     trainingDays: number[],
     today: string,
+    completedWeekdays: number[],
   ): boolean {
-    const day = resolveProgramDay(program, trainingDays, today);
+    const day = resolveProgramDay(
+      program,
+      trainingDays,
+      today,
+      completedWeekdays,
+    );
     return day.kind === 'fallback'
       ? isRestDay(today, trainingDays)
       : day.kind === 'rest';
@@ -635,9 +663,10 @@ export class SchedulerService {
       update: { status: 'skipped' },
       create: { userId, date: today, status: 'skipped' },
     });
-    const [rule, program] = await Promise.all([
+    const [rule, program, completed] = await Promise.all([
       this.prisma.scheduleRule.findUnique({ where: { userId } }),
       loadActiveProgram(this.prisma, userId),
+      this.completedWeekdays(userId, today),
     ]);
     // Resolved rather than hardcoded null: skipping a day does not leave the
     // program, so the strip that says which week the athlete is in is still
@@ -648,6 +677,7 @@ export class SchedulerService {
         program,
         rule?.trainingDays ?? [...DEFAULT_TRAINING_DAYS],
         today,
+        completed,
       ),
     );
     return {
@@ -658,12 +688,12 @@ export class SchedulerService {
       assignment: null,
       // Marking the day as rest does not close it: the week is still the unit
       // of completion, so the offer to train anyway stands (DN-17).
-      makeup: await this.makeupFor(
-        userId,
-        today,
+      makeup: this.makeupFor(
         true,
         program,
+        today,
         rule?.trainingDays ?? [...DEFAULT_TRAINING_DAYS],
+        completed,
       ),
       warmupCooldownEnabled: rule?.warmupCooldownEnabled ?? false,
       warmup: null,

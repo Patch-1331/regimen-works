@@ -3,7 +3,7 @@ import {
   expandPlanWeeks,
   minimumViableWeeks,
   resolveSlotForDate,
-  trainingWeekdaysInWeek,
+  sessionDaysInWeek,
 } from './plan.logic';
 
 /**
@@ -319,26 +319,26 @@ const THURSDAY = 4;
 const FRIDAY = 5;
 const SATURDAY = 6;
 
-describe('trainingWeekdaysInWeek', () => {
-  // 2026-09-14 is a Monday, so 09-17 is the Thursday of that same week.
+describe('sessionDaysInWeek', () => {
+  // 2026-09-14 is a Monday, so 09-16 is the Wednesday of that same week and
+  // 09-17 the Thursday.
   const WEEK_START = '2026-09-14';
+  const MON = '2026-09-14';
+  const WED = '2026-09-16';
+  const THU = '2026-09-17';
 
   it('lists the athlete’s days in calendar order, Sunday last', () => {
     // Sunday is 0 and ends the week, so a plain numeric sort would put the
     // last day of the week first and hand every session one day early.
     expect(
-      trainingWeekdaysInWeek(
-        [SUNDAY, WEDNESDAY, MONDAY],
-        WEEK_START,
-        '2026-09-16',
-      ),
+      sessionDaysInWeek([SUNDAY, WEDNESDAY, MONDAY], [], WEEK_START, MON),
     ).toEqual([MONDAY, WEDNESDAY, SUNDAY]);
   });
 
   it('leaves out days the athlete does not train', () => {
-    expect(
-      trainingWeekdaysInWeek([TUESDAY, THURSDAY], WEEK_START, '2026-09-16'),
-    ).toEqual([TUESDAY, THURSDAY]);
+    expect(sessionDaysInWeek([TUESDAY, THURSDAY], [], WEEK_START, MON)).toEqual(
+      [TUESDAY, THURSDAY],
+    );
   });
 
   it('drops the days before the start date, because week one is short', () => {
@@ -346,26 +346,75 @@ describe('trainingWeekdaysInWeek', () => {
     // Counting the Monday and Tuesday that the athlete spent on Just WODs
     // would spend two of the week's sessions on days the program did not own.
     expect(
-      trainingWeekdaysInWeek(
+      sessionDaysInWeek(
         [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY],
+        [],
         '2026-09-17',
-        '2026-09-18',
+        '2026-09-17',
       ),
     ).toEqual([THURSDAY, FRIDAY]);
   });
 
   it('counts every day again once the first week is behind them', () => {
     expect(
-      trainingWeekdaysInWeek(
+      sessionDaysInWeek(
         [MONDAY, WEDNESDAY, FRIDAY],
+        [],
         '2026-09-17',
-        '2026-09-23',
+        '2026-09-21',
       ),
     ).toEqual([MONDAY, WEDNESDAY, FRIDAY]);
   });
 
   it('gives nothing back for an athlete who trains no days', () => {
-    expect(trainingWeekdaysInWeek([], WEEK_START, '2026-09-16')).toEqual([]);
+    expect(sessionDaysInWeek([], [], WEEK_START, MON)).toEqual([]);
+  });
+
+  it('drops a training day that has already gone by untrained', () => {
+    // The half of the rule that makes a missed session reachable again
+    // (DN-123). Monday is behind them and nothing was done on it, so it holds
+    // no place in the week -- and the session that would have sat there flows
+    // onto Wednesday instead of being lost.
+    expect(
+      sessionDaysInWeek([MONDAY, WEDNESDAY, FRIDAY], [], WEEK_START, WED),
+    ).toEqual([WEDNESDAY, FRIDAY]);
+  });
+
+  it('keeps a day the athlete actually trained', () => {
+    expect(
+      sessionDaysInWeek([MONDAY, WEDNESDAY, FRIDAY], [MONDAY], WEEK_START, WED),
+    ).toEqual([MONDAY, WEDNESDAY, FRIDAY]);
+  });
+
+  it('keeps a completed day the athlete was never scheduled for', () => {
+    // A makeup: they trained Thursday although Thursday is not theirs. It
+    // takes its place in the week rather than happening beside it, which is
+    // what makes the sessions either side of it flow around it.
+    expect(
+      sessionDaysInWeek(
+        [MONDAY, WEDNESDAY, FRIDAY],
+        [MONDAY, THURSDAY],
+        WEEK_START,
+        '2026-09-18',
+      ),
+    ).toEqual([MONDAY, THURSDAY, FRIDAY]);
+  });
+
+  it('keeps today whether or not anything has been done on it yet', () => {
+    // Today is not "already gone by". An athlete opening the app on Wednesday
+    // morning has not missed Wednesday.
+    expect(
+      sessionDaysInWeek([MONDAY, WEDNESDAY, FRIDAY], [MONDAY], WEEK_START, WED),
+    ).toContain(WEDNESDAY);
+  });
+
+  it('does not let a completed day outside this week in', () => {
+    // `completedWeekdays` is scoped to this calendar week by its caller, but
+    // the start-date guard is the one that has to hold here: a Thursday
+    // completed before the program began is not a day of the program.
+    expect(sessionDaysInWeek([FRIDAY], [THURSDAY], '2026-09-18', THU)).toEqual([
+      FRIDAY,
+    ]);
   });
 });
 

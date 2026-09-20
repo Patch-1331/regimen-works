@@ -76,7 +76,7 @@ describe('resolveProgramDay', () => {
   it('falls back when the athlete has no active enrollment', () => {
     // Not a broken state: an athlete whose program has just completed has none
     // until provisioning re-enrolls them, and their Today still has to render.
-    expect(resolveProgramDay(null, WEEKDAYS, MONDAY)).toEqual({
+    expect(resolveProgramDay(null, WEEKDAYS, MONDAY, [])).toEqual({
       kind: 'fallback',
       reason: 'no-enrollment',
     });
@@ -89,6 +89,7 @@ describe('resolveProgramDay', () => {
       program({ startDate: '2026-09-21' }),
       WEEKDAYS,
       MONDAY,
+      [],
     );
 
     expect(day).toEqual({ kind: 'fallback', reason: 'before-start' });
@@ -111,13 +112,14 @@ describe('resolveProgramDay', () => {
       }),
       WEEKDAYS,
       '2026-10-12',
+      [],
     );
 
     expect(day).toEqual({ kind: 'completed', enrollmentId: 'enr_1' });
   });
 
   it('never completes an open-ended run, however far past the start', () => {
-    const day = resolveProgramDay(program(), EVERY_DAY, '2027-06-14');
+    const day = resolveProgramDay(program(), EVERY_DAY, '2027-06-14', []);
 
     expect(day.kind).toBe('generated');
   });
@@ -126,13 +128,13 @@ describe('resolveProgramDay', () => {
     it('defers to the athlete’s training days on a flexible program', () => {
       // The reason Just WODs can author all seven weekdays without turning
       // every day into a training day.
-      const day = resolveProgramDay(program(), WEEKDAYS, SATURDAY);
+      const day = resolveProgramDay(program(), WEEKDAYS, SATURDAY, []);
 
       expect(day.kind).toBe('rest');
     });
 
     it('trains on that same day once the athlete adds it', () => {
-      const day = resolveProgramDay(program(), [...WEEKDAYS, 6], SATURDAY);
+      const day = resolveProgramDay(program(), [...WEEKDAYS, 6], SATURDAY, []);
 
       expect(day.kind).toBe('generated');
     });
@@ -144,6 +146,7 @@ describe('resolveProgramDay', () => {
         program({ scheduleMode: 'fixed' }),
         WEEKDAYS,
         SATURDAY,
+        [],
       );
 
       expect(day.kind).toBe('generated');
@@ -153,7 +156,7 @@ describe('resolveProgramDay', () => {
       // Distinct from an authored rest, and the rest-day copy depends on it:
       // "planned rest" over a day the athlete took off would be the app
       // taking credit for their decision.
-      const day = resolveProgramDay(program(), WEEKDAYS, SATURDAY);
+      const day = resolveProgramDay(program(), WEEKDAYS, SATURDAY, []);
 
       expect(day).toMatchObject({ kind: 'rest', day: { slotKind: null } });
     });
@@ -193,13 +196,15 @@ describe('resolveProgramDay', () => {
     it('gives the top-ranked session to the first day the athlete trains', () => {
       // Before DN-128 a Tue/Thu/Sat athlete got whatever the author happened
       // to write on Tuesday, which for Foundations was the conditioning day.
-      const day = resolveProgramDay(ranked(), [2, 4, 6], TUESDAY);
+      const day = resolveProgramDay(ranked(), [2, 4, 6], TUESDAY, []);
 
       expect(day).toMatchObject({ day: { planSlotId: 'press' } });
     });
 
     it('keeps the authored order across the athlete’s week', () => {
-      const day = resolveProgramDay(ranked(), [2, 4, 6], THURSDAY);
+      // Tuesday trained, so it still holds the week's first place and
+      // Thursday is the second session rather than the first (DN-123).
+      const day = resolveProgramDay(ranked(), [2, 4, 6], THURSDAY, [2]);
 
       expect(day).toMatchObject({ day: { planSlotId: 'squat' } });
     });
@@ -207,7 +212,7 @@ describe('resolveProgramDay', () => {
     it('records no slot against a day the athlete chose off', () => {
       // The session this week would have authored here is being trained on
       // another day now; recording it against a rest day would count it twice.
-      const day = resolveProgramDay(ranked(), [2, 4, 6], MONDAY);
+      const day = resolveProgramDay(ranked(), [2, 4, 6], MONDAY, []);
 
       expect(day).toMatchObject({
         kind: 'rest',
@@ -220,7 +225,12 @@ describe('resolveProgramDay', () => {
       // would have given them, and it beats the app overruling a choice it
       // asked them to make -- but `slotKind` stays null, because this is a day
       // beside the program rather than a day of it.
-      const day = resolveProgramDay(ranked(), [1, 2, 3, 4, 5], THURSDAY);
+      const day = resolveProgramDay(
+        ranked(),
+        [1, 2, 3, 4, 5],
+        THURSDAY,
+        [1, 2, 3],
+      );
 
       expect(day).toMatchObject({
         kind: 'generated',
@@ -242,11 +252,90 @@ describe('resolveProgramDay', () => {
         ranked({ scheduleMode: 'fixed' }),
         [2, 4, 6],
         TUESDAY,
+        [],
       );
 
       expect(day).toMatchObject({
         kind: 'rest',
         day: { slotKind: null, planSlotId: null },
+      });
+    });
+
+    describe('a week that re-flows around what was done (DN-123)', () => {
+      /** Mon/Wed/Fri, the days `ranked()` authors and this athlete trains. */
+      const MWF = [1, 3, 5];
+      const WEDNESDAY = '2026-09-16';
+      const FRIDAY = '2026-09-18';
+
+      const slotOn = (
+        days: number[],
+        date: string,
+        completed: number[],
+      ): string | null => {
+        const day = resolveProgramDay(ranked(), days, date, completed);
+        return day.kind === 'fallback' || day.kind === 'completed'
+          ? null
+          : day.day.planSlotId;
+      };
+
+      it('carries a missed session forward to the next day they train', () => {
+        // Monday went by untrained, so it holds no place in the week and the
+        // session behind it is still owed. Before DN-123 Wednesday took its
+        // position in the sequence regardless and the press was simply gone.
+        expect(slotOn(MWF, WEDNESDAY, [])).toBe('press');
+      });
+
+      it('leaves the week alone when nothing has been missed', () => {
+        expect(slotOn(MWF, WEDNESDAY, [1])).toBe('squat');
+        expect(slotOn(MWF, FRIDAY, [1, 3])).toBe('vertical');
+      });
+
+      it('hands a makeup the session the athlete missed', () => {
+        // The issue in one line: Monday done, Wednesday missed, Thursday
+        // taken as a makeup. Thursday is owed the squat, not Thursday's own
+        // authored session and not the press they already did.
+        expect(slotOn([...MWF, 4], THURSDAY, [1])).toBe('squat');
+      });
+
+      it('does not hand a makeup a session already done', () => {
+        // Both training days behind them were trained, so the makeup takes
+        // the one the week has left rather than repeating either.
+        expect(slotOn([...MWF, 4], THURSDAY, [1, 3])).toBe('vertical');
+      });
+
+      it('spends the week out rather than offering a session twice', () => {
+        // DN-123's own complaint, at the point where it would otherwise come
+        // back: the makeup on Thursday took the last session, so Friday has
+        // none left. A day beside the program, not a second helping of it --
+        // which is the answer to "what happens when the week has no room".
+        const friday = resolveProgramDay(ranked(), MWF, FRIDAY, [1, 3, 4]);
+
+        expect(friday).toMatchObject({
+          kind: 'generated',
+          day: { slotKind: null, planSlotId: null },
+        });
+      });
+
+      it('stops treating a day they trained as a rest day', () => {
+        // Thursday is not one of their days, but they trained it. Reporting
+        // it as rest afterwards would have the app disagree with the row it
+        // just wrote.
+        const thursday = resolveProgramDay(ranked(), MWF, THURSDAY, [1, 4]);
+
+        expect(thursday.kind).not.toBe('rest');
+      });
+
+      it('leaves a fixed program out of it entirely', () => {
+        // A fixed program never offers a makeup, so nothing can have been
+        // trained off-schedule -- and its week is its schedule either way.
+        const fixed = ranked({ scheduleMode: 'fixed' });
+
+        expect(resolveProgramDay(fixed, MWF, WEDNESDAY, []).kind).not.toBe(
+          'rest',
+        );
+        expect(resolveProgramDay(fixed, MWF, WEDNESDAY, [])).toMatchObject({
+          day: { planSlotId: 'squat' },
+        });
       });
     });
   });
@@ -266,6 +355,7 @@ describe('resolveProgramDay', () => {
         }),
         WEEKDAYS,
         MONDAY,
+        [],
       );
     }
 
@@ -380,6 +470,7 @@ describe('resolveProgramDay', () => {
         }),
         EVERY_DAY,
         MONDAY,
+        [],
       );
 
       expect(day).toMatchObject({
@@ -393,7 +484,7 @@ describe('resolveProgramDay', () => {
     it('counts weeks from one, and days from zero', () => {
       // The week is the one number an athlete reads; planDayIndex is what
       // DailyAssignment stores and what "day 17 of 24" counts.
-      const day = resolveProgramDay(program(), EVERY_DAY, '2026-09-23');
+      const day = resolveProgramDay(program(), EVERY_DAY, '2026-09-23', []);
 
       expect(day).toMatchObject({
         day: { week: 2, planDayIndex: 9, totalWeeks: null },
@@ -415,6 +506,7 @@ describe('resolveProgramDay', () => {
         }),
         WEEKDAYS,
         MONDAY,
+        [],
       );
 
       expect(day).toMatchObject({
@@ -423,7 +515,7 @@ describe('resolveProgramDay', () => {
     });
 
     it('cycles the authored weeks of an open-ended run rather than running out', () => {
-      const day = resolveProgramDay(program(), EVERY_DAY, '2027-01-04');
+      const day = resolveProgramDay(program(), EVERY_DAY, '2027-01-04', []);
 
       expect(day.kind).toBe('generated');
     });

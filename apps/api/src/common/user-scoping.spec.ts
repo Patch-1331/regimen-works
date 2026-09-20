@@ -200,10 +200,14 @@ describe('per-user query scoping', () => {
     }
   });
 
-  it('scopes the week-so-far count behind the makeup offer', async () => {
-    // A Saturday, so the rest-day fork runs and the count is actually issued
-    // (DN-17). Unscoped it would total every athlete's completed sessions,
-    // and a busy database would quietly decide this athlete's week was done.
+  it('scopes the week-so-far read behind the makeup offer', async () => {
+    // A Saturday, so the rest-day fork runs (DN-17). Unscoped this would
+    // total every athlete's completed sessions, and a busy database would
+    // quietly decide this athlete's week was done.
+    //
+    // A `findMany` rather than a `count` since DN-123: the week's sessions
+    // are laid onto the days the athlete actually trained, so *which* days
+    // were completed matters and not only how many.
     const prisma = recordingPrisma();
     const wods = {
       getChecklists: jest.fn(),
@@ -217,9 +221,11 @@ describe('per-user query scoping', () => {
       .getToday(ALICE, '2026-09-19')
       .catch(() => undefined);
 
-    const counts = whereOf(prisma, 'dailyAssignment.count');
-    expect(counts.length).toBeGreaterThan(0);
-    for (const where of counts) {
+    const reads = whereOf(prisma, 'dailyAssignment.findMany').filter((w) =>
+      w.includes('completed'),
+    );
+    expect(reads.length).toBeGreaterThan(0);
+    for (const where of reads) {
       expect(where).toContain(ALICE);
     }
   });
