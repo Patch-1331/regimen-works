@@ -32,6 +32,13 @@ describe('the Just WODs program definition', () => {
     expect(JUST_WODS_PLAN.maxDaysPerWeek).toBe(7);
   });
 
+  it('has nothing to explain about its week, because it takes none of it', () => {
+    // DN-124's note is a fixed program justifying the days it takes over.
+    // Just WODs takes none, offers the rest-day makeup like any flexible
+    // program, and would be talking about a restriction it does not impose.
+    expect(JUST_WODS_PLAN.scheduleNote).toBeNull();
+  });
+
   it('is open-ended, with no length to choose and no last day', () => {
     // All three, not one: a half-open-ended program cannot bound a picker.
     expect(JUST_WODS_PLAN.minWeeks).toBeNull();

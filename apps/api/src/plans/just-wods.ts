@@ -50,6 +50,11 @@ export const JUST_WODS_PLAN = {
   // Null on purpose. A goal is what *finishing* gets you, and this is a way
   // of training rather than a target -- there is nothing to finish.
   goal: null,
+  // Null for the same reason `goal` is. The week here belongs entirely to the
+  // athlete -- seven identical days, any of which they may train -- so there
+  // is no layout to explain and a note would be the app taking credit for a
+  // shape it did not choose.
+  scheduleNote: null,
   scheduleMode: 'flexible',
   minDaysPerWeek: 1,
   maxDaysPerWeek: 7,

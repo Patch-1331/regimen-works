@@ -402,6 +402,7 @@ export function setupProgram(
     name: "Just WODs",
     summary: "A workout a day, picked for you.",
     goal: null,
+    scheduleNote: null,
     scheduleMode: "flexible",
     minDaysPerWeek: 1,
     maxDaysPerWeek: 7,
@@ -445,6 +446,8 @@ export function fixedProgram(
     name: "Bar Muscle-Up",
     summary: "Four days a week, spaced on purpose.",
     goal: "A bar muscle-up",
+    scheduleNote:
+      "Two heavy pull days, 48 hours apart. The gap is what makes the second one heavy.",
     scheduleMode: "fixed",
     minDaysPerWeek: null,
     maxDaysPerWeek: null,

@@ -548,6 +548,19 @@ model Plan {
   // way of training rather than a target -- Just WODs is exactly that.
   goal    String?
 
+  // Why this program's week is laid out the way it is, in the author's own
+  // words -- "Two heavy pull days, 48 hours apart." Shown at enrollment
+  // (DN-124), where a fixed program takes the day picker away and the athlete
+  // is owed the reason before they agree to it rather than after it bites.
+  //
+  // Nullable because most programs have nothing particular to say: a flexible
+  // program's week is the athlete's, and a note on it would be the app
+  // explaining a decision it did not make. Not CHECKed against scheduleMode
+  // for the same reason `defaultDays` is not -- a fixed program with no
+  // special reason for its days is an honest row, and so is a flexible one
+  // whose author wants to explain the shape of the week anyway.
+  scheduleNote String?
+
   // fixed | flexible -- whether the cadence screen is an input or a readout.
   //
   //   flexible -- the athlete taps which weekdays they train, bounded by

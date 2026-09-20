@@ -1552,6 +1552,7 @@ function plan(overrides: Record<string, unknown> = {}) {
     name: "Pull-Up Builder",
     summary: "Six weeks to your first unassisted chin-up.",
     goal: "your first unassisted chin-up",
+    scheduleNote: null,
     scheduleMode: "flexible",
     minDaysPerWeek: 3,
     maxDaysPerWeek: 5,
@@ -1770,6 +1771,19 @@ describe("planSchema's schedule-mode refinement", () => {
           defaultWeeks: null,
         }),
       ).success,
+    ).toBe(true);
+  });
+
+  it("requires a schedule note to be answered, even with nothing to say", () => {
+    // Nullable, not optional (DN-124). A program whose author never thought
+    // about why its week is shaped that way and one who decided there is
+    // nothing to explain are different facts, and only the second is a null.
+    expect(planSchema.safeParse(plan({ scheduleNote: undefined })).success).toBe(
+      false,
+    );
+    expect(
+      planSchema.safeParse(plan({ scheduleNote: "Two heavy pull days." }))
+        .success,
     ).toBe(true);
   });
 

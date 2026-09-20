@@ -119,6 +119,34 @@ describe('SetupService.options', () => {
     expect(program.scheduleMode).toBe('fixed');
   });
 
+  it("carries the author's reason for a fixed week to the picker", async () => {
+    // A fixed program takes the day picker away and suppresses the rest-day
+    // makeup, and DN-124 says both at enrollment. Neither reads as design
+    // rather than restriction without the author's own sentence beside it,
+    // so the column has to survive the trip to the wizard.
+    const { userId } = await provisionedAthlete();
+    const fixed = await createFixedPlan([1, 2, 4, 5], {
+      scheduleNote: 'Two heavy pull days, 48 hours apart.',
+    });
+
+    const options = await service().options(userId, TODAY);
+
+    expect(options.programs.find((p) => p.id === fixed.id)!.scheduleNote).toBe(
+      'Two heavy pull days, 48 hours apart.',
+    );
+  });
+
+  it('leaves the note null for a program with nothing to explain', async () => {
+    // Most programs. The wizard shows nothing rather than an empty panel.
+    const { userId } = await provisionedAthlete();
+
+    const options = await service().options(userId, TODAY);
+
+    expect(
+      options.programs.find((p) => p.id === DEFAULT_PLAN_ID)!.scheduleNote,
+    ).toBeNull();
+  });
+
   it('reports no fixed days for a flexible program', async () => {
     const { userId } = await provisionedAthlete();
 

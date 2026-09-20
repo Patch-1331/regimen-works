@@ -1,5 +1,6 @@
 import { addIsoDays } from "@regimen-works/shared";
 import type { SetupProgram } from "@regimen-works/shared";
+import { WEEKDAYS } from "./weekdays";
 
 /**
  * What the first-run wizard works out for itself (DN-15).
@@ -113,4 +114,23 @@ export function weeksChoice(program: SetupProgram): {
   // one that cannot move.
   if (minWeeks === null || maxWeeks === null) return null;
   return { min: minWeeks, max: maxWeeks, start: defaultWeeks ?? minWeeks };
+}
+
+/**
+ * Weekdays as prose, in the week's own order: "Monday, Tuesday, Thursday and
+ * Friday".
+ *
+ * Ordered through `WEEKDAYS` rather than by number, because 0 is Sunday and a
+ * numeric sort would open every list with the day the week ends on. This is
+ * the same display order the day strip renders in — a readout that disagreed
+ * with the buttons above it would be describing a different week (DN-124).
+ */
+export function listDays(days: number[]): string {
+  const names = WEEKDAYS.filter((day) => days.includes(day.value)).map(
+    (day) => day.full,
+  );
+  if (names.length <= 1) return names.join("");
+  // "and" before the last, because this is a sentence rather than a list of
+  // chips — the readout is read aloud by a screen reader either way.
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }

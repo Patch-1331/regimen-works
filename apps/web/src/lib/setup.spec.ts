@@ -3,6 +3,7 @@ import * as fixtures from "../test/fixtures";
 import {
   dayCountWarning,
   formatStartDate,
+  listDays,
   startDateChoices,
   weekdayOf,
   weeksChoice,
@@ -130,5 +131,26 @@ describe("weeksChoice", () => {
     expect(
       weeksChoice(fixtures.boundedProgram({ defaultWeeks: null })),
     ).toEqual({ min: 4, max: 8, start: 4 });
+  });
+});
+
+describe("listDays", () => {
+  it("names the days in the order the week runs", () => {
+    // Given out of order, because the days arrive from the program's own
+    // array and nothing upstream promises to sort them (DN-124).
+    expect(listDays([5, 1, 2, 4])).toBe("Monday, Tuesday, Thursday and Friday");
+  });
+
+  it("joins the last one with 'and', because this is a sentence", () => {
+    // Read inside a line of prose rather than shown as a list, so a trailing
+    // comma would be a comma splice in the athlete's face.
+    expect(listDays([1, 3])).toBe("Monday and Wednesday");
+    expect(listDays([1])).toBe("Monday");
+  });
+
+  it("says nothing for no days at all", () => {
+    // A flexible program's `fixedDays` is empty. Nothing here reads it, but
+    // returning "undefined" if something ever did would be worse than "".
+    expect(listDays([])).toBe("");
   });
 });

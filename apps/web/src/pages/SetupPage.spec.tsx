@@ -359,6 +359,86 @@ describe("a fixed program", () => {
     expect(screen.getByText("Set by Bar Muscle-Up")).toBeInTheDocument();
   });
 
+  it("names the days it trains before the athlete agrees to it", async () => {
+    // The locked picker shows the days as pressed buttons; this says them in
+    // words, on the way in rather than when they bite (DN-124).
+    newAthlete();
+    renderRoute("/setup");
+    await walkTo("Bar Muscle-Up");
+
+    expect(
+      screen.getByText(
+        /Bar Muscle-Up trains Monday, Tuesday, Thursday and Friday/,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("gives the author's own reason for the week's shape", async () => {
+    // The difference between a rule and a piece of programming is whether
+    // anyone says why. Without this the athlete is told what they cannot do
+    // and nothing else.
+    newAthlete();
+    renderRoute("/setup");
+    await walkTo("Bar Muscle-Up");
+
+    expect(
+      screen.getByText(/Two heavy pull days, 48 hours apart/),
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing extra for a program with no reason to give", async () => {
+    // Nullable, and most programs are null. An empty panel where the reason
+    // would be reads as a program that forgot to explain itself.
+    newAthlete({
+      setup: {
+        programs: [fixtures.fixedProgram({ scheduleNote: null })],
+      },
+    });
+    renderRoute("/setup");
+    await walkTo("Bar Muscle-Up");
+
+    expect(screen.queryByText(/48 hours apart/)).not.toBeInTheDocument();
+    // Still told which days it trains -- that part is not optional.
+    expect(
+      screen.getByText(/Bar Muscle-Up trains Monday, Tuesday/),
+    ).toBeInTheDocument();
+  });
+
+  it("warns that rest days will not offer a makeup, before the commit", async () => {
+    // DN-17 suppresses the makeup offer entirely on a fixed program, and
+    // until now that was only discoverable by missing a session and finding
+    // no way back. The confirm screen is the last place it can be said in
+    // time to matter.
+    newAthlete();
+    renderRoute("/setup");
+    await walkTo("Bar Muscle-Up");
+    await click("Continue");
+    await click("Continue");
+
+    expect(
+      screen.getByRole("heading", { name: "While Bar Muscle-Up runs" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/nothing will offer to move a missed session onto one/),
+    ).toBeInTheDocument();
+  });
+
+  it("promises the athlete's own days back when it finishes", async () => {
+    // Set aside for the run, not taken. The day picker in Settings goes back
+    // to the athlete's own answer the moment the enrollment completes.
+    newAthlete();
+    renderRoute("/setup");
+    await walkTo("Bar Muscle-Up");
+    await click("Continue");
+    await click("Continue");
+
+    expect(
+      screen.getByText(
+        /Your own training days sit out the run and come back when it finishes/,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("sends no training days at all", async () => {
     // Null rather than the program's own days echoed back: the API refuses
     // days for a fixed program rather than storing them and overruling them.
@@ -372,6 +452,43 @@ describe("a fixed program", () => {
     await waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0].trainingDays).toBeNull();
     expect(sent[0].weeks).toBe(6);
+  });
+});
+
+describe("a program that leaves the week alone", () => {
+  it("says what training fewer days than it was written for costs", async () => {
+    // Since DN-128 a short week keeps the highest-ranked sessions rather
+    // than whichever ones the calendar left. That is worth knowing while the
+    // athlete is still choosing the count.
+    newAthlete();
+    renderRoute("/setup");
+    await walkTo("Pull-Up Builder");
+
+    expect(
+      screen.getByText(/At 3 days you get Pull-Up Builder's main sessions/),
+    ).toBeInTheDocument();
+  });
+
+  it("makes no promises about rest days it does not keep", async () => {
+    // A flexible program does offer the makeup and does keep the athlete's
+    // days, so every line of the fixed-program panel would be a lie here.
+    newAthlete();
+    renderRoute("/setup");
+    await walkTo("Just WODs");
+    await click("Continue");
+    await click("Continue");
+
+    // On the confirm screen, so the absences below are absences and not a
+    // test that walked off the end of the wizard.
+    expect(
+      await screen.findByRole("button", { name: "Go to today" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /While Just WODs runs/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/nothing will offer to move a missed session/),
+    ).not.toBeInTheDocument();
   });
 });
 
