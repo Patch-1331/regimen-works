@@ -8,6 +8,7 @@ import { AdminGuard } from './auth/admin.guard';
 import { ProxyAwareThrottlerGuard } from './common/proxy-aware-throttler.guard';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { HealthModule } from './health/health.module';
 import { ExercisesModule } from './exercises/exercises.module';
 import { WodsModule } from './wods/wods.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
@@ -37,6 +38,7 @@ import { EnrollmentsModule } from './enrollments/enrollments.module';
       { name: 'sustained', ttl: 60_000, limit: 200 },
     ]),
     PrismaModule,
+    HealthModule,
     AuthModule,
     ExercisesModule,
     WodsModule,

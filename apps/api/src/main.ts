@@ -24,7 +24,7 @@ async function bootstrap() {
   // CORP is widened to cross-origin deliberately: the default same-origin
   // policy is about embedding, and this API is *designed* to be read from the
   // separately-hosted web app. CSP stays on its default — irrelevant to JSON,
-  // but the health check below does answer as text/html.
+  // but `GET /` does answer as text/html.
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
   app.enableCors({ origin: webOrigins() });

@@ -7,13 +7,14 @@ import { AppService } from './app.service';
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
-  // Render's health check can't send an auth header.
+  // Not the health check any more -- that is GET /health, which actually
+  // reaches the database (DN-76). This stays public and unthrottled anyway:
+  // it is the API's front door, anything pointed at the bare host still hits
+  // it, and a route that answers a constant string has nothing to protect.
   //
-  // It is exempt from rate limiting too, and deliberately so: Render's probes
-  // arrive from its own network rather than through the Cloudflare edge, so
-  // they share one tracker key, and a throttled probe reads as an unhealthy
-  // service and restarts it. Being rate limited into a restart loop is a worse
-  // outcome than an unthrottled route that returns a constant string.
+  // The throttle exemption carries the same reasoning /health does: probes
+  // arrive from outside the Cloudflare edge, so they share one tracker key,
+  // and a throttled probe reads as an unhealthy service and restarts it.
   //
   // Every tier has to be named explicitly. A bare @SkipThrottle() sets
   // `{ default: true }`, which matches nothing when the tiers are named — it
