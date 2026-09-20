@@ -1,4 +1,4 @@
-import { resolveMakeup, type MakeupInputs } from './makeup';
+import { alsoTraining, resolveMakeup, type MakeupInputs } from './makeup';
 
 const WEEKDAYS = [1, 2, 3, 4, 5];
 
@@ -74,5 +74,33 @@ describe('resolveMakeup', () => {
     // An empty schedule expects nothing, so nothing can be short. Without the
     // comparison this would offer a makeup every single day.
     expect(resolveMakeup(inputs({ trainingDays: [] }))).toBeNull();
+  });
+});
+
+describe('alsoTraining', () => {
+  const THURSDAY = '2026-09-17';
+  const WEDNESDAY = '2026-09-16';
+
+  it('adds the makeup day to the athlete’s week', () => {
+    // The point of DN-123: a Mon/Wed/Fri athlete taking Thursday has a
+    // four-day week this once, and the program's sessions flow across it.
+    expect(alsoTraining([1, 3, 5], THURSDAY)).toEqual([1, 3, 5, 4]);
+  });
+
+  it('leaves a day they already train alone', () => {
+    // No makeup is offered on a training day, but the guard keeps the week
+    // from counting the same day twice if one ever were.
+    expect(alsoTraining([1, 3, 5], WEDNESDAY)).toEqual([1, 3, 5]);
+  });
+
+  it('does not widen the week beyond the day being made up', () => {
+    // DN-17 passed all seven weekdays here. That resolved a seven-day
+    // athlete's week, which since DN-128 hands out sessions the athlete's
+    // own week deliberately drops.
+    expect(alsoTraining([1, 3, 5], THURSDAY)).toHaveLength(4);
+  });
+
+  it('gives a day to an athlete with no training days at all', () => {
+    expect(alsoTraining([], THURSDAY)).toEqual([4]);
   });
 });
