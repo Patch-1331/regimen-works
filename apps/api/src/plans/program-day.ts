@@ -242,38 +242,134 @@ export type ConstrainableWod = {
 };
 
 /**
+ * Which axis a slot constrained, for reporting what the ladder gave up.
+ *
+ * Named after the `SlotConstraints` fields rather than prose, because these
+ * end up in an operator's logs and the thing an operator then wants to do is
+ * find the authored slot that set one.
+ */
+export type SlotAxis =
+  'maxTimeCapMinutes' | 'wodType' | 'pattern' | 'allowNamed';
+
+/**
+ * The narrowed pool, and the axes the slot asked for that it could not get.
+ *
+ * `relaxed` is the point of the pair. A pool on its own cannot say whether it
+ * is what the program wanted or what was left after the ladder gave up, and
+ * those are very different facts: the second one is a library hole, and it
+ * stays invisible until something reports it (DN-14).
+ */
+export type NarrowedPool<C> = {
+  candidates: C[];
+  /**
+   * Dropped axes, outermost first — the order the ladder gave them up in.
+   * Empty when the slot was satisfied exactly as authored, which is the
+   * ordinary case and the one that should stay silent.
+   *
+   * Only axes the slot actually constrained appear here. Dropping a null
+   * axis costs nothing and asked for nothing, so reporting it would bury the
+   * real holes in noise from every unconstrained slot.
+   */
+  relaxed: SlotAxis[];
+};
+
+/**
+ * The ladder, outermost (given up first) to innermost (protected longest).
+ *
+ * ## The order is settled (DN-14), and this is the losing argument
+ *
+ * DN-14 originally specified the opposite at the sharp end —
+ * `wodType → maxTimeCapMinutes → allowNamed → pattern`, protecting `pattern`
+ * longest — and the reasoning was good: **the emphasis is the program's
+ * intent.** A pull day that hands over a squat workout is not the session the
+ * author wrote, and on that view a named on-pattern WOD is the lesser
+ * compromise.
+ *
+ * It lost to this: `allowNamed` is the only axis that exists to prevent a
+ * *surprise* rather than to express a preference. An author who turned
+ * benchmarks off did it so Fran does not land in the middle of a progression
+ * block, and an athlete who gets one anyway has been handed a maximal effort
+ * they did not plan for. An off-pattern WOD, by contrast, is a normal
+ * training day that is not the one the program wanted — disappointing, not
+ * disruptive. So the axis protecting against harm outranks the axis
+ * protecting intent.
+ *
+ * Both arguments are real; this records which one won so it is not quietly
+ * re-flipped. The `maxTimeCapMinutes`/`wodType` order at the front is the
+ * same question in miniature and matters much less — either is defensible,
+ * and a time cap is the most cosmetic thing a slot can ask for.
+ */
+const SLOT_AXES: {
+  axis: SlotAxis;
+  /** Whether the slot asked anything of this axis at all. */
+  constrains: (c: SlotConstraints) => boolean;
+  matches: (wod: ConstrainableWod, c: SlotConstraints) => boolean;
+}[] = [
+  {
+    axis: 'maxTimeCapMinutes',
+    constrains: (c) => c.maxTimeCapMinutes !== null,
+    matches: (wod, c) =>
+      c.maxTimeCapMinutes === null || wod.timeCapMinutes <= c.maxTimeCapMinutes,
+  },
+  {
+    axis: 'wodType',
+    constrains: (c) => c.wodType !== null,
+    matches: (wod, c) => c.wodType === null || wod.type === c.wodType,
+  },
+  {
+    axis: 'pattern',
+    constrains: (c) => c.pattern !== null,
+    matches: (wod, c) =>
+      c.pattern === null || wod.dominantPattern === c.pattern,
+  },
+  {
+    // Constrained only when named WODs are *disallowed*: `allowNamed: true`
+    // asks for nothing and so can never be relaxed.
+    axis: 'allowNamed',
+    constrains: (c) => !c.allowNamed,
+    matches: (wod, c) => c.allowNamed || !wod.isNamed,
+  },
+];
+
+/**
  * Narrows the candidate pool to what the slot asked for, dropping axes in a
  * stated order rather than ever handing back nothing.
  *
- * The order is what the program cares about least, first. A time cap is a
- * convenience; the format is a preference; the pattern is the session's
- * point. `allowNamed` goes last because it is the one protecting against a
- * surprise -- a benchmark landing in the middle of a progression block -- and
- * an author who turned it off meant it.
- *
- * This is the same discipline `applyEquipmentFloor` and `pickWod`'s
+ * The order, and the argument that lost, are recorded on `SLOT_AXES` above.
+ * This is the same discipline `applyEquipmentFloor` and `pickWod`'s own
  * relaxation ladder keep, for the same reason: the library is small, and an
  * athlete with no workout at all is a worse answer than an off-pattern one.
+ *
+ * Returns what it gave up alongside what it kept (DN-14). The ladder firing
+ * is the app's best evidence of a library hole -- with no squat- or
+ * hinge-dominant unnamed WODs seeded it fires today -- and a function that
+ * returned only the pool left the caller unable to tell a satisfied slot from
+ * an exhausted one.
  */
 export function narrowToSlot<C extends ConstrainableWod>(
   candidates: C[],
   constraints: SlotConstraints,
-): C[] {
-  const axes = [
-    (c: C) =>
-      constraints.maxTimeCapMinutes === null ||
-      c.timeCapMinutes <= constraints.maxTimeCapMinutes,
-    (c: C) => constraints.wodType === null || c.type === constraints.wodType,
-    (c: C) =>
-      constraints.pattern === null || c.dominantPattern === constraints.pattern,
-    (c: C) => constraints.allowNamed || !c.isNamed,
-  ];
-
-  for (let from = 0; from < axes.length; from++) {
+): NarrowedPool<C> {
+  for (let from = 0; from < SLOT_AXES.length; from++) {
     const kept = candidates.filter((c) =>
-      axes.slice(from).every((axis) => axis(c)),
+      SLOT_AXES.slice(from).every((a) => a.matches(c, constraints)),
     );
-    if (kept.length > 0) return kept;
+    if (kept.length > 0) {
+      return { candidates: kept, relaxed: relaxedBefore(from, constraints) };
+    }
   }
-  return candidates;
+  // Every axis spent and still nothing -- which means the pool was empty to
+  // begin with, since the last rung asks nothing of any candidate. Handing
+  // back the pool keeps the never-throws promise, and everything the slot
+  // asked for counts as given up.
+  return {
+    candidates,
+    relaxed: relaxedBefore(SLOT_AXES.length, constraints),
+  };
+}
+
+function relaxedBefore(from: number, constraints: SlotConstraints): SlotAxis[] {
+  return SLOT_AXES.slice(0, from)
+    .filter((a) => a.constrains(constraints))
+    .map((a) => a.axis);
 }
