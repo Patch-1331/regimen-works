@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { LoggerModule } from 'nestjs-pino';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ClerkAuthGuard } from './auth/clerk-auth.guard';
@@ -9,6 +10,7 @@ import { ProxyAwareThrottlerGuard } from './common/proxy-aware-throttler.guard';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
+import { loggerParams } from './logging/logging.config';
 import { ExercisesModule } from './exercises/exercises.module';
 import { WodsModule } from './wods/wods.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
@@ -24,6 +26,10 @@ import { EnrollmentsModule } from './enrollments/enrollments.module';
 
 @Module({
   imports: [
+    // Structured request logging on stdout, which is what Render captures
+    // (DN-41). Every decision it makes -- redaction, the ignored health check,
+    // the request id -- lives in logging.config.ts, where it can be asserted.
+    LoggerModule.forRoot({ pinoHttp: loggerParams() }),
     // Two tiers, because one number can't express both shapes of abuse. The
     // burst tier stops a hot loop; the sustained tier stops a slow drip that
     // stays under it. Limits are per client IP (see ProxyAwareThrottlerGuard)
