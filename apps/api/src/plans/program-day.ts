@@ -1,4 +1,9 @@
-import { expandPlanWeeks, resolveSlotForDate } from './plan.logic';
+import {
+  assignSlotsToTrainingDays,
+  expandPlanWeeks,
+  resolveSlotForDate,
+  trainingWeekdaysInWeek,
+} from './plan.logic';
 
 /**
  * What a program makes of one date (DN-16) — pure, like `plan.logic.ts` and
@@ -33,6 +38,13 @@ export type ProgramSlotMovement = {
 export type ProgramSlot = {
   id: string;
   dayOfWeek: number;
+  /**
+   * Which of a flexible week's sessions survive when the athlete trains fewer
+   * days than it was authored for: lower is kept first (DN-128). Read by
+   * `assignSlotsToTrainingDays`; meaningless on a fixed program, whose slot
+   * layout is the schedule and whose every day therefore survives.
+   */
+  priority: number;
   kind: string;
   wodId: string | null;
   pattern: string | null;
@@ -161,29 +173,49 @@ export function resolveProgramDay(
     planDayIndex: resolution.dayIndex,
   };
 
-  if (resolution.status === 'unscheduled') {
-    return {
-      kind: 'rest',
-      day: { ...base, slotKind: null, planSlotId: null },
-    };
-  }
-
-  const slot = resolution.slot;
-
   // A flexible program has no opinion about *which* days are trained -- that
   // is the athlete's `trainingDays`, and it is the whole reason Just WODs can
   // author all seven weekdays without turning every day into a training day.
   // A fixed program's slot layout **is** the schedule: that is what lets it
   // insist on 48 hours between heavy pull days, which "4 days a week" cannot
   // say. So this is the one place the two modes genuinely diverge.
-  if (program.scheduleMode !== 'fixed' && !trainsOn(trainingDays, date)) {
+  const slot: ProgramSlot | NoSlot =
+    program.scheduleMode === 'fixed'
+      ? // A fixed week that authors nothing for this weekday -- a four-day
+        // week saying nothing about Wednesday -- is the program's own rest
+        // day rather than the athlete's, but there is no slot to report
+        // either way and `off` is what says "nothing here, record nothing".
+        resolution.status === 'scheduled'
+        ? resolution.slot
+        : 'off'
+      : flexibleSlot(program, week.slots, trainingDays, date);
+
+  if (slot === 'off') {
     return {
-      // slotKind null, not the slot's own kind: today is a rest day because of
+      // slotKind null, not a slot's own kind: today is a rest day because of
       // the athlete's schedule, not because the program planned one. Telling
       // them "planned rest" over a day they chose off would be the app taking
       // credit for their decision.
+      //
+      // No planSlotId either. Under the remap the session this week would
+      // have authored here is being trained on another day, and recording it
+      // against a rest day would have it counted twice.
       kind: 'rest',
-      day: { ...base, slotKind: null, planSlotId: slot.id },
+      day: { ...base, slotKind: null, planSlotId: null },
+    };
+  }
+
+  if (slot === 'spare') {
+    // The athlete trains more days than the week has sessions to give. They
+    // said they train today, so they train: an unconstrained generated WOD is
+    // what they would have had from Just WODs, and it is a better answer than
+    // the app overruling a choice it asked them to make. `slotKind` stays null
+    // because the program authored nothing here -- this is a day beside the
+    // program rather than a day of it.
+    return {
+      kind: 'generated',
+      day: { ...base, slotKind: null, planSlotId: null },
+      constraints: UNCONSTRAINED,
     };
   }
 
@@ -229,8 +261,39 @@ export function resolveProgramDay(
   };
 }
 
+/**
+ * A day with no session on it: `off` is the athlete's own rest day, `spare` a
+ * day they train that the program has run out of sessions for. Distinct
+ * because one is their decision and the other is the program's shape.
+ */
+type NoSlot = 'off' | 'spare';
+
+/**
+ * A flexible program's week, laid onto the days the athlete actually trains
+ * (DN-128). The weekday a slot was authored on is a slot key, not an
+ * appointment; `assignSlotsToTrainingDays` holds the rules.
+ */
+function flexibleSlot(
+  program: ActiveProgram,
+  slots: ProgramSlot[],
+  trainingDays: number[],
+  date: string,
+): ProgramSlot | NoSlot {
+  if (!trainsOn(trainingDays, date)) return 'off';
+
+  const assigned = assignSlotsToTrainingDays(
+    slots,
+    trainingWeekdaysInWeek(trainingDays, program.startDate, date),
+  );
+  return assigned.get(weekdayOf(date)) ?? 'spare';
+}
+
 function trainsOn(trainingDays: number[], date: string): boolean {
-  return trainingDays.includes(new Date(`${date}T00:00:00Z`).getUTCDay());
+  return trainingDays.includes(weekdayOf(date));
+}
+
+function weekdayOf(date: string): number {
+  return new Date(`${date}T00:00:00Z`).getUTCDay();
 }
 
 /** A candidate, reduced to the axes a slot can constrain. */
