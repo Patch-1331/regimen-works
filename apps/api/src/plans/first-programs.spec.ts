@@ -50,7 +50,7 @@ function asDetail(program: (typeof FIRST_PROGRAMS)[number]): PlanDetail {
         movements: (slot.movements ?? []).map((movement, index) => ({
           id: programMovementId(program.id, week.order, slot.dayOfWeek, index),
           order: index,
-          line: movement.line,
+          movementGroup: movement.movementGroup,
           exerciseId: null,
           sets: movement.sets,
           reps: movement.reps,
@@ -189,7 +189,7 @@ describe('the first programs', () => {
   it.each(FIRST_PROGRAMS.map((p) => [p.name, p] as const))(
     '%s prescribes lines a day-one athlete can already train',
     (_name, program) => {
-      // A prescription names a progression line, and the athlete trains
+      // A prescription names a movement groups, and the athlete trains
       // whichever rung they are on -- which for a new athlete is the bottom
       // one. A line whose bottom rung needs equipment is a session an athlete
       // with a bar and a floor cannot do, and unlike a WOD there is no
@@ -201,17 +201,17 @@ describe('the first programs', () => {
             (e) =>
               e.rung === 0 && (e.equipment ?? []).every((p) => owned.has(p)),
           )
-          .map((e) => e.line),
+          .map((e) => e.movementGroup),
       );
       const unreachable = [
         ...new Set(
           program.weeks.flatMap((week) =>
             week.slots.flatMap((slot) =>
-              (slot.movements ?? []).map((m) => m.line),
+              (slot.movements ?? []).map((m) => m.movementGroup),
             ),
           ),
         ),
-      ].filter((line) => !dayOneLines.has(line));
+      ].filter((movementGroup) => !dayOneLines.has(movementGroup));
       expect(unreachable).toEqual([]);
     },
   );
@@ -281,7 +281,7 @@ describe('the first programs', () => {
         const pullDays = week.slots
           .filter((slot) =>
             slot.kind === 'movements'
-              ? (slot.movements ?? []).some((m) => m.line === 'pull')
+              ? (slot.movements ?? []).some((m) => m.movementGroup === 'pull')
               : slot.pattern === 'pull',
           )
           .map((slot) => slot.dayOfWeek)
@@ -303,7 +303,7 @@ describe('the first programs', () => {
           week.slots
             .filter((slot) =>
               (slot.movements ?? []).some(
-                (m) => m.line === 'pull' && m.reps === 5,
+                (m) => m.movementGroup === 'pull' && m.reps === 5,
               ),
             )
             .map((slot) => slot.dayOfWeek),
@@ -390,7 +390,7 @@ describe('the first programs', () => {
           (s) => s.priority < FOUNDATIONS.minDaysPerWeek!,
         );
         const lines = new Set(
-          kept.flatMap((s) => (s.movements ?? []).map((m) => m.line)),
+          kept.flatMap((s) => (s.movements ?? []).map((m) => m.movementGroup)),
         );
         expect([...lines].sort()).toEqual([
           'core_dynamic',

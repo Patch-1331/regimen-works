@@ -24,7 +24,7 @@
 export type SubstitutableSeed = {
   name: string;
   equipment?: string[];
-  alt?: string;
+  fallback?: string;
   /** Defaults to reps, as it does in the seed itself. */
   unit?: 'reps' | 'seconds';
 };
@@ -66,23 +66,23 @@ export function unreachableSubstitutes(
     const needs = requirements(exercise);
     if (needs.length === 0) return [];
 
-    if (!exercise.alt) {
+    if (!exercise.fallback) {
       return [
         `"${exercise.name}" needs ${needs.join(', ')} and has no alternative — an athlete without it gets a movement they cannot do.`,
       ];
     }
 
-    const alt = byName.get(exercise.alt);
-    if (!alt) {
+    const fallback = byName.get(exercise.fallback);
+    if (!fallback) {
       return [
-        `"${exercise.name}" names "${exercise.alt}" as its alternative, which is not a seeded exercise.`,
+        `"${exercise.name}" names "${exercise.fallback}" as its alternative, which is not a seeded exercise.`,
       ];
     }
 
-    const altNeeds = requirements(alt);
-    if (altNeeds.length > 0) {
+    const fallbackNeeds = requirements(fallback);
+    if (fallbackNeeds.length > 0) {
       return [
-        `"${exercise.name}" falls back to "${alt.name}", which itself needs ${altNeeds.join(', ')} — the fallback is one step, so this is where it stops.`,
+        `"${exercise.name}" falls back to "${fallback.name}", which itself needs ${fallbackNeeds.join(', ')} — the fallback is one step, so this is where it stops.`,
       ];
     }
 
@@ -112,14 +112,14 @@ export function mismatchedSubstituteUnits(
   const unitOf = (e: SubstitutableSeed) => e.unit ?? 'reps';
 
   return exercises.flatMap((exercise) => {
-    if (requirements(exercise).length === 0 || !exercise.alt) return [];
+    if (requirements(exercise).length === 0 || !exercise.fallback) return [];
 
-    const alt = byName.get(exercise.alt);
+    const fallback = byName.get(exercise.fallback);
     // A missing alternative is the other check's to report, in its words.
-    if (!alt || unitOf(alt) === unitOf(exercise)) return [];
+    if (!fallback || unitOf(fallback) === unitOf(exercise)) return [];
 
     return [
-      `"${exercise.name}" is counted in ${unitOf(exercise)} and falls back to "${alt.name}", counted in ${unitOf(alt)} — the prescribed count carries over unchanged, so it would arrive meaning something else.`,
+      `"${exercise.name}" is counted in ${unitOf(exercise)} and falls back to "${fallback.name}", counted in ${unitOf(fallback)} — the prescribed count carries over unchanged, so it would arrive meaning something else.`,
     ];
   });
 }

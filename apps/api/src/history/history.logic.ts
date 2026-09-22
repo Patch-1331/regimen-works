@@ -54,7 +54,7 @@ export function buildMovementHistory(days: TrainedDay[]): MovementHistory[] {
         histories.set(movement.exercise.id, {
           exerciseId: movement.exercise.id,
           name: movement.exercise.name,
-          line: movement.exercise.line,
+          movementGroup: movement.exercise.movementGroup,
           unit: movement.exercise.unit,
           sessions: 1,
           total: movement.reps,

@@ -9,7 +9,7 @@ import * as fixtures from "../test/fixtures";
 /**
  * Which rows of the plate carry a swap control (DN-80).
  *
- * The rule used to be "every row on a progression line", which was the same
+ * The rule used to be "every row on a movement groups", which was the same
  * thing as "every row with somewhere to go" while equipment meant the bar.
  * A jump rope breaks that equivalence: cardio carries `line: null`, so the row
  * most likely to need a way out was the one row that had none.
@@ -31,18 +31,18 @@ const doubleUnders = fixtures.apiExercise({
   name: "Double-unders",
   pattern: "cardio",
   equipment: ROPE,
-  line: null,
+  movementGroup: null,
   rung: null,
-  altExercise: { id: "high-knees", name: "High knees" },
+  fallbackExercise: { id: "high-knees", name: "High knees" },
 });
 
 const highKnees = fixtures.apiExercise({
   id: "high-knees",
   name: "High knees",
   pattern: "cardio",
-  line: null,
+  movementGroup: null,
   rung: null,
-  altExercise: null,
+  fallbackExercise: null,
 });
 
 /** A plate whose single movement is the given cardio exercise. */
@@ -76,9 +76,9 @@ function plateShowing(
                     equipment: exercise.id === "double-unders" ? ROPE : [],
                     unit: "reps",
                     instructions: null,
-                    line: null,
+                    movementGroup: null,
                     rung: null,
-                    altExerciseId: exercise.altExercise?.id ?? null,
+                    fallbackExerciseId: exercise.fallbackExercise?.id ?? null,
                   },
                 }),
               ],
@@ -90,7 +90,7 @@ function plateShowing(
   );
 }
 
-describe("the swap control on an off-ladder movement", () => {
+describe("the swap control on an off-group movement", () => {
   it("is offered on a movement that has a no-equipment alternative", async () => {
     plateShowing(doubleUnders);
     renderRoute("/");
@@ -108,7 +108,7 @@ describe("the swap control on an off-ladder movement", () => {
     expect(screen.getByText("NO KIT")).toBeInTheDocument();
   });
 
-  it("is withheld from a movement with no ladder and no alternative", async () => {
+  it("is withheld from a movement with no group and no fallback", async () => {
     plateShowing(highKnees);
     renderRoute("/");
 
@@ -120,7 +120,7 @@ describe("the swap control on an off-ladder movement", () => {
   });
 
   it("stays on a swapped row that now offers nothing further", async () => {
-    // The athlete took the alternative: what they hold has no ladder under it
+    // The athlete took the alternative: what they hold has no group under it
     // and no alternative of its own, so revert is the only way back. Without
     // the control the swap would be a one-way door.
     plateShowing(highKnees, { isSwapped: true });
@@ -136,25 +136,25 @@ describe("the swap control on an off-ladder movement", () => {
 });
 
 /**
- * The rope pair, once it is a progression line (DN-115).
+ * The rope pair, once it is a movement groups (DN-115).
  *
- * Both movements need the rope, so before the line the panel could only offer
+ * Both movements need the rope, so before the group the panel could only offer
  * the way *off* it: an athlete who owned a rope and could not yet turn doubles
  * was shown high knees, which is the app taking away gear they have.
  */
-describe("a line where every rung needs the same equipment", () => {
+describe("a movementGroup where every rung needs the same equipment", () => {
   const singleUnders = fixtures.apiExercise({
     id: "single-unders",
     name: "Single-unders",
     pattern: "cardio",
     equipment: ROPE,
-    line: "cardio_rope",
+    movementGroup: "cardio_rope",
     rung: 0,
-    altExercise: { id: "high-knees", name: "High knees" },
+    fallbackExercise: { id: "high-knees", name: "High knees" },
   });
   const linedDoubleUnders = fixtures.apiExercise({
     ...doubleUnders,
-    line: "cardio_rope",
+    movementGroup: "cardio_rope",
     rung: 1,
   });
 
@@ -180,9 +180,9 @@ describe("a line where every rung needs the same equipment", () => {
                       equipment: ROPE,
                       unit: "reps",
                       instructions: null,
-                      line: "cardio_rope",
+                      movementGroup: "cardio_rope",
                       rung: 1,
-                      altExerciseId: "high-knees",
+                      fallbackExerciseId: "high-knees",
                     },
                   }),
                 ],
@@ -250,7 +250,7 @@ describe("the prescribed movement after an equipment fallback", () => {
     equipmentResolvedPlate();
     renderRoute("/");
 
-    // High knees have no ladder and no alternative of their own: without the
+    // High knees have no group and no fallback of their own: without the
     // prescription there is nothing to offer, which is the case above.
     expect(
       await screen.findByRole("button", { name: /swap high knees/i }),

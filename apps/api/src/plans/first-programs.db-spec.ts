@@ -162,7 +162,7 @@ describe('the first programs, seeded', () => {
       data: {
         planSlotId: slotId,
         order: 99,
-        line: 'squat',
+        movementGroup: 'squat',
         sets: 9,
         reps: 9,
         restSeconds: 0,
@@ -316,7 +316,7 @@ describe('the first programs, seeded', () => {
       };
       const lines = (week: ProgramDay[]) =>
         week.flatMap((d) =>
-          d.kind === 'prescribed' ? [d.movements[0].line] : [],
+          d.kind === 'prescribed' ? [d.movements[0].movementGroup] : [],
         );
 
       const kept = lines(await walk(FOUNDATIONS.id, options));
@@ -369,7 +369,9 @@ describe('the first programs, seeded', () => {
         });
         const lines = new Set(
           week.flatMap((day) =>
-            day.kind === 'prescribed' ? day.movements.map((m) => m.line) : [],
+            day.kind === 'prescribed'
+              ? day.movements.map((m) => m.movementGroup)
+              : [],
           ),
         );
         expect([...lines].sort()).toEqual([
@@ -410,7 +412,9 @@ describe('the first programs, seeded', () => {
       expect(
         week
           .filter((d) => d.kind === 'prescribed')
-          .map((d) => (d.kind === 'prescribed' ? d.movements[0].line : null)),
+          .map((d) =>
+            d.kind === 'prescribed' ? d.movements[0].movementGroup : null,
+          ),
       ).toEqual(['push_horizontal', 'squat', 'push_vertical']);
     });
 
@@ -458,7 +462,7 @@ describe('the first programs, seeded', () => {
 
       expect(
         week.map((d) =>
-          d.kind === 'prescribed' ? d.movements[0].line : d.kind,
+          d.kind === 'prescribed' ? d.movements[0].movementGroup : d.kind,
         ),
       ).toEqual(['rest', 'push_horizontal']);
     });

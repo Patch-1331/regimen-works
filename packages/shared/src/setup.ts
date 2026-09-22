@@ -7,7 +7,7 @@ import { SATURDAY, SUNDAY, trainingDaysSchema } from "./schedule.js";
  *
  * The questions are the three the app cannot guess -- which program, which
  * days, and when to start. There is deliberately no fourth about what the
- * athlete can do: everyone starts at the bottom of every ladder and fixes it
+ * athlete can do: nobody is placed anywhere, and the athlete fixes it
  * in one tap on their first workout, which is a better first impression than
  * a form asking how many pull-ups you can do before you have done one here.
  */

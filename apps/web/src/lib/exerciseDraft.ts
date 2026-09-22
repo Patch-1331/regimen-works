@@ -4,7 +4,7 @@ import type {
   ExercisePhase,
   ExerciseUnit,
   MovementPattern,
-  ProgressionLine,
+  MovementGroup,
 } from "@regimen-works/shared";
 import type { ApiExercise, LibraryTier } from "./api";
 
@@ -17,8 +17,8 @@ import type { ApiExercise, LibraryTier } from "./api";
  *
  * `rung` is the reason this matters rather than being a detail. It is a
  * number the schema allows to be 0, and `Number("")` is also 0 — so a form
- * holding it as a number cannot tell an empty box from the bottom of a
- * ladder, and would write rung 0 onto every movement that has no rung at all.
+ * holding it as a number cannot tell an empty box from the first position
+ * in a group, and would write rung 0 onto every movement that has none.
  */
 export type ExerciseDraft = {
   name: string;
@@ -27,13 +27,13 @@ export type ExerciseDraft = {
   scalable: boolean;
   unit: ExerciseUnit;
   instructions: string;
-  line: ProgressionLine | "";
+  movementGroup: MovementGroup | "";
   rung: string;
-  altExerciseId: string;
+  fallbackExerciseId: string;
   phase: ExercisePhase | "";
 };
 
-/** What a new movement starts as: the bodyweight baseline, off every ladder. */
+/** What a new movement starts as: the bodyweight baseline, in no group. */
 export const EMPTY_DRAFT: ExerciseDraft = {
   name: "",
   pattern: "",
@@ -41,9 +41,9 @@ export const EMPTY_DRAFT: ExerciseDraft = {
   scalable: false,
   unit: "reps",
   instructions: "",
-  line: "",
+  movementGroup: "",
   rung: "",
-  altExerciseId: "",
+  fallbackExerciseId: "",
   phase: "",
 };
 
@@ -56,9 +56,9 @@ export function toDraft(exercise: ApiExercise): ExerciseDraft {
     scalable: exercise.scalable,
     unit: exercise.unit,
     instructions: exercise.instructions ?? "",
-    line: (exercise.line ?? "") as ProgressionLine | "",
+    movementGroup: (exercise.movementGroup ?? "") as MovementGroup | "",
     rung: exercise.rung === null ? "" : String(exercise.rung),
-    altExerciseId: exercise.altExerciseId ?? "",
+    fallbackExerciseId: exercise.fallbackExerciseId ?? "",
     phase: (exercise.phase ?? "") as ExercisePhase | "",
   };
 }
@@ -73,9 +73,9 @@ export function toWriteBody(draft: ExerciseDraft): CreateExercise {
     unit: draft.unit,
     instructions:
       draft.instructions.trim() === "" ? null : draft.instructions.trim(),
-    line: draft.line === "" ? null : draft.line,
+    movementGroup: draft.movementGroup === "" ? null : draft.movementGroup,
     rung: draft.rung === "" ? null : Number(draft.rung),
-    altExerciseId: draft.altExerciseId === "" ? null : draft.altExerciseId,
+    fallbackExerciseId: draft.fallbackExerciseId === "" ? null : draft.fallbackExerciseId,
     phase: draft.phase === "" ? null : draft.phase,
   };
 }
@@ -124,36 +124,36 @@ export function problemsWith(
     problems.push("A movement needs a name.");
   }
 
-  // Half a ladder is not a position on it: the remembered-choice lookup keys
-  // on `line:rung`, so a movement with one and not the other sits on a line it
+  // Half an answer is no answer: the remembered-choice lookup keys
+  // on `line:rung`, so a movement with one and not the other sits in a group it
   // can never be selected from.
-  if ((draft.line === "") !== (draft.rung === "")) {
+  if ((draft.movementGroup === "") !== (draft.rung === "")) {
     problems.push(
-      "A movement on a progression line needs its position on it — set both the line and the rung, or neither.",
+      "A movement on a progression movementGroup needs its position on it — set both the movementGroup and the rung, or neither.",
     );
   }
 
-  const alt =
-    draft.altExerciseId === ""
+  const fallback =
+    draft.fallbackExerciseId === ""
       ? null
-      : alternatives.find((e) => e.id === draft.altExerciseId);
+      : alternatives.find((e) => e.id === draft.fallbackExerciseId);
 
   // The picker only offers alternatives the API would accept, so a missing one
   // means the list moved under the form — someone retired it in another tab.
-  if (draft.altExerciseId !== "" && !alt) {
+  if (draft.fallbackExerciseId !== "" && !fallback) {
     problems.push(
       "The alternative is no longer one this movement can point at — choose another.",
     );
   }
 
   if (draft.equipment.length > 0) {
-    if (!alt) {
+    if (!fallback) {
       problems.push(
         "A movement that needs equipment has to name an alternative, or an athlete without it gets a movement they cannot do.",
       );
-    } else if (alt.equipment.length > 0) {
+    } else if (fallback.equipment.length > 0) {
       problems.push(
-        `"${alt.name}" needs equipment of its own — the fallback is one step, so the alternative has to need nothing.`,
+        `"${fallback.name}" needs equipment of its own — the fallback is one step, so the alternative has to need nothing.`,
       );
     }
   }
@@ -161,9 +161,9 @@ export function problemsWith(
   // The prescribed count carries over unchanged when a movement is swapped, so
   // a forty-second carry falling back to a reps movement arrives as forty of
   // them.
-  if (alt && alt.unit !== draft.unit) {
+  if (fallback && fallback.unit !== draft.unit) {
     problems.push(
-      `This is counted in ${draft.unit} and "${alt.name}" is counted in ${alt.unit} — the prescribed count carries over unchanged, so it would arrive meaning something else.`,
+      `This is counted in ${draft.unit} and "${fallback.name}" is counted in ${fallback.unit} — the prescribed count carries over unchanged, so it would arrive meaning something else.`,
     );
   }
 

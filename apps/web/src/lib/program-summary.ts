@@ -9,10 +9,10 @@ import type { CompletedProgram, RungChange } from "@regimen-works/shared";
  * the record would be two claims about one run.
  */
 
-/** "pull: Negative chin-up → Chin-up" — the line, and where it started and ended. */
+/** "pull: Negative chin-up → Chin-up" — the group, and where it started and ended. */
 export function rungChangeText(change: RungChange): string {
   // The line is a column name, and an athlete reads "push horizontal".
-  return `${change.line.replace(/_/g, " ")}: ${change.fromName} → ${change.toName}`;
+  return `${change.movementGroup.replace(/_/g, " ")}: ${change.fromName} → ${change.toName}`;
 }
 
 /**

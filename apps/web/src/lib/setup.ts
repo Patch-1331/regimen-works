@@ -47,7 +47,7 @@ export function dayCountWarning(
  *
  * One helper for both sentences rather than the same ternary twice. Only the
  * maximum can actually reach the singular — a minimum of one is unreachable,
- * because an empty week is refused a line earlier — so a second copy would be
+ * because an empty week is refused a group earlier — so a second copy would be
  * one nobody could ever see get it wrong.
  */
 function dayCount(days: number): string {

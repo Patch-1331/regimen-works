@@ -32,8 +32,8 @@ const PRESCRIBED = [
     order: 1,
     sets: 3,
     reps: 8,
-    line: "push_horizontal",
-    exercise: { id: "exercise-push-up", name: "Push-up", line: "push_horizontal", rung: 2 },
+    movementGroup: "push_horizontal",
+    exercise: { id: "exercise-push-up", name: "Push-up", movementGroup: "push_horizontal", rung: 2 },
   }),
 ];
 

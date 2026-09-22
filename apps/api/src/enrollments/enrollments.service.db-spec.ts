@@ -5,7 +5,7 @@ import { testPrisma } from '../test-support/database';
 import {
   createAssignment,
   createEnrollment,
-  createLadder,
+  createGroup,
   createPlan,
   createSkillLevel,
   createUser,
@@ -28,9 +28,9 @@ function service(client: PrismaClient = testPrisma()): EnrollmentsService {
 
 const TODAY = '2026-10-26';
 
-/** The ladder the design's card is written against: pull, three rungs. */
-async function pullLadder() {
-  return createLadder('pull', [
+/** The group the design's card is written against: pull, three rungs. */
+async function pullGroup() {
+  return createGroup('pull', [
     'Negative chin-up',
     'Band-assisted chin-up',
     'Chin-up',
@@ -104,7 +104,7 @@ describe('EnrollmentsService.completeRun', () => {
 
   it('reports what moved, named at both ends', async () => {
     const user = await createUser();
-    const { rungs } = await pullLadder();
+    const { rungs } = await pullGroup();
     const enrollment = await createEnrollment(user.id, {
       startingRungs: { pull: 0 },
     });
@@ -118,7 +118,7 @@ describe('EnrollmentsService.completeRun', () => {
     expect(after.summary).toMatchObject({
       rungChanges: [
         {
-          line: 'pull',
+          movementGroup: 'pull',
           fromRung: 0,
           toRung: 2,
           fromName: rungs[0].name,

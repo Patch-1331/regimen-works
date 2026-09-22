@@ -66,7 +66,7 @@ export function dominantMovement<
  * describes none of what was trained.
  *
  * **This sits above `pickWod`'s relaxation ladder, never inside it.** The
- * library is small and that ladder exists because the pool empties fast; a
+ * library is small and that fallback exists because the pool empties fast; a
  * filter applied underneath it could leave an athlete with no workout at all.
  * So when the filter empties the pool it hands back the unfiltered list and
  * lets per-movement substitution carry the day: a degraded workout beats no
@@ -184,7 +184,7 @@ export function isRestDay(isoDate: string, trainingDays: number[]): boolean {
 }
 
 export type ExerciseWithLine = {
-  line: string | null;
+  movementGroup: string | null;
 };
 
 /**
@@ -194,14 +194,14 @@ export type ExerciseWithLine = {
  *
  * This applies a remembered preference, not a verdict (DN-88). The app holds
  * no view about what anyone is capable of: the stored rung is the last thing
- * they picked, and the ladder it sits on is a grouping and a sort order, not a
+ * they picked, and the group it belongs to is a grouping and a sort order, not a
  * scale they are being measured against.
  *
  * Reps are left untouched — only the exercise identity changes, matching
  * "preserve function" (source 01 in the design doc): same rep scheme, movement
  * substituted within its own pattern.
  *
- * Movements whose exercise isn't on a tracked line (`line === null`, e.g.
+ * Movements whose exercise isn't on a group (`line === null`, e.g.
  * cardio) pass through unchanged, as does any movement where the athlete has
  * chosen nothing or no exercise exists at that line+rung — a curated WOD
  * should never end up with a hole in its movement list because of a data gap.
@@ -215,13 +215,13 @@ export function applyRememberedChoice<
   exerciseAtRung: Map<string, E>, // key: `${line}:${rung}`
 ): M[] {
   return movements.map((m) => {
-    const line = m.exercise.line;
-    if (!line) return m;
+    const movementGroup = m.exercise.movementGroup;
+    if (!movementGroup) return m;
 
-    const rung = chosenRung.get(line);
+    const rung = chosenRung.get(movementGroup);
     if (rung === undefined) return m;
 
-    const substitute = exerciseAtRung.get(`${line}:${rung}`);
+    const substitute = exerciseAtRung.get(`${movementGroup}:${rung}`);
     if (!substitute) return m;
 
     return { ...m, exercise: substitute };
@@ -230,7 +230,7 @@ export function applyRememberedChoice<
 
 export type ExerciseWithEquipment = {
   equipment: string[];
-  altExerciseId: string | null;
+  fallbackExerciseId: string | null;
 };
 
 /**
@@ -266,7 +266,7 @@ export function unperformableSubstituteIds<E extends ExerciseWithEquipment>(
     ...new Set(
       movements
         .filter((m) => !isPerformable(m.exercise, owned))
-        .map((m) => m.exercise.altExerciseId)
+        .map((m) => m.exercise.fallbackExerciseId)
         .filter((id): id is string => id !== null),
     ),
   ];
@@ -274,7 +274,7 @@ export function unperformableSubstituteIds<E extends ExerciseWithEquipment>(
 
 /**
  * Falls each movement the athlete has no equipment for back to its
- * `altExerciseId` — the layer that turns "what they chose" into "what they
+ * `fallbackExerciseId` — the layer that turns "what they chose" into "what they
  * can actually perform" (DN-79).
  *
  * Runs *after* the remembered choice, because the choice itself lands on
@@ -307,10 +307,10 @@ export function applyEquipmentAvailability<
   return movements.map((m) => {
     if (isPerformable(m.exercise, owned)) return m;
 
-    const altId = m.exercise.altExerciseId;
-    if (altId === null) return m;
+    const fallbackId = m.exercise.fallbackExerciseId;
+    if (fallbackId === null) return m;
 
-    const substitute = substituteById.get(altId);
+    const substitute = substituteById.get(fallbackId);
     if (!substitute) return m;
 
     return { ...m, exercise: substitute };
@@ -324,7 +324,7 @@ export function applyEquipmentAvailability<
  * wins.
  *
  * Keyed by WodMovement id rather than by exercise or line, so a WOD naming
- * the same line twice moves only the row that was tapped.
+ * the same group twice moves only the row that was tapped.
  *
  * A swap whose exercise is missing from `exerciseById` passes through
  * unchanged rather than throwing, for the same reason a missing rung does:

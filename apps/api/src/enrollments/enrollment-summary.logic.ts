@@ -1,5 +1,5 @@
 import {
-  progressionLine,
+  movementGroup,
   type EnrollmentSummary,
   type RungChange,
   type RungSnapshot,
@@ -13,31 +13,37 @@ import {
  * direction, and what the movement was called at each end.
  */
 
-/** The exercise seeded at a rung on a line, or undefined where none is. */
+/** The exercise seeded at a rung in a group, or undefined where none is. */
 export type RungNames = ReadonlyMap<string, string>;
 
 /** The key both sides of the diff look a name up by. */
-export function rungKey(line: string, rung: number): string {
-  return `${line}:${rung}`;
+export function rungKey(movementGroup: string, rung: number): string {
+  return `${movementGroup}:${rung}`;
 }
 
 /**
- * A line the athlete has never trained reads as rung 0, not as "no answer".
+ * A group the athlete has never chosen on reads as position 0, not as "no
+ * answer".
  *
- * `SkillLevel` has no row until something writes one (DN-86), so an athlete
- * on their first program has an empty snapshot and an empty set of current
- * rungs. Rung 0 is what the app itself means by that -- everyone starts at the
- * bottom of every ladder and fixes it in one tap on their first workout
- * (DN-15) -- so reading absence as 0 describes the athlete the card is for.
- * Reading it as unknown would make the first program, the one most worth
- * summarising, the one that reports nothing.
+ * The reason once given for this -- "everyone starts at the bottom of every
+ * ladder and fixes it in one tap on their first workout" -- describes the app
+ * as it was before DN-86 stopped provisioning anyone onto anything, and it is
+ * the wrong question here besides. This function decides what the card claims
+ * *moved*, and an athlete who never chose did not move from anywhere: the
+ * default invents a change that never happened.
+ *
+ * ADR-0004 settles it the other way -- an absent choice means the group did
+ * not move, and the card says nothing about it.
  */
-function rungOf(rungs: ReadonlyMap<string, number>, line: string): number {
-  return rungs.get(line) ?? 0;
+function rungOf(
+  rungs: ReadonlyMap<string, number>,
+  movementGroup: string,
+): number {
+  return rungs.get(movementGroup) ?? 0;
 }
 
 /**
- * Which lines moved over the run, and what they moved between.
+ * Which groups moved over the run, and what they moved between.
  *
  * Both directions are reported. A rung that went down is a real outcome of a
  * program -- an athlete who deloaded, or who corrected an over-ambitious first
@@ -58,20 +64,20 @@ export function rungChangesOver(
   const lines = new Set([...started.keys(), ...currentRungs.keys()]);
 
   return [...lines]
-    .filter((line) => progressionLine.safeParse(line).success)
+    .filter((group) => movementGroup.safeParse(group).success)
     .sort()
-    .flatMap((line) => {
-      const fromRung = rungOf(started, line);
-      const toRung = rungOf(currentRungs, line);
+    .flatMap((group) => {
+      const fromRung = rungOf(started, group);
+      const toRung = rungOf(currentRungs, group);
       if (fromRung === toRung) return [];
 
-      const fromName = names.get(rungKey(line, fromRung));
-      const toName = names.get(rungKey(line, toRung));
+      const fromName = names.get(rungKey(group, fromRung));
+      const toName = names.get(rungKey(group, toRung));
       if (fromName === undefined || toName === undefined) return [];
 
       return [
         {
-          line: line as RungChange['line'],
+          movementGroup: group as RungChange['movementGroup'],
           fromRung,
           toRung,
           fromName,

@@ -3,7 +3,7 @@ import type {
   MovementPattern,
   PlanPhase,
   PlanSlotKind,
-  ProgressionLine,
+  MovementGroup,
   ScheduleMode,
   WodType,
 } from '@regimen-works/shared';
@@ -40,9 +40,9 @@ import type {
 /** A prescribed movement. `line` rather than a specific exercise, so the day
  * resolves through whichever rung the athlete has chosen for themselves. */
 type MovementSeed = {
-  line: ProgressionLine;
+  movementGroup: MovementGroup;
   sets: number;
-  /** Seconds on a held movement, where the line's unit says so -- `core_hold`
+  /** Seconds on a held movement, where the group's unit says so -- `core_hold`
    * is counted the way a WOD counts a plank, not in repetitions. */
   reps: number;
   restSeconds: number;
@@ -191,8 +191,13 @@ export const PULL_UP_BUILDER: ProgramSeed = {
             // three minutes between them is a strength session, not a volume
             // one. The point of the week is Thursday, and Monday is what
             // leaves something for it.
-            { line: 'pull', sets: 5, reps: 3, restSeconds: 180 },
-            { line: 'core_dynamic', sets: 3, reps: 12, restSeconds: 60 },
+            { movementGroup: 'pull', sets: 5, reps: 3, restSeconds: 180 },
+            {
+              movementGroup: 'core_dynamic',
+              sets: 3,
+              reps: 12,
+              restSeconds: 60,
+            },
           ],
         },
         {
@@ -200,8 +205,8 @@ export const PULL_UP_BUILDER: ProgramSeed = {
           kind: 'movements',
           priority: 1,
           movements: [
-            { line: 'squat', sets: 3, reps: 8, restSeconds: 90 },
-            { line: 'hinge', sets: 3, reps: 10, restSeconds: 60 },
+            { movementGroup: 'squat', sets: 3, reps: 8, restSeconds: 90 },
+            { movementGroup: 'hinge', sets: 3, reps: 10, restSeconds: 60 },
           ],
         },
         {
@@ -243,9 +248,9 @@ function pullUpWeek(sets: number): SlotSeed[] {
       kind: 'movements',
       priority: 0,
       movements: [
-        { line: 'pull', sets, reps: 5, restSeconds: 120 },
-        { line: 'push_horizontal', sets: 3, reps: 8, restSeconds: 90 },
-        { line: 'core_dynamic', sets: 3, reps: 10, restSeconds: 60 },
+        { movementGroup: 'pull', sets, reps: 5, restSeconds: 120 },
+        { movementGroup: 'push_horizontal', sets: 3, reps: 8, restSeconds: 90 },
+        { movementGroup: 'core_dynamic', sets: 3, reps: 10, restSeconds: 60 },
       ],
     },
     {
@@ -255,9 +260,9 @@ function pullUpWeek(sets: number): SlotSeed[] {
       kind: 'movements',
       priority: 1,
       movements: [
-        { line: 'squat', sets: 3, reps: 10, restSeconds: 90 },
-        { line: 'hinge', sets: 3, reps: 12, restSeconds: 60 },
-        { line: 'core_hold', sets: 3, reps: 30, restSeconds: 45 },
+        { movementGroup: 'squat', sets: 3, reps: 10, restSeconds: 90 },
+        { movementGroup: 'hinge', sets: 3, reps: 12, restSeconds: 60 },
+        { movementGroup: 'core_hold', sets: 3, reps: 30, restSeconds: 45 },
       ],
     },
     {
@@ -268,9 +273,9 @@ function pullUpWeek(sets: number): SlotSeed[] {
       kind: 'movements',
       priority: 0,
       movements: [
-        { line: 'pull', sets, reps: 5, restSeconds: 120 },
-        { line: 'push_vertical', sets: 3, reps: 5, restSeconds: 90 },
-        { line: 'core_side', sets: 3, reps: 20, restSeconds: 45 },
+        { movementGroup: 'pull', sets, reps: 5, restSeconds: 120 },
+        { movementGroup: 'push_vertical', sets: 3, reps: 5, restSeconds: 90 },
+        { movementGroup: 'core_side', sets: 3, reps: 20, restSeconds: 45 },
       ],
     },
     {
@@ -308,7 +313,7 @@ function pullUpWeek(sets: number): SlotSeed[] {
  * and ranking them is what lets the same program be a three-day program and a
  * five-day one: `priority` is the author saying which sessions are the
  * program and which are the extras, so a run at three days keeps
- * Monday, Wednesday and Friday -- between them every pattern the ladders
+ * Monday, Wednesday and Friday -- between them every pattern the groups
  * train -- rather than whichever days happen to fall earliest in the week.
  *
  * The ranking is total rather than grouped, because a tie is the author
@@ -332,7 +337,7 @@ export const FOUNDATIONS: ProgramSeed = {
   defaultDays: [MONDAY, WEDNESDAY, FRIDAY],
   minWeeks: 5,
   // Two whole waves. Eight weeks of straight sets is long enough for the
-  // ladder to have moved under somebody, which is the point of the program.
+  // choice to have moved under somebody, which is the point of the program.
   defaultWeeks: 8,
   maxWeeks: 16,
   weeks: [
@@ -383,9 +388,14 @@ function foundationsWeek(
       kind: 'movements',
       priority: 0,
       movements: [
-        { line: 'push_horizontal', sets, reps: pressReps, restSeconds: 90 },
-        { line: 'pull', sets, reps: upperReps, restSeconds: 120 },
-        { line: 'core_dynamic', sets: 3, reps: 10, restSeconds: 60 },
+        {
+          movementGroup: 'push_horizontal',
+          sets,
+          reps: pressReps,
+          restSeconds: 90,
+        },
+        { movementGroup: 'pull', sets, reps: upperReps, restSeconds: 120 },
+        { movementGroup: 'core_dynamic', sets: 3, reps: 10, restSeconds: 60 },
       ],
     },
     {
@@ -393,9 +403,9 @@ function foundationsWeek(
       kind: 'movements',
       priority: 1,
       movements: [
-        { line: 'squat', sets, reps: legReps, restSeconds: 90 },
-        { line: 'hinge', sets, reps: legReps + 2, restSeconds: 60 },
-        { line: 'core_hold', sets: 3, reps: 30, restSeconds: 45 },
+        { movementGroup: 'squat', sets, reps: legReps, restSeconds: 90 },
+        { movementGroup: 'hinge', sets, reps: legReps + 2, restSeconds: 60 },
+        { movementGroup: 'core_hold', sets: 3, reps: 30, restSeconds: 45 },
       ],
     },
     {
@@ -403,9 +413,14 @@ function foundationsWeek(
       kind: 'movements',
       priority: 2,
       movements: [
-        { line: 'push_vertical', sets, reps: upperReps, restSeconds: 90 },
-        { line: 'pull', sets, reps: upperReps, restSeconds: 120 },
-        { line: 'core_side', sets: 3, reps: 20, restSeconds: 45 },
+        {
+          movementGroup: 'push_vertical',
+          sets,
+          reps: upperReps,
+          restSeconds: 90,
+        },
+        { movementGroup: 'pull', sets, reps: upperReps, restSeconds: 120 },
+        { movementGroup: 'core_side', sets: 3, reps: 20, restSeconds: 45 },
       ],
     },
     {
@@ -426,9 +441,9 @@ function foundationsWeek(
       kind: 'movements',
       priority: 4,
       movements: [
-        { line: 'squat', sets: 3, reps: legReps, restSeconds: 90 },
-        { line: 'hinge', sets: 3, reps: legReps + 2, restSeconds: 60 },
-        { line: 'core_dynamic', sets: 3, reps: 12, restSeconds: 60 },
+        { movementGroup: 'squat', sets: 3, reps: legReps, restSeconds: 90 },
+        { movementGroup: 'hinge', sets: 3, reps: legReps + 2, restSeconds: 60 },
+        { movementGroup: 'core_dynamic', sets: 3, reps: 12, restSeconds: 60 },
       ],
     },
   ];
@@ -533,7 +548,7 @@ export async function upsertFirstPrograms(
               id: programMovementId(id, week.order, slot.dayOfWeek, index),
               planSlotId: slotId,
               order: index,
-              line: movement.line,
+              movementGroup: movement.movementGroup,
               exerciseId: null,
               sets: movement.sets,
               reps: movement.reps,

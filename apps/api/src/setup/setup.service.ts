@@ -146,7 +146,7 @@ export class SetupService {
         where: { userId, status: 'active' },
         select: { id: true },
       });
-      // Where every ladder stands as the run begins, so the completion card
+      // What every group stands at as the run begins, so the completion card
       // can say what moved rather than only how many sessions were trained
       // (DN-18). Taken inside the transaction, against the same instant the
       // enrollment is written.

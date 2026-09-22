@@ -172,16 +172,22 @@ describe('applyRememberedChoice', () => {
   type FakeExercise = ExerciseWithLine & { name: string };
   const kneePushUp: FakeExercise = {
     name: 'Knee push-up',
-    line: 'push_horizontal',
+    movementGroup: 'push_horizontal',
   };
-  const pushUp: FakeExercise = { name: 'Push-up', line: 'push_horizontal' };
+  const pushUp: FakeExercise = {
+    name: 'Push-up',
+    movementGroup: 'push_horizontal',
+  };
   const diamondPushUp: FakeExercise = {
     name: 'Diamond push-up',
-    line: 'push_horizontal',
+    movementGroup: 'push_horizontal',
   };
-  const airSquat: FakeExercise = { name: 'Air squat', line: 'squat' };
-  const pistolSquat: FakeExercise = { name: 'Pistol squat', line: 'squat' };
-  const burpee: FakeExercise = { name: 'Burpee', line: null };
+  const airSquat: FakeExercise = { name: 'Air squat', movementGroup: 'squat' };
+  const pistolSquat: FakeExercise = {
+    name: 'Pistol squat',
+    movementGroup: 'squat',
+  };
+  const burpee: FakeExercise = { name: 'Burpee', movementGroup: null };
 
   const exerciseAtRung = new Map<string, FakeExercise>([
     ['push_horizontal:0', kneePushUp],
@@ -191,7 +197,7 @@ describe('applyRememberedChoice', () => {
     ['squat:3', pistolSquat],
   ]);
 
-  it('substitutes a movement for the exercise at the current rung on its line', () => {
+  it('substitutes a movement for the exercise at the current rung on its movementGroup', () => {
     const movements = [{ reps: 10, exercise: pushUp }];
     const currentRung = new Map([['push_horizontal', 0]]);
     const result = applyRememberedChoice(
@@ -203,7 +209,7 @@ describe('applyRememberedChoice', () => {
     expect(result[0].reps).toBe(10); // reps untouched — only the exercise changes
   });
 
-  it('leaves a movement unchanged when its exercise has no tracked line', () => {
+  it('leaves a movement unchanged when its exercise has no tracked movementGroup', () => {
     const movements = [{ reps: 15, exercise: burpee }];
     const currentRung = new Map([['push_horizontal', 2]]);
     const result = applyRememberedChoice(
@@ -214,7 +220,7 @@ describe('applyRememberedChoice', () => {
     expect(result[0].exercise).toBe(burpee);
   });
 
-  it('leaves a movement unchanged when its line has no recorded rung', () => {
+  it('leaves a movement unchanged when its movementGroup has no recorded rung', () => {
     const movements = [{ reps: 5, exercise: pistolSquat }];
     const currentRung = new Map<string, number>(); // no squat entry at all
     const result = applyRememberedChoice(
@@ -225,7 +231,7 @@ describe('applyRememberedChoice', () => {
     expect(result[0].exercise).toBe(pistolSquat);
   });
 
-  it('leaves a movement unchanged when no exercise exists at that line+rung', () => {
+  it('leaves a movement unchanged when no exercise exists at that movementGroup+rung', () => {
     const movements = [{ reps: 5, exercise: airSquat }];
     const currentRung = new Map([['squat', 99]]); // no exercise seeded at squat:99
     const result = applyRememberedChoice(
@@ -260,50 +266,50 @@ describe('applyEquipmentAvailability', () => {
     id: string;
     name: string;
     equipment: string[];
-    altExerciseId: string | null;
+    fallbackExerciseId: string | null;
   };
 
   const rowUnderTable: FakeExercise = {
     id: 'row',
     name: 'Row under table',
     equipment: [],
-    altExerciseId: null,
+    fallbackExerciseId: null,
   };
   const pullUp: FakeExercise = {
     id: 'pull-up',
     name: 'Pull-up',
     equipment: ['bar'],
-    altExerciseId: 'row',
+    fallbackExerciseId: 'row',
   };
   const burpee: FakeExercise = {
     id: 'burpee',
     name: 'Burpee',
     equipment: [],
-    altExerciseId: null,
+    fallbackExerciseId: null,
   };
   const barMuscleUp: FakeExercise = {
     id: 'muscle-up',
     name: 'Bar muscle-up',
     equipment: ['bar'],
-    altExerciseId: null, // the data gap DN-83 exists to stop
+    fallbackExerciseId: null, // the data gap DN-83 exists to stop
   };
   const boxStepUp: FakeExercise = {
     id: 'step-up',
     name: 'Box step-up',
     equipment: ['box'],
-    altExerciseId: 'lunge',
+    fallbackExerciseId: 'lunge',
   };
   const weightedStepUp: FakeExercise = {
     id: 'weighted-step-up',
     name: 'Weighted box step-up',
     equipment: ['box', 'dumbbell'],
-    altExerciseId: 'step-up',
+    fallbackExerciseId: 'step-up',
   };
   const lunge: FakeExercise = {
     id: 'lunge',
     name: 'Lunge',
     equipment: [],
-    altExerciseId: null,
+    fallbackExerciseId: null,
   };
 
   const substituteById = new Map<string, FakeExercise>([
@@ -410,14 +416,14 @@ describe('applyEquipmentAvailability', () => {
 });
 
 describe('unperformableSubstituteIds', () => {
-  type Tagged = { equipment: string[]; altExerciseId: string | null };
-  const pullUp: Tagged = { equipment: ['bar'], altExerciseId: 'row' };
-  const chinUp: Tagged = { equipment: ['bar'], altExerciseId: 'row' };
-  const burpee: Tagged = { equipment: [], altExerciseId: null };
-  const muscleUp: Tagged = { equipment: ['bar'], altExerciseId: null };
+  type Tagged = { equipment: string[]; fallbackExerciseId: string | null };
+  const pullUp: Tagged = { equipment: ['bar'], fallbackExerciseId: 'row' };
+  const chinUp: Tagged = { equipment: ['bar'], fallbackExerciseId: 'row' };
+  const burpee: Tagged = { equipment: [], fallbackExerciseId: null };
+  const muscleUp: Tagged = { equipment: ['bar'], fallbackExerciseId: null };
   const doubleUnder: Tagged = {
     equipment: ['jump_rope'],
-    altExerciseId: 'high-knees',
+    fallbackExerciseId: 'high-knees',
   };
 
   it('asks for nothing when the athlete owns what the WOD needs', () => {
@@ -467,7 +473,7 @@ describe('applySubstitutions', () => {
     expect(result[0].reps).toBe(15); // reps untouched — only the exercise changes
   });
 
-  it('moves only the tapped row when a WOD names the same line twice', () => {
+  it('moves only the tapped row when a WOD names the same movementGroup twice', () => {
     const movements = [
       { id: 'm1', reps: 15, exercise: negative },
       { id: 'm2', reps: 10, exercise: negative },

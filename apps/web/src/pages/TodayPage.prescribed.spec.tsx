@@ -26,7 +26,7 @@ const chinUp = fixtures.apiExercise({
   id: "exercise-chin-up",
   name: "Chin-up",
   pattern: "pull",
-  line: "pull",
+  movementGroup: "pull",
   rung: 1,
 });
 
@@ -34,7 +34,7 @@ const ringRow = fixtures.apiExercise({
   id: "exercise-ring-row",
   name: "Ring row",
   pattern: "pull",
-  line: "pull",
+  movementGroup: "pull",
   rung: 0,
 });
 
@@ -128,7 +128,7 @@ describe("the prescribed plate", () => {
     // somebody a different movement should at least say so.
     prescribing([
       fixtures.prescribedMovement({
-        exercise: { id: ringRow.id, name: "Row under table", line: null, rung: null },
+        exercise: { id: ringRow.id, name: "Row under table", movementGroup: null, rung: null },
         prescribedName: "Chin-up",
         prescribedId: chinUp.id,
         prescribedReason: "equipment",

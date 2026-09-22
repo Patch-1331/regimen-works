@@ -72,7 +72,7 @@ export class SchedulerService {
    * is the log -- Render captures stdout, so a warn here is greppable without
    * any further infrastructure.
    *
-   * Warn rather than log: the ladder firing is not normal. It means the
+   * Warn rather than log: the relaxation ladder firing is not normal. It means the
    * library cannot satisfy a slot somebody authored, which is a content bug
    * with a fix (seed the missing WODs -- DN-23) rather than a fact of life.
    * The line names the plan, the week and the axes given up, because the
@@ -323,7 +323,7 @@ export class SchedulerService {
    *
    * The figures are computed and stored by `EnrollmentsService` in the same
    * breath (DN-18), because the moment a run is retired is the only moment
-   * they are all still true -- the ladder grows, days get deleted with a user,
+   * they are all still true -- the group grows, days get deleted with a user,
    * and a record of what somebody finished should not change afterwards
    * because the library did.
    */
@@ -407,7 +407,7 @@ export class SchedulerService {
    * (DN-19).
    *
    * Null also covers a `movements` day whose prescription resolved to nothing
-   * -- every line missing from the library this athlete can see. The caller
+   * -- every group missing from the library this athlete can see. The caller
    * then generates a WOD, which is the same refusal `resolveProgramDay` makes
    * for a slot with no rows at all: an authoring or library gap should cost
    * somebody the session it described, not the day.
@@ -766,7 +766,7 @@ export class SchedulerService {
         // Supermans is having nothing substituted for equipment.
         this.prisma.skillLevel.findMany({ where: { userId } }),
         this.prisma.exercise.findMany({
-          where: { ...libraryVisibleTo(userId), line: { not: null } },
+          where: { ...libraryVisibleTo(userId), movementGroup: { not: null } },
         }),
       ]);
 
@@ -778,9 +778,11 @@ export class SchedulerService {
           a.wod !== null,
       )
       .map((a) => ({ date: a.date, wod: a.wod }));
-    const chosenRung = new Map(skillLevels.map((l) => [l.line, l.rung]));
+    const chosenRung = new Map(
+      skillLevels.map((l) => [l.movementGroup, l.rung]),
+    );
     const exerciseAtRung = new Map(
-      linedExercises.map((e) => [`${e.line}:${e.rung}`, e]),
+      linedExercises.map((e) => [`${e.movementGroup}:${e.rung}`, e]),
     );
     const owned = new Set(equipment);
 

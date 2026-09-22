@@ -19,7 +19,7 @@ import {
 /**
  * One movement a `movements` slot prescribes, as authored (DN-19).
  *
- * Still authored: `line` is a progression line, not an exercise. Resolving it
+ * Still authored: `line` is a movement groups, not an exercise. Resolving it
  * to the exercise this athlete trains today needs their rung and their
  * equipment, neither of which belongs in a pure function — so this stays as
  * written and `PrescriptionService` does the rest.
@@ -27,7 +27,7 @@ import {
 export type ProgramSlotMovement = {
   id: string;
   order: number;
-  line: string | null;
+  movementGroup: string | null;
   exerciseId: string | null;
   sets: number;
   reps: number;

@@ -65,7 +65,7 @@ describe('UserProvisioningService.ensure', () => {
 
   it('provisions no skill levels at all', async () => {
     // DN-86. A rung is the app forming an opinion about someone it has never
-    // seen train, and rung 0 on every line was the worst version of that
+    // seen train, and rung 0 on every group was the worst version of that
     // guess. No row means the first WOD is the library's own prescription.
     const userId = newUserId();
 

@@ -37,7 +37,7 @@ seeded exercise pool (24 movements) and WOD library (11 WODs).
 
 | Entity | Key fields | Purpose |
 |---|---|---|
-| `Exercise` | pattern, equipment, scalable, altExerciseId | The movement pool; `altExerciseId` is the no-equipment substitute. |
+| `Exercise` | pattern, equipment, scalable, fallbackExerciseId | The movement pool; `fallbackExerciseId` is the no-equipment substitute. |
 | `Wod` | type, timeCapMinutes, movements, isNamed, dominantPattern, work/rest seconds + intervalCount | A reusable workout definition; the interval fields drive the EMOM/Tabata timer. |
 | `ScheduleRule` | maxDaysPerWeek, patternCooldownDays, warm-up/cool-down + auto-stop toggles | Config the scheduler reads, plus the preferences the Settings screen writes. |
 | `DailyAssignment` | date, wodId, status | "Today's WOD" — scheduled → in_progress → completed. |

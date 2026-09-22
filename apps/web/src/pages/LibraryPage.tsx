@@ -22,12 +22,14 @@ type Editing =
   | { kind: "create"; tier: LibraryTier }
   | { kind: "edit"; tier: LibraryTier; exercise: ApiExercise };
 
-/** What a row says about itself under its name — pattern, ladder, equipment. */
+/** What a row says about itself under its name — pattern, group, equipment. */
 function summarise(exercise: ApiExercise): string {
   const parts: string[] = [];
   if (exercise.pattern) parts.push(patternLabel(exercise.pattern));
-  if (exercise.line && exercise.rung !== null)
-    parts.push(`${lineLabel(exercise.line)} · rung ${exercise.rung}`);
+  // The group, but not the position in it. A list index is not information
+  // an athlete needs, and printing it is what made it look like a grade.
+  if (exercise.movementGroup)
+    parts.push(lineLabel(exercise.movementGroup));
   parts.push(
     exercise.equipment.length === 0
       ? "bodyweight"

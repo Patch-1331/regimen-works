@@ -27,7 +27,7 @@ export async function createExercise(overrides: Record<string, unknown> = {}) {
       name: unique('Push-up'),
       pattern: 'push',
       unit: 'reps',
-      line: 'push_horizontal',
+      movementGroup: 'push_horizontal',
       rung: 0,
       ...overrides,
     },
@@ -133,27 +133,29 @@ export async function createLog(
 
 export async function createSkillLevel(
   userId: string,
-  line: string,
+  movementGroup: string,
   rung: number,
 ) {
-  return testPrisma().skillLevel.create({ data: { userId, line, rung } });
+  return testPrisma().skillLevel.create({
+    data: { userId, movementGroup, rung },
+  });
 }
 
 /**
- * A progression line as the athlete sees it: rungs 0..n-1 of one line, each
- * with an optional no-equipment alternative off the line entirely.
+ * A movement groups as the athlete sees it: rungs 0..n-1 of one line, each
+ * with an optional no-equipment alternative outside the group entirely.
  */
-export async function createLadder(
-  line: string,
+export async function createGroup(
+  movementGroup: string,
   names: string[],
-  options: { altFor?: number } = {},
+  options: { fallbackFor?: number } = {},
 ) {
-  const alt =
-    options.altFor === undefined
+  const fallback =
+    options.fallbackFor === undefined
       ? null
       : await createExercise({
           name: unique('Row under table'),
-          line: null,
+          movementGroup: null,
           rung: null,
         });
 
@@ -162,13 +164,13 @@ export async function createLadder(
     rungs.push(
       await createExercise({
         name: unique(name),
-        line,
+        movementGroup,
         rung: index,
-        altExerciseId: index === options.altFor ? alt!.id : null,
+        fallbackExerciseId: index === options.fallbackFor ? fallback!.id : null,
       }),
     );
   }
-  return { rungs, alt };
+  return { rungs, fallback };
 }
 
 /**
@@ -281,7 +283,7 @@ export async function createPrescribedDay(
                 movements: {
                   create: sets.map((count, order) => ({
                     order,
-                    line: 'pull',
+                    movementGroup: 'pull',
                     sets: count,
                     reps: 3,
                     restSeconds: 90,

@@ -28,8 +28,9 @@ describe('request logging', () => {
     const lines: Record<string, unknown>[] = [];
     const stream = new Writable({
       write(chunk: Buffer, _encoding, done) {
-        for (const line of chunk.toString().trim().split('\n')) {
-          if (line) lines.push(JSON.parse(line) as Record<string, unknown>);
+        for (const movementGroup of chunk.toString().trim().split('\n')) {
+          if (movementGroup)
+            lines.push(JSON.parse(movementGroup) as Record<string, unknown>);
         }
         done();
       },
@@ -89,7 +90,7 @@ describe('request logging', () => {
     expect(JSON.stringify(sink.lines)).toContain('[Redacted]');
   });
 
-  it('correlates the line with the id Cloudflare gave the request', async () => {
+  it('correlates the movementGroup with the id Cloudflare gave the request', async () => {
     const sink = collector();
     const app = await appWriting(sink);
 
@@ -100,7 +101,7 @@ describe('request logging', () => {
     await app.close();
 
     const ids = sink.lines.map(
-      (line) => (line.req as { id?: string } | undefined)?.id,
+      (movementGroup) => (movementGroup.req as { id?: string } | undefined)?.id,
     );
     expect(ids).toContain('cf-trace-me');
   });
@@ -112,7 +113,9 @@ describe('request logging', () => {
     await request(app.getHttpServer()).get('/today').expect(200);
     await app.close();
 
-    expect(sink.lines.some((line) => line.userId === 'user_alice')).toBe(true);
+    expect(
+      sink.lines.some((movementGroup) => movementGroup.userId === 'user_alice'),
+    ).toBe(true);
   });
 
   it('writes nothing for the health probe', async () => {
@@ -124,7 +127,11 @@ describe('request logging', () => {
     await request(app.getHttpServer()).get('/health').expect(200);
     await app.close();
 
-    expect(sink.lines.filter((line) => line.req ?? line.res)).toHaveLength(0);
+    expect(
+      sink.lines.filter(
+        (movementGroup) => movementGroup.req ?? movementGroup.res,
+      ),
+    ).toHaveLength(0);
   });
 
   it('is registered on the real application, not only in this spec', async () => {

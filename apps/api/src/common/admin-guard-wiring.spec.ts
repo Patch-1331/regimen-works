@@ -53,9 +53,9 @@ const BODY = {
   scalable: false,
   unit: 'reps',
   instructions: null,
-  line: null,
+  movementGroup: null,
   rung: null,
-  altExerciseId: null,
+  fallbackExerciseId: null,
   phase: null,
 };
 

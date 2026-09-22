@@ -7,19 +7,19 @@ import { proposeRungChanges, TrainedRung } from './rung-changes.logic';
  */
 
 const chinUp: TrainedRung = {
-  line: 'pull',
+  movementGroup: 'pull',
   rung: 2,
   exerciseId: 'chin-up',
   exerciseName: 'Chin-up',
 };
 const negative: TrainedRung = {
-  line: 'pull',
+  movementGroup: 'pull',
   rung: 1,
   exerciseId: 'negative',
   exerciseName: 'Negative chin-up',
 };
 const pushUp: TrainedRung = {
-  line: 'push_horizontal',
+  movementGroup: 'push_horizontal',
   rung: 1,
   exerciseId: 'push-up',
   exerciseName: 'Push-up',
@@ -30,7 +30,7 @@ describe('proposeRungChanges', () => {
     const proposals = proposeRungChanges([chinUp], new Map([['pull', 0]]));
     expect(proposals).toEqual([
       {
-        line: 'pull',
+        movementGroup: 'pull',
         fromRung: 0,
         toRung: 2,
         exerciseId: 'chin-up',
@@ -56,7 +56,7 @@ describe('proposeRungChanges', () => {
   // to take the higher rung — "someone who did both chin-ups and negatives did
   // chin-ups" — which is an inference about ability. The app has no way to
   // know which they meant to keep, so it takes the one they reached for last.
-  it('asks once per line, taking the choice made most recently', () => {
+  it('asks once per movementGroup, taking the choice made most recently', () => {
     const proposals = proposeRungChanges(
       [negative, chinUp],
       new Map([['pull', 0]]),
@@ -75,14 +75,14 @@ describe('proposeRungChanges', () => {
   });
 
   // DN-86. This used to propose nothing, which made sense only while everyone
-  // was provisioned at rung 0 — with no provisioning, every line looks like
+  // was provisioned at rung 0 — with no provisioning, every group looks like
   // this on a new athlete's first session, and the first choice is the one
   // most worth remembering.
-  it('proposes a line with no rung on record, as a change from null', () => {
+  it('proposes a movementGroup with no rung on record, as a change from null', () => {
     const proposals = proposeRungChanges([chinUp], new Map());
     expect(proposals).toHaveLength(1);
     expect(proposals[0]).toMatchObject({
-      line: 'pull',
+      movementGroup: 'pull',
       fromRung: null,
       toRung: 2,
     });
@@ -96,7 +96,10 @@ describe('proposeRungChanges', () => {
         ['push_horizontal', 0],
       ]),
     );
-    expect(proposals.map((p) => p.line)).toEqual(['pull', 'push_horizontal']);
+    expect(proposals.map((p) => p.movementGroup)).toEqual([
+      'pull',
+      'push_horizontal',
+    ]);
   });
 
   it('returns a stable order, so the card does not reshuffle', () => {

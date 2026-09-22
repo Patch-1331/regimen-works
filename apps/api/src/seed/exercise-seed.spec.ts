@@ -1,4 +1,4 @@
-import { progressionLine } from '@regimen-works/shared';
+import { movementGroup } from '@regimen-works/shared';
 import { exercises } from '../../prisma/exercise-seed';
 import {
   mismatchedSubstituteUnits,
@@ -29,34 +29,39 @@ describe('the seeded exercise library', () => {
     expect(mismatchedSubstituteUnits(exercises)).toEqual([]);
   });
 
-  it('puts every movement on a line the rest of the app knows', () => {
+  it('puts every movement on a movementGroup the rest of the app knows', () => {
     // `ExerciseSeed.line` is a bare string, so a typo here reaches the
-    // database and then the athlete: the row lands on a line nothing else
+    // database and then the athlete: the row lands in a group nothing else
     // recognises, `SkillLevelsService` refuses to write a choice for it, and
     // the Stats panel labels it with the raw slug. Adding a real line means
     // adding it to the enum too (DN-84 added squat_loaded and hinge_loaded);
     // this is what says so out loud.
-    const lines = [...new Set(exercises.map((e) => e.line).filter(Boolean))];
+    const lines = [
+      ...new Set(exercises.map((e) => e.movementGroup).filter(Boolean)),
+    ];
     const unknown = lines.filter(
-      (line) => !progressionLine.safeParse(line).success,
+      (group) => !movementGroup.safeParse(group).success,
     );
     expect(unknown).toEqual([]);
   });
 
-  it('numbers each line from zero with no gaps and no ties', () => {
+  it('numbers each movementGroup from zero with no gaps and no ties', () => {
     // `applyRememberedChoice` looks an exercise up by (line, rung), so a
     // duplicate rung makes which movement an athlete gets depend on row
     // order, and a gap makes a stored rung resolve to nothing at all.
     const byLine = new Map<string, number[]>();
     for (const e of exercises) {
-      if (!e.line || e.rung === undefined) continue;
-      byLine.set(e.line, [...(byLine.get(e.line) ?? []), e.rung]);
+      if (!e.movementGroup || e.rung === undefined) continue;
+      byLine.set(e.movementGroup, [
+        ...(byLine.get(e.movementGroup) ?? []),
+        e.rung,
+      ]);
     }
 
-    for (const [line, rungs] of byLine) {
+    for (const [movementGroup, rungs] of byLine) {
       const sorted = [...rungs].sort((a, b) => a - b);
-      expect({ line, rungs: sorted }).toEqual({
-        line,
+      expect({ movementGroup, rungs: sorted }).toEqual({
+        movementGroup,
         rungs: sorted.map((_, i) => i),
       });
     }
@@ -92,40 +97,50 @@ describe('the seeded exercise library', () => {
    * line it can only offer the bodyweight alternative, which is the app
    * taking away gear they have.
    */
-  describe('the lines where every rung needs equipment', () => {
+  describe('the groups where every rung needs equipment', () => {
     const pairs = [
-      { line: 'cardio_rope', piece: 'jump_rope' },
-      { line: 'squat_box', piece: 'box' },
+      { movementGroup: 'cardio_rope', piece: 'jump_rope' },
+      { movementGroup: 'squat_box', piece: 'box' },
     ];
 
-    it.each(pairs)('puts both $piece movements on $line', ({ line }) => {
-      const rungs = exercises
-        .filter((e) => e.line === line)
-        .sort((a, b) => (a.rung ?? 0) - (b.rung ?? 0));
-      expect(rungs.map((e) => e.rung)).toEqual([0, 1]);
-    });
-
-    it.each(pairs)('needs $piece on every rung of $line', ({ line, piece }) => {
-      // What makes these lines different from every other one: there is no
-      // rung an athlete without the piece can climb to. The way out is the
-      // alternative, not a lower rung, which is the case below.
-      const rungs = exercises.filter((e) => e.line === line);
-      expect(rungs.map((e) => e.equipment)).toEqual([[piece], [piece]]);
-    });
+    it.each(pairs)(
+      'puts both $piece movements on $movementGroup',
+      ({ movementGroup }) => {
+        const rungs = exercises
+          .filter((e) => e.movementGroup === movementGroup)
+          .sort((a, b) => (a.rung ?? 0) - (b.rung ?? 0));
+        expect(rungs.map((e) => e.rung)).toEqual([0, 1]);
+      },
+    );
 
     it.each(pairs)(
-      'keeps a bodyweight way off $line on both rungs',
-      ({ line }) => {
+      'needs $piece on every rung of $movementGroup',
+      ({ movementGroup, piece }) => {
+        // What makes these lines different from every other one: there is no
+        // rung an athlete without the piece can climb to. The way out is the
+        // alternative, not a lower rung, which is the case below.
+        const rungs = exercises.filter(
+          (e) => e.movementGroup === movementGroup,
+        );
+        expect(rungs.map((e) => e.equipment)).toEqual([[piece], [piece]]);
+      },
+    );
+
+    it.each(pairs)(
+      'keeps a bodyweight way off $movementGroup on both rungs',
+      ({ movementGroup }) => {
         // `unreachableSubstitutes` already says this across the whole library.
-        // Said again here because it is the property that makes the lines safe
+        // Said again here because it is the property that makes the groups safe
         // to add: an athlete who owns neither piece is no worse off than before.
         const byName = new Map(exercises.map((e) => [e.name, e]));
         const stranded = exercises
-          .filter((e) => e.line === line)
+          .filter((e) => e.movementGroup === movementGroup)
           .filter((e) => {
-            const alt = e.alt ? byName.get(e.alt) : undefined;
+            const fallback = e.fallback ? byName.get(e.fallback) : undefined;
             return (
-              !alt || (alt.equipment ?? []).length > 0 || alt.line === line
+              !fallback ||
+              (fallback.equipment ?? []).length > 0 ||
+              fallback.movementGroup === movementGroup
             );
           })
           .map((e) => e.name);
@@ -147,10 +162,10 @@ describe('the seeded exercise library', () => {
       expect(added.filter((name) => !names.has(name))).toEqual([]);
     });
 
-    it('keeps them off every progression line', () => {
+    it('keeps them off every progression movementGroup', () => {
       const onALine = exercises
-        .filter((e) => added.includes(e.name) && e.line)
-        .map((e) => `${e.name} on ${e.line}`);
+        .filter((e) => added.includes(e.name) && e.movementGroup)
+        .map((e) => `${e.name} on ${e.movementGroup}`);
       expect(onALine).toEqual([]);
     });
 

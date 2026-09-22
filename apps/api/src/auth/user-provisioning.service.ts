@@ -13,7 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
  * them: their User row (which every per-user foreign key points at), a
  * ScheduleRule, and an enrollment in Just WODs (DN-13).
  *
- * Deliberately **not** a SkillLevel per progression line (DN-86). Provisioning
+ * Deliberately **not** a SkillLevel per movement groups (DN-86). Provisioning
  * a rung is the app forming an opinion about someone it has never seen train:
  * it used to start everyone at rung 0, so an athlete who can do ten pull-ups
  * was handed negative pull-ups and knee push-ups on day one. `applyCurrentRung`

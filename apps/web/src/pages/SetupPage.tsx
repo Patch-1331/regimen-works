@@ -22,9 +22,9 @@ import { WEEKDAYS, localIsoDate } from "../lib/weekdays";
  * changes nothing, and the commit at the end is the only write.
  *
  * There is deliberately no fourth question about what the athlete can do.
- * Everyone starts at the bottom of every ladder and fixes it in one tap on
- * their first workout, which is a better first impression than a form asking
- * how many pull-ups you can do before you have done one here.
+ * Everyone is handed each group's default movement and changes it in one tap
+ * on their first workout, which is a better first impression than a form
+ * asking how many pull-ups you can do before you have done one here.
  */
 
 const STEPS = ["welcome", "program", "cadence", "start", "ready"] as const;
@@ -654,8 +654,8 @@ function ReadyStep({
     <div>
       <Title>You're ready</Title>
       <Lede>
-        Movements start at the bottom of each ladder. Change any of them with
-        one tap on your first workout.
+        Every movement starts on a default. Change any of them with one tap on
+        your first workout.
       </Lede>
 
       <dl

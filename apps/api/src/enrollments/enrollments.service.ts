@@ -176,7 +176,7 @@ export class EnrollmentsService {
 
   /**
    * The figures for one run: how long it was, how much of it was trained, and
-   * which ladders moved while it ran.
+   * which groups moved while it ran.
    *
    * Sessions are counted from the assignments that point at this enrollment,
    * so a day trained on a Just WODs fallback before the program started is
@@ -195,27 +195,29 @@ export class EnrollmentsService {
       }),
       this.prisma.skillLevel.findMany({
         where: { userId },
-        select: { line: true, rung: true },
+        select: { movementGroup: true, rung: true },
       }),
     ]);
 
-    const currentRungs = new Map(skillLevels.map((l) => [l.line, l.rung]));
+    const currentRungs = new Map(
+      skillLevels.map((l) => [l.movementGroup, l.rung]),
+    );
     const lines = [
       ...new Set([...Object.keys(startingRungs), ...currentRungs.keys()]),
     ];
 
-    // Only the lines in play. The ladder is library content and most of it is
+    // Only the groups in play. The library is mostly content this card never
     // irrelevant to any one program -- a pull program has nothing to say
     // about the athlete's hinge.
-    const ladder = await this.prisma.exercise.findMany({
-      where: { ...libraryVisibleTo(userId), line: { in: lines } },
-      select: { line: true, rung: true, name: true },
+    const inGroups = await this.prisma.exercise.findMany({
+      where: { ...libraryVisibleTo(userId), movementGroup: { in: lines } },
+      select: { movementGroup: true, rung: true, name: true },
     });
     const names = new Map(
-      ladder.flatMap((e) =>
-        e.line === null || e.rung === null
+      inGroups.flatMap((e) =>
+        e.movementGroup === null || e.rung === null
           ? []
-          : [[rungKey(e.line, e.rung), e.name] as const],
+          : [[rungKey(e.movementGroup, e.rung), e.name] as const],
       ),
     );
 

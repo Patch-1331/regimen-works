@@ -1,6 +1,6 @@
 import type {
   ExerciseUnit,
-  ProgressionLine,
+  MovementGroup,
   RoundSplit,
   SessionMovement,
   SubstitutionReason,
@@ -19,7 +19,7 @@ export type ResolvedMovementInput = {
     id: string;
     name: string;
     unit: string;
-    line: string | null;
+    movementGroup: string | null;
     rung: number | null;
   };
 };
@@ -56,7 +56,7 @@ export function snapshotMovements(
         id: m.exercise.id,
         name: m.exercise.name,
         unit: m.exercise.unit as ExerciseUnit,
-        line: m.exercise.line as ProgressionLine | null,
+        movementGroup: m.exercise.movementGroup as MovementGroup | null,
         rung: m.exercise.rung,
       },
     }));
@@ -130,7 +130,7 @@ export type ResolvedPrescribedInput = {
     id: string;
     name: string;
     unit: string;
-    line: string | null;
+    movementGroup: string | null;
     rung: number | null;
   };
 };
@@ -174,7 +174,7 @@ export function snapshotPrescribedMovements(
         id: m.exercise.id,
         name: m.exercise.name,
         unit: m.exercise.unit as ExerciseUnit,
-        line: m.exercise.line as ProgressionLine | null,
+        movementGroup: m.exercise.movementGroup as MovementGroup | null,
         rung: m.exercise.rung,
       },
     }));

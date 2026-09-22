@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { progressionLine, type SkillLevel } from "@regimen-works/shared";
+import { movementGroup, type SkillLevel } from "@regimen-works/shared";
 import type { ApiExercise } from "./api";
 import { buildMovementChoices, lineLabel } from "./progressions";
 
 /**
  * What the Stats panel says about the athlete (DN-91). It replaced a ladder
  * marked done / current / locked, so what these lock in is mostly what it no
- * longer claims: every movement on the line is offered, one is marked as
+ * longer claims: every movement on the group is offered, one is marked as
  * chosen, and nothing is closed off or graduated past.
  */
 
@@ -19,22 +19,22 @@ function exercise(
     equipment: [],
     scalable: true,
     unit: "reps",
-    line: "pull",
+    movementGroup: "pull",
     rung: 0,
     instructions: null,
-    altExerciseId: null,
+    fallbackExerciseId: null,
     phase: null,
     ownerId: null,
     archivedAt: null,
-    altExercise: null,
+    fallbackExercise: null,
     ...partial,
   };
 }
 
-function skill(line: string, rung: number): SkillLevel {
+function skill(movementGroup: string, rung: number): SkillLevel {
   return {
-    id: `sl-${line}`,
-    line: line as SkillLevel["line"],
+    id: `sl-${movementGroup}`,
+    movementGroup: movementGroup as SkillLevel["movementGroup"],
     rung,
     updatedAt: "2026-09-13T10:00:00.000Z",
   };
@@ -46,7 +46,7 @@ const pullUp = exercise({ id: "pull-up", name: "Pull-up", rung: 2 });
 const airSquat = exercise({
   id: "air-squat",
   name: "Air squat",
-  line: "squat",
+  movementGroup: "squat",
   pattern: "squat",
   rung: 0,
 });
@@ -54,7 +54,7 @@ const cardio = exercise({
   id: "row",
   name: "Row",
   pattern: "monostructural",
-  line: null,
+  movementGroup: null,
   rung: null,
 });
 
@@ -66,7 +66,7 @@ describe("buildMovementChoices", () => {
     expect(choice.chosenName).toBe("Chin-up");
   });
 
-  it("offers the whole line in order, not just what is 'allowed'", () => {
+  it("offers the whole movementGroup in order, not just what is 'allowed'", () => {
     const [choice] = buildMovementChoices(pullExercises, [skill("pull", 1)]);
     expect(choice.options.map((o) => o.name)).toEqual([
       "Negative chin-up",
@@ -86,7 +86,7 @@ describe("buildMovementChoices", () => {
     expect(above.isChosen).toBe(false);
   });
 
-  it("skips exercises off a tracked line", () => {
+  it("skips exercises off a tracked movementGroup", () => {
     const [choice] = buildMovementChoices(pullExercises, [skill("pull", 1)]);
     expect(choice.options.map((o) => o.id)).not.toContain("row");
   });
@@ -108,27 +108,27 @@ describe("buildMovementChoices", () => {
       [...pullExercises, airSquat],
       [skill("squat", 0), skill("pull", 1)],
     );
-    expect(choices.map((c) => lineLabel(c.line))).toEqual(["Pull", "Squat"]);
+    expect(choices.map((c) => lineLabel(c.movementGroup))).toEqual(["Pull", "Squat"]);
   });
 });
 
 /**
  * The gap DN-115 found while adding two lines: `exercise-seed.spec.ts` catches
- * a line the enum does not know, and nothing caught a line the *labels* do not
+ * a group the enum does not know, and nothing caught a group the *labels* do not
  * know. `lineLabel` falls through to the raw slug, so the omission ships as
  * "cardio_rope" printed at an athlete in the Stats panel rather than as a
  * failure anywhere.
  */
 describe("lineLabel", () => {
-  it("has a label for every line the app can store", () => {
-    const unlabelled = progressionLine.options.filter(
-      (line) => lineLabel(line) === line,
+  it("has a label for every movementGroup the app can store", () => {
+    const unlabelled = movementGroup.options.filter(
+      (movementGroup) => lineLabel(movementGroup) === movementGroup,
     );
     expect(unlabelled).toEqual([]);
   });
 
-  it("falls through to the slug for a line it does not know", () => {
-    // The fallback is deliberate — a line added to the enum and not here
+  it("falls through to the slug for a movementGroup it does not know", () => {
+    // The fallback is deliberate — a group added to the enum and not here
     // should still render something — and the test above is what keeps it
     // from being how the app actually behaves.
     expect(lineLabel("not_a_line")).toBe("not_a_line");

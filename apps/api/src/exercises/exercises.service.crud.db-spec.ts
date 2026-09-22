@@ -30,9 +30,9 @@ function body(overrides: Partial<CreateExercise> = {}): CreateExercise {
     scalable: false,
     unit: 'reps',
     instructions: null,
-    line: null,
+    movementGroup: null,
     rung: null,
-    altExerciseId: null,
+    fallbackExerciseId: null,
     phase: null,
     ...overrides,
   };
@@ -163,7 +163,7 @@ describe('what a patch means', () => {
       body({
         instructions: 'Chest to the bar.',
         phase: 'warmup',
-        line: 'pull',
+        movementGroup: 'pull',
         rung: 1,
       }),
     );
@@ -174,7 +174,7 @@ describe('what a patch means', () => {
 
     expect(updated.instructions).toBe('Chest to the bar.');
     expect(updated.phase).toBe('warmup');
-    expect(updated.line).toBe('pull');
+    expect(updated.movementGroup).toBe('pull');
     expect(updated.rung).toBe(1);
     expect(updated.pattern).toBe('pull');
   });
@@ -186,7 +186,7 @@ describe('what a patch means', () => {
       body({
         instructions: 'Chest to the bar.',
         phase: 'warmup',
-        line: 'pull',
+        movementGroup: 'pull',
         rung: 1,
       }),
     );
@@ -195,14 +195,14 @@ describe('what a patch means', () => {
       instructions: null,
       phase: null,
       pattern: null,
-      line: null,
+      movementGroup: null,
       rung: null,
     });
 
     expect(updated.instructions).toBeNull();
     expect(updated.phase).toBeNull();
     expect(updated.pattern).toBeNull();
-    expect(updated.line).toBeNull();
+    expect(updated.movementGroup).toBeNull();
   });
 
   // The one clearing that is not just a database write: nulling the way out
@@ -215,12 +215,12 @@ describe('what a patch means', () => {
       body({
         name: 'Goblet squat',
         equipment: ['dumbbell'],
-        altExerciseId: fallback.id,
+        fallbackExerciseId: fallback.id,
       }),
     );
 
     await expect(
-      exercises().update(ADMIN, loaded.id, { altExerciseId: null }),
+      exercises().update(ADMIN, loaded.id, { fallbackExerciseId: null }),
     ).rejects.toThrow(/must name an alternative/i);
   });
 
@@ -240,15 +240,15 @@ describe('what a patch means', () => {
       scalable: true,
       unit: 'seconds',
       instructions: 'Elbows inside the knees.',
-      line: 'squat',
+      movementGroup: 'squat',
       rung: 3,
-      altExerciseId: fallback.id,
+      fallbackExerciseId: fallback.id,
       phase: 'cooldown',
     });
 
     expect(updated.name).toBe('Goblet squat');
     expect(updated.equipment).toEqual(['dumbbell']);
-    expect(updated.altExerciseId).toBe(fallback.id);
+    expect(updated.fallbackExerciseId).toBe(fallback.id);
     expect(updated.rung).toBe(3);
   });
 });
@@ -262,7 +262,7 @@ describe('what an alternative may be', () => {
     });
 
     await expect(
-      exercises().create(ADMIN, body({ altExerciseId: hers.id })),
+      exercises().create(ADMIN, body({ fallbackExerciseId: hers.id })),
     ).rejects.toThrow(/not an exercise this write can point at/i);
   });
 
@@ -272,10 +272,10 @@ describe('what an alternative may be', () => {
 
     const hers = await exercises().create(
       { ownerId: alice.id },
-      body({ altExerciseId: global.id }),
+      body({ fallbackExerciseId: global.id }),
     );
 
-    expect(hers.altExerciseId).toBe(global.id);
+    expect(hers.fallbackExerciseId).toBe(global.id);
   });
 
   it('refuses an id lifted from another athlete’s library', async () => {
@@ -285,7 +285,7 @@ describe('what an alternative may be', () => {
     await expect(
       exercises().create(
         { ownerId: alice.id },
-        body({ altExerciseId: his.id }),
+        body({ fallbackExerciseId: his.id }),
       ),
     ).rejects.toThrow(/not an exercise this write can point at/i);
   });
@@ -297,7 +297,7 @@ describe('what an alternative may be', () => {
     });
 
     await expect(
-      exercises().create(ADMIN, body({ altExerciseId: global.id })),
+      exercises().create(ADMIN, body({ fallbackExerciseId: global.id })),
     ).rejects.toThrow(/not an exercise this write can point at/i);
   });
 
@@ -305,7 +305,7 @@ describe('what an alternative may be', () => {
     const global = await createExercise({ name: 'Air squat' });
 
     await expect(
-      exercises().update(ADMIN, global.id, { altExerciseId: global.id }),
+      exercises().update(ADMIN, global.id, { fallbackExerciseId: global.id }),
     ).rejects.toThrow(/its own alternative/i);
   });
 
@@ -315,7 +315,10 @@ describe('what an alternative may be', () => {
     const hold = await createExercise({ name: 'Plank', unit: 'seconds' });
 
     await expect(
-      exercises().create(ADMIN, body({ unit: 'reps', altExerciseId: hold.id })),
+      exercises().create(
+        ADMIN,
+        body({ unit: 'reps', fallbackExerciseId: hold.id }),
+      ),
     ).rejects.toThrow(/meaning something else/i);
   });
 });
@@ -338,7 +341,7 @@ describe('a movement needing equipment needs a way out', () => {
     await expect(
       exercises().create(
         ADMIN,
-        body({ equipment: ['dumbbell'], altExerciseId: alsoLoaded.id }),
+        body({ equipment: ['dumbbell'], fallbackExerciseId: alsoLoaded.id }),
       ),
     ).rejects.toThrow(/one step/i);
   });
@@ -351,7 +354,7 @@ describe('a movement needing equipment needs a way out', () => {
 
     const created = await exercises().create(
       ADMIN,
-      body({ equipment: ['dumbbell'], altExerciseId: bodyweight.id }),
+      body({ equipment: ['dumbbell'], fallbackExerciseId: bodyweight.id }),
     );
 
     expect(created.equipment).toEqual(['dumbbell']);
@@ -367,29 +370,29 @@ describe('a movement needing equipment needs a way out', () => {
   });
 });
 
-describe('a position on a line is both halves', () => {
-  it('refuses a line with no rung', async () => {
+describe('a position on a movementGroup is both halves', () => {
+  it('refuses a movementGroup with no rung', async () => {
     await expect(
-      exercises().create(ADMIN, body({ line: 'pull', rung: null })),
-    ).rejects.toThrow(/line and rung/i);
+      exercises().create(ADMIN, body({ movementGroup: 'pull', rung: null })),
+    ).rejects.toThrow(/movementGroup and rung/i);
   });
 
-  it('refuses a rung with no line', async () => {
+  it('refuses a rung with no movementGroup', async () => {
     await expect(
-      exercises().create(ADMIN, body({ line: null, rung: 2 })),
-    ).rejects.toThrow(/line and rung/i);
+      exercises().create(ADMIN, body({ movementGroup: null, rung: 2 })),
+    ).rejects.toThrow(/movementGroup and rung/i);
   });
 
   it('refuses a patch that clears only one of them', async () => {
     const global = await createExercise({
       name: 'Ring row',
-      line: 'pull',
+      movementGroup: 'pull',
       rung: 1,
     });
 
     await expect(
       exercises().update(ADMIN, global.id, { rung: null }),
-    ).rejects.toThrow(/line and rung/i);
+    ).rejects.toThrow(/movementGroup and rung/i);
   });
 });
 
@@ -430,7 +433,7 @@ describe('archiving', () => {
       body({
         name: 'Goblet squat',
         equipment: ['dumbbell'],
-        altExerciseId: bodyweight.id,
+        fallbackExerciseId: bodyweight.id,
       }),
     );
 
@@ -452,7 +455,7 @@ describe('archiving', () => {
       body({
         name: 'Alice goblet squat',
         equipment: ['dumbbell'],
-        altExerciseId: bodyweight.id,
+        fallbackExerciseId: bodyweight.id,
       }),
     );
 
@@ -472,7 +475,7 @@ describe('archiving', () => {
       body({
         name: 'Goblet squat',
         equipment: ['dumbbell'],
-        altExerciseId: bodyweight.id,
+        fallbackExerciseId: bodyweight.id,
       }),
     );
     // Archive the loaded movement first, which frees the fallback to be

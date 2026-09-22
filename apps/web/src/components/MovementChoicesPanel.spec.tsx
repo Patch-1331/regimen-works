@@ -34,22 +34,22 @@ function exercise(
     equipment: [],
     scalable: true,
     unit: "reps",
-    line: "pull",
+    movementGroup: "pull",
     rung: 0,
     instructions: null,
-    altExerciseId: null,
+    fallbackExerciseId: null,
     phase: null,
     ownerId: null,
     archivedAt: null,
-    altExercise: null,
+    fallbackExercise: null,
     ...partial,
   };
 }
 
-function skill(line: string, rung: number): SkillLevel {
+function skill(movementGroup: string, rung: number): SkillLevel {
   return {
-    id: `sl-${line}`,
-    line: line as SkillLevel["line"],
+    id: `sl-${movementGroup}`,
+    movementGroup: movementGroup as SkillLevel["movementGroup"],
     rung,
     updatedAt: "2026-09-13T10:00:00.000Z",
   };
@@ -77,10 +77,10 @@ function renderPanel(skillLevels: SkillLevel[], exercises = PULL_LINE) {
  * that the button and the list it opens are actually wired to each other —
  * "Pull" as an accessible name would match the Pull-up option too.
  */
-function expander(line: string) {
+function expander(movementGroup: string) {
   return screen.getByRole("button", {
     name: (_name, element) =>
-      element.getAttribute("aria-controls") === `movement-choice-${line}`,
+      element.getAttribute("aria-controls") === `movement-choice-${movementGroup}`,
   });
 }
 
@@ -100,7 +100,7 @@ describe("MovementChoicesPanel", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
-  it("names the chosen movement under its line, and hides the rest until asked", () => {
+  it("names the chosen movement under its movementGroup, and hides the rest until asked", () => {
     renderPanel([skill("pull", 1)]);
 
     expect(screen.getByText("Pull")).toBeInTheDocument();
@@ -109,7 +109,7 @@ describe("MovementChoicesPanel", () => {
     expect(screen.queryByText("Pull-up")).not.toBeInTheDocument();
   });
 
-  it("offers the whole line in order once expanded, marking only the chosen one", async () => {
+  it("offers the whole movementGroup in order once expanded, marking only the chosen one", async () => {
     const user = userEvent.setup();
     renderPanel([skill("pull", 1)]);
 
@@ -131,7 +131,7 @@ describe("MovementChoicesPanel", () => {
     ]);
   });
 
-  it("saves the picked movement against its line and closes the list", async () => {
+  it("saves the picked movement against its movementGroup and closes the list", async () => {
     const user = userEvent.setup();
     renderPanel([skill("pull", 1)]);
 

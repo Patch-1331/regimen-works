@@ -46,7 +46,7 @@ export function RungChangeCard({
       {single ? (
         <p className="mt-1.5 text-sm leading-relaxed text-[var(--ink)]">
           You did <strong>{single.exerciseName.toLowerCase()}</strong> today. Make
-          that your default {lineLabel(single.line).toLowerCase()} movement?
+          that your default {lineLabel(single.movementGroup).toLowerCase()} movement?
         </p>
       ) : (
         <>
@@ -56,13 +56,13 @@ export function RungChangeCard({
           <ul className="mt-2.5 flex flex-col gap-1">
             {proposals.map((p) => (
               <li
-                key={p.line}
+                key={p.movementGroup}
                 className="flex items-baseline justify-between gap-3 text-[13px]"
                 style={{ fontFamily: "var(--font-mono)", color: "var(--ink-soft)" }}
               >
                 <span className="truncate">{p.exerciseName}</span>
                 <span className="shrink-0 text-[11px] tracking-[0.08em] text-[var(--ink-faint)]">
-                  {lineLabel(p.line).toUpperCase()}
+                  {lineLabel(p.movementGroup).toUpperCase()}
                 </span>
               </li>
             ))}

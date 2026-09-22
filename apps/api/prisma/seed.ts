@@ -29,7 +29,7 @@ const prisma = new PrismaClient({
 /**
  * Resolves a seeded movement to the pair actually stored, and refuses
  * anything self-contradictory. The DB has a CHECK constraint saying the same
- * thing; this just fails at the line of seed data that's wrong rather than at
+ * thing; this just fails at the group of seed data that's wrong rather than at
  * the insert.
  */
 function movementCounts(
@@ -80,7 +80,7 @@ async function main() {
       equipment: e.equipment ?? [],
       scalable: e.scalable ?? false,
       unit: e.unit ?? 'reps',
-      line: e.line ?? null,
+      movementGroup: e.movementGroup ?? null,
       rung: e.rung ?? null,
       phase: e.phase ?? null,
       instructions: e.instructions,
@@ -100,7 +100,7 @@ async function main() {
     //
     // The `ownerId: null` here is load-bearing beyond the lookup: it is what
     // stops the seed resolving a name to an athlete's own exercise and then
-    // wiring a global row's `altExerciseId` to it, which would let one
+    // wiring a global row's `fallbackExerciseId` to it, which would let one
     // athlete's delete break everyone's scheduler.
     const existing = await prisma.exercise.findFirst({
       where: { ...GLOBAL_LIBRARY, name: e.name },
@@ -118,13 +118,15 @@ async function main() {
   }
 
   for (const e of exercises) {
-    if (!e.alt) continue;
-    const altId = idByName.get(e.alt);
-    if (!altId)
-      throw new Error(`Unknown alt exercise "${e.alt}" for "${e.name}"`);
+    if (!e.fallback) continue;
+    const fallbackId = idByName.get(e.fallback);
+    if (!fallbackId)
+      throw new Error(
+        `Unknown fallback exercise "${e.fallback}" for "${e.name}"`,
+      );
     await prisma.exercise.update({
       where: { id: idByName.get(e.name)! },
-      data: { altExerciseId: altId },
+      data: { fallbackExerciseId: fallbackId },
     });
   }
 

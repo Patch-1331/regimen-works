@@ -6,7 +6,7 @@ import {
   exercisePhase,
   exerciseUnit,
   movementPattern,
-  progressionLine,
+  movementGroup,
 } from "@regimen-works/shared";
 import type { ApiExercise } from "../lib/api";
 import { lineLabel, patternLabel } from "../lib/progressions";
@@ -163,18 +163,18 @@ export function ExerciseForm({
 
       <div className="flex gap-3">
         <div className="flex-1">
-          <Label htmlFor="exercise-line">Progression line</Label>
+          <Label htmlFor="exercise-movementGroup">Progression movementGroup</Label>
           <select
-            id="exercise-line"
+            id="exercise-movementGroup"
             className={field}
             style={fieldStyle}
-            value={draft.line}
+            value={draft.movementGroup}
             onChange={(e) =>
-              set("line", e.target.value as ExerciseDraft["line"])
+              set("movementGroup", e.target.value as ExerciseDraft["movementGroup"])
             }
           >
             <option value="">None</option>
-            {progressionLine.options.map((l) => (
+            {movementGroup.options.map((l) => (
               <option key={l} value={l}>
                 {lineLabel(l)}
               </option>
@@ -242,16 +242,16 @@ export function ExerciseForm({
       </fieldset>
 
       <div>
-        <Label htmlFor="exercise-alt">Alternative</Label>
+        <Label htmlFor="exercise-fallback">Alternative</Label>
         <p className="mt-1 text-[11px] text-[var(--ink-faint)]">
           What an athlete is given instead when they don't own the equipment.
         </p>
         <select
-          id="exercise-alt"
+          id="exercise-fallback"
           className={field}
           style={fieldStyle}
-          value={draft.altExerciseId}
-          onChange={(e) => set("altExerciseId", e.target.value)}
+          value={draft.fallbackExerciseId}
+          onChange={(e) => set("fallbackExerciseId", e.target.value)}
         >
           <option value="">None</option>
           {alternatives.map((e) => (

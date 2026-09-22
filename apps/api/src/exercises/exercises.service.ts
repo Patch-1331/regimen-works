@@ -27,12 +27,15 @@ function merged(existing: Exercise, patch: UpdateExercise) {
       patch.instructions === undefined
         ? existing.instructions
         : patch.instructions,
-    line: patch.line === undefined ? existing.line : patch.line,
+    movementGroup:
+      patch.movementGroup === undefined
+        ? existing.movementGroup
+        : patch.movementGroup,
     rung: patch.rung === undefined ? existing.rung : patch.rung,
-    altExerciseId:
-      patch.altExerciseId === undefined
-        ? existing.altExerciseId
-        : patch.altExerciseId,
+    fallbackExerciseId:
+      patch.fallbackExerciseId === undefined
+        ? existing.fallbackExerciseId
+        : patch.fallbackExerciseId,
     phase: patch.phase === undefined ? existing.phase : patch.phase,
   };
 }
@@ -54,7 +57,7 @@ export class ExercisesService {
       where: includeArchived
         ? libraryOwnedBy(userId)
         : libraryVisibleTo(userId),
-      include: { altExercise: true },
+      include: { fallbackExercise: true },
       orderBy: { name: 'asc' },
     });
   }
@@ -185,36 +188,40 @@ export class ExercisesService {
     row: {
       equipment: string[];
       unit: string;
-      line: string | null;
+      movementGroup: string | null;
       rung: number | null;
-      altExerciseId: string | null;
+      fallbackExerciseId: string | null;
     },
     selfId: string | null,
   ) {
-    // Half a ladder is not a position on it: `applyRememberedChoice` keys on
-    // `${line}:${rung}`, so a row with one and not the other sits on a line it
+    // Half an answer is no answer: `applyRememberedChoice` keys on
+    // `${line}:${rung}`, so a row with one and not the other sits in a group it
     // can never be selected from.
-    if ((row.line === null) !== (row.rung === null)) {
+    if ((row.movementGroup === null) !== (row.rung === null)) {
       throw new BadRequestException(
-        'line and rung go together — an exercise on a progression line needs its position on it',
+        'movementGroup and rung go together — an exercise on a progression movementGroup needs its position on it',
       );
     }
 
-    const alt = await this.loadAlternative(writer, row.altExerciseId, selfId);
+    const fallback = await this.loadAlternative(
+      writer,
+      row.fallbackExerciseId,
+      selfId,
+    );
 
     // DN-83, at the second place library rows can now be written. Every
     // runtime layer passes a gap through rather than throwing, by design —
     // the athlete is about to train — so nothing downstream will ever report
     // this. The seed catches it for seeded rows; this catches it for the rest.
     if (row.equipment.length > 0) {
-      if (!alt) {
+      if (!fallback) {
         throw new BadRequestException(
           `An exercise needing ${row.equipment.join(', ')} must name an alternative, or an athlete without it gets a movement they cannot do`,
         );
       }
-      if (alt.equipment.length > 0) {
+      if (fallback.equipment.length > 0) {
         throw new BadRequestException(
-          `The alternative "${alt.name}" itself needs ${alt.equipment.join(', ')} — the equipment fallback is one step, so this is where it has to stop`,
+          `The alternative "${fallback.name}" itself needs ${fallback.equipment.join(', ')} — the equipment fallback is one step, so this is where it has to stop`,
         );
       }
     }
@@ -222,9 +229,9 @@ export class ExercisesService {
     // DN-113. `applyEquipmentAvailability` swaps the exercise and leaves the
     // prescribed count alone, so a forty-second carry falling back to a
     // reps movement arrives as forty of them.
-    if (alt && alt.unit !== row.unit) {
+    if (fallback && fallback.unit !== row.unit) {
       throw new BadRequestException(
-        `This is counted in ${row.unit} and falls back to "${alt.name}", counted in ${alt.unit} — the prescribed count carries over unchanged, so it would arrive meaning something else`,
+        `This is counted in ${row.unit} and falls back to "${fallback.name}", counted in ${fallback.unit} — the prescribed count carries over unchanged, so it would arrive meaning something else`,
       );
     }
   }
@@ -232,24 +239,24 @@ export class ExercisesService {
   /** The alternative, if one is named, and only if this writer may point at it. */
   private async loadAlternative(
     writer: LibraryWriter,
-    altExerciseId: string | null,
+    fallbackExerciseId: string | null,
     selfId: string | null,
   ) {
-    if (altExerciseId === null) return null;
+    if (fallbackExerciseId === null) return null;
 
     // Caught before the lookup, which would otherwise find it and say yes. A
     // self-referential fallback is a movement whose way out is itself.
-    if (altExerciseId === selfId) {
+    if (fallbackExerciseId === selfId) {
       throw new BadRequestException(
         'An exercise cannot be its own alternative',
       );
     }
 
-    const alt = await this.prisma.exercise.findFirst({
-      where: { ...referenceableBy(writer), id: altExerciseId },
+    const fallback = await this.prisma.exercise.findFirst({
+      where: { ...referenceableBy(writer), id: fallbackExerciseId },
       select: { id: true, name: true, unit: true, equipment: true },
     });
-    if (!alt) {
+    if (!fallback) {
       // One message for four different misses — not in the library, archived,
       // another athlete's, or (for an admin) an athlete's own. Naming which
       // would tell a caller about rows they cannot otherwise see.
@@ -257,7 +264,7 @@ export class ExercisesService {
         'That alternative is not an exercise this write can point at',
       );
     }
-    return alt;
+    return fallback;
   }
 
   /**
@@ -276,7 +283,7 @@ export class ExercisesService {
     row: { id: string; name: string },
   ) {
     const referrers = await this.prisma.exercise.findMany({
-      where: { altExerciseId: row.id, archivedAt: null },
+      where: { fallbackExerciseId: row.id, archivedAt: null },
       select: { name: true, ownerId: true },
     });
     if (referrers.length === 0) return;

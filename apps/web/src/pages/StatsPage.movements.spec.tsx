@@ -23,13 +23,13 @@ vi.mock("@clerk/clerk-react", async () => {
 const chinUp = fixtures.apiExercise({
   id: "chin-up",
   name: "Chin-up",
-  line: "pull",
+  movementGroup: "pull",
   rung: 1,
 });
 const negative = fixtures.apiExercise({
   id: "negative",
   name: "Negative chin-up",
-  line: "pull",
+  movementGroup: "pull",
   rung: 0,
 });
 
@@ -37,7 +37,7 @@ function history(overrides: Partial<MovementHistory>[] = []): MovementHistory[] 
   return overrides.map((movement) => ({
     exerciseId: "chin-up",
     name: "Chin-up",
-    line: "pull",
+    movementGroup: "pull",
     unit: "reps",
     sessions: 1,
     total: 30,
@@ -62,7 +62,7 @@ function statsShowing(movements: MovementHistory[]) {
   server.use(
     http.get("/api/exercises", () => HttpResponse.json([negative, chinUp])),
     http.get("/api/skill-levels", () =>
-      HttpResponse.json([fixtures.skillLevel({ line: "pull", rung: 1 })]),
+      HttpResponse.json([fixtures.skillLevel({ movementGroup: "pull", rung: 1 })]),
     ),
     http.get("/api/movement-history", () => HttpResponse.json(movements)),
   );
@@ -105,7 +105,7 @@ describe("the movement panel history", () => {
     ).toBeInTheDocument();
   });
 
-  it("stays quiet about a line that has never been trained", async () => {
+  it("stays quiet about a movementGroup that has never been trained", async () => {
     // Not "0 sessions" — a count of nothing reads as a mark against someone
     // for a movement group they may not have met yet.
     statsShowing([]);
@@ -146,7 +146,7 @@ describe("the movement panel history", () => {
     server.use(
       http.get("/api/exercises", () => HttpResponse.json([negative, chinUp])),
       http.get("/api/skill-levels", () =>
-        HttpResponse.json([fixtures.skillLevel({ line: "pull", rung: 1 })]),
+        HttpResponse.json([fixtures.skillLevel({ movementGroup: "pull", rung: 1 })]),
       ),
       http.get("/api/movement-history", () => new HttpResponse(null, { status: 500 })),
     );

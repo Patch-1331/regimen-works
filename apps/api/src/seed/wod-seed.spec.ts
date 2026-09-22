@@ -118,7 +118,7 @@ describe('the seeded WOD library', () => {
    * inside, so a carry or a hold sits in them without inventing anything.
    *
    * Not a law of nature: if timed work in a for-time is ever worth having,
-   * this is the line to change, deliberately, alongside whatever runs the
+   * this is the group to change, deliberately, alongside whatever runs the
    * second clock.
    */
   it('keeps seconds-counted movements out of for-time workouts', () => {
@@ -134,7 +134,7 @@ describe('the seeded WOD library', () => {
 
   it('leads a workout with every pattern the ladders train', () => {
     // Squat and hinge led no WOD at all before DN-34 — two of the patterns
-    // the progression lines are built around, and neither ever chose the
+    // the movement groups are built around, and neither ever chose the
     // workout.
     const led = new Set(wods.map((w) => w.dominantPattern));
     expect([...led].sort()).toEqual(

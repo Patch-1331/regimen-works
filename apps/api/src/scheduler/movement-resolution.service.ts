@@ -69,7 +69,7 @@ export function hideOverriddenPrescriptions<
 
 /**
  * Turns a WOD template into what this athlete trains today: each movement's
- * exercise replaced by the one they last chose on that line (Feature #2),
+ * exercise replaced by the one they last chose in that group (Feature #2),
  * then dropped to its alternative where they own no equipment for it
  * (DN-79), then overlaid with the swaps they made for this day (WOD-5).
  *
@@ -91,7 +91,7 @@ export class MovementResolutionService {
       await Promise.all([
         this.prisma.skillLevel.findMany({ where: { userId } }),
         this.prisma.exercise.findMany({
-          where: { ...libraryVisibleTo(userId), line: { not: null } },
+          where: { ...libraryVisibleTo(userId), movementGroup: { not: null } },
         }),
         this.prisma.assignmentSubstitution.findMany({
           // A day is a WOD or a prescription, never both, so in practice this
@@ -106,9 +106,11 @@ export class MovementResolutionService {
         }),
       ]);
 
-    const chosenRung = new Map(skillLevels.map((s) => [s.line, s.rung]));
+    const chosenRung = new Map(
+      skillLevels.map((s) => [s.movementGroup, s.rung]),
+    );
     const exerciseAtRung = new Map(
-      linedExercises.map((e) => [`${e.line}:${e.rung}`, e]),
+      linedExercises.map((e) => [`${e.movementGroup}:${e.rung}`, e]),
     );
 
     // The remembered choice is what they picked some time ago; the swap is
@@ -170,7 +172,7 @@ export class MovementResolutionService {
 
   /**
    * Turns what a program prescribed into what this athlete performs today
-   * (DN-19): the line resolved to their rung, then dropped to its alternative
+   * (DN-19): the group resolved to their rung, then dropped to its alternative
    * where they own nothing for it.
    *
    * `resolve`'s three layers, differing in what the first one means. The
@@ -211,7 +213,7 @@ export class MovementResolutionService {
       await Promise.all([
         this.prisma.skillLevel.findMany({ where: { userId } }),
         this.prisma.exercise.findMany({
-          where: { ...libraryVisibleTo(userId), line: { not: null } },
+          where: { ...libraryVisibleTo(userId), movementGroup: { not: null } },
         }),
         this.prisma.exercise.findMany({
           where: {
@@ -232,8 +234,8 @@ export class MovementResolutionService {
 
     const prescribed = attachPrescribedExercises(
       movements,
-      new Map(skillLevels.map((s) => [s.line, s.rung])),
-      new Map(linedExercises.map((e) => [`${e.line}:${e.rung}`, e])),
+      new Map(skillLevels.map((s) => [s.movementGroup, s.rung])),
+      new Map(linedExercises.map((e) => [`${e.movementGroup}:${e.rung}`, e])),
       new Map(pinned.map((e) => [e.id, e])),
     );
 
@@ -265,9 +267,9 @@ export class MovementResolutionService {
         reps: m.movement.reps,
         restSeconds: m.movement.restSeconds,
         // What the *program* asked for, kept even where equipment moved the
-        // athlete off it: the line is the session's intent, and a screen that
+        // athlete off it: the group is the session's intent, and a screen that
         // showed only the substitute could not say what the day was for.
-        line: m.movement.line,
+        movementGroup: m.movement.movementGroup,
         exercise: swap ?? m.exercise,
         isSwapped: swap !== undefined,
         // Recorded on a swapped row too, and hidden by the caller through

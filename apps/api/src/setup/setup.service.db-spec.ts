@@ -249,7 +249,7 @@ describe('SetupService.commit', () => {
     );
   });
 
-  it('snapshots where every ladder stands as the run begins', async () => {
+  it('snapshots what every group stands at as the run begins', async () => {
     // The completion card diffs against this (DN-18). Without it a finished
     // program can count sessions but cannot say what changed, which is the
     // half of the card worth reading.

@@ -1,34 +1,34 @@
 import { z } from "zod";
-import { enrollmentStatus, progressionLine } from "./enums.js";
+import { enrollmentStatus, movementGroup } from "./enums.js";
 import { planSchema } from "./plan.js";
 
 /**
- * Every tracked line's rung on a date, as `{ line: rung }`.
+ * Every group's rung on a date, as `{ line: rung }`.
  *
  * `partialRecord` rather than `record`: in Zod 4 a record keyed by an enum is
- * **exhaustive**, so `z.record(progressionLine, …)` would demand a rung for
- * every line in the app. An athlete has rungs only on the lines they have
+ * **exhaustive**, so `z.record(movementGroup, …)` would demand a rung for
+ * every group in the app. An athlete has rungs only on the groups they have
  * actually trained — a new athlete has none at all (DN-86) — so the exhaustive
  * shape would reject exactly the athletes this snapshot exists to describe.
  */
 export const rungSnapshotSchema = z.partialRecord(
-  progressionLine,
+  movementGroup,
   z.number().int().nonnegative(),
 );
 export type RungSnapshot = z.infer<typeof rungSnapshotSchema>;
 
 /**
- * One line's movement over a completed program, for the completion card's
+ * One group's movement over a completed program, for the completion card's
  * "pull: negative → chin-up".
  *
  * Carries names as well as rungs because a rung is meaningless to the athlete
  * on its own, and the exercise that was at rung 3 when the program started
- * can be a different one by the time it finishes — the ladder grows. A card
- * that renders today's ladder against a stored number would quietly rewrite
+ * can be a different one by the time it finishes — the group grows. A card
+ * that renders today's group against a stored number would quietly rewrite
  * the athlete's own history.
  */
 export const rungChangeSchema = z.object({
-  line: progressionLine,
+  movementGroup: movementGroup,
   fromRung: z.number().int().nonnegative(),
   toRung: z.number().int().nonnegative(),
   fromName: z.string(),
@@ -40,7 +40,7 @@ export type RungChange = z.infer<typeof rungChangeSchema>;
  * The completion card's figures, snapshotted when the enrollment completes
  * rather than recomputed on every read of the Completed list.
  *
- * Snapshotted because the inputs move: exercises get added to a ladder,
+ * Snapshotted because the inputs move: exercises get added to a group,
  * assignments can be deleted with a user, and a record of what an athlete
  * finished should not change afterwards because the library did.
  *
@@ -80,7 +80,7 @@ export const planEnrollmentSchema = z.object({
   status: enrollmentStatus,
   completedAt: z.string().datetime().nullable(),
   /**
-   * Where every tracked line stood on the start date. `SkillLevel` keeps only
+   * Where every group stood on the start date. `SkillLevel` keeps only
    * the current value, so without this a finished program can count sessions
    * but cannot say what changed — the interesting half of the completion card.
    */

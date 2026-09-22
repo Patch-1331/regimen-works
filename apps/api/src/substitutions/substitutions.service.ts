@@ -62,8 +62,8 @@ export class SubstitutionsService {
    * what was prescribed and these rows say what was chosen -- which is why a
    * prescribed day's swaps (DN-125) count here on exactly the same terms,
    * with nothing to add: a rung trained is a rung trained. A swap to an
-   * off-ladder alternative (the no-equipment substitute) carries no rung, so
-   * there is no position on the line to remember and it proposes nothing.
+   * fallback (the no-equipment stand-in) is not a group member, so it carries no position and
+   * there is no position on the group to remember and it proposes nothing.
    */
   async proposedRungChanges(
     userId: string,
@@ -79,7 +79,7 @@ export class SubstitutionsService {
       this.prisma.assignmentSubstitution.findMany({
         where: { userId, assignmentId },
         include: { exercise: true },
-        // Oldest first: `proposeRungChanges` breaks a tie on the same line by
+        // Oldest first: `proposeRungChanges` breaks a tie on the same group by
         // taking the choice made most recently (DN-88).
         orderBy: { updatedAt: 'asc' },
       }),
@@ -87,9 +87,11 @@ export class SubstitutionsService {
     ]);
 
     const trained = substitutions
-      .filter((s) => s.exercise.line !== null && s.exercise.rung !== null)
+      .filter(
+        (s) => s.exercise.movementGroup !== null && s.exercise.rung !== null,
+      )
       .map((s) => ({
-        line: s.exercise.line!,
+        movementGroup: s.exercise.movementGroup!,
         rung: s.exercise.rung!,
         exerciseId: s.exercise.id,
         exerciseName: s.exercise.name,
@@ -97,7 +99,7 @@ export class SubstitutionsService {
 
     return proposeRungChanges(
       trained,
-      new Map(skillLevels.map((s) => [s.line, s.rung])),
+      new Map(skillLevels.map((s) => [s.movementGroup, s.rung])),
     );
   }
 
@@ -153,20 +155,20 @@ export class SubstitutionsService {
           "Movement is not part of today's prescription",
         );
       }
-      // A line-prescribed row has no exercise of its own: the ladder *is* what
+      // A group-prescribed row has no exercise of its own: the group *is* what
       // it named, and which rung the athlete is standing on is resolved per
       // read rather than stored. Null current exercise is right for it -- the
-      // legality check then asks only whether the target is on that line.
+      // legality check then asks only whether the target is in that group.
       return movement.exercise
         ? {
             currentExerciseId: movement.exercise.id,
-            line: movement.exercise.line,
-            altExerciseId: movement.exercise.altExerciseId,
+            movementGroup: movement.exercise.movementGroup,
+            fallbackExerciseId: movement.exercise.fallbackExerciseId,
           }
         : {
             currentExerciseId: null,
-            line: movement.line,
-            altExerciseId: null,
+            movementGroup: movement.movementGroup,
+            fallbackExerciseId: null,
           };
     }
 
@@ -179,26 +181,30 @@ export class SubstitutionsService {
     }
     return {
       currentExerciseId: movement.exerciseId,
-      line: movement.exercise.line,
-      altExerciseId: movement.exercise.altExerciseId,
+      movementGroup: movement.exercise.movementGroup,
+      fallbackExerciseId: movement.exercise.fallbackExerciseId,
     };
   }
 
   /**
-   * A swap moves along the movement's own ladder, or to its no-equipment
-   * alternative. Anything else isn't scaling, it's a different workout —
-   * and the reps stay as prescribed, so an unrelated target would leave the
-   * athlete with a rep count that means nothing.
+   * A swap moves to another member of the movement's group, or to a
+   * no-equipment fallback. Anything else isn't scaling, it's a different
+   * workout — and the reps stay as prescribed, so an unrelated target would
+   * leave the athlete with a rep count that means nothing.
    *
-   * The alternative is read from every rung on the line, not just the
-   * prescribed exercise, because the athlete sees the ladder as it stands
-   * after their remembered choice has been applied.
+   * Members and their fallbacks are one flat legal set, in both directions
+   * and at any distance: the group is unordered, so there is no such thing as
+   * a target that is too far. This is the purest statement of the group being
+   * an equivalence group rather than a ladder (ADR-0004).
    *
-   * Off a line there is no ladder to move along, but the alternative is still
-   * a legal target (DN-80): cardio carries `line: null` and an alternative
+   * The set is read from every member of the group, not just the prescribed
+   * exercise, because the athlete sees the group as it stands after their
+   * remembered choice has been applied.
+   *
+   * Outside a group there is nothing to move between, but the fallback is
+   * still a legal target (DN-80): cardio carries no group and a fallback
    * both, and refusing it left an athlete holding a movement they own no
-   * equipment for with nowhere to go. Nothing else is legal there — with no
-   * line, the alternative is the entire set of movements this one scales to.
+   * equipment for with nowhere to go.
    */
   private async assertLegalTarget(
     userId: string,
@@ -207,28 +213,28 @@ export class SubstitutionsService {
   ) {
     if (exerciseId === movement.currentExerciseId) return;
 
-    const line = movement.line;
-    if (!line) {
-      if (exerciseId === movement.altExerciseId) return;
+    const movementGroup = movement.movementGroup;
+    if (!movementGroup) {
+      if (exerciseId === movement.fallbackExerciseId) return;
       throw new BadRequestException(
-        'This movement is not on a progression line, so it can only be swapped for its alternative',
+        'This movement is not in a movement group, so it can only be swapped for its alternative',
       );
     }
 
-    const onLine = await this.prisma.exercise.findMany({
-      where: { ...libraryVisibleTo(userId), line },
-      select: { id: true, altExerciseId: true },
+    const inGroup = await this.prisma.exercise.findMany({
+      where: { ...libraryVisibleTo(userId), movementGroup },
+      select: { id: true, fallbackExerciseId: true },
     });
 
     const legal = new Set<string>();
-    for (const e of onLine) {
+    for (const e of inGroup) {
       legal.add(e.id);
-      if (e.altExerciseId) legal.add(e.altExerciseId);
+      if (e.fallbackExerciseId) legal.add(e.fallbackExerciseId);
     }
 
     if (!legal.has(exerciseId)) {
       throw new BadRequestException(
-        'That exercise is not on this movement’s ladder',
+        'That exercise is not one this movement can be swapped for',
       );
     }
   }
@@ -251,11 +257,11 @@ export type SwapKey = {
  * A movement a swap can be made against, reduced to what legality needs.
  *
  * The two kinds of day flatten to this before anything decides what a legal
- * target is, so the ladder rule is written once. `currentExerciseId` is null
- * only for a line-prescribed row, which names a line and no exercise at all.
+ * target is, so the legality rule is written once. `currentExerciseId` is null
+ * only for a group-prescribed row, which names a group and no exercise at all.
  */
 type SwappableMovement = {
   currentExerciseId: string | null;
-  line: string | null;
-  altExerciseId: string | null;
+  movementGroup: string | null;
+  fallbackExerciseId: string | null;
 };

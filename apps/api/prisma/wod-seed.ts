@@ -343,7 +343,7 @@ export const wods: WodSeed[] = [
   // "Floor Pull" also closes a hole that predates the equipment work
   // entirely: all six pull-dominant WODs are led by the pull-up, so an
   // athlete with no bar had never once been given a workout *about* pulling.
-  // Their pull ladder starts on the floor; the library had no WOD that did.
+  // Their pull group starts on the floor; the library had no WOD that did.
   {
     name: 'Floor Pull',
     type: 'amrap',

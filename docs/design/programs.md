@@ -264,7 +264,7 @@ status-flipping job, and the partial unique index above still holds.
 
 ### Snapshot the rungs at the start
 
-`PlanEnrollment.startingRungs` records every line's rung on the start date.
+`PlanEnrollment.startingRungs` records every group's rung on the start date.
 `SkillLevel` only keeps the current value, so without this snapshot a
 finished program can count sessions but can't say what changed — which is
 the interesting half.
@@ -323,13 +323,13 @@ Just WODs day it's a `trainingDays` lookup.
 `SkillLevel` stays. What changes is **who writes it**.
 
 Today `computeRungChanges` infers capability from rounds completed in a
-metcon and silently advances or drops a line. The inference is noisy, and the
+metcon and silently advances or drops a group. The inference is noisy, and the
 drop path means a bad Tuesday quietly makes tomorrow easier without asking.
 
 ### Substitution is the write path
 
-Tap a movement on the Today plate before starting → see that line's whole
-ladder, plus the movement's `altExerciseId` (the no-equipment substitute,
+Tap a movement on the Today plate before starting → see that group's other
+members, plus the movement's `fallbackExerciseId` (the no-equipment stand-in,
 which exists in the schema today and is currently read only by
 `GET /exercises`). Pick one. It applies to **today**, one tap, no modal — the
 athlete is about to train, not configure.
@@ -448,7 +448,7 @@ awkward against jsonb.
 
 ### Prescribing by line, not by exercise
 
-A `movements` slot should name the **progression line** ("pull, 5x3"), not a
+A `movements` slot should name the **movement groups** ("pull, 5x3"), not a
 specific exercise, so one program fits every athlete and resolves through the
 rung the athlete owns. Pinning an exercise stays possible for cases where the
 specific variation is the point — a nullable `exerciseId` and a nullable

@@ -317,7 +317,7 @@ describe('a prescribed movement names one movement and prescribes work', () => {
       data: {
         planSlotId: planSlot.id,
         order: 0,
-        line: 'pull',
+        movementGroup: 'pull',
         sets: 5,
         reps: 3,
         restSeconds: 90,
@@ -326,29 +326,31 @@ describe('a prescribed movement names one movement and prescribes work', () => {
     });
   }
 
-  it('accepts a movement prescribed by line', async () => {
-    await expect(prescribe()).resolves.toMatchObject({ line: 'pull' });
+  it('accepts a movement prescribed by movementGroup', async () => {
+    await expect(prescribe()).resolves.toMatchObject({ movementGroup: 'pull' });
   });
 
   it('accepts a movement pinned to a specific exercise', async () => {
     const exercise = await createExercise();
     await expect(
-      prescribe({ line: null, exerciseId: exercise.id }),
+      prescribe({ movementGroup: null, exerciseId: exercise.id }),
     ).resolves.toMatchObject({ exerciseId: exercise.id });
   });
 
   it('refuses a prescription naming no movement at all', async () => {
     // Sets and reps for nothing. The athlete would be handed a count with no
     // instruction attached.
-    await expect(prescribe({ line: null })).rejects.toThrow(CHECK_VIOLATION);
+    await expect(prescribe({ movementGroup: null })).rejects.toThrow(
+      CHECK_VIOLATION,
+    );
   });
 
-  it('refuses a prescription naming both a line and an exercise', async () => {
+  it('refuses a prescription naming both a movementGroup and an exercise', async () => {
     // "Pull at your rung" and "this exact exercise" are different
     // instructions, and a reader picking one would be guessing at the author.
     const exercise = await createExercise();
     await expect(
-      prescribe({ line: 'pull', exerciseId: exercise.id }),
+      prescribe({ movementGroup: 'pull', exerciseId: exercise.id }),
     ).rejects.toThrow(CHECK_VIOLATION);
   });
 
@@ -373,7 +375,7 @@ describe('a prescribed movement names one movement and prescribes work', () => {
         data: {
           planSlotId: first.planSlotId,
           order: 0,
-          line: 'squat',
+          movementGroup: 'squat',
           sets: 3,
           reps: 8,
           restSeconds: 60,
@@ -387,7 +389,7 @@ describe('a prescribed movement names one movement and prescribes work', () => {
     // SET NULL, and the CHECK turns that nulling into a refusal. Archiving is
     // the answer here too.
     const exercise = await createExercise();
-    await prescribe({ line: null, exerciseId: exercise.id });
+    await prescribe({ movementGroup: null, exerciseId: exercise.id });
 
     await expect(
       testPrisma().exercise.delete({ where: { id: exercise.id } }),

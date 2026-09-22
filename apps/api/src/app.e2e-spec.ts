@@ -25,7 +25,7 @@ import {
   createAssignment,
   createExercise,
   createFixedPlan,
-  createLadder,
+  createGroup,
   createPlan,
   createWod,
 } from './test-support/fixtures';
@@ -135,7 +135,7 @@ async function trainsEveryDay(...userIds: string[]) {
 
 /** Enough of a library for the scheduler to have something to assign. */
 async function seedLibrary() {
-  const { rungs } = await createLadder('pull', [
+  const { rungs } = await createGroup('pull', [
     'Negative chin-up',
     'Chin-up',
     'Pull-up',
@@ -293,16 +293,16 @@ describe('GET /today', () => {
     const row = await createExercise({
       name: 'Row under table',
       pattern: 'pull',
-      line: null,
+      movementGroup: null,
       rung: null,
     });
     const pullUp = await createExercise({
       name: 'Pull-up',
       pattern: 'pull',
-      line: 'pull',
+      movementGroup: 'pull',
       rung: 0,
       equipment: ['bar'],
-      altExerciseId: row.id,
+      fallbackExerciseId: row.id,
     });
     await createWod({
       dominantPattern: 'pull',
@@ -691,7 +691,7 @@ describe('settings and skill levels', () => {
     expect(res).toEqual([]);
   });
 
-  it('sets a line standing choice', async () => {
+  it('sets a movementGroup standing choice', async () => {
     await seedLibrary();
 
     const res = parsed(
@@ -703,12 +703,12 @@ describe('settings and skill levels', () => {
         .expect(200),
     );
 
-    expect(res).toMatchObject({ line: 'pull', rung: 2 });
+    expect(res).toMatchObject({ movementGroup: 'pull', rung: 2 });
   });
 
   it('refuses a rung with no exercise seeded at it', async () => {
     // Bounded to what exists, so the scheduler never has to fall back on a
-    // missing rung. The seeded pull ladder tops out at 2.
+    // missing rung. The seeded pull group tops out at 2.
     await seedLibrary();
 
     await http()
@@ -718,8 +718,8 @@ describe('settings and skill levels', () => {
       .expect(400);
   });
 
-  it('404s a line that is not one of the eight', async () => {
-    // "push" is a movement pattern; the lines are finer-grained than that.
+  it('404s a movementGroup that is not one of the eight', async () => {
+    // "push" is a movement pattern; the groups are finer-grained than that.
     await http()
       .patch('/skill-levels/push')
       .set(...asUser(ALICE))
@@ -794,7 +794,7 @@ describe('validation and not-found', () => {
 
 /** A slot prescribing `pull, 5x3`, and today's assignment pointing at it. */
 async function prescribedDay(userId: string) {
-  const { rungs } = await createLadder('pull', [
+  const { rungs } = await createGroup('pull', [
     'Negative chin-up',
     'Chin-up',
     'Pull-up',
@@ -814,7 +814,7 @@ async function prescribedDay(userId: string) {
                   create: [
                     {
                       order: 0,
-                      line: 'pull',
+                      movementGroup: 'pull',
                       sets: 5,
                       reps: 3,
                       restSeconds: 90,
@@ -1316,11 +1316,11 @@ describe('a program ending, end to end', () => {
   }
 
   it('hands back the card, a workout, and the finished run', async () => {
-    // seedLibrary's pull ladder is the one the rung change is read off.
+    // seedLibrary's pull group is the one the rung change is read off.
     const plan = await everyDayPlan({ name: 'Pull-Up Builder' });
     const enrollmentId = await ranOutLastWeek(ALICE, plan.id);
     await testPrisma().skillLevel.create({
-      data: { userId: ALICE, line: 'pull', rung: 2 },
+      data: { userId: ALICE, movementGroup: 'pull', rung: 2 },
     });
 
     const today = parsed(
@@ -1342,7 +1342,9 @@ describe('a program ending, end to end', () => {
       summary: {
         weeks: 1,
         sessions: 1,
-        rungChanges: [expect.objectContaining({ line: 'pull', toRung: 2 })],
+        rungChanges: [
+          expect.objectContaining({ movementGroup: 'pull', toRung: 2 }),
+        ],
       },
     });
 

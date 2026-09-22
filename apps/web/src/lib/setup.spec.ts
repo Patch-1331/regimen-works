@@ -59,7 +59,7 @@ describe("dayCountWarning", () => {
       ),
     ).toBe("Just WODs runs at most 1 day a week.");
     // Only the maximum can reach the singular: a minimum of one is
-    // unreachable, because the empty week is caught a line earlier. Both
+    // unreachable, because the empty week is caught a group earlier. Both
     // sentences go through the same helper so there is no second wording to
     // leave plural.
   });
