@@ -34,7 +34,7 @@ function movement(
       id: 'chin-up',
       name: 'Chin-up',
       unit: 'reps',
-      line: 'pull',
+      movementGroup: 'pull',
       rung: 1,
       ...overrides.exercise,
     },
@@ -64,7 +64,7 @@ describe('buildMovementHistory', () => {
     expect(history[0]).toMatchObject({
       exerciseId: 'chin-up',
       name: 'Chin-up',
-      line: 'pull',
+      movementGroup: 'pull',
       unit: 'reps',
       sessions: 2,
       total: 50,
@@ -101,7 +101,7 @@ describe('buildMovementHistory', () => {
     expect(history.map((h) => h.name)).toEqual(['Chin-up', 'Negative pull-up']);
   });
 
-  it('keeps the two movements of a line apart rather than summing the line', () => {
+  it('keeps the two movements of a movementGroup apart rather than summing the movementGroup', () => {
     const history = buildMovementHistory([
       day('2026-09-10', [
         movement({ reps: 20 }),
@@ -129,7 +129,7 @@ describe('buildMovementHistory', () => {
           exercise: {
             id: 'high-knees',
             name: 'High knees',
-            line: null,
+            movementGroup: null,
             rung: null,
           },
         }),
@@ -139,7 +139,7 @@ describe('buildMovementHistory', () => {
           exercise: {
             id: 'high-knees',
             name: 'High knees',
-            line: null,
+            movementGroup: null,
             rung: null,
           },
         }),
@@ -158,7 +158,7 @@ describe('buildMovementHistory', () => {
           exercise: {
             id: 'row',
             name: 'Row under table',
-            line: null,
+            movementGroup: null,
             rung: null,
           },
           prescribedName: 'Pull-up',
@@ -203,7 +203,7 @@ describe('buildMovementHistory', () => {
             id: 'plank',
             name: 'Plank hold',
             unit: 'seconds',
-            line: 'core_hold',
+            movementGroup: 'core_hold',
             rung: 2,
           },
         }),

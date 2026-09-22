@@ -3,9 +3,9 @@ import type { ApiExercise } from "./api";
 import { buildSwapOptions } from "./swapOptions";
 
 /**
- * The ladder the athlete is shown. It has to be the whole line in order —
+ * The group the athlete is shown. It has to be the whole group in list order —
  * marking where they are rather than filtering to what's "allowed" — because
- * the app no longer holds an opinion about their level, and seeing the line
+ * the app no longer holds an opinion about their level, and seeing the group
  * is half of what makes the choice meaningful.
  */
 
@@ -16,14 +16,14 @@ function exercise(partial: Partial<ApiExercise> & { id: string }): ApiExercise {
     equipment: [],
     scalable: true,
     unit: "reps",
-    line: "pull",
+    movementGroup: "pull",
     rung: 0,
     instructions: null,
-    altExerciseId: null,
+    fallbackExerciseId: null,
     phase: null,
     ownerId: null,
     archivedAt: null,
-    altExercise: null,
+    fallbackExercise: null,
     ...partial,
   };
 }
@@ -33,34 +33,34 @@ const chinUp = exercise({
   id: "chin-up",
   name: "Chin-up",
   rung: 1,
-  altExercise: { id: "row", name: "Row under table" },
+  fallbackExercise: { id: "row", name: "Row under table" },
 });
 const pullUp = exercise({ id: "pull-up", name: "Pull-up", rung: 2 });
-const row = exercise({ id: "row", name: "Row under table", line: null, rung: null });
-const burpee = exercise({ id: "burpee", name: "Burpee", line: null, rung: null, pattern: "cardio" });
+const row = exercise({ id: "row", name: "Row under table", movementGroup: null, rung: null });
+const burpee = exercise({ id: "burpee", name: "Burpee", movementGroup: null, rung: null, pattern: "cardio" });
 const highKnees = exercise({
   id: "high-knees",
   name: "High knees",
-  line: null,
+  movementGroup: null,
   rung: null,
   pattern: "cardio",
 });
-// The rope movement and what it falls to: off every line, and the pair the
+// The rope movement and what it falls to: off every group, and the pair the
 // equipment work made swappable (DN-80).
 const doubleUnders = exercise({
   id: "double-unders",
   name: "Double-unders",
-  line: null,
+  movementGroup: null,
   rung: null,
   pattern: "cardio",
   equipment: ["jump_rope"],
-  altExercise: { id: "high-knees", name: "High knees" },
+  fallbackExercise: { id: "high-knees", name: "High knees" },
 });
 
 const library = [pullUp, negative, chinUp, row, burpee, doubleUnders, highKnees];
 
 describe("buildSwapOptions", () => {
-  it("lists the line's rungs in order, whatever order the library came in", () => {
+  it("lists the movementGroup's rungs in order, whatever order the library came in", () => {
     const options = buildSwapOptions(library, "pull", "negative");
     expect(options.map((o) => o.name)).toEqual([
       "Negative chin-up",
@@ -81,8 +81,8 @@ describe("buildSwapOptions", () => {
 
   it("offers the current exercise's no-equipment alternative, last and labelled", () => {
     const options = buildSwapOptions(library, "pull", "chin-up");
-    // Not appended here — `row` is off the ladder, so it only appears via the
-    // current exercise's altExercise.
+    // Not appended here — `row` is outside the group, so it only appears via the
+    // current exercise's fallbackExercise.
     expect(options.at(-1)).toMatchObject({
       exerciseId: "row",
       name: "Row under table",
@@ -96,32 +96,32 @@ describe("buildSwapOptions", () => {
     expect(options.some((o) => o.isAlternative)).toBe(false);
   });
 
-  it("never repeats an alternative that is already a rung on the line", () => {
+  it("never repeats an alternative that is already a rung on the movementGroup", () => {
     const withRowAsRung = [
       exercise({ id: "row", name: "Row under table", rung: 0 }),
       exercise({
         id: "chin-up",
         name: "Chin-up",
         rung: 1,
-        altExercise: { id: "row", name: "Row under table" },
+        fallbackExercise: { id: "row", name: "Row under table" },
       }),
     ];
     const options = buildSwapOptions(withRowAsRung, "pull", "chin-up");
     expect(options.map((o) => o.exerciseId)).toEqual(["row", "chin-up"]);
   });
 
-  it("returns nothing for an off-ladder movement with no alternative", () => {
+  it("returns nothing for an off-group movement with no alternative", () => {
     // A burpee needs nothing and stands in for nothing — this is the row the
     // control really would open onto nothing for.
     expect(buildSwapOptions(library, null, "burpee")).toEqual([]);
   });
 
   /**
-   * Off-ladder movements used to be refused a control outright, which was
+   * Movements in no group used to be refused a control outright, which was
    * right while equipment meant the bar. Once a WOD can name a jump rope, the
-   * row with no ladder is the row most likely to need a way out (DN-80).
+   * row with no group is the row most likely to need a way out (DN-80).
    */
-  it("offers an off-ladder movement its alternative, labelled and last", () => {
+  it("offers an off-group movement its alternative, labelled and last", () => {
     const options = buildSwapOptions(library, null, "double-unders");
     expect(options).toEqual([
       {
@@ -145,7 +145,7 @@ describe("buildSwapOptions", () => {
 
   it("marks where the athlete is, rather than offering the alternative alone", () => {
     // One unmarked row reads as an instruction. The pair reads as a choice —
-    // the same reason the ladder lists every rung instead of the next one.
+    // the same reasin the group lists every rung instead of the next one.
     const options = buildSwapOptions(library, null, "double-unders");
     expect(options.filter((o) => o.isCurrent).map((o) => o.name)).toEqual([
       "Double-unders",
@@ -191,9 +191,9 @@ describe("buildSwapOptions", () => {
     ]);
   });
 
-  it("marks the prescribed rung on the ladder rather than listing it twice", () => {
+  it("marks the prescribed rung in the group rather than listing it twice", () => {
     // The remembered choice moved this row, and the movement it moved from is
-    // a rung the ladder already carries. Appending it would offer the same
+    // a member the group already carries. Appending it would offer the same
     // exercise on two lines of the same list.
     const options = buildSwapOptions(library, "pull", "negative", "pull-up");
     expect(options.map((o) => o.exerciseId)).toEqual([
@@ -221,7 +221,7 @@ describe("buildSwapOptions", () => {
     expect(buildSwapOptions(library, null, "burpee", "burpee")).toEqual([]);
   });
 
-  it("returns nothing when the line has no seeded rungs", () => {
+  it("returns nothing when the movementGroup has no seeded rungs", () => {
     expect(buildSwapOptions(library, "hinge", "deadlift")).toEqual([]);
   });
 });

@@ -71,7 +71,7 @@ export const EQUIPMENT_CATALOG: readonly EquipmentInfo[] = [
  *
  * The baseline the app assumed for its whole life before these tags existed,
  * and so the only default that changes no existing athlete's workouts.
- * Owning nothing would silently drop the whole pull ladder to its substitutes
+ * Owning nothing would silently drop the whole pull group to its fallbacks
  * for everyone who never opens the Settings screen; owning everything would
  * make the setting opt-in-by-discovery.
  *

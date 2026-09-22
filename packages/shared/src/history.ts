@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { exerciseUnit, progressionLine, substitutionReason } from "./enums.js";
+import { exerciseUnit, movementGroup, substitutionReason } from "./enums.js";
 
 /**
  * Per-movement history (DN-89): what the athlete has actually trained, movement
- * by movement, drawn from the session snapshots rather than from a position on
- * a ladder.
+ * by movement, drawn from the session snapshots rather than from a stored
+ * choice.
  *
  * Read as a narrative rather than a score. "Chin-ups for the last six weeks,
  * negatives before that" is a fact about their training; "you are at rung 3"
@@ -38,7 +38,7 @@ export const movementHistorySchema = z.object({
   exerciseId: z.string(),
   /** The name as it stood when it was trained — a rename must not rewrite history. */
   name: z.string(),
-  line: progressionLine.nullable(),
+  movementGroup: movementGroup.nullable(),
   unit: exerciseUnit,
   /** How many sessions it appeared in — `days.length`, carried so a caller need not count. */
   sessions: z.number().int().positive(),

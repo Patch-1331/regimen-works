@@ -139,10 +139,10 @@ function patchJson<T>(path: string, body: unknown) {
  *
  * The fields are restated rather than spread from `Exercise` because the
  * swap and progression logic (`lib/swapOptions.ts`, `lib/progressions.ts`) is
- * written against `pattern: string` and a nested `altExercise`; adopting the
+ * written against `pattern: string` and a nested `fallbackExercise`; adopting the
  * shared type wholesale is a refactor of that logic, not of this type. What
  * changed for DN-28 is that the fields the shared schema grew — `ownerId`,
- * `archivedAt`, `instructions`, `phase`, `altExerciseId` — stopped being
+ * `archivedAt`, `instructions`, `phase`, `fallbackExerciseId` — stopped being
  * missing here, because the library page needs all five.
  */
 export type ApiExercise = {
@@ -153,15 +153,15 @@ export type ApiExercise = {
   scalable: boolean;
   unit: "reps" | "seconds";
   instructions: string | null;
-  line: string | null;
+  movementGroup: string | null;
   rung: number | null;
-  altExerciseId: string | null;
+  fallbackExerciseId: string | null;
   phase: string | null;
   /** Null for global library content, set for the reading athlete's own. */
   ownerId: string | null;
   /** When it was retired, or null while it is live. */
   archivedAt: string | null;
-  altExercise: { id: string; name: string } | null;
+  fallbackExercise: { id: string; name: string } | null;
 };
 
 /**
@@ -318,8 +318,8 @@ export const api = {
   movementVolume: () => request<MovementVolume[]>("/movement-volume"),
 
   skillLevels: () => request<SkillLevel[]>("/skill-levels"),
-  setSkillLevel: (line: string, body: SetSkillLevelRequest) =>
-    patchJson<SkillLevel>(`/skill-levels/${line}`, body),
+  setSkillLevel: (movementGroup: string, body: SetSkillLevelRequest) =>
+    patchJson<SkillLevel>(`/skill-levels/${movementGroup}`, body),
 
   /**
    * Who the API thinks the caller is (DN-92). Read for `isAdmin`, which says

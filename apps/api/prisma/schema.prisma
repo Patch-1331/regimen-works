@@ -60,15 +60,22 @@ model Exercise {
   // seeded exercise has one (the seed type requires it); nullable only so a
   // row added outside the seed isn't blocked on copy that hasn't been
   // written yet. Never the home of rep counts or scaling advice: counts are
-  // WodMovement.reps, and the easier variant is already altExerciseId.
+  // WodMovement.reps, and the no-equipment stand-in is already
+  // fallbackExerciseId (equipment, not difficulty -- see ADR-0004).
   instructions String?
 
-  // Progression tracking (Feature #2) — finer-grained than `pattern`, since a
-  // pattern like push or core actually contains multiple independent skill
-  // lines (push_horizontal vs push_vertical; core_dynamic/core_hold/core_side).
-  // Null for exercises not yet part of a tracked ladder (e.g. cardio).
-  line String?
-  rung Int? // position within that line's chain, 0-indexed
+  // The movement group this belongs to (Feature #2, ADR-0004): movements
+  // that accomplish the same thing in a program and are freely
+  // interchangeable. Finer-grained than `pattern`, since a pattern like push
+  // or core contains several groups that are not interchangeable
+  // (push_horizontal vs push_vertical; core_dynamic/core_hold/core_side).
+  // Null for movements in no group (e.g. cardio).
+  movementGroup String?
+  // Where this movement is listed among its group's members. Display order
+  // only -- it is not a difficulty and nothing resolves through it. Renamed
+  // to `sortOrder` when `SkillLevel.rung` becomes a foreign key; see
+  // ADR-0004.
+  rung          Int?
 
   // Warm-up/cool-down tagging (Feature #63) — independent of `pattern`/`line`
   // so an exercise still carries its `pattern` for WOD matching while also
@@ -76,9 +83,9 @@ model Exercise {
   // of either checklist.
   phase String? // warmup | cooldown | null
 
-  altExerciseId String?
-  altExercise   Exercise?  @relation("ExerciseAlt", fields: [altExerciseId], references: [id])
-  substitutes   Exercise[] @relation("ExerciseAlt")
+  fallbackExerciseId String?
+  fallbackExercise   Exercise?  @relation("ExerciseFallback", fields: [fallbackExerciseId], references: [id])
+  fallbackFor        Exercise[] @relation("ExerciseFallback")
 
   // Which tier of the library this row belongs to (DN-93).
   //
@@ -99,7 +106,7 @@ model Exercise {
   setLogs       WorkoutSetLog[]
 
   // Soft delete (DN-25). Archiving hides the row from every pool and picker --
-  // `libraryVisibleTo` filters it out, so the scheduler, the ladder and the
+  // `libraryVisibleTo` filters it out, so the scheduler, the group and the
   // swap panel stop offering it -- while leaving it resolvable through the
   // relations that already point at it. A hard delete cannot do that: a
   // `WodMovement` or a logged `AssignmentSubstitution` naming this row would
@@ -124,18 +131,24 @@ model Exercise {
   @@unique([ownerId, name])
 }
 
-// Current rung per progression line — one row per line, v1 single-user (see
-// User). Read by the scheduler when generating a WOD and advanced/dropped
-// by the 3x8-to-3x5 rule after a result is logged (Feature #2).
+// The athlete's standing choice of movement per group — the last thing they
+// picked, remembered so they need not re-pick it every session. One row per
+// group, and only once they have chosen: nobody is provisioned onto one
+// (DN-86). Nothing in the app moves it without the athlete confirming.
+//
+// `rung` identifies which member was picked, by its position in the group's
+// list. ADR-0004 replaces it with a foreign key to the exercise itself, for
+// the reason the seed already warns about: a stored position is an index into
+// a list that must then never move.
 model SkillLevel {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  line      String // push_horizontal | push_vertical | pull | squat | hinge | core_dynamic | core_hold | core_side
-  rung      Int      @default(0)
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  movementGroup String // push_horizontal | push_vertical | pull | squat | hinge | core_dynamic | core_hold | core_side
+  rung          Int      @default(0)
+  updatedAt     DateTime @updatedAt
 
-  @@unique([userId, line])
+  @@unique([userId, movementGroup])
 }
 
 model Wod {
@@ -339,7 +352,7 @@ model AssignmentSubstitution {
   // same shape of rule as PlanSlotMovement's own line/exerciseId xor.
   //
   // A swap is keyed by the movement the athlete tapped rather than by the
-  // exercise, so a day naming the same line twice moves only the row they
+  // exercise, so a day naming the same group twice moves only the row they
   // touched -- and since DN-125 a day can be straight sets rather than a WOD,
   // which has no WodMovement anywhere in it. Two nullable FKs rather than one
   // polymorphic id column, so the database still refuses a swap pointing at a
@@ -717,15 +730,15 @@ model PlanSlotMovement {
 
   // **Exactly one of these two.** A CHECK in this model's migration holds it.
   //
-  // `line` is the one to reach for: naming the progression line rather than a
+  // `movementGroup` is the one to reach for: naming the group rather than a
   // specific exercise is what lets one program fit every athlete, because the
-  // day resolves through the rung they own. `exerciseId` is for the cases
-  // where the specific variation is the point -- a program teaching the
-  // negative names the negative, and an athlete further up the line should
-  // still train it that day.
-  line       String? // push_horizontal | push_vertical | pull | squat | ... (see progressionLine)
-  exerciseId String?
-  exercise   Exercise? @relation(fields: [exerciseId], references: [id])
+  // day resolves through the movement they chose. `exerciseId` is for the
+  // cases where the specific variation is the point -- a program teaching the
+  // negative names the negative, and an athlete who usually trains something
+  // else in that group should still train it that day.
+  movementGroup String? // push_horizontal | push_vertical | pull | squat | ... (see movementGroup)
+  exerciseId    String?
+  exercise      Exercise? @relation(fields: [exerciseId], references: [id])
 
   // The day's swaps that key off this row (DN-125). A prescribed movement is
   // swappable for the same reason a WOD's is: the app decides what you do, you
@@ -770,17 +783,17 @@ model PlanEnrollment {
   createdAt   DateTime  @default(now())
   completedAt DateTime?
 
-  // Every tracked line's rung on the start date, as { line: rung }. SkillLevel
+  // Every group's chosen member on the start date, as { group: rung }. SkillLevel
   // only keeps the current value, so without this a finished program can count
   // sessions but cannot say what changed -- which is the interesting half of
   // the completion card. jsonb rather than a table because it is written once
   // and always read whole.
-  startingRungs Json  @default("{}")
+  startingRungs      Json      @default("{}")
   // The completion card's figures, snapshotted when the enrollment completes
   // rather than recomputed on every read of the Completed list. Null while the
   // program is still running, which is also how "has this been completed" reads
   // without a join.
-  summary       Json?
+  summary            Json?
   // When the athlete dismissed the completion card (DN-18). Null while the
   // card is still owed -- which, with `summary`, is the whole rule for showing
   // it. A column rather than browser storage because dismissing on a phone

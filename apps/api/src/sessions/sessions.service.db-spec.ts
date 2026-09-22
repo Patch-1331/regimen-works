@@ -6,7 +6,7 @@ import { testPrisma, withSeparateConnections } from '../test-support/database';
 import {
   createAssignment,
   createExercise,
-  createLadder,
+  createGroup,
   createPlan,
   createSkillLevel,
   createUser,
@@ -31,7 +31,7 @@ function service(client: PrismaClient = testPrisma()): SessionsService {
   return new SessionsService(prisma, new MovementResolutionService(prisma));
 }
 
-/** A flat For Time WOD on a pull ladder, assigned to a fresh athlete. */
+/** A flat For Time WOD on the pull group, assigned to a fresh athlete. */
 async function pullDay(
   options: {
     status?: string;
@@ -40,7 +40,7 @@ async function pullDay(
   } = {},
 ) {
   const user = await createUser();
-  const { rungs } = await createLadder('pull', [
+  const { rungs } = await createGroup('pull', [
     'Negative chin-up',
     'Chin-up',
     'Pull-up',
@@ -216,21 +216,21 @@ describe('SessionsService.start', () => {
     const floor = await createExercise({
       name: 'Supermans',
       pattern: 'pull',
-      line: null,
+      movementGroup: null,
       rung: null,
     });
     const pullUp = await createExercise({
       name: 'Pull-up',
       pattern: 'pull',
-      line: 'pull',
+      movementGroup: 'pull',
       rung: 0,
       equipment: ['bar'],
-      altExerciseId: floor.id,
+      fallbackExerciseId: floor.id,
     });
     const ringRow = await createExercise({
       name: 'Ring row',
       pattern: 'pull',
-      line: 'pull',
+      movementGroup: 'pull',
       rung: 1,
     });
     const wod = await createWod({
@@ -571,9 +571,9 @@ describe('SessionsService.advanceInterval', () => {
 });
 
 describe('SessionsService.setRoundSplit', () => {
-  async function ladderDay() {
+  async function groupDay() {
     const user = await createUser();
-    const { rungs } = await createLadder('pull', ['Chin-up']);
+    const { rungs } = await createGroup('pull', ['Chin-up']);
     const wod = await createWod({
       movements: [
         { exerciseId: rungs[0].id, reps: 45, order: 0, repScheme: [21, 15, 9] },
@@ -596,7 +596,7 @@ describe('SessionsService.setRoundSplit', () => {
   it('refuses a split on a WOD whose rep scheme already sets its rounds', async () => {
     // An even split over the ladder's total would walk the athlete through
     // 15-15-15 where the workout says 21-15-9.
-    const { user, assignment } = await ladderDay();
+    const { user, assignment } = await groupDay();
     await service().start(user.id, assignment.id);
 
     await expect(
@@ -605,7 +605,7 @@ describe('SessionsService.setRoundSplit', () => {
   });
 
   it('still allows clearing a split on a scheme-driven WOD', async () => {
-    const { user, assignment } = await ladderDay();
+    const { user, assignment } = await groupDay();
     await service().start(user.id, assignment.id);
 
     expect(
@@ -783,7 +783,7 @@ describe('SessionsService.cancel', () => {
  */
 async function prescribedDay(options: { kind?: string } = {}) {
   const user = await createUser();
-  const { rungs } = await createLadder('pull', [
+  const { rungs } = await createGroup('pull', [
     'Negative chin-up',
     'Chin-up',
     'Pull-up',
@@ -804,7 +804,7 @@ async function prescribedDay(options: { kind?: string } = {}) {
                   create: [
                     {
                       order: 0,
-                      line: 'pull',
+                      movementGroup: 'pull',
                       sets: 5,
                       reps: 3,
                       restSeconds: 90,
@@ -896,7 +896,7 @@ describe('SessionsService, on a prescribed day', () => {
     });
   });
 
-  it("resolves the line to the athlete's own rung, as the plate did", async () => {
+  it("resolves the movementGroup to the athlete's own rung, as the plate did", async () => {
     const { user, rungs, assignment } = await prescribedDay();
     await createSkillLevel(user.id, 'pull', 2);
 
@@ -1063,7 +1063,7 @@ describe('SessionsService.logSet', () => {
 });
 
 describe('SessionsService.logSet, the rows it writes (DN-21)', () => {
-  /** A started straight-sets session: 5 x 3 on the pull ladder, then 3 x 8 push-ups. */
+  /** A started straight-sets session: 5 x 3 on the pull group, then 3 x 8 push-ups. */
   async function running() {
     const day = await prescribedDay();
     const session = await service().start(day.user.id, day.assignment.id);

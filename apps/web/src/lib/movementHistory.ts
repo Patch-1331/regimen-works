@@ -9,10 +9,11 @@ import type { MovementHistory } from "@regimen-works/shared";
  * The panel above it says what the athlete has *chosen*; this says what has
  * actually been happening. Neither is a verdict: there is no "enough", no
  * ranking, and nothing here says whether the athlete should move on. The
- * ladder this panel replaced made exactly those claims, which is why it went.
+ * ladder this panel replaced made exactly those claims, which is why it went
+ * (and why the concept it rested on is gone too — ADR-0004).
  */
 
-/** A stretch of days on one line where the movement did not change. */
+/** A stretch of days in one group where the movement did not change. */
 export type MovementRun = {
   exerciseId: string;
   /** The name the days themselves carried — a rename must not rewrite them. */
@@ -27,22 +28,22 @@ export type MovementRun = {
 type TrainedDay = { date: string; exerciseId: string; name: string };
 
 /**
- * The line's history as runs, newest first: the movement being trained now,
+ * The group's history as runs, newest first: the movement being trained now,
  * then the one before it, and so on.
  *
  * Runs rather than a flat list because the question is when the movement
  * *changed* — twelve identical rows say less than "chin-ups since August".
  *
- * A day that trained two movements of the same line (a WOD naming two rungs)
+ * A day that trained two movements of the same group (a WOD naming two rungs)
  * ends a run and starts another, which is what actually happened; it is not
  * smoothed into one.
  */
 export function buildLineRuns(
   history: MovementHistory[],
-  line: string,
+  movementGroup: string,
 ): MovementRun[] {
   const days: TrainedDay[] = history
-    .filter((movement) => movement.line === line)
+    .filter((movement) => movement.movementGroup === movementGroup)
     .flatMap((movement) =>
       movement.days.map((day) => ({
         date: day.date,
@@ -84,7 +85,7 @@ export function shortDate(iso: string): string {
 /**
  * What the collapsed card says under the chosen movement.
  *
- * Null when the line has never been trained — the card then says nothing
+ * Null when the group has never been trained — the card then says nothing
  * rather than "0 sessions", which reads as a mark against the athlete for a
  * movement group they may simply not have met yet.
  */

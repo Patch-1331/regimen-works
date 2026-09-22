@@ -3,7 +3,7 @@ import {
   movementPattern,
   planPhase,
   planSlotKind,
-  progressionLine,
+  movementGroup,
   scheduleMode,
   wodType,
 } from "./enums.js";
@@ -24,7 +24,7 @@ export const DEFAULT_PLAN_ID = "plan_just_wods";
  * One movement a `movements` day prescribes, as authored (DN-19).
  *
  * The authoring shape. What the athlete is handed is
- * `prescribedMovementSchema`, where the line has already resolved to an
+ * `prescribedMovementSchema`, where the group has already resolved to an
  * exercise at their rung — an author writes "pull", an athlete reads
  * "chin-up", and keeping the two shapes apart is what stops a client
  * resolving rungs for itself.
@@ -40,14 +40,14 @@ export const planSlotMovementSchema = z
     /** Position in the session, 0-based, the way `WodMovement.order` is. */
     order: z.number().int().nonnegative(),
     /**
-     * The progression line to resolve through the athlete's rung — the one to
+     * The movement groups to resolve through the athlete's rung — the one to
      * reach for, because it is what lets one program fit every athlete.
      */
-    line: progressionLine.nullable(),
+    movementGroup: movementGroup.nullable(),
     /**
      * A specific exercise instead, for the cases where the variation is the
      * point: a program teaching the negative names the negative, and an
-     * athlete further up the line should still train it that day.
+     * athlete further up the group should still train it that day.
      */
     exerciseId: z.string().nullable(),
     sets: z.number().int().positive(),
@@ -58,10 +58,10 @@ export const planSlotMovementSchema = z
   // Mirrors the PlanSlotMovement_line_xor_exercise CHECK. Neither set is a
   // rep count attached to nothing; both set is two different instructions in
   // one row, and a reader picking one would be guessing at the author.
-  .refine((m) => (m.line !== null) !== (m.exerciseId !== null), {
+  .refine((m) => (m.movementGroup !== null) !== (m.exerciseId !== null), {
     message:
-      "a prescribed movement names a line or an exercise — one of them, not both and not neither",
-    path: ["line"],
+      "a prescribed movement names a movementGroup or an exercise — one of them, not both and not neither",
+    path: ["movementGroup"],
   });
 export type PlanSlotMovement = z.infer<typeof planSlotMovementSchema>;
 

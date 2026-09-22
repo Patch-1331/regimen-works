@@ -13,13 +13,13 @@ export class SkillLevelsController {
     return this.skillLevelsService.findAll(userId);
   }
 
-  @Patch(':line')
+  @Patch(':movementGroup')
   setRung(
     @CurrentUser() userId: string,
-    @Param('line') line: string,
+    @Param('movementGroup') movementGroup: string,
     @Body() body: unknown,
   ) {
     const { rung } = validateBody(setSkillLevelRequestSchema, body);
-    return this.skillLevelsService.setRung(userId, line, rung);
+    return this.skillLevelsService.setRung(userId, movementGroup, rung);
   }
 }

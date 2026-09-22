@@ -30,7 +30,7 @@ const SANDBAG = fixtures.apiExercise({
   id: "o1",
   name: "Sandbag carry",
   ownerId: "user_alice",
-  line: null,
+  movementGroup: null,
   rung: null,
   unit: "seconds",
 });
@@ -38,7 +38,7 @@ const RETIRED = fixtures.apiExercise({
   id: "o2",
   name: "Burpee",
   ownerId: "user_alice",
-  line: null,
+  movementGroup: null,
   rung: null,
   archivedAt: "2026-09-01T00:00:00.000Z",
 });
@@ -249,8 +249,8 @@ describe("the movement library", () => {
         name: "Ring row",
         pattern: "pull",
         equipment: ["bar"],
-        altExerciseId: "g1",
-        line: null,
+        fallbackExerciseId: "g1",
+        movementGroup: null,
         rung: null,
       }),
     );

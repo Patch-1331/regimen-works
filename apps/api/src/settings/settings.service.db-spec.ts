@@ -345,7 +345,7 @@ describe('SettingsService.update', () => {
 describe('SettingsService equipment ownership', () => {
   it('starts a new athlete at the assumed baseline rather than at nothing', async () => {
     // DN-81: the only default that changes no existing athlete's workouts.
-    // Defaulting to owning nothing would silently drop the whole pull ladder
+    // Defaulting to owning nothing would silently drop the whole pull group
     // to its substitutes for everyone who never opens the screen.
     const user = await createUser();
 

@@ -165,7 +165,7 @@ function LogResultForm({
       // Sequential rather than parallel: these are separate rows and a
       // partial failure should leave the earlier ones written, not race.
       for (const p of proposals ?? []) {
-        await api.setSkillLevel(p.line, { rung: p.toRung });
+        await api.setSkillLevel(p.movementGroup, { rung: p.toRung });
       }
     },
     onSuccess: async () => {

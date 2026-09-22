@@ -16,8 +16,8 @@ const LINE_LABELS: Record<string, string> = {
   cardio_rope: "Rope",
 };
 
-export function lineLabel(line: string): string {
-  return LINE_LABELS[line] ?? line;
+export function lineLabel(movementGroup: string): string {
+  return LINE_LABELS[movementGroup] ?? movementGroup;
 }
 
 const PATTERN_LABELS: Record<string, string> = {
@@ -52,28 +52,28 @@ export type MovementOption = {
 };
 
 export type MovementChoice = {
-  line: string;
+  movementGroup: string;
   /**
    * The movement the athlete last picked. Null only on a data gap — a stored
    * rung with no exercise seeded at it — where naming nothing is better than
    * naming the wrong movement.
    */
   chosenName: string | null;
-  /** Every movement on the line, in the line's own order. */
+  /** Every movement on the group, in the group's own order. */
   options: MovementOption[];
 };
 
 /**
  * What the athlete has chosen, per movement group (DN-91).
  *
- * This replaced a ladder per line whose rungs were marked done / current /
+ * This replaced a ladder per group whose members were marked done / current /
  * locked. Those are assessment words: `done` says you graduated past
  * something, `locked` says you are not allowed it yet, and neither is true of
  * a preference. What the data supports is one sentence — this is the movement
  * you picked — plus the rest of the group to pick from instead.
  *
- * One entry per line the athlete has actually chosen on, and deliberately not
- * one per line that exists. Rendering all eight with "not set yet" would turn
+ * One entry per group the athlete has actually chosen on, and deliberately not
+ * one per group that exists. Rendering all eight with "not set yet" would turn
  * this screen into the calibration wizard DN-86 removed: the app asking what
  * you can do, in the abstract, before it has seen you train. A line appears
  * here once there is something true to say about it.
@@ -84,17 +84,17 @@ export function buildMovementChoices(
 ): MovementChoice[] {
   const exercisesByLine = new Map<string, ApiExercise[]>();
   for (const e of exercises) {
-    if (!e.line || e.rung === null) continue;
-    const list = exercisesByLine.get(e.line) ?? [];
+    if (!e.movementGroup || e.rung === null) continue;
+    const list = exercisesByLine.get(e.movementGroup) ?? [];
     list.push(e);
-    exercisesByLine.set(e.line, list);
+    exercisesByLine.set(e.movementGroup, list);
   }
 
   return skillLevels
     .slice()
-    .sort((a, b) => lineLabel(a.line).localeCompare(lineLabel(b.line)))
+    .sort((a, b) => lineLabel(a.movementGroup).localeCompare(lineLabel(b.movementGroup)))
     .map((skill) => {
-      const lineExercises = (exercisesByLine.get(skill.line) ?? [])
+      const lineExercises = (exercisesByLine.get(skill.movementGroup) ?? [])
         .slice()
         .sort((a, b) => (a.rung ?? 0) - (b.rung ?? 0));
 
@@ -106,7 +106,7 @@ export function buildMovementChoices(
       }));
 
       return {
-        line: skill.line,
+        movementGroup: skill.movementGroup,
         chosenName: options.find((o) => o.isChosen)?.name ?? null,
         options,
       };

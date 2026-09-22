@@ -27,7 +27,7 @@ describe('unreachableSubstitutes', () => {
   it('passes an equipment movement that falls to bodyweight', () => {
     const seeds = [
       bodyweight,
-      { name: 'Pull-up', equipment: ['bar'], alt: 'Supermans' },
+      { name: 'Pull-up', equipment: ['bar'], fallback: 'Supermans' },
     ];
     expect(unreachableSubstitutes(seeds)).toEqual([]);
   });
@@ -46,8 +46,12 @@ describe('unreachableSubstitutes', () => {
     // bodyweight in two hops, and the scheduler only takes one.
     const problems = unreachableSubstitutes([
       bodyweight,
-      { name: 'Goblet squat', equipment: ['kettlebell'], alt: 'Box step-up' },
-      { name: 'Box step-up', equipment: ['box'], alt: 'Supermans' },
+      {
+        name: 'Goblet squat',
+        equipment: ['kettlebell'],
+        fallback: 'Box step-up',
+      },
+      { name: 'Box step-up', equipment: ['box'], fallback: 'Supermans' },
     ]);
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain('"Goblet squat"');
@@ -57,7 +61,11 @@ describe('unreachableSubstitutes', () => {
 
   it('catches an alternative that is not a seeded exercise', () => {
     const problems = unreachableSubstitutes([
-      { name: 'Kettlebell swing', equipment: ['kettlebell'], alt: 'Hip hinge' },
+      {
+        name: 'Kettlebell swing',
+        equipment: ['kettlebell'],
+        fallback: 'Hip hinge',
+      },
     ]);
     expect(problems[0]).toContain('not a seeded exercise');
   });
@@ -87,7 +95,7 @@ describe('assertSubstitutesReachable', () => {
     expect(() =>
       assertSubstitutesReachable([
         bodyweight,
-        { name: 'Pull-up', equipment: ['bar'], alt: 'Supermans' },
+        { name: 'Pull-up', equipment: ['bar'], fallback: 'Supermans' },
       ]),
     ).not.toThrow();
   });
@@ -117,7 +125,7 @@ describe('mismatchedSubstituteUnits', () => {
       {
         name: 'Farmer carry',
         equipment: ['dumbbell'],
-        alt: 'Plank hold',
+        fallback: 'Plank hold',
         unit: 'seconds' as const,
       },
     ];
@@ -130,7 +138,7 @@ describe('mismatchedSubstituteUnits', () => {
       {
         name: 'Suitcase carry',
         equipment: ['dumbbell'],
-        alt: 'Side plank',
+        fallback: 'Side plank',
         unit: 'seconds',
       },
     ]);
@@ -143,7 +151,7 @@ describe('mismatchedSubstituteUnits', () => {
   it('catches the mismatch in the other direction too', () => {
     const problems = mismatchedSubstituteUnits([
       plank,
-      { name: 'Dumbbell row', equipment: ['dumbbell'], alt: 'Plank hold' },
+      { name: 'Dumbbell row', equipment: ['dumbbell'], fallback: 'Plank hold' },
     ]);
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain('"Dumbbell row"');
@@ -157,7 +165,7 @@ describe('mismatchedSubstituteUnits', () => {
       {
         name: 'Dumbbell floor press',
         equipment: ['dumbbell'],
-        alt: 'Push-up',
+        fallback: 'Push-up',
         unit: 'reps' as const,
       },
     ];
@@ -172,7 +180,7 @@ describe('mismatchedSubstituteUnits', () => {
       {
         name: 'Suitcase carry',
         equipment: ['dumbbell'],
-        alt: 'Nothing seeded',
+        fallback: 'Nothing seeded',
         unit: 'seconds',
       },
     ];
@@ -187,21 +195,21 @@ describe('mismatchedSubstituteUnits', () => {
         {
           name: 'Suitcase carry',
           equipment: ['dumbbell'],
-          alt: 'Side plank',
+          fallback: 'Side plank',
           unit: 'seconds',
         },
       ]),
     ).toThrow(/different unit/);
   });
 
-  it('lets a seed whose units line up through', () => {
+  it('lets a seed whose units movementGroup up through', () => {
     expect(() =>
       assertSubstituteUnitsMatch([
         plank,
         {
           name: 'Farmer carry',
           equipment: ['dumbbell'],
-          alt: 'Plank hold',
+          fallback: 'Plank hold',
           unit: 'seconds',
         },
       ]),

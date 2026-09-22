@@ -80,14 +80,14 @@ export async function seedE2eUser(
 
   // A standing choice on two lines, so the progressions panel and the
   // remembered-choice substitution both have something to show. Deliberately
-  // not all eight: an athlete who has chosen on every line is not what a real
+  // not all eight: an athlete who has chosen on every group is not what a real
   // one looks like, and DN-86 made "no choice yet" the ordinary case.
   const lines = await pickSeededLines(prisma);
-  for (const { line, rung } of lines) {
+  for (const { movementGroup, rung } of lines) {
     await prisma.skillLevel.upsert({
-      where: { userId_line: { userId, line } },
+      where: { userId_movementGroup: { userId, movementGroup } },
       update: { rung },
-      create: { userId, line, rung },
+      create: { userId, movementGroup, rung },
     });
   }
 
@@ -145,23 +145,29 @@ export async function seedE2eUser(
  */
 async function pickSeededLines(
   prisma: PrismaClient,
-): Promise<{ line: string; rung: number }[]> {
+): Promise<{ movementGroup: string; rung: number }[]> {
   const exercises = await prisma.exercise.findMany({
-    where: { line: { not: null } },
-    select: { line: true, rung: true },
-    orderBy: [{ line: 'asc' }, { rung: 'asc' }],
+    where: { movementGroup: { not: null } },
+    select: { movementGroup: true, rung: true },
+    orderBy: [{ movementGroup: 'asc' }, { rung: 'asc' }],
   });
 
   const maxRungByLine = new Map<string, number>();
   for (const e of exercises) {
-    if (e.line === null || e.rung === null) continue;
-    maxRungByLine.set(e.line, Math.max(maxRungByLine.get(e.line) ?? 0, e.rung));
+    if (e.movementGroup === null || e.rung === null) continue;
+    maxRungByLine.set(
+      e.movementGroup,
+      Math.max(maxRungByLine.get(e.movementGroup) ?? 0, e.rung),
+    );
   }
 
   return [...maxRungByLine.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .slice(0, 2)
-    .map(([line, maxRung]) => ({ line, rung: Math.min(1, maxRung) }));
+    .map(([movementGroup, maxRung]) => ({
+      movementGroup,
+      rung: Math.min(1, maxRung),
+    }));
 }
 
 async function main(): Promise<void> {

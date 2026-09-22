@@ -112,7 +112,7 @@ describe("SwapPanel prescription note", () => {
   });
 
   it("marks which row the workout asked for", () => {
-    // Off the ladder the two rows are near-identical movements, and which is
+    // Outside a group the two rows are near-identical movements, and which is
     // which decides the tap.
     panel({ options: withPrescribed, prescribedName: "Pull-up", prescribedReason: "equipment" });
     expect(screen.getByText("PRESCRIBED")).toBeInTheDocument();

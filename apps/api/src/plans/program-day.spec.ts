@@ -38,7 +38,7 @@ function prescribed(
   return {
     id: 'psm_1',
     order: 0,
-    line: 'pull',
+    movementGroup: 'pull',
     exerciseId: null,
     sets: 5,
     reps: 3,
@@ -399,7 +399,9 @@ describe('resolveProgramDay', () => {
       ).toMatchObject({
         kind: 'prescribed',
         day: { slotKind: 'movements', planSlotId: 'slot_1' },
-        movements: [{ line: 'pull', sets: 5, reps: 3, restSeconds: 90 }],
+        movements: [
+          { movementGroup: 'pull', sets: 5, reps: 3, restSeconds: 90 },
+        ],
       });
     });
 
@@ -412,15 +414,17 @@ describe('resolveProgramDay', () => {
       // nothing about sorting.
       const day = dayOfKind('movements', {
         movements: [
-          prescribed({ id: 'psm_2', order: 1, line: 'squat' }),
-          prescribed({ id: 'psm_3', order: 2, line: 'hinge' }),
-          prescribed({ id: 'psm_1', order: 0, line: 'pull' }),
+          prescribed({ id: 'psm_2', order: 1, movementGroup: 'squat' }),
+          prescribed({ id: 'psm_3', order: 2, movementGroup: 'hinge' }),
+          prescribed({ id: 'psm_1', order: 0, movementGroup: 'pull' }),
         ],
       });
 
       expect(day.kind).toBe('prescribed');
       expect(
-        day.kind === 'prescribed' ? day.movements.map((m) => m.line) : [],
+        day.kind === 'prescribed'
+          ? day.movements.map((m) => m.movementGroup)
+          : [],
       ).toEqual(['pull', 'squat', 'hinge']);
     });
 
@@ -609,7 +613,7 @@ describe('narrowToSlot', () => {
   });
 
   it('hands back the whole pool rather than nothing, once every axis is spent', () => {
-    // The discipline applyEquipmentFloor and pickWod's ladder both keep: the
+    // The discipline applyEquipmentFloor and pickWod's relaxation ladder both keep: the
     // library is small, and no workout at all is worse than an off-pattern one.
     const kept = narrowToSlot([namedPull], constraints({ allowNamed: false }));
 
@@ -662,7 +666,7 @@ describe('narrowToSlot', () => {
 
     it('reports the pattern too when the library has none of it -- the squat hole DN-23 fills', () => {
       // The library today: no squat-dominant WOD exists at all, so a squat
-      // slot walks the whole ladder down to the pattern and gets a pull day.
+      // slot walks the whole group down to the pattern and gets a pull day.
       const longPullEmom = { ...pullAmrap, type: 'emom', timeCapMinutes: 30 };
 
       expect(
@@ -722,7 +726,7 @@ describe('narrowToSlot', () => {
         narrowToSlot([longNamedPush], constraints({ pattern: 'pull' })),
       ).toEqual({ candidates: [longNamedPush], relaxed: ['pattern'] });
 
-      // And still not when the ladder runs past that rung entirely, which is
+      // And still not when the group runs past that position entirely, which is
       // the only place a slot that forbade nothing could be reported as
       // having given something up.
       expect(

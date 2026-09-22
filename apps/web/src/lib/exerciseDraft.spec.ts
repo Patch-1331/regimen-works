@@ -33,17 +33,17 @@ describe("toWriteBody", () => {
       scalable: false,
       unit: "reps",
       instructions: null,
-      line: null,
+      movementGroup: null,
       rung: null,
-      altExerciseId: null,
+      fallbackExerciseId: null,
       phase: null,
     });
   });
 
   it("keeps rung 0 and does not invent one from an empty box", () => {
     // The whole reason the draft holds `rung` as a string: `Number("")` is 0,
-    // and rung 0 is the bottom of a real ladder.
-    expect(toWriteBody(draft({ line: "push_horizontal", rung: "0" })).rung).toBe(
+    // and rung 0 is the a real position in a group.
+    expect(toWriteBody(draft({ movementGroup: "push_horizontal", rung: "0" })).rung).toBe(
       0,
     );
     expect(toWriteBody(draft({ rung: "" })).rung).toBeNull();
@@ -64,9 +64,9 @@ describe("toDraft", () => {
       equipment: ["bar"],
       unit: "reps",
       instructions: "Chin over the bar.",
-      line: "pull_vertical",
+      movementGroup: "pull_vertical",
       rung: 3,
-      altExerciseId: "exercise-9",
+      fallbackExerciseId: "exercise-9",
       phase: "warmup",
     });
 
@@ -75,9 +75,9 @@ describe("toDraft", () => {
       pattern: "pull",
       equipment: ["bar"],
       instructions: "Chin over the bar.",
-      line: "pull_vertical",
+      movementGroup: "pull_vertical",
       rung: 3,
-      altExerciseId: "exercise-9",
+      fallbackExerciseId: "exercise-9",
       phase: "warmup",
     });
   });
@@ -115,13 +115,13 @@ describe("alternativesFor", () => {
 
 describe("problemsWith", () => {
   const barbellRow = fixtures.apiExercise({
-    id: "alt-bar",
+    id: "fallback-bar",
     name: "Barbell row",
     equipment: ["bar"],
   });
-  const ringRow = fixtures.apiExercise({ id: "alt-ring", name: "Ring row" });
+  const ringRow = fixtures.apiExercise({ id: "fallback-ring", name: "Ring row" });
   const plank = fixtures.apiExercise({
-    id: "alt-plank",
+    id: "fallback-plank",
     name: "Plank",
     unit: "seconds",
   });
@@ -137,16 +137,16 @@ describe("problemsWith", () => {
     ]);
   });
 
-  it("refuses half a ladder position, in either direction", () => {
+  it("refuses half a group position, in either direction", () => {
     expect(
-      problemsWith(draft({ line: "push_horizontal" }), alternatives).join(),
-    ).toMatch(/both the line and the rung/);
+      problemsWith(draft({ movementGroup: "push_horizontal" }), alternatives).join(),
+    ).toMatch(/both the movementGroup and the rung/);
     expect(problemsWith(draft({ rung: "2" }), alternatives).join()).toMatch(
-      /both the line and the rung/,
+      /both the movementGroup and the rung/,
     );
     expect(
       problemsWith(
-        draft({ line: "push_horizontal", rung: "2" }),
+        draft({ movementGroup: "push_horizontal", rung: "2" }),
         alternatives,
       ),
     ).toEqual([]);
@@ -163,7 +163,7 @@ describe("problemsWith", () => {
     // alternative and that is the end of it.
     expect(
       problemsWith(
-        draft({ equipment: ["bar"], altExerciseId: "alt-bar" }),
+        draft({ equipment: ["bar"], fallbackExerciseId: "fallback-bar" }),
         alternatives,
       ).join(),
     ).toMatch(/needs equipment of its own/);
@@ -172,7 +172,7 @@ describe("problemsWith", () => {
   it("refuses a fallback counted in the other unit", () => {
     expect(
       problemsWith(
-        draft({ equipment: ["bar"], altExerciseId: "alt-plank" }),
+        draft({ equipment: ["bar"], fallbackExerciseId: "fallback-plank" }),
         alternatives,
       ).join(),
     ).toMatch(/counted in seconds/);
@@ -181,7 +181,7 @@ describe("problemsWith", () => {
   it("accepts the whole coherent thing", () => {
     expect(
       problemsWith(
-        draft({ equipment: ["bar"], altExerciseId: "alt-ring" }),
+        draft({ equipment: ["bar"], fallbackExerciseId: "fallback-ring" }),
         alternatives,
       ),
     ).toEqual([]);
@@ -190,14 +190,14 @@ describe("problemsWith", () => {
   it("names an alternative that is no longer offered", () => {
     // The list moved under the form: someone retired it in another tab.
     expect(
-      problemsWith(draft({ altExerciseId: "gone" }), alternatives).join(),
+      problemsWith(draft({ fallbackExerciseId: "gone" }), alternatives).join(),
     ).toMatch(/no longer one this movement can point at/);
   });
 
   it("reports every problem at once rather than one at a time", () => {
     expect(
       problemsWith(
-        draft({ name: "", equipment: ["bar"], line: "push_horizontal" }),
+        draft({ name: "", equipment: ["bar"], movementGroup: "push_horizontal" }),
         alternatives,
       ),
     ).toHaveLength(3);

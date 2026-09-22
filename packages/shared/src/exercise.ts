@@ -4,7 +4,7 @@ import {
   exercisePhase,
   exerciseUnit,
   movementPattern,
-  progressionLine,
+  movementGroup,
 } from "./enums.js";
 
 export const exerciseSchema = z.object({
@@ -20,9 +20,9 @@ export const exerciseSchema = z.object({
   // How the movement is performed, in prose. Null on rows added outside the
   // seed; every seeded exercise has one.
   instructions: z.string().nullable(),
-  line: progressionLine.nullable(),
+  movementGroup: movementGroup.nullable(),
   rung: z.number().int().nonnegative().nullable(),
-  altExerciseId: z.string().nullable(),
+  fallbackExerciseId: z.string().nullable(),
   phase: exercisePhase.nullable(),
   /**
    * Which tier this row belongs to (DN-93): null is global library content,
@@ -56,9 +56,9 @@ export const createExerciseSchema = z.object({
   scalable: z.boolean(),
   unit: exerciseUnit,
   instructions: z.string().nullable(),
-  line: progressionLine.nullable(),
+  movementGroup: movementGroup.nullable(),
   rung: z.number().int().nonnegative().nullable(),
-  altExerciseId: z.string().nullable(),
+  fallbackExerciseId: z.string().nullable(),
   phase: exercisePhase.nullable(),
 });
 export type CreateExercise = z.infer<typeof createExerciseSchema>;

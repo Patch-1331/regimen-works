@@ -20,7 +20,7 @@ function movement(
   return {
     exerciseId: "chin-up",
     name: "Chin-up",
-    line: "pull",
+    movementGroup: "pull",
     unit: "reps",
     sessions: dates.length,
     total: dates.length * 30,
@@ -39,7 +39,7 @@ function movement(
 }
 
 describe("buildLineRuns", () => {
-  it("says nothing about a line that has never been trained", () => {
+  it("says nothing about a movementGroup that has never been trained", () => {
     expect(buildLineRuns([], "pull")).toEqual([]);
   });
 
@@ -106,7 +106,7 @@ describe("buildLineRuns", () => {
     const runs = buildLineRuns(
       [
         movement(),
-        movement({ exerciseId: "air-squat", name: "Air squat", line: "squat" }),
+        movement({ exerciseId: "air-squat", name: "Air squat", movementGroup: "squat" }),
       ],
       "pull",
     );
@@ -114,10 +114,10 @@ describe("buildLineRuns", () => {
     expect(runs.map((r) => r.name)).toEqual(["Chin-up"]);
   });
 
-  it("ignores movements that sit off every line", () => {
+  it("ignores movements that sit off every movementGroup", () => {
     // Burpees and the loaded movements carry no line, so no card claims them.
     const runs = buildLineRuns(
-      [movement({ exerciseId: "burpee", name: "Burpee", line: null })],
+      [movement({ exerciseId: "burpee", name: "Burpee", movementGroup: null })],
       "pull",
     );
 
@@ -126,7 +126,7 @@ describe("buildLineRuns", () => {
 });
 
 describe("describeLineHistory", () => {
-  it("says nothing at all about a line never trained", () => {
+  it("says nothing at all about a movementGroup never trained", () => {
     // Not "0 sessions": a count of nothing reads as a mark against someone for
     // a movement group they may simply not have met yet.
     expect(describeLineHistory([])).toBeNull();

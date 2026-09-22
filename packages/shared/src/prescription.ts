@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { progressionLine, substitutionReason } from "./enums.js";
+import { movementGroup, substitutionReason } from "./enums.js";
 import { movementExerciseSchema } from "./wod.js";
 
 /**
@@ -30,17 +30,17 @@ export const prescribedMovementSchema = z.object({
    * specific exercise because the variation was the point.
    *
    * Carried rather than inferred from `exercise.line`: those are the same
-   * value on a line-prescribed row and mean different things — this one is
+   * value in a group-prescribed row and mean different things — this one is
    * what the *program* asked for, and it survives the athlete being dropped
-   * off the line entirely by an equipment fallback.
+   * outside the group entirely by an equipment fallback.
    */
-  line: progressionLine.nullable(),
+  movementGroup: movementGroup.nullable(),
   /** What this athlete actually trains today. */
   exercise: movementExerciseSchema,
   /** True where the athlete swapped this row themselves, for today only (DN-125). */
   isSwapped: z.boolean(),
   /**
-   * What the line resolved to before an automatic layer replaced it, and
+   * What the group resolved to before an automatic layer replaced it, and
    * which layer did — the same honesty rule the WOD plate follows (DN-79,
    * DN-88): an app that quietly hands somebody a different movement should
    * at least say so.

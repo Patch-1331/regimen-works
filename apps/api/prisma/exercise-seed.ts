@@ -23,12 +23,12 @@ export type ExerciseSeed = {
   // needing nothing carries no tags rather than a "bodyweight" one.
   equipment?: string[];
   scalable?: boolean;
-  alt?: string; // name of the no-equipment substitute
-  // Progression tracking (Feature #2) — line groups exercises into an
-  // ordered chain; rung is this exercise's 0-indexed position in it. See
-  // the "Scaling the Ladder" design doc for why these 8 lines exist instead
-  // of tracking progress per `pattern`.
-  line?: string;
+  fallback?: string; // name of the no-equipment substitute
+  // The movement group this belongs to (Feature #2, ADR-0004): the set of
+  // movements that accomplish the same thing in a program. `rung` is only a
+  // position in the list the swap panel shows — not a difficulty, and not a
+  // claim that anyone should work through them in order.
+  movementGroup?: string;
   rung?: number;
   // Defaults to "reps" — set to "seconds" for timed holds (plank family).
   unit?: 'reps' | 'seconds';
@@ -38,10 +38,11 @@ export type ExerciseSeed = {
   // How the movement is performed, in prose: setup, what one rep is, and the
   // cue or two that decide whether it's the movement at all. Required rather
   // than optional so a movement can't join the library with no way for the
-  // athlete to find out what it is — the ladders promote people onto moves
-  // they've never done, so the copy has to exist before the move does.
-  // Not the place for counts (WodMovement.reps) or for the easier variant
-  // (`alt`), both of which the app already shows next to it.
+  // athlete to find out what it is — the swap panel puts moves in front of
+  // people who have never done them, so the copy has to exist before the
+  // move does. Not the place for counts (WodMovement.reps) or for the
+  // no-equipment fallback (`fallback`), both of which the app already shows
+  // next to it.
   instructions: string;
 };
 
@@ -50,7 +51,7 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Knee push-up',
     pattern: 'push',
-    line: 'push_horizontal',
+    movementGroup: 'push_horizontal',
     rung: 0,
     instructions:
       "Hands under the shoulders, knees on the floor, body straight from knees to head. Lower until the chest is a fist from the floor, then press back up. Keep the hips from sagging — the knees only shorten the lever, they don't change the plank.",
@@ -58,8 +59,8 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Push-up',
     pattern: 'push',
-    alt: 'Knee push-up',
-    line: 'push_horizontal',
+    fallback: 'Knee push-up',
+    movementGroup: 'push_horizontal',
     rung: 1,
     instructions:
       'Full plank, hands under the shoulders, elbows tracking back at roughly 45° rather than flaring wide. Lower until the chest is a fist from the floor and press back up as one rigid piece — hips and shoulders arrive together.',
@@ -67,7 +68,7 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Diamond push-up',
     pattern: 'push',
-    line: 'push_horizontal',
+    movementGroup: 'push_horizontal',
     rung: 2,
     instructions:
       'A push-up with the hands together under the sternum, index fingers and thumbs touching. Elbows stay close to the ribs on the way down. The narrow base shifts the work to the triceps, so expect fewer reps than a standard push-up.',
@@ -75,24 +76,25 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Archer push-up',
     pattern: 'push',
-    line: 'push_horizontal',
+    movementGroup: 'push_horizontal',
     rung: 3,
     instructions:
       'Hands wider than a push-up. Lower toward one hand while the other arm straightens out along the floor, then press up and alternate sides. The working arm does the pressing; the straight arm is a kickstand, not a second presser.',
   },
 
-  // Loaded pressing (DN-113) — off the line, not appended to it.
+  // Loaded pressing (DN-113) — its own group, not a member of
+  // `push_horizontal`.
   //
-  // `push_horizontal` is a bodyweight ladder ordered by how much of your own
-  // weight you press, and a floor press is ordered by what you loaded onto
-  // the dumbbell. It is not harder than an archer push-up; it is a different
-  // question. Appending it would also renumber nothing today and everything
-  // later, since a stored `SkillLevel.rung` is an index into this list.
+  // The reason is equipment, not difficulty: a floor press needs a dumbbell
+  // and every member of `push_horizontal` needs nothing, so grouping them
+  // would put a movement the athlete may not be able to perform in a group
+  // the resolver treats as freely interchangeable. Nothing here claims a
+  // floor press is harder than an archer push-up; the code could not tell.
   {
     name: 'Dumbbell floor press',
     pattern: 'push',
     equipment: ['dumbbell'],
-    alt: 'Push-up',
+    fallback: 'Push-up',
     instructions:
       'On your back, knees bent, a dumbbell in each hand at chest height with the elbows on the floor at about 45°. Press until the arms are straight, then lower until the upper arms touch down again and pause there. The floor is the depth stop, which is what makes this kinder on the shoulders than a bench press.',
   },
@@ -101,7 +103,7 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Incline pike push-up',
     pattern: 'push',
-    line: 'push_vertical',
+    movementGroup: 'push_vertical',
     rung: 0,
     instructions:
       'Hands on the floor, feet up on a chair or step, hips high so the body makes an upside-down V. Bend the elbows to lower the crown of the head toward the floor, then press back up. The higher the feet, the harder it gets.',
@@ -110,8 +112,8 @@ export const exercises: ExerciseSeed[] = [
     name: 'Pike push-up',
     pattern: 'push',
     scalable: true,
-    alt: 'Incline pike push-up',
-    line: 'push_vertical',
+    fallback: 'Incline pike push-up',
+    movementGroup: 'push_vertical',
     rung: 1,
     instructions:
       'Feet on the floor, hips pushed high into an upside-down V, hands shoulder-width. Lower the crown of the head toward the floor between the hands, then press back up. Keep the hips stacked over the shoulders — dropping them turns it into a push-up.',
@@ -120,8 +122,8 @@ export const exercises: ExerciseSeed[] = [
     name: 'Handstand push-up',
     pattern: 'push',
     scalable: true,
-    alt: 'Pike push-up',
-    line: 'push_vertical',
+    fallback: 'Pike push-up',
+    movementGroup: 'push_vertical',
     rung: 2,
     instructions:
       'Kick up to a handstand with the heels resting on a wall, hands slightly wider than the shoulders. Lower under control until the head touches the floor, then press back to locked arms. Only attempt it once a wall handstand hold is comfortable.',
@@ -131,7 +133,7 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Supermans + reverse snow angels',
     pattern: 'pull',
-    line: 'pull',
+    movementGroup: 'pull',
     rung: 0,
     instructions:
       'Face down, arms overhead. Lift the chest, arms and legs off the floor, then sweep the arms out and down to the hips and back overhead, keeping them off the floor throughout. The floor-based stand-in for pulling when no bar is available.',
@@ -140,8 +142,8 @@ export const exercises: ExerciseSeed[] = [
     name: 'Negative pull-up',
     pattern: 'pull',
     equipment: ['bar'],
-    alt: 'Supermans + reverse snow angels',
-    line: 'pull',
+    fallback: 'Supermans + reverse snow angels',
+    movementGroup: 'pull',
     rung: 1,
     instructions:
       'Jump or step up so the chin starts above the bar, then lower yourself as slowly as you can — aim for three to five seconds to full hang. Only the lowering half counts as the rep; step back up for the next one.',
@@ -150,31 +152,31 @@ export const exercises: ExerciseSeed[] = [
     name: 'Chin-up',
     pattern: 'pull',
     equipment: ['bar'],
-    alt: 'Supermans + reverse snow angels',
-    line: 'pull',
+    fallback: 'Supermans + reverse snow angels',
+    movementGroup: 'pull',
     rung: 2,
     instructions:
-      'Hang from the bar with palms facing you, hands shoulder-width. Pull until the chin clears the bar, then lower to straight arms. The underhand grip brings the biceps in, which is why it comes before the pull-up on the ladder.',
+      'Hang from the bar with palms facing you, hands shoulder-width. Pull until the chin clears the bar, then lower to straight arms. The underhand grip brings the biceps in, which is what makes it a different option rather than the same one.',
   },
   {
     name: 'Pull-up',
     pattern: 'pull',
     equipment: ['bar'],
-    alt: 'Supermans + reverse snow angels',
-    line: 'pull',
+    fallback: 'Supermans + reverse snow angels',
+    movementGroup: 'pull',
     rung: 3,
     instructions:
       'Hang from the bar with palms facing away, hands just outside the shoulders. Pull the chest toward the bar until the chin clears it, then lower all the way to straight arms. Start each rep from a dead hang rather than bouncing out of the bottom.',
   },
 
-  // Loaded pulling (DN-113) — off the line, for the reason the floor press is.
+  // Loaded pulling (DN-113) — outside the group, for the reason the floor press is.
   // A dumbbell row is not a step above a pull-up; it is the horizontal pull
   // the library otherwise has nothing for, at whatever load you own.
   {
     name: 'Dumbbell row',
     pattern: 'pull',
     equipment: ['dumbbell'],
-    alt: 'Supermans + reverse snow angels',
+    fallback: 'Supermans + reverse snow angels',
     instructions:
       "Hinge at the hips with a flat back, one hand braced on a knee or a chair, the dumbbell hanging at arm's length. Pull it to the ribs by driving the elbow back, then lower to a full stretch. Alternate sides; each pull is a rep. The torso stays still — if it twists to help, the weight is winning.",
   },
@@ -183,7 +185,7 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Air squat',
     pattern: 'squat',
-    line: 'squat',
+    movementGroup: 'squat',
     rung: 0,
     instructions:
       'Feet shoulder-width, toes turned out slightly. Push the hips back and down until the hip crease drops below the top of the knee, then stand all the way up. Heels stay down and the knees track over the toes.',
@@ -191,7 +193,7 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Reverse lunge',
     pattern: 'squat',
-    line: 'squat',
+    movementGroup: 'squat',
     rung: 1,
     instructions:
       'From standing, step one foot back and lower until both knees are bent near 90° and the back knee grazes the floor. Drive through the front heel to stand, then alternate legs. Stepping back rather than forward keeps the front knee quieter.',
@@ -199,7 +201,7 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Assisted pistol',
     pattern: 'squat',
-    line: 'squat',
+    movementGroup: 'squat',
     rung: 2,
     instructions:
       'Stand on one leg with the other extended in front, holding a doorframe or strap for balance. Sit down as far as control allows and pull lightly on the support to help you back up — use only as much hand assistance as the rep actually needs.',
@@ -208,33 +210,35 @@ export const exercises: ExerciseSeed[] = [
     name: 'Pistol squat',
     pattern: 'squat',
     scalable: true,
-    alt: 'Assisted pistol',
-    line: 'squat',
+    fallback: 'Assisted pistol',
+    movementGroup: 'squat',
     rung: 3,
     instructions:
       'A full one-legged squat: stand on one leg, extend the other in front, and lower under control until the hamstring meets the calf, then stand back up without touching down. Arms out in front for a counterweight; the heel of the standing foot stays flat.',
   },
-  // Squat · Loaded (DN-84) — its own line rather than rungs appended to
-  // `squat`, for two reasons. A goblet squat is not harder than a pistol, so
-  // it cannot honestly sit above one; and inserting it mid-ladder would
-  // renumber every rung above it, silently changing what each athlete's
-  // stored `SkillLevel.rung` refers to.
+  // Squat · Loaded (DN-84) — its own group rather than members of `squat`.
   //
-  // The ladder is made of variations, never of weight: a 20 lb goblet squat
-  // and a 40 lb one are the same exercise at the same rung, and nothing in
-  // the schema can tell them apart (DN-85). What rises here is where the load
-  // sits and how much of the body has to hold it there.
+  // DN-84 gave two reasons and ADR-0004 retired both: nothing in the code can
+  // tell whether a goblet squat is harder than a pistol, and there is no
+  // longer a stored number for an insertion to renumber. What keeps the split
+  // alive for now is DN-115's reason — see `movementGroup` in the shared
+  // enums — and ADR-0004 folds these into `squat` in a follow-up.
   //
-  // Every rung carries its own bodyweight `alt`, not just the top one — the
-  // remembered choice is applied before equipment is, so an athlete can be
-  // resolved onto any rung of this line and then need a way down from it.
+  // The group is made of variations, never of weight: a 20 lb goblet squat
+  // and a 40 lb one are the same exercise, and nothing in the schema can tell
+  // them apart (DN-85). What varies here is where the load sits and how much
+  // of the body has to hold it there.
+  //
+  // Every member carries its own bodyweight `fallback`, not just one of them
+  // — the remembered choice is applied before equipment is, so an athlete can
+  // be resolved onto any member of this group and then need a way out of it.
   {
     name: 'Goblet squat',
     pattern: 'squat',
     equipment: ['dumbbell'],
-    line: 'squat_loaded',
+    movementGroup: 'squat_loaded',
     rung: 0,
-    alt: 'Air squat',
+    fallback: 'Air squat',
     instructions:
       'Hold one dumbbell vertically against the chest, elbows tucked under it. Squat between your knees until the hips are below parallel, then stand. The weight at the chest is what keeps the torso upright — let it pull you forward and it becomes a different movement.',
   },
@@ -242,9 +246,9 @@ export const exercises: ExerciseSeed[] = [
     name: 'Dumbbell front squat',
     pattern: 'squat',
     equipment: ['dumbbell'],
-    line: 'squat_loaded',
+    movementGroup: 'squat_loaded',
     rung: 1,
-    alt: 'Air squat',
+    fallback: 'Air squat',
     instructions:
       'A dumbbell resting on each shoulder, elbows pointed forward and up. Squat to depth and stand, keeping both elbows high the whole way. Two weights split across the shoulders sit further from the midline than one at the chest, so the trunk works harder to stay upright.',
   },
@@ -252,9 +256,9 @@ export const exercises: ExerciseSeed[] = [
     name: 'Dumbbell thruster',
     pattern: 'squat',
     equipment: ['dumbbell'],
-    line: 'squat_loaded',
+    movementGroup: 'squat_loaded',
     rung: 2,
-    alt: 'Jump squat',
+    fallback: 'Jump squat',
     instructions:
       'Front squat into an overhead press in one movement: stand out of the bottom and let that drive send the dumbbells straight overhead, arms locked. Lower them back to the shoulders and go again. One rep is the whole thing — the pause between squat and press is what makes it two exercises instead of this one.',
   },
@@ -263,7 +267,7 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Jump squat',
     pattern: 'squat',
-    alt: 'Air squat',
+    fallback: 'Air squat',
     instructions:
       'Squat to about parallel, then drive up hard and leave the floor. Land on the whole foot with soft knees and flow straight into the next rep. Absorb the landing rather than stiff-legging it.',
   },
@@ -279,16 +283,16 @@ export const exercises: ExerciseSeed[] = [
   // rungs athletes have already chosen.
   //
   // A line at all because the two are a real pair in difficulty that share a
-  // piece of kit. Off a line the swap panel offers only the bodyweight
+  // piece of kit. Off a group the swap panel offers only the bodyweight
   // alternative, so a box jump was a movement nobody was ever shown, and an
   // athlete on step-ups had no way up that kept the box.
   {
     name: 'Box step-up',
     pattern: 'squat',
     equipment: ['box'],
-    line: 'squat_box',
+    movementGroup: 'squat_box',
     rung: 0,
-    alt: 'Reverse lunge',
+    fallback: 'Reverse lunge',
     instructions:
       'Place one whole foot on the box, drive through that heel until the leg is straight, then lower under control and step down. Alternate legs; each step up is a rep. Push through the top foot rather than bouncing off the bottom one — a box around knee height is plenty.',
   },
@@ -296,9 +300,9 @@ export const exercises: ExerciseSeed[] = [
     name: 'Box jump',
     pattern: 'squat',
     equipment: ['box'],
-    line: 'squat_box',
+    movementGroup: 'squat_box',
     rung: 1,
-    alt: 'Jump squat',
+    fallback: 'Jump squat',
     instructions:
       'From a quarter squat, swing the arms and jump onto the box, landing on the whole foot with knees soft and hips back. Stand up fully on top, then step down — one foot at a time, every rep. Pick a height you can land on, not the one you can barely clear.',
   },
@@ -307,16 +311,16 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Glute bridge',
     pattern: 'hinge',
-    line: 'hinge',
+    movementGroup: 'hinge',
     rung: 0,
     instructions:
-      'Lie on your back, knees bent, feet flat and close to the hips. Squeeze the glutes to drive the hips up until knees, hips and shoulders form a straight line, pause, then lower. Push with the glutes, not by arching the lower back.',
+      'Lie on your back, knees bent, feet flat and close to the hips. Squeeze the glutes to drive the hips up until knees, hips and shoulders form a straight movementGroup, pause, then lower. Push with the glutes, not by arching the lower back.',
   },
   {
     name: 'Single-leg glute bridge',
     pattern: 'hinge',
-    alt: 'Glute bridge',
-    line: 'hinge',
+    fallback: 'Glute bridge',
+    movementGroup: 'hinge',
     rung: 1,
     instructions:
       'A glute bridge with one foot planted and the other leg held straight out or knee hugged to the chest. Drive the hips up with the planted leg, keeping the hips level rather than letting the free side drop. Do all reps on one side, then switch.',
@@ -324,22 +328,22 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Superman',
     pattern: 'hinge',
-    line: 'hinge',
+    movementGroup: 'hinge',
     rung: 2,
     instructions:
-      'Face down, arms stretched overhead. Lift the chest, arms and legs off the floor at the same time, hold for a beat, then lower under control. Look at the floor rather than forward so the neck stays in line with the spine.',
+      'Face down, arms stretched overhead. Lift the chest, arms and legs off the floor at the same time, hold for a beat, then lower under control. Look at the floor rather than forward so the neck stays in movementGroup with the spine.',
   },
   {
     name: 'Single-leg superman',
     pattern: 'hinge',
-    line: 'hinge',
+    movementGroup: 'hinge',
     rung: 3,
     instructions:
       'A superman lifting one arm and the opposite leg, holding briefly before switching. Working diagonally makes the back and glutes resist rotation as well as extend, which is what puts it above the two-sided version.',
   },
-  // Hinge · Loaded (DN-84) — a separate line from `hinge` for the same reason
-  // the loaded squats are: the bodyweight hinge ladder ends at a single-leg
-  // superman, which a Romanian deadlift is neither harder nor easier than.
+  // Hinge · Loaded (DN-84) — a separate group from `hinge` for the same
+  // reason the loaded squats are, and with the same caveat: see the Squat ·
+  // Loaded comment above and ADR-0004.
   //
   // The swing is the one movement here that genuinely wants a kettlebell
   // rather than a dumbbell, which is what earns it its own row in the
@@ -349,9 +353,9 @@ export const exercises: ExerciseSeed[] = [
     name: 'Romanian deadlift',
     pattern: 'hinge',
     equipment: ['dumbbell'],
-    line: 'hinge_loaded',
+    movementGroup: 'hinge_loaded',
     rung: 0,
-    alt: 'Glute bridge',
+    fallback: 'Glute bridge',
     instructions:
       'Dumbbells in front of the thighs, knees softly bent and fixed there. Push the hips straight back, letting the weights track down the legs until you feel the hamstrings load, then drive the hips forward to stand. The back stays flat throughout — this is a hinge, not a squat and not a round-backed reach for the floor.',
   },
@@ -359,19 +363,19 @@ export const exercises: ExerciseSeed[] = [
     name: 'Single-leg Romanian deadlift',
     pattern: 'hinge',
     equipment: ['dumbbell'],
-    line: 'hinge_loaded',
+    movementGroup: 'hinge_loaded',
     rung: 1,
-    alt: 'Single-leg glute bridge',
+    fallback: 'Single-leg glute bridge',
     instructions:
-      'One dumbbell, standing on one leg. Hinge at the hip and let the free leg travel straight back as a counterweight, body forming one line from head to heel, then stand tall. Do all the reps on one side before switching. The hips stay square to the floor — letting the free hip open up turns it into a twist.',
+      'One dumbbell, standing on one leg. Hinge at the hip and let the free leg travel straight back as a counterweight, body forming one movementGroup from head to heel, then stand tall. Do all the reps on one side before switching. The hips stay square to the floor — letting the free hip open up turns it into a twist.',
   },
   {
     name: 'Kettlebell swing',
     pattern: 'hinge',
     equipment: ['kettlebell'],
-    line: 'hinge_loaded',
+    movementGroup: 'hinge_loaded',
     rung: 2,
-    alt: 'Broad jump',
+    fallback: 'Broad jump',
     instructions:
       'Hike the kettlebell back between the legs, then snap the hips forward to float it to chest height — the arms only steer it. Let it fall back into the next hinge. It is a hip snap, not a front raise: if the shoulders are lifting the bell, it is too heavy or the hips are too quiet.',
   },
@@ -396,7 +400,7 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Sit-up',
     pattern: 'core',
-    line: 'core_dynamic',
+    movementGroup: 'core_dynamic',
     rung: 0,
     instructions:
       'On your back, knees bent, feet flat. Curl up until the torso is upright and reaches past the knees, then lower back down. Come up one vertebra at a time rather than yanking with the neck or throwing the arms.',
@@ -404,7 +408,7 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Tuck-up',
     pattern: 'core',
-    line: 'core_dynamic',
+    movementGroup: 'core_dynamic',
     rung: 1,
     instructions:
       'Lie on your back, arms overhead, legs straight. Crunch up and tuck the knees to the chest at the same time so hands and shins meet over the middle, then extend back out without letting the feet and hands rest on the floor.',
@@ -412,8 +416,8 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'V-up',
     pattern: 'core',
-    alt: 'Tuck-up',
-    line: 'core_dynamic',
+    fallback: 'Tuck-up',
+    movementGroup: 'core_dynamic',
     rung: 2,
     instructions:
       'The straight-legged tuck-up: from flat on your back with arms overhead, lift the legs and torso together into a V and reach for the toes, then lower under control. Keep the legs straight — bending them turns it back into a tuck-up.',
@@ -421,7 +425,7 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Lying leg raise',
     pattern: 'core',
-    line: 'core_dynamic',
+    movementGroup: 'core_dynamic',
     rung: 3,
     instructions:
       'On your back, hands under the hips or by your sides, legs straight. Raise the legs to vertical, then lower to just above the floor without touching down. Press the lower back into the floor the whole way — if it lifts, shorten the range.',
@@ -430,8 +434,8 @@ export const exercises: ExerciseSeed[] = [
     name: 'Hanging knee raise',
     pattern: 'core',
     equipment: ['bar'],
-    alt: 'Lying leg raise',
-    line: 'core_dynamic',
+    fallback: 'Lying leg raise',
+    movementGroup: 'core_dynamic',
     rung: 4,
     instructions:
       'Hang from the bar with straight arms and shoulders pulled down away from the ears. Raise the knees to at least hip height, then lower under control without swinging. Stop the swing between reps rather than using it.',
@@ -440,8 +444,8 @@ export const exercises: ExerciseSeed[] = [
     name: 'Toes-to-bar',
     pattern: 'core',
     equipment: ['bar'],
-    alt: 'V-up',
-    line: 'core_dynamic',
+    fallback: 'V-up',
+    movementGroup: 'core_dynamic',
     rung: 5,
     instructions:
       'From a hang, raise straight legs until both feet touch the bar between the hands, then lower with control. The rep counts on contact with the bar; half-height raises are hanging knee raises, not this.',
@@ -450,7 +454,7 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Knee plank',
     pattern: 'core',
-    line: 'core_hold',
+    movementGroup: 'core_hold',
     rung: 0,
     unit: 'seconds',
     instructions:
@@ -459,7 +463,7 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Tucked hollow hold',
     pattern: 'core',
-    line: 'core_hold',
+    movementGroup: 'core_hold',
     rung: 1,
     unit: 'seconds',
     instructions:
@@ -468,18 +472,18 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Plank hold',
     pattern: 'core',
-    alt: 'Knee plank',
-    line: 'core_hold',
+    fallback: 'Knee plank',
+    movementGroup: 'core_hold',
     rung: 2,
     unit: 'seconds',
     instructions:
-      'Forearms on the floor, elbows under the shoulders, legs straight, body in one line from heels to head. Brace the stomach and squeeze the glutes so the hips neither sag nor pike up. Counted in seconds, not reps.',
+      'Forearms on the floor, elbows under the shoulders, legs straight, body in one movementGroup from heels to head. Brace the stomach and squeeze the glutes so the hips neither sag nor pike up. Counted in seconds, not reps.',
   },
   {
     name: 'Hollow hold',
     pattern: 'core',
-    alt: 'Tucked hollow hold',
-    line: 'core_hold',
+    fallback: 'Tucked hollow hold',
+    movementGroup: 'core_hold',
     rung: 3,
     unit: 'seconds',
     instructions:
@@ -488,7 +492,7 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Long-lever plank',
     pattern: 'core',
-    line: 'core_hold',
+    movementGroup: 'core_hold',
     rung: 4,
     unit: 'seconds',
     instructions:
@@ -499,7 +503,7 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Knee side plank',
     pattern: 'core',
-    line: 'core_side',
+    movementGroup: 'core_side',
     rung: 0,
     instructions:
       'On your side, elbow under the shoulder, knees bent and stacked. Lift the hips so the body is straight from knees to head, hold, then lower. Split the prescribed reps evenly between the two sides.',
@@ -507,11 +511,11 @@ export const exercises: ExerciseSeed[] = [
   {
     name: 'Side plank',
     pattern: 'core',
-    alt: 'Knee side plank',
-    line: 'core_side',
+    fallback: 'Knee side plank',
+    movementGroup: 'core_side',
     rung: 1,
     instructions:
-      'On your side, elbow under the shoulder, legs straight and feet stacked. Lift the hips into one line from heels to head and keep the top hip from rolling backwards. Split the prescribed reps evenly between the two sides.',
+      'On your side, elbow under the shoulder, legs straight and feet stacked. Lift the hips into one movementGroup from heels to head and keep the top hip from rolling backwards. Split the prescribed reps evenly between the two sides.',
   },
 
   // Core · Carries (DN-113) — counted in seconds, like the holds above.
@@ -529,7 +533,7 @@ export const exercises: ExerciseSeed[] = [
     name: 'Farmer carry',
     pattern: 'core',
     equipment: ['dumbbell'],
-    alt: 'Plank hold',
+    fallback: 'Plank hold',
     unit: 'seconds',
     instructions:
       'A dumbbell in each hand at your sides, shoulders back and down, ribs stacked over the hips. Walk at a steady pace — turning where you run out of room — without leaning back or letting the weights swing. Counted in seconds, not reps or lengths.',
@@ -538,17 +542,17 @@ export const exercises: ExerciseSeed[] = [
     name: 'Suitcase carry',
     pattern: 'core',
     equipment: ['dumbbell'],
-    alt: 'Plank hold',
+    fallback: 'Plank hold',
     unit: 'seconds',
     instructions:
       'The farmer carry with one dumbbell instead of two, held at one side. The load pulls you sideways and the job is to stay upright — both shoulders level, no leaning away from the weight. Split the prescribed time evenly between the two sides.',
   },
 
-  // Cardio — not part of a progression line
+  // Cardio — not part of a movement groups
   {
     name: 'Burpee',
     pattern: 'cardio',
-    alt: 'Squat thrust',
+    fallback: 'Squat thrust',
     instructions:
       'From standing, drop to a plank and let the chest touch the floor, jump the feet back under you, then stand and jump with the hands overhead. Chest to the floor at the bottom and feet off the floor at the top make it a full rep.',
   },
@@ -570,16 +574,16 @@ export const exercises: ExerciseSeed[] = [
     instructions:
       'Run on the spot lifting each knee to at least hip height, landing on the balls of the feet with a tall torso. Each knee lift is a rep. Pump the arms in time with the legs.',
   },
-  // Jump rope (DN-32) — the one line in `cardio`, added in DN-115.
+  // Jump rope (DN-32) — the one group in `cardio`, added in DN-115.
   //
-  // DN-32 put these off any line, and its reasoning was that a rope is not a
-  // ladder anyone climbs by rung: an athlete picks the one they can turn.
-  // The premise holds and the conclusion does not follow. The swap panel is
-  // *how* an athlete picks, and off a line it offers only the bodyweight
-  // alternative — so someone who owned a rope and could not yet turn doubles
-  // was offered high knees, which is the app taking away gear they have.
+  // DN-32 put these in no group, reasoning that a rope is not something
+  // anyone climbs in order: an athlete picks the one they can turn. The
+  // premise holds and the conclusion does not follow. The swap panel is *how*
+  // an athlete picks, and outside a group it offers only the bodyweight
+  // fallback — so someone who owned a rope and could not yet turn doubles was
+  // offered high knees, which is the app taking away gear they have.
   //
-  // The line is not a claim that everyone should work single → double. It is
+  // The group is not a claim that everyone should work single → double. It is
   // the only way the app can put both in front of them.
   //
   // Both still fall to high knees, which keeps the feet moving at the same
@@ -588,9 +592,9 @@ export const exercises: ExerciseSeed[] = [
     name: 'Single-unders',
     pattern: 'cardio',
     equipment: ['jump_rope'],
-    line: 'cardio_rope',
+    movementGroup: 'cardio_rope',
     rung: 0,
-    alt: 'High knees',
+    fallback: 'High knees',
     instructions:
       'Turn the rope with the wrists, not the arms, and hop just high enough to clear it — one pass under the feet is a rep. Elbows stay close to the ribs; big arm circles make the rope slower and the jump higher than it needs to be.',
   },
@@ -598,9 +602,9 @@ export const exercises: ExerciseSeed[] = [
     name: 'Double-unders',
     pattern: 'cardio',
     equipment: ['jump_rope'],
-    line: 'cardio_rope',
+    movementGroup: 'cardio_rope',
     rung: 1,
-    alt: 'High knees',
+    fallback: 'High knees',
     instructions:
       'One jump, two passes of the rope. Jump a little higher than a single-under and turn the wrists faster rather than pulling the knees up — tucking the legs is what turns a set into a string of misses. Trip the rope and you start the next rep, not the set again.',
   },

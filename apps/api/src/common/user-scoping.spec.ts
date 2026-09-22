@@ -320,8 +320,8 @@ describe('library ownership scoping', () => {
         exercise: {
           id: 'ex-1',
           equipment: ['dumbbell'],
-          altExerciseId: 'ex-2',
-          line: null,
+          fallbackExerciseId: 'ex-2',
+          movementGroup: null,
           rung: null,
         },
       },

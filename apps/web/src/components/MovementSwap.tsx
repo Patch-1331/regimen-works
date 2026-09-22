@@ -9,12 +9,12 @@ import type { SwapOption } from "../lib/swapOptions";
  * athlete was already looking at.
  *
  * It is also the only encouragement the app offers towards a harder movement
- * (DN-87). The panel lists the whole line in order with the current choice
+ * (DN-87). The panel lists the whole group in list order with the current choice
  * marked, so the next movement is visible and one tap away — which is what the
  * deleted advancement rule was reduced to suggesting, without the app having
  * to form a view about who is ready for it.
  *
- * It covers what the ladder never could, too — a tweaked shoulder, no bar in
+ * It covers what a fixed progression never could, too — a tweaked shoulder, no bar in
  * the hotel room, dead legs. So it sits on the plate rather than in Settings,
  * and it applies to today only: the athlete is about to train, not configure.
  */
@@ -75,8 +75,8 @@ function SwapIcon({ lit }: { lit: boolean }) {
 }
 
 /**
- * The ladder, expanded in place under the row. The current rung is marked
- * rather than the list being filtered — seeing where you are on the line is
+ * The group, expanded in place under the row. The current choice is marked
+ * rather than the list being filtered — seeing where you are on the group is
  * half of what makes the choice meaningful.
  *
  * No confirmation step and no "today or forever?" question. The swap is one
@@ -150,7 +150,7 @@ export function SwapPanel({
               )}
               {/* The movement the workout named, back on the list where an
                   automatic layer took it off (DN-110). Marked rather than
-                  left to the sentence below, because in the off-ladder case
+                  left to the sentence below, because in the off-group case
                   it is one of two near-identical rows and which is which
                   decides the tap. */}
               {option.isPrescribed && (

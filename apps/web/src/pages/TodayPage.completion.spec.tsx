@@ -137,7 +137,7 @@ describe("the completion card", () => {
     expect(await screen.findByText("1 week · 1 session")).toBeInTheDocument();
   });
 
-  it("lists every line that moved", async () => {
+  it("lists every movementGroup that moved", async () => {
     todayIs({
       completedProgram: fixtures.completedProgram({
         summary: {
@@ -146,7 +146,7 @@ describe("the completion card", () => {
           rungChanges: [
             fixtures.rungChange(),
             fixtures.rungChange({
-              line: "push_horizontal",
+              movementGroup: "push_horizontal",
               fromName: "Knee push-up",
               toName: "Push-up",
             }),
@@ -157,7 +157,7 @@ describe("the completion card", () => {
 
     renderRoute("/");
 
-    // The line's own name is readable rather than a column name -- an athlete
+    // The group's own name is readable rather than a column name -- an athlete
     // reads "push horizontal", not "push_horizontal".
     expect(
       await screen.findByText(/push horizontal: Knee push-up → Push-up/),

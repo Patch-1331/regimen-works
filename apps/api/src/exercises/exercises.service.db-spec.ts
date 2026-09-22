@@ -1,6 +1,6 @@
 import type { PrismaService } from '../prisma/prisma.service';
 import { testPrisma } from '../test-support/database';
-import { createExercise, createLadder } from '../test-support/fixtures';
+import { createExercise, createGroup } from '../test-support/fixtures';
 import { ExercisesService } from './exercises.service';
 
 /**
@@ -39,28 +39,28 @@ describe('ExercisesService.findAll', () => {
   it('carries the alternative movement, not just its id', async () => {
     // What the swap screen offers an athlete without the equipment. Without
     // the include it would have a foreign key and nothing to show.
-    const { rungs, alt } = await createLadder('pull', ['Pull-up'], {
-      altFor: 0,
+    const { rungs, fallback } = await createGroup('pull', ['Pull-up'], {
+      fallbackFor: 0,
     });
 
     const listed = (await service().findAll(ANY_ATHLETE)).find(
       (e) => e.id === rungs[0].id,
     );
 
-    expect(listed?.altExercise).toMatchObject({
-      id: alt!.id,
-      name: alt!.name,
+    expect(listed?.fallbackExercise).toMatchObject({
+      id: fallback!.id,
+      name: fallback!.name,
     });
   });
 
-  it('leaves altExercise null on a movement that needs no substitute', async () => {
+  it('leaves fallbackExercise null on a movement that needs no substitute', async () => {
     const exercise = await createExercise({ name: 'Air squat' });
 
     const listed = (await service().findAll(ANY_ATHLETE)).find(
       (e) => e.id === exercise.id,
     );
 
-    expect(listed?.altExercise).toBeNull();
+    expect(listed?.fallbackExercise).toBeNull();
   });
 
   it('is empty before anything is seeded', async () => {

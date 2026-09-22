@@ -32,7 +32,7 @@ const PUSH_UP = fixtures.sessionMovement({
   sets: 3,
   reps: 8,
   restSeconds: 60,
-  exercise: { id: "exercise-push-up", name: "Push-up", line: "push_horizontal", rung: 2 },
+  exercise: { id: "exercise-push-up", name: "Push-up", movementGroup: "push_horizontal", rung: 2 },
 });
 
 /**
@@ -50,8 +50,8 @@ const PRESCRIBED = [
     sets: 3,
     reps: 8,
     restSeconds: 60,
-    line: "push_horizontal",
-    exercise: { id: "exercise-push-up", name: "Push-up", line: "push_horizontal", rung: 2 },
+    movementGroup: "push_horizontal",
+    exercise: { id: "exercise-push-up", name: "Push-up", movementGroup: "push_horizontal", rung: 2 },
   }),
 ];
 

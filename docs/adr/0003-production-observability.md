@@ -27,11 +27,11 @@ beside it.
 - **Redaction is non-negotiable.** `req.headers.authorization` and cookies in
   both directions. Every authenticated request to this API carries a Clerk
   session token, so an unredacted logger writes a live credential into
-  Render's log store on every line — where it outlives the ~60s token and is
+  Render's log store on every group — where it outlives the ~60s token and is
   readable by anyone with dashboard access.
 - **Request id prefers `cf-request-id`,** then `x-request-id`, else generates
   one. Same trust reasoning as `ProxyAwareThrottlerGuard`: the Cloudflare
-  header is edge-written and cannot be forged from outside, and it lets a line
+  header is edge-written and cannot be forged from outside, and it lets a group
   here be traced back to a Cloudflare event.
 - **`userId` correlation** from where `ClerkAuthGuard` stashes it. The
   completion line is emitted at response time, long after the guard ran, so an

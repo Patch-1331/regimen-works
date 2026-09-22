@@ -108,14 +108,14 @@ describe('snapshotMovements', () => {
       id: 'ex-ring',
       name: 'Ring row',
       unit: 'reps',
-      line: 'pull',
+      movementGroup: 'pull',
       rung: 1,
       // The rest of an Exercise row rides along on the resolved movement and
       // must not end up in the snapshot -- it describes the exercise in
       // general, not this day's training.
       instructions: 'Lean back, pull the rings to the chest.',
       equipment: [],
-      altExerciseId: 'ex-table',
+      fallbackExerciseId: 'ex-table',
     },
   };
 
@@ -138,7 +138,7 @@ describe('snapshotMovements', () => {
           id: 'ex-ring',
           name: 'Ring row',
           unit: 'reps',
-          line: 'pull',
+          movementGroup: 'pull',
           rung: 1,
         },
       },
@@ -201,11 +201,11 @@ describe('snapshotPrescribedMovements', () => {
       id: 'ex-ring',
       name: 'Ring row',
       unit: 'reps',
-      line: 'pull',
+      movementGroup: 'pull',
       rung: 1,
       instructions: 'Lean back, pull the rings to the chest.',
       equipment: [],
-      altExerciseId: 'ex-table',
+      fallbackExerciseId: 'ex-table',
     },
   };
 
@@ -227,7 +227,7 @@ describe('snapshotPrescribedMovements', () => {
     expect(snapshot.reps).toBe(3);
   });
 
-  it('records no ladder, because a prescribed movement has none', () => {
+  it('records no group, because a prescribed movement has none', () => {
     // Empty rather than [3, 3, 3, 3, 3]: a repScheme means "the counts
     // descend as written", which five identical sets are not.
     expect(snapshotPrescribedMovements([resolved])[0].repScheme).toEqual([]);
@@ -245,7 +245,7 @@ describe('snapshotPrescribedMovements', () => {
       id: 'ex-ring',
       name: 'Ring row',
       unit: 'reps',
-      line: 'pull',
+      movementGroup: 'pull',
       rung: 1,
     });
   });

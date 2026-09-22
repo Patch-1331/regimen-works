@@ -16,7 +16,7 @@
  *
  * Archived rows are excluded here for the same reason (DN-25). Every caller
  * is a pool or a picker -- the exercise list, the WOD pool, the checklist
- * content, the rung ladder, the equipment fallback, the swap ladder, the
+ * content, the movement group, the equipment fallback, the swap group, the
  * skill-level aggregate -- and not one of them wants to offer a movement the
  * library has retired. Folding it in rather than adding a second helper or an
  * eighth hand-written `archivedAt: null`: two names differing by one clause

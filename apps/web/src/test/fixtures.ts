@@ -48,10 +48,10 @@ export function movement(overrides: Partial<WodMovement> = {}): WodMovement {
       pattern: "push",
       equipment: [],
       unit: "reps",
-      instructions: "Hands under the shoulders, body in one line.",
-      line: "push_horizontal",
+      instructions: "Hands under the shoulders, body in one movementGroup.",
+      movementGroup: "push_horizontal",
       rung: 2,
-      altExerciseId: null,
+      fallbackExerciseId: null,
       ...overrides.exercise,
     },
   };
@@ -64,7 +64,7 @@ export function movement(overrides: Partial<WodMovement> = {}): WodMovement {
 export function prescribedMovement(
   // `exercise` partial rather than whole, because the body below spreads it
   // over a complete default: a spec that wants a hold in seconds should not
-  // have to restate the line, the rung and the kit to say so.
+  // have to restate the group, the rung and the kit to say so.
   overrides: Partial<Omit<PrescribedMovement, "exercise">> & {
     exercise?: Partial<PrescribedMovement["exercise"]>;
   } = {},
@@ -75,7 +75,7 @@ export function prescribedMovement(
     sets: 5,
     reps: 3,
     restSeconds: 90,
-    line: "pull",
+    movementGroup: "pull",
     isSwapped: false,
     prescribedName: null,
     prescribedId: null,
@@ -88,9 +88,9 @@ export function prescribedMovement(
       equipment: [],
       unit: "reps",
       instructions: null,
-      line: "pull",
+      movementGroup: "pull",
       rung: 1,
-      altExerciseId: null,
+      fallbackExerciseId: null,
       ...overrides.exercise,
     },
   };
@@ -123,7 +123,7 @@ export function sessionMovement(
       id: "exercise-chin-up",
       name: "Chin-up",
       unit: "reps",
-      line: "pull",
+      movementGroup: "pull",
       rung: 1,
       ...overrides.exercise,
     },
@@ -244,7 +244,7 @@ export function today(overrides: Partial<TodayResponse> = {}): TodayResponse {
  * list both read it.
  *
  * One rung change by default, because a card with nothing to say about the
- * ladder is the exception rather than the shape most specs want -- pass
+ * group is the exception rather than the shape most specs want -- pass
  * `{ rungChanges: [] }` through `summary` for the program nobody trained.
  */
 export function completedProgram(
@@ -267,7 +267,7 @@ export function completedProgram(
 
 export function rungChange(overrides: Partial<RungChange> = {}): RungChange {
   return {
-    line: "pull",
+    movementGroup: "pull",
     fromRung: 0,
     toRung: 2,
     fromName: "Negative chin-up",
@@ -349,7 +349,7 @@ export function strengthLog(
 export function skillLevel(overrides: Partial<SkillLevel> = {}): SkillLevel {
   return {
     id: "skill-level-1",
-    line: "push_horizontal",
+    movementGroup: "push_horizontal",
     rung: 2,
     updatedAt: "2026-09-16T10:00:00.000Z",
     ...overrides,
@@ -364,14 +364,14 @@ export function apiExercise(overrides: Partial<ApiExercise> = {}): ApiExercise {
     equipment: [],
     scalable: true,
     unit: "reps",
-    line: "push_horizontal",
+    movementGroup: "push_horizontal",
     rung: 2,
     instructions: null,
-    altExerciseId: null,
+    fallbackExerciseId: null,
     phase: null,
     ownerId: null,
     archivedAt: null,
-    altExercise: null,
+    fallbackExercise: null,
     ...overrides,
   };
 }

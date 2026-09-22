@@ -39,7 +39,7 @@ behaviour — the engine picking a varied workout each day — so choosing no
 program is itself a choice the app supports rather than a gap.
 
 **The athlete owns their level, not the app.** Every movement sits on a
-progression line, and the athlete sets where they are on it by swapping a
+movement groups, and the athlete sets where they are on it by swapping a
 movement before a workout — because they've gotten stronger, or because
 their shoulder hurts, or because there's no bar in the hotel room. The
 app suggests moving up when the numbers support it and never moves
@@ -79,7 +79,7 @@ without a rewrite.
   suggestion; moving down is always the athlete's own choice.
 - Terminology: "WOD" (workout of the day), "program", "AMRAP", "For
   Time", "EMOM", "Tabata", "straight sets", "dominant movement pattern",
-  "progression line", "rung", "time cap", "PR".
+  "movement groups", "rung", "time cap", "PR".
 
 ## Evidence on Hand
 
@@ -89,7 +89,7 @@ without a rewrite.
 - `docs/plan.md` — original v1 scope, domain model, and roadmap. Predates
   the program design; where the two disagree, the design doc wins.
 - `apps/api/prisma/seed.ts` — the real content the app ships with: 51
-  exercises (39 training movements across eight progression lines, plus
+  exercises (39 training movements across eight movement groups, plus
   12 tagged for warm-up/cool-down) and 11 WODs. Known gap: of the 8
   unnamed WODs, none are squat- or hinge-dominant, so the library can't
   yet fill a program day asking for those patterns.

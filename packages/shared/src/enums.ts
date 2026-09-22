@@ -11,25 +11,32 @@ export const movementPattern = z.enum([
 export type MovementPattern = z.infer<typeof movementPattern>;
 
 /**
- * Finer-grained than MovementPattern — a pattern like push or core actually
- * contains multiple independent progression ladders (see docs/plan.md and
- * the "Scaling the Ladder" design doc for Feature #2).
+ * A set of movements that accomplish the same thing in a program, freely
+ * interchangeable. Finer-grained than MovementPattern — a pattern like push
+ * or core contains several groups that are *not* interchangeable.
+ *
+ * **Membership is a statement about role, not about difficulty.** A group is
+ * unordered and nothing compares two of its members; `Exercise.sortOrder`
+ * decides only what the swap panel lists first. See ADR-0004, and DN-130 for
+ * the audit that found no running code ever read this as a ladder.
  */
-export const progressionLine = z.enum([
+export const movementGroup = z.enum([
   "push_horizontal",
   "push_vertical",
   "pull",
   "squat",
-  // The loaded ladders (DN-84) are their own lines rather than rungs appended
-  // to `squat` and `hinge`: a goblet squat is not harder than a pistol, and
-  // inserting one mid-ladder would renumber every rung above it, silently
-  // changing what each athlete's stored `SkillLevel.rung` refers to.
+  // The equipment-split groups (DN-84, DN-115). They exist so the swap panel
+  // can offer both movements in a pair that share a piece of kit: off a group
+  // the panel offers only the bodyweight fallback, so an athlete who owns a
+  // rope but cannot yet turn double-unders was handed high knees -- the app
+  // taking away gear they actually have.
+  //
+  // DN-84 originally justified the split on two other grounds, and neither
+  // survives: nothing in the code can tell whether a goblet squat is harder
+  // than a pistol, and inserting a movement mid-group no longer renumbers
+  // anything. ADR-0004 folds these back into `squat` and `hinge` for exactly
+  // that reason; until that lands they stay, on DN-115's grounds alone.
   "squat_loaded",
-  // The two lines where every rung needs equipment (DN-115). They exist so
-  // the swap panel can offer both movements in a pair that share a piece of
-  // kit: off a line the panel offers only the bodyweight alternative, so an
-  // athlete who owns a rope but cannot yet turn double-unders was handed high
-  // knees -- the app taking away gear they actually have.
   "squat_box",
   "hinge",
   "hinge_loaded",
@@ -38,7 +45,7 @@ export const progressionLine = z.enum([
   "core_side",
   "cardio_rope",
 ]);
-export type ProgressionLine = z.infer<typeof progressionLine>;
+export type MovementGroup = z.infer<typeof movementGroup>;
 
 /**
  * The equipment catalog — what a movement needs beyond the athlete's own

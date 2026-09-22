@@ -18,7 +18,7 @@ import { Panel, SectionLabel } from "./Panel";
 /**
  * What the athlete has chosen, per movement group (DN-91).
  *
- * This replaced a ladder per line marked done / current / locked. Those words
+ * This replaced a ladder per group marked done / current / locked. Those words
  * describe an assessment — you graduated past this, you are not allowed that
  * yet — and the app no longer makes one. What is left is what is true: the
  * movement you picked, and the rest of the group in case you want a different
@@ -46,8 +46,8 @@ export function MovementChoicesPanel({
   const [openLine, setOpenLine] = useState<string | null>(null);
 
   const choose = useMutation({
-    mutationFn: ({ line, rung }: { line: string; rung: number }) =>
-      api.setSkillLevel(line, { rung }),
+    mutationFn: ({ movementGroup, rung }: { movementGroup: string; rung: number }) =>
+      api.setSkillLevel(movementGroup, { rung }),
     onSuccess: async () => {
       setOpenLine(null);
       await queryClient.invalidateQueries({ queryKey: ["skillLevels"] });
@@ -58,7 +58,7 @@ export function MovementChoicesPanel({
 
   const choices = buildMovementChoices(exercises, skillLevels);
 
-  // One entry per line the athlete has chosen on, so a new athlete has none
+  // One entry per group the athlete has chosen on, so a new athlete has none
   // (DN-86 — nobody is provisioned onto a movement any more). A bare heading
   // over nothing would read like something failed to load.
   if (choices.length === 0) {
@@ -81,15 +81,15 @@ export function MovementChoicesPanel({
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {choices.map((choice) => (
           <MovementChoiceCard
-            key={choice.line}
+            key={choice.movementGroup}
             choice={choice}
-            runs={buildLineRuns(history, choice.line)}
-            open={openLine === choice.line}
+            runs={buildLineRuns(history, choice.movementGroup)}
+            open={openLine === choice.movementGroup}
             isSaving={choose.isPending}
             onToggle={() =>
-              setOpenLine(openLine === choice.line ? null : choice.line)
+              setOpenLine(openLine === choice.movementGroup ? null : choice.movementGroup)
             }
-            onPick={(rung) => choose.mutate({ line: choice.line, rung })}
+            onPick={(rung) => choose.mutate({ movementGroup: choice.movementGroup, rung })}
           />
         ))}
       </div>
@@ -112,8 +112,8 @@ function MovementChoiceCard({
   onToggle: () => void;
   onPick: (rung: number) => void;
 }) {
-  const panelId = `movement-choice-${choice.line}`;
-  const label = lineLabel(choice.line);
+  const panelId = `movement-choice-${choice.movementGroup}`;
+  const label = lineLabel(choice.movementGroup);
   const summary = describeLineHistory(runs);
 
   return (
@@ -138,7 +138,7 @@ function MovementChoiceCard({
             {choice.chosenName ?? "Not on the current library"}
           </span>
           {/* What has actually been happening, under what was chosen (DN-96).
-              Absent rather than "0 sessions" on a line never trained: a count
+              Absent rather than "0 sessions" in a group never trained: a count
               of nothing reads as a mark against the athlete for a movement
               group they may simply not have met yet. */}
           {summary && (
@@ -188,7 +188,7 @@ function MovementChoiceCard({
 }
 
 /**
- * The line's training, newest first: which movement, how many sessions, and
+ * The group's training, newest first: which movement, how many sessions, and
  * over what stretch of days.
  *
  * Runs rather than every session listed out, because the interesting thing is

@@ -24,7 +24,7 @@ export function TodayPage() {
   // Which movement's instructions are open, by movement id. One at a time:
   // the plate is a briefing to read down, not a set of panels to leave open.
   const [openMovementId, setOpenMovementId] = useState<string | null>(null);
-  // The swap ladder, by movement id. Separate state from the instructions
+  // The swap group, by movement id. Separate state from the instructions
   // above, but only one of the two is ever open: the row is a briefing line,
   // not a stack of drawers. Opening either closes the other.
   const [swapMovementId, setSwapMovementId] = useState<string | null>(null);
@@ -32,7 +32,7 @@ export function TodayPage() {
     queryKey: ["today"],
     queryFn: api.today,
   });
-  // The ladder's rungs. Library content, the same for everyone and unchanged
+  // The group's members. Library content, the same for everyone and unchanged
   // between visits, so it's fetched once and shared with the Stats page's
   // cache rather than being carried on every today response.
   const { data: exercises } = useQuery({
@@ -61,7 +61,7 @@ export function TodayPage() {
     await queryClient.invalidateQueries({ queryKey: ["today"] });
   }
 
-  // Both close the panel first: the choice is made, and leaving the ladder
+  // Both close the panel first: the choice is made, and leaving the group
   // open over a row that has already changed reads as though it hadn't.
   async function handleSwap(wodMovementId: string, exerciseId: string) {
     setSwapMovementId(null);
@@ -223,7 +223,7 @@ export function TodayPage() {
               // program's line, `prescribedId` is what puts it back on offer.
               const swapOptions = buildSwapOptions(
                 exercises ?? [],
-                m.exercise.line,
+                m.exercise.movementGroup,
                 m.exercise.id,
                 m.prescribedId,
               );
@@ -339,12 +339,12 @@ export function TodayPage() {
     !isInProgress && hasWarmup
       ? `/warmup/${assignmentId}`
       : `/workout/${assignmentId}`;
-  // True whenever at least one movement is on a tracked progression line
+  // True whenever at least one movement is on a tracked movement groups
   // (Feature #2) — the scheduler already substituted every such movement
   // for the exercise at the user's current rung before this response left
   // the API. The badge says the plate has been fitted to the athlete, not
   // that it's fixed: those same rows are the ones that carry a swap control.
-  const isAutoScaled = wod.movements.some((m) => m.exercise.line !== null);
+  const isAutoScaled = wod.movements.some((m) => m.exercise.movementGroup !== null);
   // A ladder's own scheme sets the rounds — a 21-15-9 is three rounds whether
   // or not the WOD row happens to declare it.
   const totalRounds = effectiveRounds(wod);
@@ -425,11 +425,11 @@ export function TodayPage() {
             const panelId = `movement-instructions-${m.id}`;
             const swapPanelId = `movement-swap-${m.id}`;
             const isSwapOpen = swapMovementId === m.id;
-            // Empty only where there is nothing to offer: no ladder and no
+            // Empty only where there is nothing to offer: no group and no
             // no-equipment alternative either (DN-80).
             const swapOptions = buildSwapOptions(
               exercises ?? [],
-              m.exercise.line,
+              m.exercise.movementGroup,
               m.exercise.id,
               // What the library asked for, where an automatic layer replaced
               // it — the one movement the athlete could read but not pick
@@ -438,7 +438,7 @@ export function TodayPage() {
             );
             // A swapped row keeps its control even when the movement it now
             // holds offers nothing further — the alternative sits off every
-            // line, so the ladder that led here is gone from under it and
+            // line, so the group that led here is gone from under it and
             // revert is the only way back. Without this the swap is a
             // one-way door.
             const canSwap = swapOptions.length > 0 || m.isSwapped;
@@ -658,7 +658,7 @@ function PrescribedName({
           {movement.exercise.name.toUpperCase()}
         </span>
         {/* Only equipment can move a prescribed movement without the athlete
-            asking (DN-19) — resolving the line through their rung is the
+            asking (DN-19) — resolving the group through their rung is the
             prescription rather than a substitution for it — so there is one
             word here where the WOD plate has two. */}
         {movement.prescribedName && (

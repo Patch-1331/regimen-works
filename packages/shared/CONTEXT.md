@@ -29,17 +29,36 @@ row so there is one code path, not an `if (enrolled)` branch.
 **Movement pattern** — the coarse axis a WOD loads: `push`, `pull`, `squat`,
 `hinge`, `core`, `cardio`. Drives cooldown scheduling.
 
-**Progression line** — finer-grained than a pattern, because one pattern contains
-several independent ladders (`push_horizontal` and `push_vertical` are separate
-lines). Loaded and equipment-bound ladders are their own lines rather than rungs
-appended to a bodyweight one, so that inserting a movement never renumbers the rungs
-above it and silently changes what a stored `rung` refers to.
+**Movement group** — a set of movements that accomplish the same thing in a
+program, freely interchangeable. Finer-grained than a pattern, because one pattern
+contains several groups that are *not* interchangeable (`push_horizontal` and
+`push_vertical` are separate groups). **Membership is a statement about role, not
+about difficulty** — a group is not ordered, and nothing in the app compares two of
+its members. See [ADR-0004](../../docs/adr/0004-movement-groups.md).
 
-**Rung** — a movement's position within its progression line. **A sort order and a
-grouping, not a score.**
+> **Not a ladder.** The concept was built as one and the old names said so
+> (*movement groups*, *rung*, *"walk upwards"*). No running code ever read it that
+> way — see DN-130. If you find prose that reasons in harder/easier terms about
+> group membership, it is a leftover and it is wrong.
+
+**Default member** — the one movement in a group handed to an athlete who has not
+chosen, or whose choice is no longer usable. Declared explicitly in the seed, never
+inferred from list order. It is a prescription-time answer and never a stored one:
+no row is written, and the athlete overrides it in one tap.
+
+**Fallback** (`fallbackExerciseId`) — the movement performed *instead* when the
+athlete lacks the equipment the chosen one needs. Guaranteed to need no equipment
+itself, enforced at write time. **Equipment, not difficulty** — it is not an easier
+version, and it is not the same idea as another member of the group: a group has
+many symmetric members, a fallback is one, shared, and points outside the group
+when every member needs kit.
+
+**Sort order** (`Exercise.sortOrder`) — the order a group's members are listed in
+the swap panel. Display only. It carries no claim about difficulty even where a
+curated order happens to read like one.
 
 **SkillLevel** — despite the name, the athlete's *standing choice* of movement per
-progression line: the last thing they picked, remembered so they need not re-pick it
+movement group: the last thing they picked, remembered so they need not re-pick it
 every session. A row exists only once the athlete has chosen something; nobody is
 provisioned onto one.
 

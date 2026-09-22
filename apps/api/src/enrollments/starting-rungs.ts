@@ -2,7 +2,7 @@ import type { Prisma } from '@prisma/client';
 import type { RungSnapshot } from '@regimen-works/shared';
 
 /**
- * Where every line the athlete has an opinion about stands right now (DN-18).
+ * Where every group the athlete has an opinion about stands right now (DN-18).
  *
  * Taken when a run starts, because `SkillLevel` keeps only the current value:
  * without this a finished program can count its sessions but cannot say what
@@ -23,7 +23,7 @@ export async function snapshotRungs(
 ): Promise<RungSnapshot> {
   const rows = await tx.skillLevel.findMany({
     where: { userId },
-    select: { line: true, rung: true },
+    select: { movementGroup: true, rung: true },
   });
-  return Object.fromEntries(rows.map((r) => [r.line, r.rung]));
+  return Object.fromEntries(rows.map((r) => [r.movementGroup, r.rung]));
 }

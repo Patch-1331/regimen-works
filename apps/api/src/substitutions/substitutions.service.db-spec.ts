@@ -4,7 +4,7 @@ import { testPrisma } from '../test-support/database';
 import {
   createAssignment,
   createExercise,
-  createLadder,
+  createGroup,
   createPlan,
   createSkillLevel,
   createUser,
@@ -16,7 +16,7 @@ import { SubstitutionsService } from './substitutions.service';
  * The swap is the athlete's write path onto their own level, so the service
  * guards what the UI cannot: a day already trained, a movement from someone
  * else's WOD, and a target that is not scaling at all. The reps stay as
- * prescribed, which is why an off-ladder target has to be refused — it would
+ * prescribed, which is why a target outside the group has to be refused — it would
  * leave a rep count that means nothing.
  *
  * Against a real database (DN-99) rather than a mocked Prisma client, which
@@ -40,13 +40,13 @@ function service(): SubstitutionsService {
   return new SubstitutionsService(testPrisma() as unknown as PrismaService);
 }
 
-/** A pull ladder, a WOD using its middle rung, and an assignment for it. */
+/** A pull group, a WOD using its middle rung, and an assignment for it. */
 async function pullDay(options: { status?: string } = {}) {
   const user = await createUser();
-  const { rungs, alt } = await createLadder(
+  const { rungs, fallback } = await createGroup(
     'pull',
     ['Negative chin-up', 'Chin-up', 'Pull-up'],
-    { altFor: 1 },
+    { fallbackFor: 1 },
   );
   const wod = await createWod({
     dominantPattern: 'pull',
@@ -59,7 +59,7 @@ async function pullDay(options: { status?: string } = {}) {
   return {
     user,
     rungs,
-    alt: alt!,
+    fallback: fallback!,
     wod,
     assignment,
     movement: wod.movements[0],
@@ -73,7 +73,7 @@ function storedSwaps(assignmentId: string) {
 }
 
 describe('SubstitutionsService.set', () => {
-  it('records a swap to another rung on the movement line', async () => {
+  it('records a swap to another rung on the movement movementGroup', async () => {
     const { user, rungs, assignment, movement } = await pullDay();
 
     await service().set(
@@ -92,13 +92,18 @@ describe('SubstitutionsService.set', () => {
     });
   });
 
-  it('allows the no-equipment alternative of a rung on the line', async () => {
-    const { user, alt, assignment, movement } = await pullDay();
+  it('allows the no-equipment alternative of a rung on the movementGroup', async () => {
+    const { user, fallback, assignment, movement } = await pullDay();
 
-    await service().set(user.id, assignment.id, wodKey(movement.id), alt.id);
+    await service().set(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+      fallback.id,
+    );
 
-    // The alternative is off the line itself — legal because a rung points at it.
-    expect((await storedSwaps(assignment.id))[0].exerciseId).toBe(alt.id);
+    // The alternative is outside the group itself — legal because a rung points at it.
+    expect((await storedSwaps(assignment.id))[0].exerciseId).toBe(fallback.id);
   });
 
   it('allows swapping back to what was prescribed', async () => {
@@ -137,9 +142,9 @@ describe('SubstitutionsService.set', () => {
     expect(swaps[0].exerciseId).toBe(rungs[2].id);
   });
 
-  it('refuses an exercise that is not on the ladder', async () => {
+  it('refuses an exercise that is not in the group', async () => {
     const { user, assignment, movement } = await pullDay();
-    const { rungs: squats } = await createLadder('squat', ['Air squat']);
+    const { rungs: squats } = await createGroup('squat', ['Air squat']);
 
     await expect(
       service().set(user.id, assignment.id, wodKey(movement.id), squats[0].id),
@@ -147,17 +152,17 @@ describe('SubstitutionsService.set', () => {
     expect(await storedSwaps(assignment.id)).toHaveLength(0);
   });
 
-  it('refuses another athlete’s movement, even sitting on the same line', async () => {
-    // The ladder is built from a query, so an unscoped one makes every
+  it('refuses another athlete’s movement, even sitting on the same movementGroup', async () => {
+    // The group is built from a query, so an unscoped one makes every
     // athlete's private movements legal swap targets for everyone else
-    // (DN-93). On the same line and at a free rung, so nothing but the
+    // (DN-93). On the same group and at a free rung, so nothing but the
     // ownership scope refuses it.
     const { user, assignment, movement } = await pullDay();
     const stranger = await createUser();
     const theirs = await createExercise({
       name: 'Ring row',
       pattern: 'pull',
-      line: 'pull',
+      movementGroup: 'pull',
       rung: 7,
       ownerId: stranger.id,
     });
@@ -169,25 +174,30 @@ describe('SubstitutionsService.set', () => {
   });
 
   /**
-   * A cardio movement: off every line, and standing in front of its own
-   * no-equipment alternative (DN-80). The pair the line gate used to refuse
+   * A cardio movement: off every group, and standing in front of its own
+   * no-equipment alternative (DN-80). The pair the group gate used to refuse
    * outright.
    */
   async function cardioDay(options: { withAlternative?: boolean } = {}) {
     const user = await createUser();
     const highKnees = await testPrisma().exercise.create({
-      data: { name: 'High knees', pattern: 'cardio', line: null, rung: null },
+      data: {
+        name: 'High knees',
+        pattern: 'cardio',
+        movementGroup: null,
+        rung: null,
+      },
     });
     const doubleUnders = await testPrisma().exercise.create({
       data: {
         name: 'Double-unders',
         pattern: 'cardio',
-        line: null,
+        movementGroup: null,
         rung: null,
         equipment: ['jump_rope'],
         ...(options.withAlternative === false
           ? {}
-          : { altExerciseId: highKnees.id }),
+          : { fallbackExerciseId: highKnees.id }),
       },
     });
     const wod = await createWod({
@@ -204,7 +214,7 @@ describe('SubstitutionsService.set', () => {
     };
   }
 
-  it('allows the movement the equipment layer replaced, off every line', async () => {
+  it('allows the movement the equipment layer replaced, off every movementGroup', async () => {
     // The row the athlete is looking at says high knees; the workout said
     // double-unders, and today they have a rope (DN-110). There is no
     // substitution to clear -- the equipment layer moved this row during
@@ -225,7 +235,7 @@ describe('SubstitutionsService.set', () => {
     );
   });
 
-  it('allows the alternative of a movement that is off every line', async () => {
+  it('allows the alternative of a movement that is off every movementGroup', async () => {
     const { user, highKnees, assignment, movement } = await cardioDay();
 
     await service().set(
@@ -235,14 +245,14 @@ describe('SubstitutionsService.set', () => {
       highKnees.id,
     );
 
-    // The case the line gate used to refuse: no ladder to move along, but a
+    // The case the group gate used to refuse: nothing to move between, but a
     // rope the athlete doesn't have today and somewhere real to go.
     expect((await storedSwaps(assignment.id))[0].exerciseId).toBe(highKnees.id);
   });
 
-  it('refuses an unrelated target on a movement that is off every line', async () => {
+  it('refuses an unrelated target on a movement that is off every movementGroup', async () => {
     const { user, assignment, movement } = await cardioDay();
-    const { rungs } = await createLadder('pull', ['Chin-up']);
+    const { rungs } = await createGroup('pull', ['Chin-up']);
 
     // With no line, the alternative is the whole of what this movement scales
     // to — everything else is a different workout at the prescribed reps.
@@ -252,7 +262,7 @@ describe('SubstitutionsService.set', () => {
     expect(await storedSwaps(assignment.id)).toHaveLength(0);
   });
 
-  it('refuses any swap on an off-line movement with no alternative', async () => {
+  it('refuses any swap on an off-movementGroup movement with no alternative', async () => {
     const { user, highKnees, assignment, movement } = await cardioDay({
       withAlternative: false,
     });
@@ -378,7 +388,7 @@ describe('SubstitutionsService.proposedRungChanges', () => {
     );
   });
 
-  it('proposes from null when the line has no standing choice yet', async () => {
+  it('proposes from null when the movementGroup has no standing choice yet', async () => {
     // The ordinary case for a first swap since DN-86 stopped provisioning
     // everyone at rung 0 — and the first choice worth remembering.
     const { user, rungs, assignment, movement } = await pullDay();
@@ -392,7 +402,7 @@ describe('SubstitutionsService.proposedRungChanges', () => {
     expect(await service().proposedRungChanges(user.id, assignment.id)).toEqual(
       [
         {
-          line: 'pull',
+          movementGroup: 'pull',
           fromRung: null,
           toRung: 1,
           exerciseId: rungs[1].id,
@@ -416,7 +426,11 @@ describe('SubstitutionsService.proposedRungChanges', () => {
       user.id,
       assignment.id,
     );
-    expect(proposal).toMatchObject({ line: 'pull', fromRung: 0, toRung: 2 });
+    expect(proposal).toMatchObject({
+      movementGroup: 'pull',
+      fromRung: 0,
+      toRung: 2,
+    });
   });
 
   it('proposes an easier movement as readily as a harder one', async () => {
@@ -452,22 +466,27 @@ describe('SubstitutionsService.proposedRungChanges', () => {
     );
   });
 
-  it('proposes nothing for a swap to the off-ladder alternative', async () => {
-    // It carries no rung, so there is no position on the line to remember.
-    const { user, alt, assignment, movement } = await pullDay();
-    await service().set(user.id, assignment.id, wodKey(movement.id), alt.id);
+  it('proposes nothing for a swap to the off-group alternative', async () => {
+    // It carries no rung, so there is no position on the group to remember.
+    const { user, fallback, assignment, movement } = await pullDay();
+    await service().set(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+      fallback.id,
+    );
 
     expect(await service().proposedRungChanges(user.id, assignment.id)).toEqual(
       [],
     );
   });
 
-  it('takes the choice made most recently when one line was swapped twice', async () => {
+  it('takes the choice made most recently when one movementGroup was swapped twice', async () => {
     // The tie-break rests on `orderBy: { updatedAt: 'asc' }` in the query.
     // A mocked client returns whatever the fixture lists and proves nothing
     // about that clause; here the rows are ordered by the database.
     const user = await createUser();
-    const { rungs } = await createLadder('pull', [
+    const { rungs } = await createGroup('pull', [
       'Negative chin-up',
       'Chin-up',
       'Pull-up',
@@ -517,13 +536,13 @@ describe('SubstitutionsService.proposedRungChanges', () => {
     expect(proposals[0]).toMatchObject({ toRung: 1, exerciseId: rungs[1].id });
   });
 
-  it('proposes once per line, in a stable order', async () => {
+  it('proposes once per movementGroup, in a stable order', async () => {
     const user = await createUser();
-    const { rungs: pull } = await createLadder('pull', [
+    const { rungs: pull } = await createGroup('pull', [
       'Negative chin-up',
       'Chin-up',
     ]);
-    const { rungs: squat } = await createLadder('squat', [
+    const { rungs: squat } = await createGroup('squat', [
       'Air squat',
       'Pistol',
     ]);
@@ -552,7 +571,7 @@ describe('SubstitutionsService.proposedRungChanges', () => {
       user.id,
       assignment.id,
     );
-    expect(proposals.map((p) => p.line)).toEqual(['pull', 'squat']);
+    expect(proposals.map((p) => p.movementGroup)).toEqual(['pull', 'squat']);
   });
 
   it('ignores another athlete swaps on the same movement', async () => {
@@ -588,16 +607,16 @@ describe('SubstitutionsService.proposedRungChanges', () => {
  * A prescribed day (DN-125): a program slot authoring `pull, 5x3` and an
  * assignment pointing at it, with no WOD anywhere in sight.
  *
- * `pinned` authors the specific-exercise form instead of the line form -- the
+ * `pinned` authors the specific-exercise form instead of the group form -- the
  * two halves of PlanSlotMovement's xor, and the legality rule reads them
  * differently.
  */
 async function prescribedDay(options: { pinned?: string } = {}) {
   const user = await createUser();
-  const { rungs, alt } = await createLadder(
+  const { rungs, fallback } = await createGroup(
     'pull',
     ['Negative chin-up', 'Chin-up', 'Pull-up'],
-    { altFor: 1 },
+    { fallbackFor: 1 },
   );
   const plan = await createPlan({
     weeks: {
@@ -614,7 +633,7 @@ async function prescribedDay(options: { pinned?: string } = {}) {
                   create: [
                     {
                       order: 0,
-                      line: options.pinned ? null : 'pull',
+                      movementGroup: options.pinned ? null : 'pull',
                       exerciseId: options.pinned ?? null,
                       sets: 5,
                       reps: 3,
@@ -641,7 +660,13 @@ async function prescribedDay(options: { pinned?: string } = {}) {
       planSlotId: slot.id,
     },
   });
-  return { user, rungs, alt: alt!, assignment, movement: slot.movements[0] };
+  return {
+    user,
+    rungs,
+    fallback: fallback!,
+    assignment,
+    movement: slot.movements[0],
+  };
 }
 
 /** The key the endpoint builds for a prescribed movement. */
@@ -697,25 +722,28 @@ describe('SubstitutionsService, on a prescribed day', () => {
     expect(stored[0].exerciseId).toBe(rungs[0].id);
   });
 
-  it('allows the no-equipment alternative of a rung on the line', async () => {
-    // A line-prescribed row names no exercise, so the whole ladder and every
+  it('allows the no-equipment alternative of a rung on the movementGroup', async () => {
+    // A group-prescribed row names no exercise, so the whole group and every
     // alternative hanging off it is a legal target -- which is what lets an
-    // athlete dropped off the line by equipment stay off it on purpose.
-    const { user, alt, assignment, movement } = await prescribedDay();
+    // athlete dropped outside the group by equipment stay off it on purpose.
+    const { user, fallback, assignment, movement } = await prescribedDay();
 
     await service().set(
       user.id,
       assignment.id,
       prescribedKey(movement.id),
-      alt.id,
+      fallback.id,
     );
 
     expect(await storedSwaps(assignment.id)).toHaveLength(1);
   });
 
-  it('refuses a target off the prescribed line', async () => {
+  it('refuses a target off the prescribed movementGroup', async () => {
     const { user, assignment, movement } = await prescribedDay();
-    const squat = await createExercise({ name: 'Air squat', line: 'squat' });
+    const squat = await createExercise({
+      name: 'Air squat',
+      movementGroup: 'squat',
+    });
 
     await expect(
       service().set(
@@ -761,10 +789,10 @@ describe('SubstitutionsService, on a prescribed day', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('holds an exercise-pinned row to that exercise own ladder', async () => {
+  it('holds an exercise-pinned row to that exercise own group', async () => {
     // The other half of PlanSlotMovement's xor. A pinned row names an
-    // exercise, so the ladder is read from it exactly as a WOD movement's is.
-    const { rungs } = await createLadder('squat', ['Box squat', 'Air squat']);
+    // exercise, so the group is read from it exactly as a WOD movement's is.
+    const { rungs } = await createGroup('squat', ['Box squat', 'Air squat']);
     const {
       user,
       rungs: pullRungs,

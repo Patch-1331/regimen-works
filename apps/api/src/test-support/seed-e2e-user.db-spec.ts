@@ -1,5 +1,5 @@
 import { testPrisma } from './database';
-import { createLadder, createWod } from './fixtures';
+import { createGroup, createWod } from './fixtures';
 import { localToday, seedE2eUser } from './seed-e2e-user';
 
 /**
@@ -11,7 +11,7 @@ import { localToday, seedE2eUser } from './seed-e2e-user';
 const TEST_USER = 'user_e2e_test';
 
 async function catalogue() {
-  const { rungs } = await createLadder('pull', [
+  const { rungs } = await createGroup('pull', [
     'Negative chin-up',
     'Chin-up',
     'Pull-up',
@@ -54,7 +54,7 @@ describe('seedE2eUser', () => {
   });
 
   it('gives the athlete a standing choice on some lines but not all', async () => {
-    // An athlete who has chosen on every line is not what a real one looks
+    // An athlete who has chosen on every group is not what a real one looks
     // like, and DN-86 made "no choice yet" the ordinary case.
     await catalogue();
 

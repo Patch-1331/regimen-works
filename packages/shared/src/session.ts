@@ -1,7 +1,7 @@
 import { z } from "zod";
 import {
   exerciseUnit,
-  progressionLine,
+  movementGroup,
   sessionStatus,
   substitutionReason,
 } from "./enums.js";
@@ -21,7 +21,7 @@ export type RoundSplit = z.infer<typeof roundSplitSchema>;
  * would have done.
  *
  * The exercise fields are copied, not referenced, for the same reason: a
- * renamed exercise or a re-rung ladder must not rewrite August.
+ * renamed exercise or a re-ordered group must not rewrite August.
  */
 export const sessionMovementSchema = z
   .object({
@@ -74,7 +74,7 @@ export const sessionMovementSchema = z
       id: z.string(),
       name: z.string(),
       unit: exerciseUnit,
-      line: progressionLine.nullable(),
+      movementGroup: movementGroup.nullable(),
       rung: z.number().int().nonnegative().nullable(),
     }),
   })
