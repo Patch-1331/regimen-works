@@ -48,7 +48,7 @@ export function movement(overrides: Partial<WodMovement> = {}): WodMovement {
       pattern: "push",
       equipment: [],
       unit: "reps",
-      instructions: "Hands under the shoulders, body in one movementGroup.",
+      instructions: "Hands under the shoulders, body in one line.",
       movementGroup: "push_horizontal",
       sortOrder: 2,
       fallbackExerciseId: null,

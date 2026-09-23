@@ -87,6 +87,45 @@ describe('the seeded exercise library', () => {
     expect([...defaults].filter(([, count]) => count !== 1)).toEqual([]);
   });
 
+  describe('the prose an athlete actually reads (DN-141)', () => {
+    /**
+     * Every schema identifier that is also, or contains, an ordinary English
+     * word a coaching cue would want. These are the ones a project-wide
+     * rename can walk into a sentence without anything failing: the string
+     * still compiles, the seed still upserts, and the athlete is told to hold
+     * their body in one `movementGroup`.
+     */
+    const schemaWords = [
+      'movementGroup',
+      'sortOrder',
+      'exerciseId',
+      'fallbackExerciseId',
+      'isGroupDefault',
+    ];
+
+    it('never puts a schema identifier in an instruction', () => {
+      // DN-134 renamed `line` to `movementGroup` across the repo and caught
+      // five instructions on the way past -- among them "knees, hips and
+      // shoulders form a straight movementGroup", which is the sentence
+      // telling the athlete not to arch their lower back. They shipped, and
+      // nothing here or in CI noticed for nine days, because a corrupted
+      // sentence is still a valid string.
+      //
+      // `line` was both the old domain term and a common English word, so the
+      // rename was safe across identifiers and unsafe across prose. That will
+      // be true of the next domain word too; this is the check that survives
+      // it.
+      const offenders = exercises
+        .flatMap((e) =>
+          schemaWords
+            .filter((word) => e.instructions.includes(word))
+            .map((word) => `${e.name}: "${word}"`),
+        )
+        .sort();
+
+      expect(offenders).toEqual([]);
+    });
+  });
   describe('the merged squat and hinge groups (DN-140)', () => {
     const memberNames = (group: string) =>
       exercises
