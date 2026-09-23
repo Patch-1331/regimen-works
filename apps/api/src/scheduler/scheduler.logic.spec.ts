@@ -170,93 +170,117 @@ describe('isRestDay', () => {
 
 describe('applyRememberedChoice', () => {
   type FakeExercise = ExerciseWithLine & { name: string };
-  const kneePushUp: FakeExercise = {
-    name: 'Knee push-up',
-    movementGroup: 'push_horizontal',
-  };
-  const pushUp: FakeExercise = {
-    name: 'Push-up',
-    movementGroup: 'push_horizontal',
-  };
-  const diamondPushUp: FakeExercise = {
-    name: 'Diamond push-up',
-    movementGroup: 'push_horizontal',
-  };
-  const airSquat: FakeExercise = { name: 'Air squat', movementGroup: 'squat' };
-  const pistolSquat: FakeExercise = {
-    name: 'Pistol squat',
-    movementGroup: 'squat',
-  };
-  const burpee: FakeExercise = { name: 'Burpee', movementGroup: null };
+  const member = (
+    id: string,
+    name: string,
+    movementGroup: string | null,
+    options: { equipment?: string[]; isGroupDefault?: boolean } = {},
+  ): FakeExercise => ({
+    id,
+    name,
+    movementGroup,
+    equipment: options.equipment ?? [],
+    isGroupDefault: options.isGroupDefault ?? false,
+  });
 
-  const exerciseAtRung = new Map<string, FakeExercise>([
-    ['push_horizontal:0', kneePushUp],
-    ['push_horizontal:1', pushUp],
-    ['push_horizontal:2', diamondPushUp],
-    ['squat:0', airSquat],
-    ['squat:3', pistolSquat],
-  ]);
+  const kneePushUp = member('knee', 'Knee push-up', 'push_horizontal', {
+    isGroupDefault: true,
+  });
+  const pushUp = member('push-up', 'Push-up', 'push_horizontal');
+  const ringPushUp = member('ring', 'Ring push-up', 'push_horizontal', {
+    equipment: ['rings'],
+  });
+  const airSquat = member('air-squat', 'Air squat', 'squat', {
+    isGroupDefault: true,
+  });
+  const pistolSquat = member('pistol', 'Pistol squat', 'squat');
+  const burpee = member('burpee', 'Burpee', null);
 
-  it('substitutes a movement for the exercise at the current rung on its movementGroup', () => {
-    const movements = [{ reps: 10, exercise: pushUp }];
-    const currentRung = new Map([['push_horizontal', 0]]);
-    const result = applyRememberedChoice(
-      movements,
-      currentRung,
-      exerciseAtRung,
+  const LIBRARY = [
+    kneePushUp,
+    pushUp,
+    ringPushUp,
+    airSquat,
+    pistolSquat,
+    burpee,
+  ];
+  const byId = new Map(LIBRARY.map((e) => [e.id, e]));
+
+  const apply = (
+    movements: { reps: number; exercise: FakeExercise }[],
+    chosen: [string, string][] = [],
+    owned: string[] = ['rings'],
+  ) => applyRememberedChoice(movements, new Map(chosen), byId, new Set(owned));
+
+  it('substitutes a movement for the one the athlete chose in its group', () => {
+    const result = apply(
+      [{ reps: 10, exercise: pushUp }],
+      [['push_horizontal', 'knee']],
     );
     expect(result[0].exercise).toBe(kneePushUp);
     expect(result[0].reps).toBe(10); // reps untouched — only the exercise changes
   });
 
-  it('leaves a movement unchanged when its exercise has no tracked movementGroup', () => {
-    const movements = [{ reps: 15, exercise: burpee }];
-    const currentRung = new Map([['push_horizontal', 2]]);
-    const result = applyRememberedChoice(
-      movements,
-      currentRung,
-      exerciseAtRung,
+  it('leaves a movement unchanged when its exercise is in no group', () => {
+    const result = apply(
+      [{ reps: 15, exercise: burpee }],
+      [['push_horizontal', 'push-up']],
     );
     expect(result[0].exercise).toBe(burpee);
   });
 
-  it('leaves a movement unchanged when its movementGroup has no recorded rung', () => {
-    const movements = [{ reps: 5, exercise: pistolSquat }];
-    const currentRung = new Map<string, number>(); // no squat entry at all
-    const result = applyRememberedChoice(
-      movements,
-      currentRung,
-      exerciseAtRung,
+  // The absent-choice path (DN-139). Unlike the prescription path, this one
+  // does *not* reach for the group's declared default: a WOD has already named
+  // a movement, so an athlete who has chosen nothing trains what it asked for.
+  it('leaves the authored movement alone for an athlete who has chosen nothing', () => {
+    const result = apply([{ reps: 5, exercise: pistolSquat }]);
+    expect(result[0].exercise).toBe(pistolSquat);
+  });
+
+  // The stale-choice path: both of these reach the athlete as a movement they
+  // did not pick, so they resolve the same way the absent one does.
+  it("leaves it alone when the athlete's choice has been archived", () => {
+    // Archived rows never reach `byId` -- `libraryVisibleTo` filtered them out
+    // upstream. The stored row is left alone, so un-archiving restores it.
+    const result = apply(
+      [{ reps: 5, exercise: pistolSquat }],
+      [['squat', 'retired-squat']],
     );
     expect(result[0].exercise).toBe(pistolSquat);
   });
 
-  it('leaves a movement unchanged when no exercise exists at that movementGroup+rung', () => {
-    const movements = [{ reps: 5, exercise: airSquat }];
-    const currentRung = new Map([['squat', 99]]); // no exercise seeded at squat:99
-    const result = applyRememberedChoice(
-      movements,
-      currentRung,
-      exerciseAtRung,
+  it('leaves it alone when they own nothing for their choice', () => {
+    // The equipment layer downstream still has the authored movement to work
+    // with, rather than the fallback of a movement they cannot do anyway.
+    const result = apply(
+      [{ reps: 10, exercise: pushUp }],
+      [['push_horizontal', 'ring']],
+      [],
     );
-    expect(result[0].exercise).toBe(airSquat);
+    expect(result[0].exercise).toBe(pushUp);
   });
 
-  it('substitutes multiple movements independently across different lines', () => {
-    const movements = [
-      { reps: 10, exercise: pushUp },
-      { reps: 5, exercise: airSquat },
-    ];
-    const currentRung = new Map([
-      ['push_horizontal', 2],
-      ['squat', 3],
-    ]);
-    const result = applyRememberedChoice(
-      movements,
-      currentRung,
-      exerciseAtRung,
+  it('keeps their choice when they own what it needs', () => {
+    const result = apply(
+      [{ reps: 10, exercise: pushUp }],
+      [['push_horizontal', 'ring']],
+      ['rings'],
     );
-    expect(result[0].exercise).toBe(diamondPushUp);
+    expect(result[0].exercise).toBe(ringPushUp);
+  });
+
+  it('substitutes multiple movements independently across different groups', () => {
+    const result = apply(
+      [
+        { reps: 10, exercise: pushUp },
+        { reps: 5, exercise: airSquat },
+      ],
+      [
+        ['push_horizontal', 'push-up'],
+        ['squat', 'pistol'],
+      ],
+    );
+    expect(result[0].exercise).toBe(pushUp);
     expect(result[1].exercise).toBe(pistolSquat);
   });
 });

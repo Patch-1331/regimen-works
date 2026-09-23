@@ -16,7 +16,7 @@ import type { ApiExercise, ApiWod, LibraryTier } from "./api";
  * filled in at the same time, so the write schema's exactly-one-of rule is
  * something the form cannot express a violation of.
  *
- * Both counts are strings for the reason `ExerciseDraft.rung` is: an input
+ * Both counts are strings for the reason `ExerciseDraft.sortOrder` is: an input
  * has no number, it has "", and `Number("")` is 0.
  */
 export type MovementDraft = {

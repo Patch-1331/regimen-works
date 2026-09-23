@@ -20,7 +20,7 @@ import {
  * One movement a `movements` slot prescribes, as authored (DN-19).
  *
  * Still authored: `line` is a movement groups, not an exercise. Resolving it
- * to the exercise this athlete trains today needs their rung and their
+ * to the exercise this athlete trains today needs their choice and their
  * equipment, neither of which belongs in a pure function — so this stays as
  * written and `PrescriptionService` does the rest.
  */
@@ -444,7 +444,7 @@ export function narrowToSlot<C extends ConstrainableWod>(
     }
   }
   // Every axis spent and still nothing -- which means the pool was empty to
-  // begin with, since the last rung asks nothing of any candidate. Handing
+  // begin with, since the last axis asks nothing of any candidate. Handing
   // back the pool keeps the never-throws promise, and everything the slot
   // asked for counts as given up.
   return {

@@ -81,7 +81,7 @@ export const handlers = [
   // 204 is how the API says "no log yet" — api.ts turns the empty body into null.
   http.get(api(`/assignments/:assignmentId/log`), () => new HttpResponse(null, { status: 204 })),
   http.get(api(`/assignments/:assignmentId/session`), () => new HttpResponse(null, { status: 204 })),
-  http.get(api(`/assignments/:assignmentId/substitutions/rung-changes`), () => HttpResponse.json([])),
+  http.get(api(`/assignments/:assignmentId/substitutions/movement-changes`), () => HttpResponse.json([])),
 
   http.post(api(`/assignments/:assignmentId/session`), () => HttpResponse.json(fixtures.session())),
   http.post(api(`/assignments/:assignmentId/session/interval`), () =>

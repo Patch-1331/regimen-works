@@ -346,7 +346,7 @@ describe('a prescribed movement names one movement and prescribes work', () => {
   });
 
   it('refuses a prescription naming both a movementGroup and an exercise', async () => {
-    // "Pull at your rung" and "this exact exercise" are different
+    // "Pull, whichever movement you do" and "this exact exercise" are different
     // instructions, and a reader picking one would be guessing at the author.
     const exercise = await createExercise();
     await expect(

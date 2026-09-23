@@ -24,13 +24,13 @@ const chinUp = fixtures.apiExercise({
   id: "chin-up",
   name: "Chin-up",
   movementGroup: "pull",
-  rung: 1,
+  sortOrder: 1,
 });
 const negative = fixtures.apiExercise({
   id: "negative",
   name: "Negative chin-up",
   movementGroup: "pull",
-  rung: 0,
+  sortOrder: 0,
 });
 
 function history(overrides: Partial<MovementHistory>[] = []): MovementHistory[] {
@@ -62,7 +62,7 @@ function statsShowing(movements: MovementHistory[]) {
   server.use(
     http.get("/api/exercises", () => HttpResponse.json([negative, chinUp])),
     http.get("/api/skill-levels", () =>
-      HttpResponse.json([fixtures.skillLevel({ movementGroup: "pull", rung: 1 })]),
+      HttpResponse.json([fixtures.skillLevel({ movementGroup: "pull", exerciseId: "chin-up", exerciseName: "Chin-up" })]),
     ),
     http.get("/api/movement-history", () => HttpResponse.json(movements)),
   );
@@ -146,7 +146,7 @@ describe("the movement panel history", () => {
     server.use(
       http.get("/api/exercises", () => HttpResponse.json([negative, chinUp])),
       http.get("/api/skill-levels", () =>
-        HttpResponse.json([fixtures.skillLevel({ movementGroup: "pull", rung: 1 })]),
+        HttpResponse.json([fixtures.skillLevel({ movementGroup: "pull", exerciseId: "chin-up", exerciseName: "Chin-up" })]),
       ),
       http.get("/api/movement-history", () => new HttpResponse(null, { status: 500 })),
     );

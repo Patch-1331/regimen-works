@@ -20,14 +20,14 @@ export type ResolvedMovementInput = {
     name: string;
     unit: string;
     movementGroup: string | null;
-    rung: number | null;
+    sortOrder: number | null;
   };
 };
 
 /**
  * Pins the resolved movement list down as it stood when the session started
  * (DN-90). Copies rather than references: the point is that nothing which
- * moves afterwards -- the rung on record, the swap rows, an exercise's name
+ * moves afterwards -- the choice on record, the swap rows, an exercise's name
  * -- can change what this session says was trained.
  *
  * Only what history needs is kept. Coaching prose, equipment flags and the
@@ -57,7 +57,7 @@ export function snapshotMovements(
         name: m.exercise.name,
         unit: m.exercise.unit as ExerciseUnit,
         movementGroup: m.exercise.movementGroup as MovementGroup | null,
-        rung: m.exercise.rung,
+        sortOrder: m.exercise.sortOrder,
       },
     }));
 }
@@ -131,7 +131,7 @@ export type ResolvedPrescribedInput = {
     name: string;
     unit: string;
     movementGroup: string | null;
-    rung: number | null;
+    sortOrder: number | null;
   };
 };
 
@@ -139,7 +139,7 @@ export type ResolvedPrescribedInput = {
  * The same snapshot for a straight-sets day (DN-20), against the prescription
  * rather than a WOD.
  *
- * DN-90's argument applies unchanged -- the rung, the swap rows and the
+ * DN-90's argument applies unchanged -- the choice, the swap rows and the
  * exercise names all keep moving, so a past day re-read through them describes
  * today's settings rather than that day's training. It is load-bearing for a
  * second reason here: the session's progress is stored as a count of sets, and
@@ -175,7 +175,7 @@ export function snapshotPrescribedMovements(
         name: m.exercise.name,
         unit: m.exercise.unit as ExerciseUnit,
         movementGroup: m.exercise.movementGroup as MovementGroup | null,
-        rung: m.exercise.rung,
+        sortOrder: m.exercise.sortOrder,
       },
     }));
 }

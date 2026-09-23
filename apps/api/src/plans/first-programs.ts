@@ -38,7 +38,7 @@ import type {
  */
 
 /** A prescribed movement. `line` rather than a specific exercise, so the day
- * resolves through whichever rung the athlete has chosen for themselves. */
+ * resolves through whichever movement the athlete has chosen for themselves. */
 type MovementSeed = {
   movementGroup: MovementGroup;
   sets: number;
@@ -99,7 +99,7 @@ const FRIDAY = 5;
  * author wrote it that way rather than because anything measured the athlete.
  *
  * Reps stay put and sets move, because sets are the honest thing to add when
- * the movement itself is the progression: an athlete on a harder rung is
+ * the movement itself is the progression: an athlete on a harder movement is
  * doing harder work at the same 5 reps, and adding reps on top would be two
  * progressions fighting over the same session.
  */

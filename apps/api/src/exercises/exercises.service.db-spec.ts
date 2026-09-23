@@ -39,12 +39,12 @@ describe('ExercisesService.findAll', () => {
   it('carries the alternative movement, not just its id', async () => {
     // What the swap screen offers an athlete without the equipment. Without
     // the include it would have a foreign key and nothing to show.
-    const { rungs, fallback } = await createGroup('pull', ['Pull-up'], {
+    const { members, fallback } = await createGroup('pull', ['Pull-up'], {
       fallbackFor: 0,
     });
 
     const listed = (await service().findAll(ANY_ATHLETE)).find(
-      (e) => e.id === rungs[0].id,
+      (e) => e.id === members[0].id,
     );
 
     expect(listed?.fallbackExercise).toMatchObject({

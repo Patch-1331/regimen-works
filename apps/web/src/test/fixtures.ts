@@ -15,7 +15,7 @@ import type {
   SetupProgram,
   WorkoutSetLog,
   CompletedProgram,
-  RungChange,
+  MovementChange,
 } from "@regimen-works/shared";
 import { DEFAULT_PLAN_ID } from "@regimen-works/shared";
 import type { ApiExercise, ApiWod } from "../lib/api";
@@ -50,7 +50,7 @@ export function movement(overrides: Partial<WodMovement> = {}): WodMovement {
       unit: "reps",
       instructions: "Hands under the shoulders, body in one movementGroup.",
       movementGroup: "push_horizontal",
-      rung: 2,
+      sortOrder: 2,
       fallbackExerciseId: null,
       ...overrides.exercise,
     },
@@ -64,7 +64,7 @@ export function movement(overrides: Partial<WodMovement> = {}): WodMovement {
 export function prescribedMovement(
   // `exercise` partial rather than whole, because the body below spreads it
   // over a complete default: a spec that wants a hold in seconds should not
-  // have to restate the group, the rung and the kit to say so.
+  // have to restate the group, the position and the kit to say so.
   overrides: Partial<Omit<PrescribedMovement, "exercise">> & {
     exercise?: Partial<PrescribedMovement["exercise"]>;
   } = {},
@@ -89,7 +89,7 @@ export function prescribedMovement(
       unit: "reps",
       instructions: null,
       movementGroup: "pull",
-      rung: 1,
+      sortOrder: 1,
       fallbackExerciseId: null,
       ...overrides.exercise,
     },
@@ -124,7 +124,7 @@ export function sessionMovement(
       name: "Chin-up",
       unit: "reps",
       movementGroup: "pull",
-      rung: 1,
+      sortOrder: 1,
       ...overrides.exercise,
     },
   };
@@ -243,9 +243,9 @@ export function today(overrides: Partial<TodayResponse> = {}): TodayResponse {
  * A program the athlete just finished (DN-18), as the card and the Completed
  * list both read it.
  *
- * One rung change by default, because a card with nothing to say about the
+ * One movement change by default, because a card with nothing to say about the
  * group is the exception rather than the shape most specs want -- pass
- * `{ rungChanges: [] }` through `summary` for the program nobody trained.
+ * `{ movementChanges: [] }` through `summary` for the program nobody trained.
  */
 export function completedProgram(
   overrides: Partial<CompletedProgram> = {},
@@ -259,18 +259,20 @@ export function completedProgram(
     summary: {
       weeks: 6,
       sessions: 24,
-      rungChanges: [rungChange()],
+      movementChanges: [movementChange()],
       ...overrides.summary,
     },
   };
 }
 
-export function rungChange(overrides: Partial<RungChange> = {}): RungChange {
+export function movementChange(
+  overrides: Partial<MovementChange> = {},
+): MovementChange {
   return {
     movementGroup: "pull",
-    fromRung: 0,
-    toRung: 2,
+    fromExerciseId: "ex-negative-chin-up",
     fromName: "Negative chin-up",
+    toExerciseId: "ex-chin-up",
     toName: "Chin-up",
     ...overrides,
   };
@@ -350,7 +352,8 @@ export function skillLevel(overrides: Partial<SkillLevel> = {}): SkillLevel {
   return {
     id: "skill-level-1",
     movementGroup: "push_horizontal",
-    rung: 2,
+    exerciseId: "exercise-1",
+    exerciseName: "Push-up",
     updatedAt: "2026-09-16T10:00:00.000Z",
     ...overrides,
   };
@@ -365,7 +368,7 @@ export function apiExercise(overrides: Partial<ApiExercise> = {}): ApiExercise {
     scalable: true,
     unit: "reps",
     movementGroup: "push_horizontal",
-    rung: 2,
+    sortOrder: 2,
     instructions: null,
     fallbackExerciseId: null,
     phase: null,

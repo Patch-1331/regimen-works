@@ -1,4 +1,4 @@
-import type { ProposedRungChange } from "@regimen-works/shared";
+import type { ProposedMovementChange } from "@regimen-works/shared";
 import { lineLabel } from "../lib/progressions";
 
 /**
@@ -14,27 +14,30 @@ import { lineLabel } from "../lib/progressions";
  * button — it sits in the page and is ignorable.
  */
 
-export function RungChangeCard({
+export function MovementChangeCard({
   proposals,
   onAccept,
   onDismiss,
   isSaving,
 }: {
-  proposals: ProposedRungChange[];
+  proposals: ProposedMovementChange[];
   onAccept: () => void;
   onDismiss: () => void;
   isSaving: boolean;
 }) {
   if (proposals.length === 0) return null;
 
-  // One card however many lines changed. Several prompts stacked down the
+  // One card however many groups changed. Several prompts stacked down the
   // page would turn a small offer into a form to get through.
   const single = proposals.length === 1 ? proposals[0] : null;
 
   return (
     <div
       className="mt-4 p-4"
-      style={{ border: "1px solid var(--glow)", background: "var(--glow-tint)" }}
+      style={{
+        border: "1px solid var(--glow)",
+        background: "var(--glow-tint)",
+      }}
     >
       <p
         className="text-[10px] font-semibold tracking-[0.14em]"
@@ -45,8 +48,9 @@ export function RungChangeCard({
 
       {single ? (
         <p className="mt-1.5 text-sm leading-relaxed text-[var(--ink)]">
-          You did <strong>{single.exerciseName.toLowerCase()}</strong> today. Make
-          that your default {lineLabel(single.movementGroup).toLowerCase()} movement?
+          You did <strong>{single.toExerciseName.toLowerCase()}</strong> today.
+          Make that your default {lineLabel(single.movementGroup).toLowerCase()}{" "}
+          movement?
         </p>
       ) : (
         <>
@@ -58,9 +62,12 @@ export function RungChangeCard({
               <li
                 key={p.movementGroup}
                 className="flex items-baseline justify-between gap-3 text-[13px]"
-                style={{ fontFamily: "var(--font-mono)", color: "var(--ink-soft)" }}
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  color: "var(--ink-soft)",
+                }}
               >
-                <span className="truncate">{p.exerciseName}</span>
+                <span className="truncate">{p.toExerciseName}</span>
                 <span className="shrink-0 text-[11px] tracking-[0.08em] text-[var(--ink-faint)]">
                   {lineLabel(p.movementGroup).toUpperCase()}
                 </span>
@@ -76,7 +83,11 @@ export function RungChangeCard({
           onClick={onAccept}
           disabled={isSaving}
           className="flex-1 py-2.5 text-xs font-bold tracking-[0.14em]"
-          style={{ fontFamily: "var(--font-mono)", background: "var(--glow)", color: "var(--bg)" }}
+          style={{
+            fontFamily: "var(--font-mono)",
+            background: "var(--glow)",
+            color: "var(--bg)",
+          }}
         >
           {proposals.length === 1 ? "YES, REMEMBER IT" : "YES, REMEMBER THEM"}
         </button>

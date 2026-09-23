@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service';
 import { testPrisma } from '../test-support/database';
 import {
+  createExercise,
   createGroup,
   createSkillLevel,
   createUser,
@@ -9,7 +10,7 @@ import {
 import { SkillLevelsService } from './skill-levels.service';
 
 /**
- * The athlete's standing choice per movement groups — what the scheduler
+ * The athlete's standing choice per movement group — what the scheduler
  * reaches for when it picks a movement, and what the completion screen
  * offers to update (DN-99, DN-108).
  *
@@ -23,17 +24,19 @@ function service(): SkillLevelsService {
   return new SkillLevelsService(testPrisma() as unknown as PrismaService);
 }
 
-/** Three rungs on the pull line, so a ceiling of 2 exists to test against. */
+/** Three members on the pull group, so there is somewhere to move between. */
 function pullGroup() {
   return createGroup('pull', ['Negative chin-up', 'Chin-up', 'Pull-up']);
 }
 
 describe('SkillLevelsService.findAll', () => {
-  it('shows the athlete only their own lines', async () => {
+  it('shows the athlete only their own groups', async () => {
     const user = await createUser();
     const stranger = await createUser();
-    await createSkillLevel(user.id, 'pull', 1);
-    await createSkillLevel(stranger.id, 'squat', 3);
+    const { members } = await pullGroup();
+    const squat = await createExercise({ movementGroup: 'squat' });
+    await createSkillLevel(user.id, 'pull', members[1].id);
+    await createSkillLevel(stranger.id, 'squat', squat.id);
 
     expect(
       (await service().findAll(user.id)).map((row) => row.movementGroup),
@@ -42,9 +45,10 @@ describe('SkillLevelsService.findAll', () => {
 
   it('orders the groups so the panel does not reshuffle between loads', async () => {
     const user = await createUser();
-    await createSkillLevel(user.id, 'squat', 1);
-    await createSkillLevel(user.id, 'hinge', 2);
-    await createSkillLevel(user.id, 'pull', 0);
+    for (const group of ['squat', 'hinge', 'pull']) {
+      const exercise = await createExercise({ movementGroup: group });
+      await createSkillLevel(user.id, group, exercise.id);
+    }
 
     expect(
       (await service().findAll(user.id)).map((row) => row.movementGroup),
@@ -58,65 +62,73 @@ describe('SkillLevelsService.findAll', () => {
     expect(await service().findAll(user.id)).toEqual([]);
   });
 
-  it('hands back updatedAt as a string, not a Date', async () => {
-    // The DTO crosses the wire as JSON; a Date here would serialise by
-    // accident rather than by the shared schema's rule.
+  it('names the movement, so a screen does not need a second request', async () => {
+    // The DTO also crosses the wire as JSON, so `updatedAt` is asserted as a
+    // string: a Date here would serialise by accident rather than by the
+    // shared schema's rule.
     const user = await createUser();
-    const stored = await createSkillLevel(user.id, 'pull', 1);
+    const { members } = await pullGroup();
+    const stored = await createSkillLevel(user.id, 'pull', members[1].id);
 
     expect(await service().findAll(user.id)).toEqual([
       {
         id: stored.id,
         movementGroup: 'pull',
-        rung: 1,
+        exerciseId: members[1].id,
+        exerciseName: members[1].name,
         updatedAt: stored.updatedAt.toISOString(),
       },
     ]);
   });
 });
 
-describe('SkillLevelsService.setRung', () => {
-  it('records a first choice on a movementGroup the athlete has never set', async () => {
+describe('SkillLevelsService.setChoice', () => {
+  it('records a first choice in a group the athlete has never set', async () => {
     // DN-86: provisioning no longer creates a row per group, so the first
     // choice has nothing to update. Refusing it would mean re-swapping the
     // same movement every session forever.
     const user = await createUser();
-    await pullGroup();
+    const { members } = await pullGroup();
 
-    const saved = await service().setRung(user.id, 'pull', 2);
+    const saved = await service().setChoice(user.id, 'pull', members[2].id);
 
-    expect(saved).toMatchObject({ movementGroup: 'pull', rung: 2 });
+    expect(saved).toMatchObject({
+      movementGroup: 'pull',
+      exerciseId: members[2].id,
+      exerciseName: members[2].name,
+    });
     expect(
       await testPrisma().skillLevel.findUnique({
         where: {
           userId_movementGroup: { userId: user.id, movementGroup: 'pull' },
         },
       }),
-    ).toMatchObject({ rung: 2 });
+    ).toMatchObject({ exerciseId: members[2].id });
   });
 
   it('moves an existing choice rather than stacking a second row', async () => {
     const user = await createUser();
-    await pullGroup();
-    await service().setRung(user.id, 'pull', 2);
+    const { members } = await pullGroup();
+    await service().setChoice(user.id, 'pull', members[2].id);
 
-    const saved = await service().setRung(user.id, 'pull', 1);
+    const saved = await service().setChoice(user.id, 'pull', members[1].id);
 
-    expect(saved.rung).toBe(1);
+    expect(saved.exerciseId).toBe(members[1].id);
     expect(await testPrisma().skillLevel.count()).toBe(1);
   });
 
-  it('leaves another athlete on the same movementGroup where they were', async () => {
-    // Enforced by the `userId_movementGroup` compound unique rather than by anything
-    // in this method -- there is no way to write the upsert that scopes by
-    // line alone, so no mutation of the service can make this fail. It is
-    // here for the rewrite that replaces the upsert with something looser.
+  it('leaves another athlete in the same group where they were', async () => {
+    // Enforced by the `userId_movementGroup` compound unique rather than by
+    // anything in this method -- there is no way to write the upsert that
+    // scopes by group alone, so no mutation of the service can make this
+    // fail. It is here for the rewrite that replaces the upsert with
+    // something looser.
     const user = await createUser();
     const stranger = await createUser();
-    await pullGroup();
-    await service().setRung(stranger.id, 'pull', 2);
+    const { members } = await pullGroup();
+    await service().setChoice(stranger.id, 'pull', members[2].id);
 
-    await service().setRung(user.id, 'pull', 0);
+    await service().setChoice(user.id, 'pull', members[0].id);
 
     expect(
       (
@@ -128,48 +140,74 @@ describe('SkillLevelsService.setRung', () => {
             },
           },
         })
-      )?.rung,
-    ).toBe(2);
+      )?.exerciseId,
+    ).toBe(members[2].id);
   });
 
-  it('refuses a movementGroup that is not a progression movementGroup', async () => {
+  it('refuses a group that is not a movement group', async () => {
     // Checked against the enum rather than against the rows: with an upsert
     // there is no missing row to catch the typo, so a misspelling would
     // quietly create a group nothing ever reads.
     const user = await createUser();
 
-    await expect(service().setRung(user.id, 'pulll', 1)).rejects.toThrow(
-      NotFoundException,
-    );
+    await expect(
+      service().setChoice(user.id, 'pulll', 'whatever'),
+    ).rejects.toThrow(NotFoundException);
     expect(await testPrisma().skillLevel.count()).toBe(0);
   });
 
-  it('accepts the top rung that is actually seeded', async () => {
+  // The three checks that replaced the rung ceiling (DN-139). A number could
+  // only ever be in range or out of it; a foreign key can be any of these.
+  it('refuses a movement that does not exist', async () => {
     const user = await createUser();
     await pullGroup();
 
-    expect((await service().setRung(user.id, 'pull', 2)).rung).toBe(2);
-  });
-
-  it('refuses a rung past the last member of the group, and says where the top is', async () => {
-    // Bounded so the scheduler never has to fall back on a rung with no
-    // exercise seeded for it.
-    const user = await createUser();
-    await pullGroup();
-
-    await expect(service().setRung(user.id, 'pull', 3)).rejects.toThrow(
-      /max is 2/,
-    );
+    await expect(
+      service().setChoice(user.id, 'pull', 'no-such-exercise'),
+    ).rejects.toThrow(NotFoundException);
     expect(await testPrisma().skillLevel.count()).toBe(0);
   });
 
-  it('treats a movementGroup with nothing seeded as having a ceiling of rung 0', async () => {
-    // `_max` over no rows is null, and the fallback makes that 0 rather than
-    // letting every rung through.
+  it("refuses another athlete's private movement, as though it were not there", async () => {
+    // A 404 rather than a 403: telling the caller that a movement exists but
+    // is not theirs is itself a leak of someone else's library (DN-93).
     const user = await createUser();
+    const stranger = await createUser();
+    const theirs = await createExercise({
+      movementGroup: 'pull',
+      ownerId: stranger.id,
+    });
 
-    await expect(service().setRung(user.id, 'pull', 1)).rejects.toThrow(
-      BadRequestException,
-    );
+    await expect(
+      service().setChoice(user.id, 'pull', theirs.id),
+    ).rejects.toThrow(NotFoundException);
+    expect(await testPrisma().skillLevel.count()).toBe(0);
+  });
+
+  it('refuses a movement from a different group than the one being set', async () => {
+    // The check the rung ceiling could not make: rung 1 of pull and rung 1 of
+    // squat were the same number, so nothing stopped a pull row being set
+    // from a squat movement's position.
+    const user = await createUser();
+    await pullGroup();
+    const squat = await createExercise({ movementGroup: 'squat' });
+
+    await expect(
+      service().setChoice(user.id, 'pull', squat.id),
+    ).rejects.toThrow(BadRequestException);
+    expect(await testPrisma().skillLevel.count()).toBe(0);
+  });
+
+  it('accepts a movement wherever it sits in the group, including last', async () => {
+    // There is no ceiling any more, and no bottom either: the members are a
+    // set the athlete picks from, not a ladder they climb (ADR-0004).
+    const user = await createUser();
+    const { members } = await pullGroup();
+
+    for (const member of members) {
+      expect(
+        (await service().setChoice(user.id, 'pull', member.id)).exerciseId,
+      ).toBe(member.id);
+    }
   });
 });

@@ -72,10 +72,24 @@ model Exercise {
   // Null for movements in no group (e.g. cardio).
   movementGroup String?
   // Where this movement is listed among its group's members. Display order
-  // only -- it is not a difficulty and nothing resolves through it. Renamed
-  // to `sortOrder` when `SkillLevel.rung` becomes a foreign key; see
-  // ADR-0004.
-  rung          Int?
+  // only -- it is not a difficulty, and as of DN-139 nothing resolves through
+  // it: an athlete's choice is a foreign key to a row, so this number can be
+  // changed or a member inserted mid-list without moving anybody's movement.
+  sortOrder     Int?
+
+  // The member prescribed to an athlete who has no stored choice in this
+  // group, or whose stored choice they cannot perform today (ADR-0004
+  // decisions 7 and 8). Declared here rather than inferred from `sortOrder`
+  // so it is an argument someone can disagree with, instead of an accident
+  // of list order -- which is what `STARTING_RUNG = 0` was.
+  //
+  // Never written to `SkillLevel`: handing someone a starting point is not
+  // the same as recording that they chose it.
+  //
+  // At most one per group, enforced by a partial unique index that lives
+  // only in the migration -- Prisma cannot express one, so `prisma migrate
+  // dev` will offer to drop it on the next model change. Keep it.
+  isGroupDefault Boolean @default(false)
 
   // Warm-up/cool-down tagging (Feature #63) — independent of `pattern`/`line`
   // so an exercise still carries its `pattern` for WOD matching while also
@@ -104,6 +118,9 @@ model Exercise {
   // (DN-19).
   prescribedIn  PlanSlotMovement[]
   setLogs       WorkoutSetLog[]
+  // The athletes who have picked this movement as their default for its
+  // group (DN-139).
+  chosenBy      SkillLevel[]
 
   // Soft delete (DN-25). Archiving hides the row from every pool and picker --
   // `libraryVisibleTo` filters it out, so the scheduler, the group and the
@@ -145,7 +162,19 @@ model SkillLevel {
   userId        String
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   movementGroup String // push_horizontal | push_vertical | pull | squat | hinge | core_dynamic | core_hold | core_side
-  rung          Int      @default(0)
+
+  // The movement the athlete last picked in this group (DN-139) -- the thing
+  // itself, not a position in a list. A stored index meant that reordering a
+  // group silently re-pointed every athlete's choice at a different movement;
+  // a foreign key cannot do that.
+  //
+  // Cascades, because a row here is only meaningful as a pointer: an exercise
+  // that is genuinely deleted leaves a choice that names nothing. Archiving
+  // is the ordinary path and does NOT touch it -- the choice survives, stops
+  // being resolvable while the movement is hidden, and comes back intact if
+  // it is unarchived.
+  exerciseId    String
+  exercise      Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
   updatedAt     DateTime @updatedAt
 
   @@unique([userId, movementGroup])
@@ -783,12 +812,17 @@ model PlanEnrollment {
   createdAt   DateTime  @default(now())
   completedAt DateTime?
 
-  // Every group's chosen member on the start date, as { group: rung }. SkillLevel
-  // only keeps the current value, so without this a finished program can count
-  // sessions but cannot say what changed -- which is the interesting half of
-  // the completion card. jsonb rather than a table because it is written once
-  // and always read whole.
-  startingRungs      Json      @default("{}")
+  // Every group's chosen member on the start date, as { group: exerciseId }.
+  // SkillLevel only keeps the current value, so without this a finished program
+  // can count sessions but cannot say what changed -- which is the interesting
+  // half of the completion card. jsonb rather than a table because it is written
+  // once and always read whole.
+  //
+  // Ids, not positions (DN-139): a snapshot of rungs meant that reordering a
+  // group re-wrote what every finished program claimed the athlete had done.
+  // Not a foreign key -- a hard-deleted movement should leave the history
+  // saying what it said, and the card drops a change it cannot name.
+  startingMovements  Json      @default("{}")
   // The completion card's figures, snapshotted when the enrollment completes
   // rather than recomputed on every read of the Completed list. Null while the
   // program is still running, which is also how "has this been completed" reads

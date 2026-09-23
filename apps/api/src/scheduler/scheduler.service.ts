@@ -778,19 +778,18 @@ export class SchedulerService {
           a.wod !== null,
       )
       .map((a) => ({ date: a.date, wod: a.wod }));
-    const chosenRung = new Map(
-      skillLevels.map((l) => [l.movementGroup, l.rung]),
+    const chosen = new Map(
+      skillLevels.map((l) => [l.movementGroup, l.exerciseId]),
     );
-    const exerciseAtRung = new Map(
-      linedExercises.map((e) => [`${e.movementGroup}:${e.rung}`, e]),
-    );
+    const byId = new Map(linedExercises.map((e) => [e.id, e]));
     const owned = new Set(equipment);
 
     const candidates = wods.map((wod) => {
       const resolved = applyRememberedChoice(
         wod.movements,
-        chosenRung,
-        exerciseAtRung,
+        chosen,
+        byId,
+        owned,
       );
       const identifying = dominantMovement(resolved, wod.dominantPattern);
       return {

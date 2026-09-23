@@ -11,7 +11,7 @@ import { localToday, seedE2eUser } from './seed-e2e-user';
 const TEST_USER = 'user_e2e_test';
 
 async function catalogue() {
-  const { rungs } = await createGroup('pull', [
+  const { members } = await createGroup('pull', [
     'Negative chin-up',
     'Chin-up',
     'Pull-up',
@@ -19,13 +19,13 @@ async function catalogue() {
   await createWod({
     name: 'Fran',
     dominantPattern: 'pull',
-    movements: [{ exerciseId: rungs[0].id, reps: 30, order: 0 }],
+    movements: [{ exerciseId: members[0].id, reps: 30, order: 0 }],
   });
   await createWod({
     name: 'Cindy',
     type: 'amrap',
     dominantPattern: 'push',
-    movements: [{ exerciseId: rungs[1].id, reps: 20, order: 0 }],
+    movements: [{ exerciseId: members[1].id, reps: 20, order: 0 }],
   });
 }
 

@@ -28,7 +28,7 @@ function service(client: PrismaClient = testPrisma()): EnrollmentsService {
 
 const TODAY = '2026-10-26';
 
-/** The group the design's card is written against: pull, three rungs. */
+/** The group the design's card is written against: pull, three members. */
 async function pullGroup() {
   return createGroup('pull', [
     'Negative chin-up',
@@ -44,7 +44,7 @@ async function completedRun(
   return createEnrollment(userId, {
     status: 'completed',
     completedAt: new Date('2026-10-20T10:00:00.000Z'),
-    summary: { weeks: 6, sessions: 24, rungChanges: [] },
+    summary: { weeks: 6, sessions: 24, movementChanges: [] },
     ...overrides,
   });
 }
@@ -104,11 +104,11 @@ describe('EnrollmentsService.completeRun', () => {
 
   it('reports what moved, named at both ends', async () => {
     const user = await createUser();
-    const { rungs } = await pullGroup();
+    const { members } = await pullGroup();
     const enrollment = await createEnrollment(user.id, {
-      startingRungs: { pull: 0 },
+      startingMovements: { pull: members[0].id },
     });
-    await createSkillLevel(user.id, 'pull', 2);
+    await createSkillLevel(user.id, 'pull', members[2].id);
 
     await service().completeRun(user.id, enrollment.id);
 
@@ -116,13 +116,13 @@ describe('EnrollmentsService.completeRun', () => {
       where: { id: enrollment.id },
     });
     expect(after.summary).toMatchObject({
-      rungChanges: [
+      movementChanges: [
         {
           movementGroup: 'pull',
-          fromRung: 0,
-          toRung: 2,
-          fromName: rungs[0].name,
-          toName: rungs[2].name,
+          fromExerciseId: members[0].id,
+          toExerciseId: members[2].id,
+          fromName: members[0].name,
+          toName: members[2].name,
         },
       ],
     });
@@ -139,7 +139,11 @@ describe('EnrollmentsService.completeRun', () => {
     const after = await testPrisma().planEnrollment.findUniqueOrThrow({
       where: { id: enrollment.id },
     });
-    expect(after.summary).toEqual({ weeks: 6, sessions: 0, rungChanges: [] });
+    expect(after.summary).toEqual({
+      weeks: 6,
+      sessions: 0,
+      movementChanges: [],
+    });
   });
 
   it('leaves a run that is already completed alone', async () => {
@@ -175,7 +179,7 @@ describe('EnrollmentsService.completeRun', () => {
     // day to throw at the athlete.
     const user = await createUser();
     const enrollment = await createEnrollment(user.id, {
-      startingRungs: { pull: 'quite good' },
+      startingMovements: { pull: 7 },
     });
 
     await expect(
@@ -373,12 +377,13 @@ describe('EnrollmentsService.runAgain', () => {
 
   it('snapshots where the athlete stands now, not where they started', async () => {
     // The point of running it again is to run it from here. Carrying the old
-    // starting rungs forward would make the second run's card claim the first
+    // starting members forward would make the second run's card claim the first
     // run's progress a second time.
     const user = await createUser();
-    await createSkillLevel(user.id, 'pull', 2);
+    const { members } = await pullGroup();
+    await createSkillLevel(user.id, 'pull', members[2].id);
     const previous = await completedRun(user.id, {
-      startingRungs: { pull: 0 },
+      startingMovements: { pull: members[0].id },
     });
 
     const { enrollmentId } = await service().runAgain(
@@ -390,7 +395,7 @@ describe('EnrollmentsService.runAgain', () => {
     const created = await testPrisma().planEnrollment.findUniqueOrThrow({
       where: { id: enrollmentId },
     });
-    expect(created.startingRungs).toEqual({ pull: 2 });
+    expect(created.startingMovements).toEqual({ pull: members[2].id });
   });
 
   it('puts the card away as part of the same answer', async () => {

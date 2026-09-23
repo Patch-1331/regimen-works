@@ -46,8 +46,13 @@ export function MovementChoicesPanel({
   const [openLine, setOpenLine] = useState<string | null>(null);
 
   const choose = useMutation({
-    mutationFn: ({ movementGroup, rung }: { movementGroup: string; rung: number }) =>
-      api.setSkillLevel(movementGroup, { rung }),
+    mutationFn: ({
+      movementGroup,
+      exerciseId,
+    }: {
+      movementGroup: string;
+      exerciseId: string;
+    }) => api.setSkillLevel(movementGroup, { exerciseId }),
     onSuccess: async () => {
       setOpenLine(null);
       await queryClient.invalidateQueries({ queryKey: ["skillLevels"] });
@@ -87,9 +92,13 @@ export function MovementChoicesPanel({
             open={openLine === choice.movementGroup}
             isSaving={choose.isPending}
             onToggle={() =>
-              setOpenLine(openLine === choice.movementGroup ? null : choice.movementGroup)
+              setOpenLine(
+                openLine === choice.movementGroup ? null : choice.movementGroup,
+              )
             }
-            onPick={(rung) => choose.mutate({ movementGroup: choice.movementGroup, rung })}
+            onPick={(exerciseId) =>
+              choose.mutate({ movementGroup: choice.movementGroup, exerciseId })
+            }
           />
         ))}
       </div>
@@ -110,14 +119,17 @@ function MovementChoiceCard({
   open: boolean;
   isSaving: boolean;
   onToggle: () => void;
-  onPick: (rung: number) => void;
+  onPick: (exerciseId: string) => void;
 }) {
   const panelId = `movement-choice-${choice.movementGroup}`;
   const label = lineLabel(choice.movementGroup);
   const summary = describeLineHistory(runs);
 
   return (
-    <div className="p-4" style={{ background: "var(--panel)", border: "1px solid var(--border)" }}>
+    <div
+      className="p-4"
+      style={{ background: "var(--panel)", border: "1px solid var(--border)" }}
+    >
       <button
         type="button"
         onClick={onToggle}
@@ -133,8 +145,9 @@ function MovementChoiceCard({
             {label}
           </span>
           <span className="mt-1 block truncate text-sm font-bold text-[var(--ink)]">
-            {/* Null only on a data gap — a stored rung with nothing seeded at
-                it. Saying so beats naming the wrong movement. */}
+            {/* Null only on a data gap — a stored choice that is not in the
+                loaded library, which since DN-139 means it was archived.
+                Saying so beats naming the wrong movement. */}
             {choice.chosenName ?? "Not on the current library"}
           </span>
           {/* What has actually been happening, under what was chosen (DN-96).
@@ -161,7 +174,7 @@ function MovementChoiceCard({
             <li key={option.id}>
               <button
                 type="button"
-                onClick={() => onPick(option.rung)}
+                onClick={() => onPick(option.id)}
                 disabled={isSaving || option.isChosen}
                 aria-current={option.isChosen}
                 className="flex w-full items-center gap-2 py-1.5 text-left"
@@ -198,7 +211,10 @@ function MovementChoiceCard({
  */
 function MovementRuns({ runs }: { runs: MovementRun[] }) {
   return (
-    <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--border)" }}>
+    <div
+      className="mt-3 border-t pt-3"
+      style={{ borderColor: "var(--border)" }}
+    >
       <p
         className="text-[10px] font-semibold tracking-[0.12em] text-[var(--ink-faint)]"
         style={{ fontFamily: "var(--font-mono)" }}
@@ -211,7 +227,9 @@ function MovementRuns({ runs }: { runs: MovementRun[] }) {
             key={`${run.exerciseId}-${run.to}`}
             className="flex items-baseline justify-between gap-3 text-[11px]"
           >
-            <span className="min-w-0 truncate text-[var(--ink-soft)]">{run.name}</span>
+            <span className="min-w-0 truncate text-[var(--ink-soft)]">
+              {run.name}
+            </span>
             <span
               className="shrink-0 text-[var(--ink-faint)]"
               style={{ fontFamily: "var(--font-mono)" }}
@@ -242,5 +260,10 @@ function ChoiceMark({ chosen }: { chosen: boolean }) {
       />
     );
   }
-  return <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ border: "1.5px solid var(--border)" }} />;
+  return (
+    <span
+      className="inline-block h-2 w-2 shrink-0 rounded-full"
+      style={{ border: "1.5px solid var(--border)" }}
+    />
+  );
 }

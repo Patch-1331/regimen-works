@@ -83,7 +83,7 @@ describe('the seeded WOD library', () => {
   it('prescribes the loaded movements the seed went to the trouble of adding', () => {
     // DN-113 seeded four movements that no WOD named, so they existed in the
     // library and reached nobody: a movement is only ever put in front of an
-    // athlete by a WOD, by being a rung they can choose, or by being what
+    // athlete by a WOD, by being a movement they can choose, or by being what
     // something else falls back to (DN-114).
     const prescribed = new Set(
       wods.flatMap((w) => w.movements.map((m) => m.exercise)),

@@ -10,9 +10,7 @@ import { buildMovementChoices, lineLabel } from "./progressions";
  * chosen, and nothing is closed off or graduated past.
  */
 
-function exercise(
-  partial: Partial<ApiExercise> & { id: string },
-): ApiExercise {
+function exercise(partial: Partial<ApiExercise> & { id: string }): ApiExercise {
   return {
     name: partial.id,
     pattern: "pull",
@@ -20,7 +18,7 @@ function exercise(
     scalable: true,
     unit: "reps",
     movementGroup: "pull",
-    rung: 0,
+    sortOrder: 0,
     instructions: null,
     fallbackExerciseId: null,
     phase: null,
@@ -31,43 +29,55 @@ function exercise(
   };
 }
 
-function skill(movementGroup: string, rung: number): SkillLevel {
+function skill(
+  movementGroup: string,
+  chosen: { id: string; name: string },
+): SkillLevel {
   return {
     id: `sl-${movementGroup}`,
     movementGroup: movementGroup as SkillLevel["movementGroup"],
-    rung,
+    exerciseId: chosen.id,
+    exerciseName: chosen.name,
     updatedAt: "2026-09-13T10:00:00.000Z",
   };
 }
 
-const negative = exercise({ id: "negative", name: "Negative chin-up", rung: 0 });
-const chinUp = exercise({ id: "chin-up", name: "Chin-up", rung: 1 });
-const pullUp = exercise({ id: "pull-up", name: "Pull-up", rung: 2 });
+const negative = exercise({
+  id: "negative",
+  name: "Negative chin-up",
+  sortOrder: 0,
+});
+const chinUp = exercise({ id: "chin-up", name: "Chin-up", sortOrder: 1 });
+const pullUp = exercise({ id: "pull-up", name: "Pull-up", sortOrder: 2 });
 const airSquat = exercise({
   id: "air-squat",
   name: "Air squat",
   movementGroup: "squat",
   pattern: "squat",
-  rung: 0,
+  sortOrder: 0,
 });
 const cardio = exercise({
   id: "row",
   name: "Row",
   pattern: "monostructural",
   movementGroup: null,
-  rung: null,
+  sortOrder: null,
 });
 
 const pullExercises = [chinUp, pullUp, negative, cardio];
 
 describe("buildMovementChoices", () => {
   it("names the movement the athlete chose", () => {
-    const [choice] = buildMovementChoices(pullExercises, [skill("pull", 1)]);
+    const [choice] = buildMovementChoices(pullExercises, [
+      skill("pull", chinUp),
+    ]);
     expect(choice.chosenName).toBe("Chin-up");
   });
 
   it("offers the whole movementGroup in order, not just what is 'allowed'", () => {
-    const [choice] = buildMovementChoices(pullExercises, [skill("pull", 1)]);
+    const [choice] = buildMovementChoices(pullExercises, [
+      skill("pull", chinUp),
+    ]);
     expect(choice.options.map((o) => o.name)).toEqual([
       "Negative chin-up",
       "Chin-up",
@@ -77,17 +87,21 @@ describe("buildMovementChoices", () => {
   });
 
   it("marks nothing as cleared or closed off — only chosen or not", () => {
-    const [choice] = buildMovementChoices(pullExercises, [skill("pull", 1)]);
+    const [choice] = buildMovementChoices(pullExercises, [
+      skill("pull", chinUp),
+    ]);
     // A movement below the choice and one above it are indistinguishable:
     // the panel has no third state now, which is the point of DN-91.
-    const below = choice.options.find((o) => o.rung === 0)!;
-    const above = choice.options.find((o) => o.rung === 2)!;
+    const below = choice.options.find((o) => o.sortOrder === 0)!;
+    const above = choice.options.find((o) => o.sortOrder === 2)!;
     expect(below.isChosen).toBe(false);
     expect(above.isChosen).toBe(false);
   });
 
   it("skips exercises off a tracked movementGroup", () => {
-    const [choice] = buildMovementChoices(pullExercises, [skill("pull", 1)]);
+    const [choice] = buildMovementChoices(pullExercises, [
+      skill("pull", chinUp),
+    ]);
     expect(choice.options.map((o) => o.id)).not.toContain("row");
   });
 
@@ -97,8 +111,12 @@ describe("buildMovementChoices", () => {
     expect(buildMovementChoices(pullExercises, [])).toEqual([]);
   });
 
-  it("says nothing rather than the wrong thing when the rung has no exercise", () => {
-    const [choice] = buildMovementChoices(pullExercises, [skill("pull", 9)]);
+  it("says nothing rather than the wrong thing when the choice is not in the library", () => {
+    // An archived movement, or one that was deleted: `libraryVisibleTo` has
+    // filtered it out, so the panel has a choice it cannot draw a tick for.
+    const [choice] = buildMovementChoices(pullExercises, [
+      skill("pull", { id: "retired", name: "Retired" }),
+    ]);
     expect(choice.chosenName).toBeNull();
     expect(choice.options).toHaveLength(3);
   });
@@ -106,9 +124,12 @@ describe("buildMovementChoices", () => {
   it("orders groups by the label the athlete reads, not the enum value", () => {
     const choices = buildMovementChoices(
       [...pullExercises, airSquat],
-      [skill("squat", 0), skill("pull", 1)],
+      [skill("squat", airSquat), skill("pull", chinUp)],
     );
-    expect(choices.map((c) => lineLabel(c.movementGroup))).toEqual(["Pull", "Squat"]);
+    expect(choices.map((c) => lineLabel(c.movementGroup))).toEqual([
+      "Pull",
+      "Squat",
+    ]);
   });
 });
 

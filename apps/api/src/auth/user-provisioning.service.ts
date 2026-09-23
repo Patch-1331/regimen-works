@@ -13,14 +13,14 @@ import { PrismaService } from '../prisma/prisma.service';
  * them: their User row (which every per-user foreign key points at), a
  * ScheduleRule, and an enrollment in Just WODs (DN-13).
  *
- * Deliberately **not** a SkillLevel per movement groups (DN-86). Provisioning
- * a rung is the app forming an opinion about someone it has never seen train:
- * it used to start everyone at rung 0, so an athlete who can do ten pull-ups
- * was handed negative pull-ups and knee push-ups on day one. `applyCurrentRung`
- * passes a movement through unchanged when its line has no rung on record, so
- * creating nothing means the first workout is the library's own prescription —
- * and the app personalises only once the athlete has chosen something in the
- * swap panel.
+ * Deliberately **not** a SkillLevel per movement group (DN-86). Provisioning
+ * a choice is the app forming an opinion about someone it has never seen
+ * train: it used to start everyone at the bottom of every list, so an athlete
+ * who can do ten pull-ups was handed negative pull-ups and knee push-ups on
+ * day one. A group with no row on record now resolves to that group's declared
+ * default (DN-139), which is offered rather than recorded — creating nothing
+ * means the first workout is the library's own prescription, and the app
+ * personalises only once the athlete has chosen something in the swap panel.
  *
  * Clerk owns identity, so there is no sign-up hook here; a user simply exists
  * the first time they present a valid token.

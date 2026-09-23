@@ -14,12 +14,12 @@ export class SkillLevelsController {
   }
 
   @Patch(':movementGroup')
-  setRung(
+  setChoice(
     @CurrentUser() userId: string,
     @Param('movementGroup') movementGroup: string,
     @Body() body: unknown,
   ) {
-    const { rung } = validateBody(setSkillLevelRequestSchema, body);
-    return this.skillLevelsService.setRung(userId, movementGroup, rung);
+    const { exerciseId } = validateBody(setSkillLevelRequestSchema, body);
+    return this.skillLevelsService.setChoice(userId, movementGroup, exerciseId);
   }
 }

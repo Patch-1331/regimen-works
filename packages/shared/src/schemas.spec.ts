@@ -13,7 +13,7 @@ import {
 import { exerciseSchema, createExerciseSchema } from "./exercise.js";
 import { movementHistorySchema } from "./history.js";
 import { logResultRequestSchema, workoutLogListItemSchema } from "./log.js";
-import { proposedRungChangeSchema } from "./rung-change.js";
+import { proposedMovementChangeSchema } from "./movement-change.js";
 import {
   patternCooldownDaysSchema,
   scheduleCapSchema,
@@ -56,7 +56,7 @@ function exercise(overrides: Record<string, unknown> = {}) {
     unit: "reps",
     instructions: null,
     movementGroup: "push_horizontal",
-    rung: 2,
+    sortOrder: 2,
     fallbackExerciseId: null,
     ...overrides,
   };
@@ -283,7 +283,7 @@ describe("sessionMovementSchema", () => {
       name: "Push-up",
       unit: "reps",
       movementGroup: "push_horizontal",
-      rung: 2,
+      sortOrder: 2,
     },
     ...overrides,
   });
@@ -413,9 +413,9 @@ describe("workoutSessionSchema", () => {
   });
 
   it("rejects a cap of zero, which was never a real session", () => {
-    expect(workoutSessionSchema.safeParse(session({ capSeconds: 0 })).success).toBe(
-      false,
-    );
+    expect(
+      workoutSessionSchema.safeParse(session({ capSeconds: 0 })).success,
+    ).toBe(false);
   });
 
   it("rejects a round split at a negative time", () => {
@@ -653,24 +653,29 @@ describe("skillLevelSchema", () => {
   const level = (overrides: Record<string, unknown> = {}) => ({
     id: "sl-1",
     movementGroup: "core_hold",
-    rung: 0,
+    exerciseId: "ex-plank",
+    exerciseName: "Plank",
     updatedAt: "2026-09-16T10:00:00.000Z",
     ...overrides,
   });
 
-  it("accepts rung 0, the first movement on a movementGroup rather than an absent choice", () => {
+  it("carries the movement the athlete chose, named as well as identified", () => {
+    // Both ends since DN-139: the id is what a screen offers back, the name
+    // is what it prints, and neither can be derived from the other here.
     expect(skillLevelSchema.safeParse(level()).success).toBe(true);
   });
 
-  it("rejects a negative rung", () => {
-    expect(skillLevelSchema.safeParse(level({ rung: -1 })).success).toBe(false);
+  it("rejects a choice with no movement behind it", () => {
+    expect(skillLevelSchema.safeParse(level({ exerciseId: "" })).success).toBe(
+      false,
+    );
   });
 
   it("rejects a movementGroup that is not one of the eight", () => {
     // push/pull are patterns; the groups are finer-grained than that.
-    expect(skillLevelSchema.safeParse(level({ movementGroup: "push" })).success).toBe(
-      false,
-    );
+    expect(
+      skillLevelSchema.safeParse(level({ movementGroup: "push" })).success,
+    ).toBe(false);
   });
 });
 
@@ -809,7 +814,7 @@ describe("exerciseSchema", () => {
     unit: "reps",
     instructions: null,
     movementGroup: "push_horizontal",
-    rung: 2,
+    sortOrder: 2,
     fallbackExerciseId: null,
     phase: null,
     ownerId: null,
@@ -829,11 +834,12 @@ describe("exerciseSchema", () => {
     ).toBe(true);
   });
 
-  it("accepts an exercise with no movementGroup or rung", () => {
+  it("accepts an exercise with no movementGroup or sort order", () => {
     // Cardio is not on a movement group.
     expect(
-      exerciseSchema.safeParse(libraryExercise({ movementGroup: null, rung: null }))
-        .success,
+      exerciseSchema.safeParse(
+        libraryExercise({ movementGroup: null, sortOrder: null }),
+      ).success,
     ).toBe(true);
   });
 
@@ -873,7 +879,7 @@ describe("exerciseSchema", () => {
       unit: "reps",
       instructions: null,
       movementGroup: null,
-      rung: null,
+      sortOrder: null,
       fallbackExerciseId: null,
       phase: null,
       ownerId: null,
@@ -962,27 +968,30 @@ describe("setSubstitutionRequestSchema", () => {
   });
 });
 
-describe("proposedRungChangeSchema", () => {
+describe("proposedMovementChangeSchema", () => {
   const proposal = (overrides: Record<string, unknown> = {}) => ({
     movementGroup: "pull",
-    fromRung: 1,
-    toRung: 3,
-    exerciseId: "e-9",
-    exerciseName: "Chin-up",
+    fromExerciseId: "e-1",
+    fromExerciseName: "Negative chin-up",
+    toExerciseId: "e-9",
+    toExerciseName: "Chin-up",
     ...overrides,
   });
 
-  it("accepts a null fromRung — 'no default yet' is a proposal like any other", () => {
+  it("accepts a null origin — 'chosen nothing yet' is a proposal like any other", () => {
     // The ordinary case for a first swap, since DN-86 stopped provisioning a
-    // rung for everyone.
+    // choice for everyone.
     expect(
-      proposedRungChangeSchema.safeParse(proposal({ fromRung: null })).success,
+      proposedMovementChangeSchema.safeParse(
+        proposal({ fromExerciseId: null, fromExerciseName: null }),
+      ).success,
     ).toBe(true);
   });
 
-  it("requires a destination rung", () => {
+  it("requires a destination movement", () => {
     expect(
-      proposedRungChangeSchema.safeParse(proposal({ toRung: null })).success,
+      proposedMovementChangeSchema.safeParse(proposal({ toExerciseId: null }))
+        .success,
     ).toBe(false);
   });
 });
@@ -1016,11 +1025,11 @@ describe("todayResponseSchema", () => {
     summary: {
       weeks: 6,
       sessions: 24,
-      rungChanges: [
+      movementChanges: [
         {
           movementGroup: "pull",
-          fromRung: 0,
-          toRung: 2,
+          fromExerciseId: "ex-negative-chin-up",
+          toExerciseId: "ex-chin-up",
           fromName: "Negative chin-up",
           toName: "Chin-up",
         },
@@ -1310,7 +1319,8 @@ describe("movementHistorySchema", () => {
     // Cardio and the loaded movements carry no line, and they are trained like
     // anything else.
     expect(
-      movementHistorySchema.parse(history({ movementGroup: null })).movementGroup,
+      movementHistorySchema.parse(history({ movementGroup: null }))
+        .movementGroup,
     ).toBeNull();
   });
 
@@ -1631,7 +1641,12 @@ describe("planSlotSchema's prescription refinement", () => {
     ...overrides,
   });
   const movementDay = (movements: unknown[]) =>
-    slot({ kind: "movements", pattern: null, maxTimeCapMinutes: null, movements });
+    slot({
+      kind: "movements",
+      pattern: null,
+      maxTimeCapMinutes: null,
+      movements,
+    });
 
   it("accepts a movements day that prescribes something", () => {
     expect(planSlotSchema.safeParse(movementDay([prescribed()])).success).toBe(
@@ -1652,8 +1667,9 @@ describe("planSlotSchema's prescription refinement", () => {
     // The same biconditional as the pinned-WOD rule, refused for the same
     // reason: two halves of one row describing different days.
     expect(
-      planSlotSchema.safeParse(slot({ kind: "rest", movements: [prescribed()] }))
-        .success,
+      planSlotSchema.safeParse(
+        slot({ kind: "rest", movements: [prescribed()] }),
+      ).success,
     ).toBe(false);
   });
 
@@ -1674,15 +1690,18 @@ describe("planSlotSchema's prescription refinement", () => {
 
   it("rejects a prescribed movement naming both a movementGroup and an exercise", () => {
     expect(
-      planSlotSchema.safeParse(movementDay([prescribed({ exerciseId: "ex-1" })]))
-        .success,
+      planSlotSchema.safeParse(
+        movementDay([prescribed({ exerciseId: "ex-1" })]),
+      ).success,
     ).toBe(false);
   });
 
   it("rejects a prescribed movement naming neither", () => {
     // Sets and reps attached to nothing.
     expect(
-      planSlotSchema.safeParse(movementDay([prescribed({ movementGroup: null })])).success,
+      planSlotSchema.safeParse(
+        movementDay([prescribed({ movementGroup: null })]),
+      ).success,
     ).toBe(false);
   });
 
@@ -1778,9 +1797,9 @@ describe("planSchema's schedule-mode refinement", () => {
     // Nullable, not optional (DN-124). A program whose author never thought
     // about why its week is shaped that way and one who decided there is
     // nothing to explain are different facts, and only the second is a null.
-    expect(planSchema.safeParse(plan({ scheduleNote: undefined })).success).toBe(
-      false,
-    );
+    expect(
+      planSchema.safeParse(plan({ scheduleNote: undefined })).success,
+    ).toBe(false);
     expect(
       planSchema.safeParse(plan({ scheduleNote: "Two heavy pull days." }))
         .success,
@@ -1855,7 +1874,7 @@ describe("planEnrollmentSchema", () => {
     weeks: 6,
     status: "active",
     completedAt: null,
-    startingRungs: { pull: 2, squat: 4 },
+    startingMovements: { pull: "ex-chin-up", squat: "ex-goblet-squat" },
     summary: null,
     ...overrides,
   });
@@ -1873,11 +1892,11 @@ describe("planEnrollmentSchema", () => {
           summary: {
             weeks: 6,
             sessions: 24,
-            rungChanges: [
+            movementChanges: [
               {
                 movementGroup: "pull",
-                fromRung: 2,
-                toRung: 4,
+                fromExerciseId: "ex-negative",
+                toExerciseId: "ex-chin-up",
                 fromName: "Negative",
                 toName: "Chin-up",
               },
@@ -1888,25 +1907,27 @@ describe("planEnrollmentSchema", () => {
     ).toBe(true);
   });
 
-  it("accepts an athlete with no rungs at all", () => {
+  it("accepts an athlete who has chosen nothing at all", () => {
     // A new athlete has no SkillLevel rows (DN-86). An exhaustive record would
     // reject exactly the athlete this snapshot exists to describe.
     expect(
-      planEnrollmentSchema.safeParse(enrollment({ startingRungs: {} })).success,
-    ).toBe(true);
-  });
-
-  it("does not require a rung for every movementGroup in the app", () => {
-    expect(
-      planEnrollmentSchema.safeParse(enrollment({ startingRungs: { pull: 2 } }))
+      planEnrollmentSchema.safeParse(enrollment({ startingMovements: {} }))
         .success,
     ).toBe(true);
   });
 
-  it("rejects a rung snapshot keyed by something that is not a movementGroup", () => {
+  it("does not require a choice for every movementGroup in the app", () => {
     expect(
       planEnrollmentSchema.safeParse(
-        enrollment({ startingRungs: { biceps: 2 } }),
+        enrollment({ startingMovements: { pull: "ex-chin-up" } }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it("rejects a snapshot keyed by something that is not a movementGroup", () => {
+    expect(
+      planEnrollmentSchema.safeParse(
+        enrollment({ startingMovements: { biceps: "ex-curl" } }),
       ).success,
     ).toBe(false);
   });
@@ -1964,17 +1985,17 @@ describe("createEnrollmentSchema", () => {
     ).toBe(false);
   });
 
-  it("does not accept starting rungs from the client", () => {
+  it("does not accept a starting snapshot from the client", () => {
     // They are read from the athlete's own SkillLevel rows when enrolling. A
     // client that could send them could misreport what the program is
     // measured against.
     const result = createEnrollmentSchema.safeParse({
       planId: "plan-1",
       startDate: "2026-09-14",
-      startingRungs: { pull: 99 },
+      startingMovements: { pull: "ex-muscle-up" },
     });
     expect(result.success).toBe(true);
-    expect(result.data).not.toHaveProperty("startingRungs");
+    expect(result.data).not.toHaveProperty("startingMovements");
   });
 });
 
@@ -1995,11 +2016,11 @@ describe("completedProgramSchema", () => {
     summary: {
       weeks: 6,
       sessions: 24,
-      rungChanges: [
+      movementChanges: [
         {
           movementGroup: "pull",
-          fromRung: 0,
-          toRung: 2,
+          fromExerciseId: "ex-negative-chin-up",
+          toExerciseId: "ex-chin-up",
           fromName: "Negative chin-up",
           toName: "Chin-up",
         },
@@ -2015,7 +2036,9 @@ describe("completedProgramSchema", () => {
   it("accepts a run that had no length to report", () => {
     expect(
       completedProgramSchema.safeParse(
-        program({ summary: { weeks: null, sessions: 12, rungChanges: [] } }),
+        program({
+          summary: { weeks: null, sessions: 12, movementChanges: [] },
+        }),
       ).success,
     ).toBe(true);
   });
@@ -2023,7 +2046,7 @@ describe("completedProgramSchema", () => {
   it("accepts a program nobody trained", () => {
     expect(
       completedProgramSchema.safeParse(
-        program({ summary: { weeks: 6, sessions: 0, rungChanges: [] } }),
+        program({ summary: { weeks: 6, sessions: 0, movementChanges: [] } }),
       ).success,
     ).toBe(true);
   });
@@ -2031,7 +2054,7 @@ describe("completedProgramSchema", () => {
   it("refuses zero weeks, which is not a run that happened", () => {
     expect(
       completedProgramSchema.safeParse(
-        program({ summary: { weeks: 0, sessions: 0, rungChanges: [] } }),
+        program({ summary: { weeks: 0, sessions: 0, movementChanges: [] } }),
       ).success,
     ).toBe(false);
   });
@@ -2039,23 +2062,23 @@ describe("completedProgramSchema", () => {
   it("refuses a negative session count", () => {
     expect(
       completedProgramSchema.safeParse(
-        program({ summary: { weeks: 6, sessions: -1, rungChanges: [] } }),
+        program({ summary: { weeks: 6, sessions: -1, movementChanges: [] } }),
       ).success,
     ).toBe(false);
   });
 
-  it("refuses a rung change on a movementGroup the app does not have", () => {
+  it("refuses a movement change on a movementGroup the app does not have", () => {
     expect(
       completedProgramSchema.safeParse(
         program({
           summary: {
             weeks: 6,
             sessions: 24,
-            rungChanges: [
+            movementChanges: [
               {
                 movementGroup: "sorcery",
-                fromRung: 0,
-                toRung: 1,
+                fromExerciseId: "ex-wand",
+                toExerciseId: "ex-staff",
                 fromName: "Wand",
                 toName: "Staff",
               },
@@ -2066,7 +2089,7 @@ describe("completedProgramSchema", () => {
     ).toBe(false);
   });
 
-  it("refuses a rung change with no name at one end", () => {
+  it("refuses a movement change with no name at one end", () => {
     // A name is the only part of this an athlete can read, and a card that
     // renders "pull: negative → " is worse than one that omits the group.
     expect(
@@ -2075,8 +2098,13 @@ describe("completedProgramSchema", () => {
           summary: {
             weeks: 6,
             sessions: 24,
-            rungChanges: [
-              { movementGroup: "pull", fromRung: 0, toRung: 2, fromName: "Negative" },
+            movementChanges: [
+              {
+                movementGroup: "pull",
+                fromExerciseId: "ex-negative",
+                toExerciseId: "ex-chin-up",
+                fromName: "Negative",
+              },
             ],
           },
         }),

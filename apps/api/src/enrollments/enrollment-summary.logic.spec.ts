@@ -1,137 +1,166 @@
 import {
   buildEnrollmentSummary,
-  rungChangesOver,
-  rungKey,
-  type RungNames,
+  movementChangesOver,
+  type MovementNames,
 } from './enrollment-summary.logic';
-import type { RungSnapshot } from '@regimen-works/shared';
+import type { MovementSnapshot } from '@regimen-works/shared';
 
 /**
  * What a finished program has to show for itself (DN-18).
  *
- * The group here is deliberately small and named the way the design's card
+ * The movements here are deliberately few and named the way the design's card
  * reads -- "pull: negative → chin-up" -- so an assertion is a sentence an
- * athlete could be shown rather than a pair of numbers.
+ * athlete could be shown rather than a pair of ids.
  */
-const GROUP: [string, number, string][] = [
-  ['pull', 0, 'Negative chin-up'],
-  ['pull', 1, 'Band-assisted chin-up'],
-  ['pull', 2, 'Chin-up'],
-  ['squat', 0, 'Box squat'],
-  ['squat', 1, 'Air squat'],
-  ['hinge', 0, 'Glute bridge'],
-];
+const NAMES: MovementNames = new Map([
+  ['negative', 'Negative chin-up'],
+  ['banded', 'Band-assisted chin-up'],
+  ['chin-up', 'Chin-up'],
+  ['box-squat', 'Box squat'],
+  ['air-squat', 'Air squat'],
+  ['glute-bridge', 'Glute bridge'],
+]);
 
-const NAMES: RungNames = new Map(
-  GROUP.map(([movementGroup, rung, name]) => [
-    rungKey(movementGroup, rung),
-    name,
-  ]),
-);
+const current = (movements: Record<string, string>) =>
+  new Map(Object.entries(movements));
 
-const current = (rungs: Record<string, number>) =>
-  new Map(Object.entries(rungs));
-
-describe('rungKey', () => {
-  it('keys a name by its movementGroup and rung', () => {
-    expect(rungKey('pull', 2)).toBe('pull:2');
-  });
-});
-
-describe('rungChangesOver', () => {
-  it('reports a movementGroup that moved up, with both names', () => {
-    expect(rungChangesOver({ pull: 0 }, current({ pull: 2 }), NAMES)).toEqual([
+describe('movementChangesOver', () => {
+  it('reports a group that moved, with both names', () => {
+    expect(
+      movementChangesOver(
+        { pull: 'negative' },
+        current({ pull: 'chin-up' }),
+        NAMES,
+      ),
+    ).toEqual([
       {
         movementGroup: 'pull',
-        fromRung: 0,
-        toRung: 2,
+        fromExerciseId: 'negative',
         fromName: 'Negative chin-up',
+        toExerciseId: 'chin-up',
         toName: 'Chin-up',
       },
     ]);
   });
 
-  it('reports a movementGroup that moved down', () => {
-    // A deload, or an over-ambitious first guess corrected. Hiding it would
-    // make the card flattering rather than accurate.
-    const [change] = rungChangesOver({ pull: 2 }, current({ pull: 1 }), NAMES);
-    expect(change).toMatchObject({ fromRung: 2, toRung: 1 });
-  });
-
-  it('says nothing about a movementGroup that did not move', () => {
-    expect(rungChangesOver({ pull: 1 }, current({ pull: 1 }), NAMES)).toEqual(
-      [],
+  it('reports a move to an easier movement the same way', () => {
+    // A deload, or an over-ambitious first guess corrected. There is no
+    // direction here to hide (DN-88): the card reports what changed, not
+    // whether it improved.
+    const [change] = movementChangesOver(
+      { pull: 'chin-up' },
+      current({ pull: 'banded' }),
+      NAMES,
     );
+    expect(change).toMatchObject({
+      fromExerciseId: 'chin-up',
+      toExerciseId: 'banded',
+    });
   });
 
-  it('treats a movementGroup the athlete never had as rung 0', () => {
+  it('says nothing about a group that did not move', () => {
+    expect(
+      movementChangesOver(
+        { pull: 'banded' },
+        current({ pull: 'banded' }),
+        NAMES,
+      ),
+    ).toEqual([]);
+  });
+
+  // DN-139. This used to read an absent choice as rung 0 and report the
+  // athlete as having climbed off a movement they were never shown.
+  it('reports a group the athlete had not chosen in as a move from nothing', () => {
     // The ordinary case for a first program: DN-86 stopped provisioning a
-    // SkillLevel per group, so the snapshot is empty and the athlete's first
-    // ever choice is a move from the group default.
-    expect(rungChangesOver({}, current({ pull: 2 }), NAMES)).toEqual([
+    // SkillLevel per group, so the snapshot is empty. What they were handed
+    // meanwhile is the group's default, which they did not pick and which is
+    // therefore not what they moved from (ADR-0004 decision 8).
+    expect(
+      movementChangesOver({}, current({ pull: 'chin-up' }), NAMES),
+    ).toEqual([
       {
         movementGroup: 'pull',
-        fromRung: 0,
-        toRung: 2,
-        fromName: 'Negative chin-up',
+        fromExerciseId: null,
+        fromName: null,
+        toExerciseId: 'chin-up',
         toName: 'Chin-up',
       },
     ]);
   });
 
-  it('says nothing when an untrained movementGroup is still at the bottom', () => {
-    // Absent on both sides is 0 → 0, which is not a change. Without this the
-    // card would congratulate every athlete on every group they never touched.
-    expect(rungChangesOver({}, current({}), NAMES)).toEqual([]);
+  it('says nothing about a group the athlete never chose in at all', () => {
+    // Absent on both sides is not a change. Without this the card would
+    // congratulate every athlete on every group they never touched.
+    expect(movementChangesOver({}, current({}), NAMES)).toEqual([]);
   });
 
-  it('reports every movementGroup that moved, in a stable order', () => {
-    const changes = rungChangesOver(
-      { pull: 0, squat: 0 },
-      current({ pull: 1, squat: 1 }),
+  it('says nothing about a group whose choice was cleared', () => {
+    // No destination to name, so there is no sentence to write.
+    expect(
+      movementChangesOver({ pull: 'negative' }, current({}), NAMES),
+    ).toEqual([]);
+  });
+
+  it('reports every group that moved, in a stable order', () => {
+    const changes = movementChangesOver(
+      { pull: 'negative', squat: 'box-squat' },
+      current({ pull: 'banded', squat: 'air-squat' }),
       NAMES,
     );
     expect(changes.map((c) => c.movementGroup)).toEqual(['pull', 'squat']);
   });
 
-  it('orders by movementGroup rather than by the order the rungs arrived in', () => {
-    const changes = rungChangesOver(
-      { squat: 0, pull: 0 },
-      current({ squat: 1, pull: 1 }),
+  it('orders by group rather than by the order the entries arrived in', () => {
+    const changes = movementChangesOver(
+      { squat: 'box-squat', pull: 'negative' },
+      current({ squat: 'air-squat', pull: 'banded' }),
       NAMES,
     );
     expect(changes.map((c) => c.movementGroup)).toEqual(['pull', 'squat']);
   });
 
-  it('leaves out a movementGroup whose new rung has no exercise to name it', () => {
-    // A library hole. Better an unmentioned line than "pull: negative → ".
-    expect(rungChangesOver({ pull: 0 }, current({ pull: 9 }), NAMES)).toEqual(
-      [],
-    );
+  it('leaves out a group whose new movement cannot be named', () => {
+    // A hard-deleted row. Better an unmentioned group than "pull: negative → ".
+    expect(
+      movementChangesOver(
+        { pull: 'negative' },
+        current({ pull: 'gone' }),
+        NAMES,
+      ),
+    ).toEqual([]);
   });
 
-  it('leaves out a movementGroup whose old rung has no exercise to name it', () => {
-    expect(rungChangesOver({ pull: 9 }, current({ pull: 0 }), NAMES)).toEqual(
-      [],
-    );
+  it('leaves out a group whose old movement cannot be named', () => {
+    // Deliberately not reported as a move from null: telling the athlete they
+    // started from scratch when they did not is worse than saying nothing.
+    expect(
+      movementChangesOver(
+        { pull: 'gone' },
+        current({ pull: 'chin-up' }),
+        NAMES,
+      ),
+    ).toEqual([]);
   });
 
-  it('ignores a key that is not a progression movementGroup', () => {
-    // The snapshot is jsonb and `SkillLevel.line` is a text column, so both
-    // sides can hold a group the app no longer has. Named at both ends here on
-    // purpose: the name check would hide an unnamed one, and it is the enum
-    // that has to refuse this. A change the schema cannot parse would fail
-    // the write that stores the summary, on the one request an athlete makes
-    // the day their program ends.
-    const named: RungNames = new Map([
+  it('ignores a key that is not a movement group', () => {
+    // The snapshot is jsonb and `SkillLevel.movementGroup` is a text column,
+    // so both sides can hold a group the app no longer has. Named at both ends
+    // here on purpose: the name check would hide an unnamed one, and it is the
+    // enum that has to refuse this. A change the schema cannot parse would
+    // fail the write that stores the summary, on the one request an athlete
+    // makes the day their program ends.
+    const named: MovementNames = new Map([
       ...NAMES,
-      [rungKey('sorcery', 0), 'Wand'],
-      [rungKey('sorcery', 3), 'Staff'],
+      ['wand', 'Wand'],
+      ['staff', 'Staff'],
     ]);
-    const snapshot = { pull: 0, sorcery: 0 } as unknown as RungSnapshot;
-    const changes = rungChangesOver(
+    const snapshot = {
+      pull: 'negative',
+      sorcery: 'wand',
+    } as unknown as MovementSnapshot;
+    const changes = movementChangesOver(
       snapshot,
-      current({ pull: 1, sorcery: 3 }),
+      current({ pull: 'chin-up', sorcery: 'staff' }),
       named,
     );
     expect(changes.map((c) => c.movementGroup)).toEqual(['pull']);
@@ -142,8 +171,8 @@ describe('buildEnrollmentSummary', () => {
   const base = {
     weeks: 6,
     sessions: 24,
-    startingRungs: { pull: 0 } as RungSnapshot,
-    currentRungs: current({ pull: 2 }),
+    startingMovements: { pull: 'negative' } as MovementSnapshot,
+    currentMovements: current({ pull: 'chin-up' }),
     names: NAMES,
   };
 
@@ -154,7 +183,7 @@ describe('buildEnrollmentSummary', () => {
   });
 
   it('carries what moved', () => {
-    expect(buildEnrollmentSummary(base).rungChanges).toHaveLength(1);
+    expect(buildEnrollmentSummary(base).movementChanges).toHaveLength(1);
   });
 
   it('reads sensibly for a program nobody trained', () => {
@@ -163,10 +192,10 @@ describe('buildEnrollmentSummary', () => {
     const summary = buildEnrollmentSummary({
       ...base,
       sessions: 0,
-      startingRungs: {},
-      currentRungs: current({}),
+      startingMovements: {},
+      currentMovements: current({}),
     });
-    expect(summary).toEqual({ weeks: 6, sessions: 0, rungChanges: [] });
+    expect(summary).toEqual({ weeks: 6, sessions: 0, movementChanges: [] });
   });
 
   it('keeps a null length null', () => {

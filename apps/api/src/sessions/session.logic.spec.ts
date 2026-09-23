@@ -109,7 +109,7 @@ describe('snapshotMovements', () => {
       name: 'Ring row',
       unit: 'reps',
       movementGroup: 'pull',
-      rung: 1,
+      sortOrder: 1,
       // The rest of an Exercise row rides along on the resolved movement and
       // must not end up in the snapshot -- it describes the exercise in
       // general, not this day's training.
@@ -139,7 +139,7 @@ describe('snapshotMovements', () => {
           name: 'Ring row',
           unit: 'reps',
           movementGroup: 'pull',
-          rung: 1,
+          sortOrder: 1,
         },
       },
     ]);
@@ -202,7 +202,7 @@ describe('snapshotPrescribedMovements', () => {
       name: 'Ring row',
       unit: 'reps',
       movementGroup: 'pull',
-      rung: 1,
+      sortOrder: 1,
       instructions: 'Lean back, pull the rings to the chest.',
       equipment: [],
       fallbackExerciseId: 'ex-table',
@@ -246,7 +246,7 @@ describe('snapshotPrescribedMovements', () => {
       name: 'Ring row',
       unit: 'reps',
       movementGroup: 'pull',
-      rung: 1,
+      sortOrder: 1,
     });
   });
 

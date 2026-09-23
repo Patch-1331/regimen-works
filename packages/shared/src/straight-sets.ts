@@ -18,7 +18,7 @@
  *
  * Derived against the session's own snapshot rather than today's live
  * prescription, which is the load-bearing half: an index only means anything
- * against a list that cannot move under it. A swap made mid-session, or a rung
+ * against a list that cannot move under it. A swap made mid-session, or a group
  * re-resolved overnight, would otherwise leave the athlete resuming on a
  * different movement than the one they were on.
  */

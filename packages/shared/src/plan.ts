@@ -24,10 +24,10 @@ export const DEFAULT_PLAN_ID = "plan_just_wods";
  * One movement a `movements` day prescribes, as authored (DN-19).
  *
  * The authoring shape. What the athlete is handed is
- * `prescribedMovementSchema`, where the group has already resolved to an
- * exercise at their rung — an author writes "pull", an athlete reads
+ * `prescribedMovementSchema`, where the group has already resolved to the
+ * movement this athlete performs — an author writes "pull", an athlete reads
  * "chin-up", and keeping the two shapes apart is what stops a client
- * resolving rungs for itself.
+ * resolving the choice for itself.
  *
  * Sets and reps sit here directly: no multiplier, no progression rule. An
  * author wanting escalation writes a core block that already waves
@@ -40,7 +40,7 @@ export const planSlotMovementSchema = z
     /** Position in the session, 0-based, the way `WodMovement.order` is. */
     order: z.number().int().nonnegative(),
     /**
-     * The movement groups to resolve through the athlete's rung — the one to
+     * The movement groups to resolve through the athlete's choice — the one to
      * reach for, because it is what lets one program fit every athlete.
      */
     movementGroup: movementGroup.nullable(),

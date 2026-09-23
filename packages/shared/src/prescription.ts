@@ -9,10 +9,10 @@ import { movementExerciseSchema } from "./wod.js";
  * carries straight sets — "pull, 5x3, rest 90s" — with no clock over it and
  * no single score at the end.
  *
- * **Resolved, not authored.** The program names a progression *line*, which is
- * what lets one program fit every athlete; what arrives here is the exercise
- * that line resolves to at the rung this athlete owns, dropped to its
- * no-equipment alternative where they own nothing for it. The authoring shape
+ * **Resolved, not authored.** The program names a movement *group*, which is
+ * what lets one program fit every athlete; what arrives here is the movement
+ * this athlete performs in that group, dropped to its no-equipment
+ * alternative where they own nothing for it. The authoring shape
  * is `planSlotMovementSchema` in `plan.ts`, and the two are deliberately
  * different: an author writes "pull", an athlete reads "chin-up".
  */
@@ -47,7 +47,8 @@ export const prescribedMovementSchema = z.object({
    *
    * Only `equipment` can appear here today. A WOD's `remembered_choice`
    * has no counterpart on this shape, because resolving through the
-   * athlete's rung *is* the prescription rather than a substitution for it.
+   * athlete's standing choice *is* the prescription rather than a
+   * substitution for it.
    *
    * All three are null on a row the athlete swapped: naming what a swap
    * overrode would argue with a decision just made (DN-116).

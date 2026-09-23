@@ -1,16 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   enrollmentSummarySchema,
-  rungSnapshotSchema,
+  movementSnapshotSchema,
   type CompletedProgram,
   type EnrollmentSummary,
-  type RungSnapshot,
+  type MovementSnapshot,
 } from '@regimen-works/shared';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { libraryVisibleTo } from '../library/visible-to';
-import { buildEnrollmentSummary, rungKey } from './enrollment-summary.logic';
-import { snapshotRungs } from './starting-rungs';
+import { buildEnrollmentSummary } from './enrollment-summary.logic';
+import { snapshotMovements } from './starting-movements';
 
 /**
  * What a completed run is read back as (DN-18): the figures, plus the name of
@@ -49,7 +49,7 @@ export class EnrollmentsService {
   async completeRun(userId: string, enrollmentId: string): Promise<void> {
     const enrollment = await this.prisma.planEnrollment.findFirst({
       where: { id: enrollmentId, userId, status: 'active' },
-      select: { id: true, weeks: true, startingRungs: true },
+      select: { id: true, weeks: true, startingMovements: true },
     });
     // Gone, someone else's, or already retired by a request that arrived
     // while this one was reading. Nothing to complete, and nothing wrong.
@@ -59,7 +59,7 @@ export class EnrollmentsService {
       userId,
       enrollment.id,
       enrollment.weeks,
-      rungSnapshotOf(enrollment.startingRungs),
+      movementSnapshotOf(enrollment.startingMovements),
     );
 
     await this.prisma.planEnrollment.updateMany({
@@ -166,7 +166,7 @@ export class EnrollmentsService {
           planId: previous.planId,
           startDate: today,
           weeks: previous.weeks,
-          startingRungs: await snapshotRungs(tx, userId),
+          startingMovements: await snapshotMovements(tx, userId),
         },
         select: { id: true },
       });
@@ -187,7 +187,7 @@ export class EnrollmentsService {
     userId: string,
     enrollmentId: string,
     weeks: number | null,
-    startingRungs: RungSnapshot,
+    startingMovements: MovementSnapshot,
   ): Promise<EnrollmentSummary> {
     const [sessions, skillLevels] = await Promise.all([
       this.prisma.dailyAssignment.count({
@@ -195,44 +195,41 @@ export class EnrollmentsService {
       }),
       this.prisma.skillLevel.findMany({
         where: { userId },
-        select: { movementGroup: true, rung: true },
+        select: { movementGroup: true, exerciseId: true },
       }),
     ]);
 
-    const currentRungs = new Map(
-      skillLevels.map((l) => [l.movementGroup, l.rung]),
+    const currentMovements = new Map(
+      skillLevels.map((l) => [l.movementGroup, l.exerciseId]),
     );
-    const lines = [
-      ...new Set([...Object.keys(startingRungs), ...currentRungs.keys()]),
+    const groups = [
+      ...new Set([
+        ...Object.keys(startingMovements),
+        ...currentMovements.keys(),
+      ]),
     ];
 
     // Only the groups in play. The library is mostly content this card never
     // irrelevant to any one program -- a pull program has nothing to say
     // about the athlete's hinge.
     const inGroups = await this.prisma.exercise.findMany({
-      where: { ...libraryVisibleTo(userId), movementGroup: { in: lines } },
-      select: { movementGroup: true, rung: true, name: true },
+      where: { ...libraryVisibleTo(userId), movementGroup: { in: groups } },
+      select: { id: true, name: true },
     });
-    const names = new Map(
-      inGroups.flatMap((e) =>
-        e.movementGroup === null || e.rung === null
-          ? []
-          : [[rungKey(e.movementGroup, e.rung), e.name] as const],
-      ),
-    );
+    const names = new Map(inGroups.map((e) => [e.id, e.name] as const));
 
     return buildEnrollmentSummary({
       weeks,
       sessions,
-      startingRungs,
-      currentRungs,
+      startingMovements,
+      currentMovements,
       names,
     });
   }
 }
 
 /**
- * `startingRungs` is `Json`, so Prisma hands it back as "anything at all".
+ * `startingMovements` is `Json`, so Prisma hands it back as "anything at all".
  *
  * Parsed rather than cast: the column is written by this application, but a
  * row written before the snapshot existed holds `{}` from the column default,
@@ -240,8 +237,8 @@ export class EnrollmentsService {
  * reads as empty, which reports "nothing moved" rather than throwing on the
  * one request an athlete makes on the day their program ends.
  */
-function rungSnapshotOf(value: Prisma.JsonValue): RungSnapshot {
-  const parsed = rungSnapshotSchema.safeParse(value);
+function movementSnapshotOf(value: Prisma.JsonValue): MovementSnapshot {
+  const parsed = movementSnapshotSchema.safeParse(value);
   return parsed.success ? parsed.data : {};
 }
 

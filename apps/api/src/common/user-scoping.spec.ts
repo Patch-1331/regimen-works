@@ -72,10 +72,7 @@ function recordingPrisma() {
         (calls['exercise.findMany'] ??= []).push(args);
         return Promise.resolve([]);
       }),
-      aggregate: jest.fn((args: unknown) => {
-        (calls['exercise.aggregate'] ??= []).push(args);
-        return Promise.resolve({ _max: { rung: 9 } });
-      }),
+      findFirst: record('exercise.findFirst'),
     },
     wod: {
       findMany: jest.fn((args: unknown) => {
@@ -264,7 +261,7 @@ describe('library ownership scoping', () => {
     }
   });
 
-  it('scopes the candidate WOD pool and the rung lookup behind it', async () => {
+  it('scopes the candidate WOD pool and the choice lookup behind it', async () => {
     const prisma = recordingPrisma();
     const wods = {
       getChecklists: jest.fn(),
@@ -322,7 +319,7 @@ describe('library ownership scoping', () => {
           equipment: ['dumbbell'],
           fallbackExerciseId: 'ex-2',
           movementGroup: null,
-          rung: null,
+          sortOrder: null,
         },
       },
     ] as unknown as Parameters<MovementResolutionService['resolve']>[2]);
@@ -334,15 +331,15 @@ describe('library ownership scoping', () => {
     }
   });
 
-  it('scopes the rung ceiling a skill level is checked against', async () => {
-    // Off the library, this reads the ceiling from every athlete's rows at
-    // once: one athlete authoring a rung-9 movement would raise what everyone
-    // else is allowed to set.
+  it('scopes the movement a skill level is checked against', async () => {
+    // Off the library, this would accept any exercise id at all -- including
+    // one out of another athlete's private library, which is both a leak and
+    // a choice that resolves to nothing on every later read (DN-139).
     const prisma = recordingPrisma();
     await new SkillLevelsService(prisma)
-      .setRung(ALICE, 'push_horizontal', 1)
+      .setChoice(ALICE, 'push_horizontal', 'some-exercise')
       .catch(() => undefined);
-    for (const where of whereOf(prisma, 'exercise.aggregate')) {
+    for (const where of whereOf(prisma, 'exercise.findFirst')) {
       expectLibraryScope(where);
     }
   });

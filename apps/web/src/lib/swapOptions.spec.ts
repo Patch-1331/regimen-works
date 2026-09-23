@@ -17,7 +17,7 @@ function exercise(partial: Partial<ApiExercise> & { id: string }): ApiExercise {
     scalable: true,
     unit: "reps",
     movementGroup: "pull",
-    rung: 0,
+    sortOrder: 0,
     instructions: null,
     fallbackExerciseId: null,
     phase: null,
@@ -28,21 +28,21 @@ function exercise(partial: Partial<ApiExercise> & { id: string }): ApiExercise {
   };
 }
 
-const negative = exercise({ id: "negative", name: "Negative chin-up", rung: 0 });
+const negative = exercise({ id: "negative", name: "Negative chin-up", sortOrder: 0 });
 const chinUp = exercise({
   id: "chin-up",
   name: "Chin-up",
-  rung: 1,
+  sortOrder: 1,
   fallbackExercise: { id: "row", name: "Row under table" },
 });
-const pullUp = exercise({ id: "pull-up", name: "Pull-up", rung: 2 });
-const row = exercise({ id: "row", name: "Row under table", movementGroup: null, rung: null });
-const burpee = exercise({ id: "burpee", name: "Burpee", movementGroup: null, rung: null, pattern: "cardio" });
+const pullUp = exercise({ id: "pull-up", name: "Pull-up", sortOrder: 2 });
+const row = exercise({ id: "row", name: "Row under table", movementGroup: null, sortOrder: null });
+const burpee = exercise({ id: "burpee", name: "Burpee", movementGroup: null, sortOrder: null, pattern: "cardio" });
 const highKnees = exercise({
   id: "high-knees",
   name: "High knees",
   movementGroup: null,
-  rung: null,
+  sortOrder: null,
   pattern: "cardio",
 });
 // The rope movement and what it falls to: off every group, and the pair the
@@ -51,7 +51,7 @@ const doubleUnders = exercise({
   id: "double-unders",
   name: "Double-unders",
   movementGroup: null,
-  rung: null,
+  sortOrder: null,
   pattern: "cardio",
   equipment: ["jump_rope"],
   fallbackExercise: { id: "high-knees", name: "High knees" },
@@ -60,7 +60,7 @@ const doubleUnders = exercise({
 const library = [pullUp, negative, chinUp, row, burpee, doubleUnders, highKnees];
 
 describe("buildSwapOptions", () => {
-  it("lists the movementGroup's rungs in order, whatever order the library came in", () => {
+  it("lists the movementGroup's members in order, whatever order the library came in", () => {
     const options = buildSwapOptions(library, "pull", "negative");
     expect(options.map((o) => o.name)).toEqual([
       "Negative chin-up",
@@ -69,12 +69,12 @@ describe("buildSwapOptions", () => {
     ]);
   });
 
-  it("marks the rung the athlete is on rather than filtering the rest away", () => {
+  it("marks the movement the athlete is on rather than filtering the rest away", () => {
     const options = buildSwapOptions(library, "pull", "chin-up");
     expect(options.filter((o) => o.isCurrent).map((o) => o.name)).toEqual([
       "Chin-up",
     ]);
-    // Every rung stays on the list — plus chin-up's alternative, which is
+    // Every member stays on the list — plus chin-up's alternative, which is
     // what makes this four rather than three.
     expect(options.filter((o) => !o.isAlternative)).toHaveLength(3);
   });
@@ -86,27 +86,27 @@ describe("buildSwapOptions", () => {
     expect(options.at(-1)).toMatchObject({
       exerciseId: "row",
       name: "Row under table",
-      rung: null,
+      sortOrder: null,
       isAlternative: true,
     });
   });
 
-  it("omits the alternative when the current rung has none", () => {
+  it("omits the alternative when the current movement has none", () => {
     const options = buildSwapOptions(library, "pull", "pull-up");
     expect(options.some((o) => o.isAlternative)).toBe(false);
   });
 
-  it("never repeats an alternative that is already a rung on the movementGroup", () => {
-    const withRowAsRung = [
-      exercise({ id: "row", name: "Row under table", rung: 0 }),
+  it("never repeats an alternative that is already a member of the movementGroup", () => {
+    const withRowAsMember = [
+      exercise({ id: "row", name: "Row under table", sortOrder: 0 }),
       exercise({
         id: "chin-up",
         name: "Chin-up",
-        rung: 1,
+        sortOrder: 1,
         fallbackExercise: { id: "row", name: "Row under table" },
       }),
     ];
-    const options = buildSwapOptions(withRowAsRung, "pull", "chin-up");
+    const options = buildSwapOptions(withRowAsMember, "pull", "chin-up");
     expect(options.map((o) => o.exerciseId)).toEqual(["row", "chin-up"]);
   });
 
@@ -127,7 +127,7 @@ describe("buildSwapOptions", () => {
       {
         exerciseId: "double-unders",
         name: "Double-unders",
-        rung: null,
+        sortOrder: null,
         isCurrent: true,
         isAlternative: false,
         isPrescribed: false,
@@ -135,7 +135,7 @@ describe("buildSwapOptions", () => {
       {
         exerciseId: "high-knees",
         name: "High knees",
-        rung: null,
+        sortOrder: null,
         isCurrent: false,
         isAlternative: true,
         isPrescribed: false,
@@ -145,7 +145,7 @@ describe("buildSwapOptions", () => {
 
   it("marks where the athlete is, rather than offering the alternative alone", () => {
     // One unmarked row reads as an instruction. The pair reads as a choice —
-    // the same reasin the group lists every rung instead of the next one.
+    // the same reasin the group lists every member instead of the next one.
     const options = buildSwapOptions(library, null, "double-unders");
     expect(options.filter((o) => o.isCurrent).map((o) => o.name)).toEqual([
       "Double-unders",
@@ -175,7 +175,7 @@ describe("buildSwapOptions", () => {
       {
         exerciseId: "high-knees",
         name: "High knees",
-        rung: null,
+        sortOrder: null,
         isCurrent: true,
         isAlternative: false,
         isPrescribed: false,
@@ -183,7 +183,7 @@ describe("buildSwapOptions", () => {
       {
         exerciseId: "double-unders",
         name: "Double-unders",
-        rung: null,
+        sortOrder: null,
         isCurrent: false,
         isAlternative: false,
         isPrescribed: true,
@@ -191,7 +191,7 @@ describe("buildSwapOptions", () => {
     ]);
   });
 
-  it("marks the prescribed rung in the group rather than listing it twice", () => {
+  it("marks the prescribed movement in the group rather than listing it twice", () => {
     // The remembered choice moved this row, and the movement it moved from is
     // a member the group already carries. Appending it would offer the same
     // exercise on two lines of the same list.
@@ -221,7 +221,7 @@ describe("buildSwapOptions", () => {
     expect(buildSwapOptions(library, null, "burpee", "burpee")).toEqual([]);
   });
 
-  it("returns nothing when the movementGroup has no seeded rungs", () => {
+  it("returns nothing when the movementGroup has no seeded members", () => {
     expect(buildSwapOptions(library, "hinge", "deadlift")).toEqual([]);
   });
 });

@@ -3,7 +3,7 @@ import { z } from "zod";
 /**
  * A movement the athlete swapped for this day only (WOD-5). The app decides
  * what you do; you decide how hard it is — this is the write path for the
- * second half of that, and the permanent rung change is confirmed afterwards
+ * second half of that, and the permanent change of movement is confirmed afterwards
  * from what was actually trained.
  *
  * Keyed by the movement rather than by the exercise, so a day naming the same
