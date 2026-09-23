@@ -34,7 +34,8 @@ describe('the seeded exercise library', () => {
     // database and then the athlete: the row lands in a group nothing else
     // recognises, `SkillLevelsService` refuses to write a choice for it, and
     // the Stats panel labels it with the raw slug. Adding a real line means
-    // adding it to the enum too (DN-84 added squat_loaded and hinge_loaded);
+    // adding it to the enum too, and DN-140 showed the reverse also binds:
+    // retiring a group means retiring the value that named it;
     // this is what says so out loud.
     const lines = [
       ...new Set(exercises.map((e) => e.movementGroup).filter(Boolean)),
@@ -86,6 +87,87 @@ describe('the seeded exercise library', () => {
     expect([...defaults].filter(([, count]) => count !== 1)).toEqual([]);
   });
 
+  describe('the merged squat and hinge groups (DN-140)', () => {
+    const memberNames = (group: string) =>
+      exercises
+        .filter((e) => e.movementGroup === group)
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+        .map((e) => e.name);
+
+    it('holds the bodyweight and the equipment squats in one group', () => {
+      // The whole point of the merge: an athlete looking at a dumbbell can
+      // swap an air squat for a goblet squat, because legality is group
+      // membership (`assertLegalTarget`) and they are now in one group. While
+      // these were `squat_loaded` that swap was refused -- the app walling off
+      // the kit in front of them.
+      expect(memberNames('squat')).toEqual([
+        'Air squat',
+        'Reverse lunge',
+        'Assisted pistol',
+        'Pistol squat',
+        'Goblet squat',
+        'Dumbbell front squat',
+        'Box step-up',
+      ]);
+    });
+
+    it('holds the bodyweight and the equipment hinges in one group', () => {
+      expect(memberNames('hinge')).toEqual([
+        'Glute bridge',
+        'Single-leg glute bridge',
+        'Superman',
+        'Single-leg superman',
+        'Romanian deadlift',
+        'Single-leg Romanian deadlift',
+        'Kettlebell swing',
+      ]);
+    });
+
+    it('leads each merged group with a member needing no equipment', () => {
+      // Not cosmetic, and not the same claim as the default-per-group test
+      // above. A group whose *declared default* needs kit drops its movements
+      // from a prescribed day for an athlete who does not own it (DN-139), and
+      // the merge is exactly the moment an equipment member could drift into
+      // that slot -- both retiring groups declared one of their own.
+      for (const group of ['squat', 'hinge']) {
+        const declared = exercises.find(
+          (e) => e.movementGroup === group && e.isGroupDefault,
+        );
+        expect(declared?.equipment ?? []).toEqual([]);
+      }
+    });
+
+    it('keeps the thruster and the box jump out of every group', () => {
+      // They left the squat groups rather than riding the merge in: a thruster
+      // is a squat *and* an overhead press, so a squat slot resolving to one
+      // silently doubles the pressing volume of a day that already presses,
+      // and a box jump is plyometric, so "3x8 squat" done as box jumps is a
+      // different session. Both stay in the library and stay usable by name in
+      // an authored WOD; what they stop being is a substitute.
+      const orphans = exercises.filter((e) =>
+        ['Dumbbell thruster', 'Box jump'].includes(e.name),
+      );
+
+      expect(orphans).toHaveLength(2);
+      expect(
+        orphans.map((e) => `${e.name}: ${e.movementGroup ?? 'no group'}`),
+      ).toEqual(['Dumbbell thruster: no group', 'Box jump: no group']);
+      // Still reachable for an athlete without the kit, which is what keeps
+      // them safe to leave in the pool.
+      expect(orphans.every((e) => Boolean(e.fallback))).toBe(true);
+    });
+
+    it('retires the split group names from the enum', () => {
+      // The seed and the enum have to move together or the other direction
+      // fails silently: a row left on `squat_loaded` lands in a group nothing
+      // recognises. The test above catches that from the seed's side; this
+      // catches a half-done retirement from the enum's.
+      for (const retired of ['squat_loaded', 'squat_box', 'hinge_loaded']) {
+        expect(movementGroup.safeParse(retired).success).toBe(false);
+      }
+    });
+  });
+
   it('is actually being read — the guard is not passing an empty list', () => {
     // Without this, deleting the import above would leave a green test that
     // asserts nothing about anything.
@@ -109,16 +191,19 @@ describe('the seeded exercise library', () => {
    * would put two different questions in one panel.
    */
   /**
-   * The two pairs that share a piece of kit (DN-115). A line is what lets the
-   * swap panel put both in front of an athlete who owns the piece — off a
-   * line it can only offer the bodyweight alternative, which is the app
-   * taking away gear they have.
+   * The rope pair (DN-115). The group is what lets the swap panel put both in
+   * front of an athlete who owns the piece — off a group it can only offer the
+   * bodyweight alternative, which is the app taking away gear they have.
+   *
+   * One pair now, not two: DN-140 merged the box pair away. The step-up is an
+   * ordinary member of `squat` and swaps to movements needing no box, and the
+   * box jump is plyometric and holds no group at all. What keeps the rope pair
+   * together is that *both* its members need the rope, so there is no
+   * bodyweight member to merge them into — the reason the squat and hinge
+   * splits died does not reach it.
    */
   describe('the groups where every member needs equipment', () => {
-    const pairs = [
-      { movementGroup: 'cardio_rope', piece: 'jump_rope' },
-      { movementGroup: 'squat_box', piece: 'box' },
-    ];
+    const pairs = [{ movementGroup: 'cardio_rope', piece: 'jump_rope' }];
 
     it.each(pairs)(
       'puts both $piece movements on $movementGroup',
