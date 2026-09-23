@@ -231,13 +231,15 @@ export const exercises: ExerciseSeed[] = [
     instructions:
       'A full one-legged squat: stand on one leg, extend the other in front, and lower under control until the hamstring meets the calf, then stand back up without touching down. Arms out in front for a counterweight; the heel of the standing foot stays flat.',
   },
-  // Squat · Loaded (DN-84) — its own group rather than members of `squat`.
+  // The loaded squats — members of `squat`, not a group of their own (DN-140).
+  // They were split off in DN-84 on two grounds ADR-0004 retired, and held
+  // apart afterwards only by DN-115's; `Exercise.equipment` says everything
+  // the split was saying, and holding them apart stopped an athlete swapping
+  // an air squat for the dumbbell in front of them.
   //
-  // DN-84 gave two reasons and ADR-0004 retired both: nothing in the code can
-  // tell whether a goblet squat is harder than a pistol, and there is no
-  // longer a stored number for an insertion to renumber. What keeps the split
-  // alive for now is DN-115's reason — see `movementGroup` in the shared
-  // enums — and ADR-0004 folds these into `squat` in a follow-up.
+  // They sort after the bodyweight members so the swap panel leads with what
+  // anyone can do, which is ordering and nothing more — see `movementGroup`
+  // in the shared enums.
   //
   // The group is made of variations, never of weight: a 20 lb goblet squat
   // and a 40 lb one are the same exercise, and nothing in the schema can tell
@@ -251,9 +253,8 @@ export const exercises: ExerciseSeed[] = [
     name: 'Goblet squat',
     pattern: 'squat',
     equipment: ['dumbbell'],
-    movementGroup: 'squat_loaded',
-    sortOrder: 0,
-    isGroupDefault: true,
+    movementGroup: 'squat',
+    sortOrder: 4,
     fallback: 'Air squat',
     instructions:
       'Hold one dumbbell vertically against the chest, elbows tucked under it. Squat between your knees until the hips are below parallel, then stand. The weight at the chest is what keeps the torso upright — let it pull you forward and it becomes a different movement.',
@@ -262,18 +263,22 @@ export const exercises: ExerciseSeed[] = [
     name: 'Dumbbell front squat',
     pattern: 'squat',
     equipment: ['dumbbell'],
-    movementGroup: 'squat_loaded',
-    sortOrder: 1,
+    movementGroup: 'squat',
+    sortOrder: 5,
     fallback: 'Air squat',
     instructions:
       'A dumbbell resting on each shoulder, elbows pointed forward and up. Squat to depth and stand, keeping both elbows high the whole way. Two weights split across the shoulders sit further from the midline than one at the chest, so the trunk works harder to stay upright.',
   },
   {
+    // No group (DN-140). A thruster is a squat *and* an overhead press, so
+    // prescribing it into a squat slot silently doubles the pressing volume of
+    // a day that already has a push slot. It keeps its pattern and its
+    // fallback and stays available to an authored WOD by name; what it stops
+    // being is something a program slot resolves to or an athlete stores as a
+    // standing choice.
     name: 'Dumbbell thruster',
     pattern: 'squat',
     equipment: ['dumbbell'],
-    movementGroup: 'squat_loaded',
-    sortOrder: 2,
     fallback: 'Jump squat',
     instructions:
       'Front squat into an overhead press in one movement: stand out of the bottom and let that drive send the dumbbells straight overhead, arms locked. Lower them back to the shoulders and go again. One rep is the whole thing — the pause between squat and press is what makes it two exercises instead of this one.',
@@ -293,32 +298,28 @@ export const exercises: ExerciseSeed[] = [
     instructions:
       'Step forward and lower until the back knee grazes the floor, then drive through the front heel and step the back foot straight through into the next lunge. Torso stays upright; each step is a rep.',
   },
-  // Box (DN-33, grouped in DN-115) — a group at all because off a group the
-  // swap panel offers only the bodyweight fallback, so a box jump was a
-  // movement nobody was ever shown, and an athlete on step-ups had no way to
-  // keep the box.
-  //
-  // The reason it is *separate* from `squat` no longer holds: appending used
-  // to renumber choices athletes had already made, and as of DN-139 there are
-  // no numbers to renumber. ADR-0004 decision 9 folds the step-up into
-  // `squat` and drops the box jump from it as plyometric; DN-140 does that.
+  // Box (DN-33, grouped in DN-115, merged in DN-140). The step-up is a squat
+  // member like any other now; the box jump is not a squat at all and holds no
+  // group. Keeping the two together was what DN-115 bought, and it cost the
+  // step-up its swap to a movement needing no box — the trade ADR-0004
+  // decision 9 reversed.
   {
     name: 'Box step-up',
     pattern: 'squat',
     equipment: ['box'],
-    movementGroup: 'squat_box',
-    sortOrder: 0,
-    isGroupDefault: true,
+    movementGroup: 'squat',
+    sortOrder: 6,
     fallback: 'Reverse lunge',
     instructions:
       'Place one whole foot on the box, drive through that heel until the leg is straight, then lower under control and step down. Alternate legs; each step up is a rep. Push through the top foot rather than bouncing off the bottom one — a box around knee height is plenty.',
   },
   {
+    // No group (DN-140), for the same reason the thruster has none: a box jump
+    // is plyometric, so "3x8 squat" performed as box jumps is a different
+    // session. Its fallback already says where an athlete without a box goes.
     name: 'Box jump',
     pattern: 'squat',
     equipment: ['box'],
-    movementGroup: 'squat_box',
-    sortOrder: 1,
     fallback: 'Jump squat',
     instructions:
       'From a quarter squat, swing the arms and jump onto the box, landing on the whole foot with knees soft and hips back. Stand up fully on top, then step down — one foot at a time, every rep. Pick a height you can land on, not the one you can barely clear.',
@@ -359,9 +360,8 @@ export const exercises: ExerciseSeed[] = [
     instructions:
       'A superman lifting one arm and the opposite leg, holding briefly before switching. Working diagonally makes the back and glutes resist rotation as well as extend, which is what puts it above the two-sided version.',
   },
-  // Hinge · Loaded (DN-84) — a separate group from `hinge` for the same
-  // reason the loaded squats are, and with the same caveat: see the Squat ·
-  // Loaded comment above and ADR-0004.
+  // The loaded hinges — members of `hinge` since DN-140, for the same reason
+  // the loaded squats are members of `squat`: see the comment above.
   //
   // The swing is the one movement here that genuinely wants a kettlebell
   // rather than a dumbbell, which is what earns it its own row in the
@@ -371,9 +371,8 @@ export const exercises: ExerciseSeed[] = [
     name: 'Romanian deadlift',
     pattern: 'hinge',
     equipment: ['dumbbell'],
-    movementGroup: 'hinge_loaded',
-    sortOrder: 0,
-    isGroupDefault: true,
+    movementGroup: 'hinge',
+    sortOrder: 4,
     fallback: 'Glute bridge',
     instructions:
       'Dumbbells in front of the thighs, knees softly bent and fixed there. Push the hips straight back, letting the weights track down the legs until you feel the hamstrings load, then drive the hips forward to stand. The back stays flat throughout — this is a hinge, not a squat and not a round-backed reach for the floor.',
@@ -382,8 +381,8 @@ export const exercises: ExerciseSeed[] = [
     name: 'Single-leg Romanian deadlift',
     pattern: 'hinge',
     equipment: ['dumbbell'],
-    movementGroup: 'hinge_loaded',
-    sortOrder: 1,
+    movementGroup: 'hinge',
+    sortOrder: 5,
     fallback: 'Single-leg glute bridge',
     instructions:
       'One dumbbell, standing on one leg. Hinge at the hip and let the free leg travel straight back as a counterweight, body forming one movementGroup from head to heel, then stand tall. Do all the reps on one side before switching. The hips stay square to the floor — letting the free hip open up turns it into a twist.',
@@ -392,8 +391,8 @@ export const exercises: ExerciseSeed[] = [
     name: 'Kettlebell swing',
     pattern: 'hinge',
     equipment: ['kettlebell'],
-    movementGroup: 'hinge_loaded',
-    sortOrder: 2,
+    movementGroup: 'hinge',
+    sortOrder: 6,
     fallback: 'Broad jump',
     instructions:
       'Hike the kettlebell back between the legs, then snap the hips forward to float it to chest height — the arms only steer it. Let it fall back into the next hinge. It is a hip snap, not a front raise: if the shoulders are lifting the bell, it is too heavy or the hips are too quiet.',

@@ -154,6 +154,90 @@ describe('SubstitutionsService.set', () => {
     expect(await storedSwaps(assignment.id)).toHaveLength(0);
   });
 
+  /**
+   * The merged squat group (DN-140), end to end.
+   *
+   * This is the swap the issue exists for: the athlete standing in front of a
+   * barbell, prescribed an air squat. Legality is group membership, so while
+   * the bodyweight squats sat on `squat` and the loaded ones on `squat_loaded`
+   * this call threw — the app refusing the kit in front of them. Nothing in
+   * `assertLegalTarget` changed to allow it; one column did.
+   *
+   * Built from `createExercise` rather than `createGroup` because the point is
+   * the `equipment` array, which is the thing the two members used to be split
+   * on, and the fixture has no word for it.
+   */
+  describe('across the equipment split the merge removed (DN-140)', () => {
+    async function squatDay() {
+      const user = await createUser();
+      const bodyweight = await createExercise({
+        name: 'Air squat',
+        pattern: 'squat',
+        movementGroup: 'squat',
+        sortOrder: 0,
+        equipment: [],
+      });
+      const loaded = await createExercise({
+        name: 'Barbell back squat',
+        pattern: 'squat',
+        movementGroup: 'squat',
+        sortOrder: 1,
+        equipment: ['barbell'],
+      });
+      const wod = await createWod({
+        dominantPattern: 'squat',
+        movements: [{ exerciseId: bodyweight.id, reps: 45, order: 0 }],
+      });
+      const assignment = await createAssignment(user.id, { wodId: wod.id });
+      return {
+        user,
+        bodyweight,
+        loaded,
+        assignment,
+        movement: wod.movements[0],
+      };
+    }
+
+    it('swaps an air squat for a barbell back squat', async () => {
+      const { user, loaded, assignment, movement } = await squatDay();
+
+      await service().set(
+        user.id,
+        assignment.id,
+        wodKey(movement.id),
+        loaded.id,
+      );
+
+      expect((await storedSwaps(assignment.id))[0].exerciseId).toBe(loaded.id);
+    });
+
+    it('swaps a barbell back squat for an air squat', async () => {
+      // The other direction, and not a formality: it is the swap an athlete
+      // makes when the rack is taken. The group is unordered, so both have to
+      // work off the same membership check (ADR-0004) -- a rule that only let
+      // you add load would be the ladder this app does not have.
+      const { user, bodyweight, loaded, assignment, movement } =
+        await squatDay();
+
+      await service().set(
+        user.id,
+        assignment.id,
+        wodKey(movement.id),
+        loaded.id,
+      );
+      await service().set(
+        user.id,
+        assignment.id,
+        wodKey(movement.id),
+        bodyweight.id,
+      );
+
+      expect((await storedSwaps(assignment.id))[0].exerciseId).toBe(
+        bodyweight.id,
+      );
+    });
+  });
+
   it('refuses another athlete’s movement, even sitting on the same movementGroup', async () => {
     // The group is built from a query, so an unscoped one makes every
     // athlete's private movements legal swap targets for everyone else

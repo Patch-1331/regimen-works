@@ -24,25 +24,24 @@ export const movementGroup = z.enum([
   "push_horizontal",
   "push_vertical",
   "pull",
+  // `squat` and `hinge` each hold their bodyweight and their equipment
+  // members together (DN-140). They were split -- `squat_loaded`,
+  // `squat_box`, `hinge_loaded` -- back when equipment was the only way to
+  // say "not this one today", but `Exercise.equipment` carries that now and
+  // the prescription layer filters on it (DN-79), so the split was a second
+  // copy of one fact and the two could disagree. Worse, it put a wall across
+  // the swap an athlete most wants: the one for the kit in front of them.
   "squat",
-  // The equipment-split groups (DN-84, DN-115). They exist so the swap panel
-  // can offer both movements in a pair that share a piece of kit: off a group
-  // the panel offers only the bodyweight fallback, so an athlete who owns a
-  // rope but cannot yet turn double-unders was handed high knees -- the app
-  // taking away gear they actually have.
-  //
-  // DN-84 originally justified the split on two other grounds, and neither
-  // survives: nothing in the code can tell whether a goblet squat is harder
-  // than a pistol, and inserting a movement mid-group no longer renumbers
-  // anything. ADR-0004 folds these back into `squat` and `hinge` for exactly
-  // that reason; until that lands they stay, on DN-115's grounds alone.
-  "squat_loaded",
-  "squat_box",
   "hinge",
-  "hinge_loaded",
   "core_dynamic",
   "core_hold",
   "core_side",
+  // The one equipment-shaped group that survives (DN-115), and not for the
+  // reason the others died of. Off a group the swap panel offers only the
+  // bodyweight fallback, so an athlete who owns a rope but cannot yet turn
+  // double-unders was handed high knees -- the app taking away gear they
+  // actually have. Both rope movements need the rope, so there is no
+  // bodyweight member to merge them into. ADR-0004 decision 9 leaves it be.
   "cardio_rope",
 ]);
 export type MovementGroup = z.infer<typeof movementGroup>;

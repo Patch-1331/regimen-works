@@ -161,7 +161,9 @@ model SkillLevel {
   id            String   @id @default(cuid())
   userId        String
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  movementGroup String // push_horizontal | push_vertical | pull | squat | hinge | core_dynamic | core_hold | core_side
+  // The canonical list lives in `movementGroup` in packages/shared -- that Zod
+  // enum is what refuses an unknown value, and this column is a plain string.
+  movementGroup String
 
   // The movement the athlete last picked in this group (DN-139) -- the thing
   // itself, not a position in a list. A stored index meant that reordering a
