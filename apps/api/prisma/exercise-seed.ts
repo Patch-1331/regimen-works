@@ -333,7 +333,7 @@ export const exercises: ExerciseSeed[] = [
     sortOrder: 0,
     isGroupDefault: true,
     instructions:
-      'Lie on your back, knees bent, feet flat and close to the hips. Squeeze the glutes to drive the hips up until knees, hips and shoulders form a straight movementGroup, pause, then lower. Push with the glutes, not by arching the lower back.',
+      'Lie on your back, knees bent, feet flat and close to the hips. Squeeze the glutes to drive the hips up until knees, hips and shoulders form a straight line, pause, then lower. Push with the glutes, not by arching the lower back.',
   },
   {
     name: 'Single-leg glute bridge',
@@ -350,7 +350,7 @@ export const exercises: ExerciseSeed[] = [
     movementGroup: 'hinge',
     sortOrder: 2,
     instructions:
-      'Face down, arms stretched overhead. Lift the chest, arms and legs off the floor at the same time, hold for a beat, then lower under control. Look at the floor rather than forward so the neck stays in movementGroup with the spine.',
+      'Face down, arms stretched overhead. Lift the chest, arms and legs off the floor at the same time, hold for a beat, then lower under control. Look at the floor rather than forward so the neck stays in line with the spine.',
   },
   {
     name: 'Single-leg superman',
@@ -385,7 +385,7 @@ export const exercises: ExerciseSeed[] = [
     sortOrder: 5,
     fallback: 'Single-leg glute bridge',
     instructions:
-      'One dumbbell, standing on one leg. Hinge at the hip and let the free leg travel straight back as a counterweight, body forming one movementGroup from head to heel, then stand tall. Do all the reps on one side before switching. The hips stay square to the floor — letting the free hip open up turns it into a twist.',
+      'One dumbbell, standing on one leg. Hinge at the hip and let the free leg travel straight back as a counterweight, body forming one line from head to heel, then stand tall. Do all the reps on one side before switching. The hips stay square to the floor — letting the free hip open up turns it into a twist.',
   },
   {
     name: 'Kettlebell swing',
@@ -497,7 +497,7 @@ export const exercises: ExerciseSeed[] = [
     sortOrder: 2,
     unit: 'seconds',
     instructions:
-      'Forearms on the floor, elbows under the shoulders, legs straight, body in one movementGroup from heels to head. Brace the stomach and squeeze the glutes so the hips neither sag nor pike up. Counted in seconds, not reps.',
+      'Forearms on the floor, elbows under the shoulders, legs straight, body in one line from heels to head. Brace the stomach and squeeze the glutes so the hips neither sag nor pike up. Counted in seconds, not reps.',
   },
   {
     name: 'Hollow hold',
@@ -536,7 +536,7 @@ export const exercises: ExerciseSeed[] = [
     movementGroup: 'core_side',
     sortOrder: 1,
     instructions:
-      'On your side, elbow under the shoulder, legs straight and feet stacked. Lift the hips into one movementGroup from heels to head and keep the top hip from rolling backwards. Split the prescribed reps evenly between the two sides.',
+      'On your side, elbow under the shoulder, legs straight and feet stacked. Lift the hips into one line from heels to head and keep the top hip from rolling backwards. Split the prescribed reps evenly between the two sides.',
   },
 
   // Core · Carries (DN-113) — counted in seconds, like the holds above.
