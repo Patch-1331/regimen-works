@@ -64,8 +64,8 @@ describe('UserProvisioningService.ensure', () => {
   });
 
   it('provisions no skill levels at all', async () => {
-    // DN-86. A rung is the app forming an opinion about someone it has never
-    // seen train, and rung 0 on every group was the worst version of that
+    // DN-86. A stored choice is the app claiming the athlete picked
+    // something, and a row on every group was the worst version of that
     // guess. No row means the first WOD is the library's own prescription.
     const userId = newUserId();
 
@@ -195,7 +195,7 @@ describe('UserProvisioningService.ensure, the Just WODs program', () => {
     });
   });
 
-  it('starts the athlete on no rungs at all', async () => {
+  it('starts the athlete with no movement chosen anywhere', async () => {
     // The snapshot is empty because a new athlete has no SkillLevel rows
     // (DN-86), not because provisioning declined to look.
     const userId = newUserId();
@@ -205,7 +205,7 @@ describe('UserProvisioningService.ensure, the Just WODs program', () => {
     const enrollment = await testPrisma().planEnrollment.findFirstOrThrow({
       where: { userId },
     });
-    expect(enrollment.startingRungs).toEqual({});
+    expect(enrollment.startingMovements).toEqual({});
     expect(enrollment.summary).toBeNull();
   });
 

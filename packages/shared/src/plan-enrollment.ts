@@ -3,38 +3,44 @@ import { enrollmentStatus, movementGroup } from "./enums.js";
 import { planSchema } from "./plan.js";
 
 /**
- * Every group's rung on a date, as `{ line: rung }`.
+ * What the athlete had chosen in each group on a date, as
+ * `{ movementGroup: exerciseId }`.
  *
  * `partialRecord` rather than `record`: in Zod 4 a record keyed by an enum is
- * **exhaustive**, so `z.record(movementGroup, …)` would demand a rung for
- * every group in the app. An athlete has rungs only on the groups they have
+ * **exhaustive**, so `z.record(movementGroup, …)` would demand an entry for
+ * every group in the app. An athlete has chosen in only the groups they have
  * actually trained — a new athlete has none at all (DN-86) — so the exhaustive
  * shape would reject exactly the athletes this snapshot exists to describe.
+ *
+ * An absent group means they had chosen nothing, and that is the honest shape:
+ * it is *not* the same as having been handed the group's default, which is
+ * resolved per prescription and never stored (ADR-0004 decision 8).
  */
-export const rungSnapshotSchema = z.partialRecord(
+export const movementSnapshotSchema = z.partialRecord(
   movementGroup,
-  z.number().int().nonnegative(),
+  z.string(),
 );
-export type RungSnapshot = z.infer<typeof rungSnapshotSchema>;
+export type MovementSnapshot = z.infer<typeof movementSnapshotSchema>;
 
 /**
  * One group's movement over a completed program, for the completion card's
  * "pull: negative → chin-up".
  *
- * Carries names as well as rungs because a rung is meaningless to the athlete
- * on its own, and the exercise that was at rung 3 when the program started
- * can be a different one by the time it finishes — the group grows. A card
- * that renders today's group against a stored number would quietly rewrite
- * the athlete's own history.
+ * Carries the names as well as the ids because an id is meaningless to the
+ * athlete, and because a movement can be renamed or retired between the start
+ * of a program and its end. The names are resolved once, at completion, and
+ * frozen into the summary — a card that re-read them later would quietly
+ * rewrite the athlete's own history.
  */
-export const rungChangeSchema = z.object({
+export const movementChangeSchema = z.object({
   movementGroup: movementGroup,
-  fromRung: z.number().int().nonnegative(),
-  toRung: z.number().int().nonnegative(),
-  fromName: z.string(),
+  /** Null where the athlete had chosen nothing in this group when the run began. */
+  fromExerciseId: z.string().nullable(),
+  fromName: z.string().nullable(),
+  toExerciseId: z.string(),
   toName: z.string(),
 });
-export type RungChange = z.infer<typeof rungChangeSchema>;
+export type MovementChange = z.infer<typeof movementChangeSchema>;
 
 /**
  * The completion card's figures, snapshotted when the enrollment completes
@@ -53,7 +59,7 @@ export const enrollmentSummarySchema = z.object({
   weeks: z.number().int().positive().nullable(),
   sessions: z.number().int().nonnegative(),
   /** Empty when nothing moved, which is a real outcome and not a missing figure. */
-  rungChanges: z.array(rungChangeSchema),
+  movementChanges: z.array(movementChangeSchema),
 });
 export type EnrollmentSummary = z.infer<typeof enrollmentSummarySchema>;
 
@@ -84,7 +90,7 @@ export const planEnrollmentSchema = z.object({
    * the current value, so without this a finished program can count sessions
    * but cannot say what changed — the interesting half of the completion card.
    */
-  startingRungs: rungSnapshotSchema,
+  startingMovements: movementSnapshotSchema,
   /** Null while the program is still running, which is also how "has this been completed" reads without a join. */
   summary: enrollmentSummarySchema.nullable(),
 });
@@ -94,7 +100,7 @@ export type PlanEnrollment = z.infer<typeof planEnrollmentSchema>;
  * What starting a program asks for.
  *
  * `planId` and a start date, and nothing else that can be derived: the
- * starting rungs are read from the athlete's own `SkillLevel` rows at the
+ * starting movements are read from the athlete's own `SkillLevel` rows at the
  * moment of enrolling, and a client that could send them could misreport what
  * the program is measured against.
  *

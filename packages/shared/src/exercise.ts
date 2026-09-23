@@ -21,7 +21,9 @@ export const exerciseSchema = z.object({
   // seed; every seeded exercise has one.
   instructions: z.string().nullable(),
   movementGroup: movementGroup.nullable(),
-  rung: z.number().int().nonnegative().nullable(),
+  // Display order within the group, nothing more (DN-139) — no athlete's
+  // choice resolves through it.
+  sortOrder: z.number().int().nonnegative().nullable(),
   fallbackExerciseId: z.string().nullable(),
   phase: exercisePhase.nullable(),
   /**
@@ -57,7 +59,9 @@ export const createExerciseSchema = z.object({
   unit: exerciseUnit,
   instructions: z.string().nullable(),
   movementGroup: movementGroup.nullable(),
-  rung: z.number().int().nonnegative().nullable(),
+  // Display order within the group, nothing more (DN-139) — no athlete's
+  // choice resolves through it.
+  sortOrder: z.number().int().nonnegative().nullable(),
   fallbackExerciseId: z.string().nullable(),
   phase: exercisePhase.nullable(),
 });

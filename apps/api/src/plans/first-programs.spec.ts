@@ -189,17 +189,18 @@ describe('the first programs', () => {
   it.each(FIRST_PROGRAMS.map((p) => [p.name, p] as const))(
     '%s prescribes lines a day-one athlete can already train',
     (_name, program) => {
-      // A prescription names a movement groups, and the athlete trains
-      // whichever rung they are on -- which for a new athlete is the bottom
-      // one. A line whose bottom rung needs equipment is a session an athlete
-      // with a bar and a floor cannot do, and unlike a WOD there is no
-      // generated fallback behind it.
+      // A prescription names a movement group, and the athlete trains the
+      // movement they chose in it -- which on day one is the group's declared
+      // default (DN-139). A group whose default needs equipment is a session
+      // an athlete with a bar and a floor cannot do, and unlike a WOD there is
+      // no generated fallback behind it.
       const owned = new Set<string>(DEFAULT_EQUIPMENT);
       const dayOneLines = new Set(
         exercises
           .filter(
             (e) =>
-              e.rung === 0 && (e.equipment ?? []).every((p) => owned.has(p)),
+              e.isGroupDefault === true &&
+              (e.equipment ?? []).every((p) => owned.has(p)),
           )
           .map((e) => e.movementGroup),
       );

@@ -163,14 +163,19 @@ export function ExerciseForm({
 
       <div className="flex gap-3">
         <div className="flex-1">
-          <Label htmlFor="exercise-movementGroup">Progression movementGroup</Label>
+          <Label htmlFor="exercise-movementGroup">
+            Progression movementGroup
+          </Label>
           <select
             id="exercise-movementGroup"
             className={field}
             style={fieldStyle}
             value={draft.movementGroup}
             onChange={(e) =>
-              set("movementGroup", e.target.value as ExerciseDraft["movementGroup"])
+              set(
+                "movementGroup",
+                e.target.value as ExerciseDraft["movementGroup"],
+              )
             }
           >
             <option value="">None</option>
@@ -182,15 +187,15 @@ export function ExerciseForm({
           </select>
         </div>
         <div className="w-24">
-          <Label htmlFor="exercise-rung">Rung</Label>
+          <Label htmlFor="exercise-sort-order">Order</Label>
           <input
-            id="exercise-rung"
+            id="exercise-sort-order"
             type="number"
             min={0}
             className={field}
             style={fieldStyle}
-            value={draft.rung}
-            onChange={(e) => set("rung", e.target.value)}
+            value={draft.sortOrder}
+            onChange={(e) => set("sortOrder", e.target.value)}
           />
         </div>
       </div>
@@ -217,12 +222,15 @@ export function ExerciseForm({
       </div>
 
       <fieldset>
-        <legend className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--ink-faint)]" style={{ fontFamily: "var(--font-mono)" }}>
+        <legend
+          className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--ink-faint)]"
+          style={{ fontFamily: "var(--font-mono)" }}
+        >
           Equipment it needs
         </legend>
         <p className="mt-1 text-[11px] text-[var(--ink-faint)]">
-          Leave every box empty for a bodyweight movement. Anything ticked
-          means an athlete without it is given the alternative instead.
+          Leave every box empty for a bodyweight movement. Anything ticked means
+          an athlete without it is given the alternative instead.
         </p>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
           {EQUIPMENT_CATALOG.map((piece) => (

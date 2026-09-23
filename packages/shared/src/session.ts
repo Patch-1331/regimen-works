@@ -14,7 +14,7 @@ export type RoundSplit = z.infer<typeof roundSplitSchema>;
 
 /**
  * One movement as it was actually trained (DN-90). A WOD is resolved at read
- * time through several layers -- the athlete's current rung, then today's
+ * time through several layers -- the athlete's standing choice, then today's
  * swap -- and every one of those inputs keeps moving afterwards. This is the
  * output of that resolution, written onto the session when it starts, so
  * history can say what was done rather than re-deriving what today's settings
@@ -75,7 +75,7 @@ export const sessionMovementSchema = z
       name: z.string(),
       unit: exerciseUnit,
       movementGroup: movementGroup.nullable(),
-      rung: z.number().int().nonnegative().nullable(),
+      sortOrder: z.number().int().nonnegative().nullable(),
     }),
   })
   .refine(

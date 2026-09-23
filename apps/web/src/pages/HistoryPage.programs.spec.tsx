@@ -78,7 +78,7 @@ describe("programs completed", () => {
   it("reads sensibly for a program nobody trained", async () => {
     completedAre([
       fixtures.completedProgram({
-        summary: { weeks: 6, sessions: 0, rungChanges: [] },
+        summary: { weeks: 6, sessions: 0, movementChanges: [] },
       }),
     ]);
 

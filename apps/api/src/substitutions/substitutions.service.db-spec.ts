@@ -40,17 +40,17 @@ function service(): SubstitutionsService {
   return new SubstitutionsService(testPrisma() as unknown as PrismaService);
 }
 
-/** A pull group, a WOD using its middle rung, and an assignment for it. */
+/** A pull group, a WOD using its middle member, and an assignment for it. */
 async function pullDay(options: { status?: string } = {}) {
   const user = await createUser();
-  const { rungs, fallback } = await createGroup(
+  const { members, fallback } = await createGroup(
     'pull',
     ['Negative chin-up', 'Chin-up', 'Pull-up'],
     { fallbackFor: 1 },
   );
   const wod = await createWod({
     dominantPattern: 'pull',
-    movements: [{ exerciseId: rungs[0].id, reps: 30, order: 0 }],
+    movements: [{ exerciseId: members[0].id, reps: 30, order: 0 }],
   });
   const assignment = await createAssignment(user.id, {
     wodId: wod.id,
@@ -58,7 +58,7 @@ async function pullDay(options: { status?: string } = {}) {
   });
   return {
     user,
-    rungs,
+    members,
     fallback: fallback!,
     wod,
     assignment,
@@ -73,14 +73,14 @@ function storedSwaps(assignmentId: string) {
 }
 
 describe('SubstitutionsService.set', () => {
-  it('records a swap to another rung on the movement movementGroup', async () => {
-    const { user, rungs, assignment, movement } = await pullDay();
+  it("records a swap to another member of the movement's movementGroup", async () => {
+    const { user, members, assignment, movement } = await pullDay();
 
     await service().set(
       user.id,
       assignment.id,
       wodKey(movement.id),
-      rungs[1].id,
+      members[1].id,
     );
 
     const swaps = await storedSwaps(assignment.id);
@@ -88,11 +88,11 @@ describe('SubstitutionsService.set', () => {
     expect(swaps[0]).toMatchObject({
       userId: user.id,
       wodMovementId: movement.id,
-      exerciseId: rungs[1].id,
+      exerciseId: members[1].id,
     });
   });
 
-  it('allows the no-equipment alternative of a rung on the movementGroup', async () => {
+  it('allows the no-equipment alternative of a member of the movementGroup', async () => {
     const { user, fallback, assignment, movement } = await pullDay();
 
     await service().set(
@@ -102,49 +102,51 @@ describe('SubstitutionsService.set', () => {
       fallback.id,
     );
 
-    // The alternative is outside the group itself — legal because a rung points at it.
+    // The alternative is outside the group itself — legal because a member points at it.
     expect((await storedSwaps(assignment.id))[0].exerciseId).toBe(fallback.id);
   });
 
   it('allows swapping back to what was prescribed', async () => {
-    const { user, rungs, assignment, movement } = await pullDay();
+    const { user, members, assignment, movement } = await pullDay();
 
     await service().set(
       user.id,
       assignment.id,
       wodKey(movement.id),
-      rungs[0].id,
+      members[0].id,
     );
 
-    expect((await storedSwaps(assignment.id))[0].exerciseId).toBe(rungs[0].id);
+    expect((await storedSwaps(assignment.id))[0].exerciseId).toBe(
+      members[0].id,
+    );
   });
 
   it('corrects the choice rather than stacking a second row', async () => {
-    const { user, rungs, assignment, movement } = await pullDay();
+    const { user, members, assignment, movement } = await pullDay();
 
     await service().set(
       user.id,
       assignment.id,
       wodKey(movement.id),
-      rungs[1].id,
+      members[1].id,
     );
     await service().set(
       user.id,
       assignment.id,
       wodKey(movement.id),
-      rungs[2].id,
+      members[2].id,
     );
 
     // The unique constraint would let a stacking insert fail loudly, but an
     // upsert on the wrong key would quietly leave two rows.
     const swaps = await storedSwaps(assignment.id);
     expect(swaps).toHaveLength(1);
-    expect(swaps[0].exerciseId).toBe(rungs[2].id);
+    expect(swaps[0].exerciseId).toBe(members[2].id);
   });
 
   it('refuses an exercise that is not in the group', async () => {
     const { user, assignment, movement } = await pullDay();
-    const { rungs: squats } = await createGroup('squat', ['Air squat']);
+    const { members: squats } = await createGroup('squat', ['Air squat']);
 
     await expect(
       service().set(user.id, assignment.id, wodKey(movement.id), squats[0].id),
@@ -155,7 +157,7 @@ describe('SubstitutionsService.set', () => {
   it('refuses another athlete’s movement, even sitting on the same movementGroup', async () => {
     // The group is built from a query, so an unscoped one makes every
     // athlete's private movements legal swap targets for everyone else
-    // (DN-93). On the same group and at a free rung, so nothing but the
+    // (DN-93). On the same group and at a free member, so nothing but the
     // ownership scope refuses it.
     const { user, assignment, movement } = await pullDay();
     const stranger = await createUser();
@@ -163,7 +165,7 @@ describe('SubstitutionsService.set', () => {
       name: 'Ring row',
       pattern: 'pull',
       movementGroup: 'pull',
-      rung: 7,
+      sortOrder: 7,
       ownerId: stranger.id,
     });
 
@@ -185,7 +187,7 @@ describe('SubstitutionsService.set', () => {
         name: 'High knees',
         pattern: 'cardio',
         movementGroup: null,
-        rung: null,
+        sortOrder: null,
       },
     });
     const doubleUnders = await testPrisma().exercise.create({
@@ -193,7 +195,7 @@ describe('SubstitutionsService.set', () => {
         name: 'Double-unders',
         pattern: 'cardio',
         movementGroup: null,
-        rung: null,
+        sortOrder: null,
         equipment: ['jump_rope'],
         ...(options.withAlternative === false
           ? {}
@@ -252,12 +254,12 @@ describe('SubstitutionsService.set', () => {
 
   it('refuses an unrelated target on a movement that is off every movementGroup', async () => {
     const { user, assignment, movement } = await cardioDay();
-    const { rungs } = await createGroup('pull', ['Chin-up']);
+    const { members } = await createGroup('pull', ['Chin-up']);
 
     // With no line, the alternative is the whole of what this movement scales
     // to — everything else is a different workout at the prescribed reps.
     await expect(
-      service().set(user.id, assignment.id, wodKey(movement.id), rungs[0].id),
+      service().set(user.id, assignment.id, wodKey(movement.id), members[0].id),
     ).rejects.toThrow(BadRequestException);
     expect(await storedSwaps(assignment.id)).toHaveLength(0);
   });
@@ -273,17 +275,17 @@ describe('SubstitutionsService.set', () => {
   });
 
   it.each(['completed', 'skipped'])('refuses a %s day', async (status) => {
-    const { user, rungs, assignment, movement } = await pullDay({ status });
+    const { user, members, assignment, movement } = await pullDay({ status });
 
     // A swap says what the athlete is going to do; rewriting it afterwards
     // would put the record out of step with the session logged against it.
     await expect(
-      service().set(user.id, assignment.id, wodKey(movement.id), rungs[1].id),
+      service().set(user.id, assignment.id, wodKey(movement.id), members[1].id),
     ).rejects.toThrow(BadRequestException);
   });
 
   it('allows a swap while the session is in progress', async () => {
-    const { user, rungs, assignment, movement } = await pullDay({
+    const { user, members, assignment, movement } = await pullDay({
       status: 'in_progress',
     });
 
@@ -291,14 +293,14 @@ describe('SubstitutionsService.set', () => {
       user.id,
       assignment.id,
       wodKey(movement.id),
-      rungs[1].id,
+      members[1].id,
     );
 
     expect(await storedSwaps(assignment.id)).toHaveLength(1);
   });
 
   it('404s on an assignment belonging to another athlete', async () => {
-    const { rungs, assignment, movement } = await pullDay();
+    const { members, assignment, movement } = await pullDay();
     const mallory = await createUser();
 
     await expect(
@@ -306,16 +308,16 @@ describe('SubstitutionsService.set', () => {
         mallory.id,
         assignment.id,
         wodKey(movement.id),
-        rungs[1].id,
+        members[1].id,
       ),
     ).rejects.toThrow(NotFoundException);
     expect(await storedSwaps(assignment.id)).toHaveLength(0);
   });
 
   it('404s on a movement that is not part of that day WOD', async () => {
-    const { user, rungs, assignment } = await pullDay();
+    const { user, members, assignment } = await pullDay();
     const otherWod = await createWod({
-      movements: [{ exerciseId: rungs[0].id, reps: 21, order: 0 }],
+      movements: [{ exerciseId: members[0].id, reps: 21, order: 0 }],
     });
 
     await expect(
@@ -323,7 +325,7 @@ describe('SubstitutionsService.set', () => {
         user.id,
         assignment.id,
         wodKey(otherWod.movements[0].id),
-        rungs[1].id,
+        members[1].id,
       ),
     ).rejects.toThrow(NotFoundException);
   });
@@ -331,12 +333,12 @@ describe('SubstitutionsService.set', () => {
 
 describe('SubstitutionsService.clear', () => {
   it('puts the movement back to what was prescribed', async () => {
-    const { user, rungs, assignment, movement } = await pullDay();
+    const { user, members, assignment, movement } = await pullDay();
     await service().set(
       user.id,
       assignment.id,
       wodKey(movement.id),
-      rungs[1].id,
+      members[1].id,
     );
 
     await service().clear(user.id, assignment.id, wodKey(movement.id));
@@ -353,12 +355,12 @@ describe('SubstitutionsService.clear', () => {
   });
 
   it('404s on an assignment belonging to another athlete', async () => {
-    const { user, rungs, assignment, movement } = await pullDay();
+    const { user, members, assignment, movement } = await pullDay();
     await service().set(
       user.id,
       assignment.id,
       wodKey(movement.id),
-      rungs[1].id,
+      members[1].id,
     );
     const mallory = await createUser();
 
@@ -370,104 +372,110 @@ describe('SubstitutionsService.clear', () => {
   });
 });
 
-describe('SubstitutionsService.proposedRungChanges', () => {
+describe('SubstitutionsService.proposedMovementChanges', () => {
   it('404s on an assignment belonging to another athlete', async () => {
     const { assignment } = await pullDay();
     const mallory = await createUser();
 
     await expect(
-      service().proposedRungChanges(mallory.id, assignment.id),
+      service().proposedMovementChanges(mallory.id, assignment.id),
     ).rejects.toThrow(NotFoundException);
   });
 
   it('proposes nothing when nothing was swapped', async () => {
     const { user, assignment } = await pullDay();
 
-    expect(await service().proposedRungChanges(user.id, assignment.id)).toEqual(
-      [],
-    );
+    expect(
+      await service().proposedMovementChanges(user.id, assignment.id),
+    ).toEqual([]);
   });
 
-  it('proposes from null when the movementGroup has no standing choice yet', async () => {
+  it('proposes from null when the group has no standing choice yet', async () => {
     // The ordinary case for a first swap since DN-86 stopped provisioning
-    // everyone at rung 0 — and the first choice worth remembering.
-    const { user, rungs, assignment, movement } = await pullDay();
+    // everyone a starting movement — and the first choice worth remembering.
+    // What they were handed in the meantime is the group's default, which is
+    // not something they chose and so not what they are moving from.
+    const { user, members, assignment, movement } = await pullDay();
     await service().set(
       user.id,
       assignment.id,
       wodKey(movement.id),
-      rungs[1].id,
+      members[1].id,
     );
 
-    expect(await service().proposedRungChanges(user.id, assignment.id)).toEqual(
-      [
-        {
-          movementGroup: 'pull',
-          fromRung: null,
-          toRung: 1,
-          exerciseId: rungs[1].id,
-          exerciseName: rungs[1].name,
-        },
-      ],
-    );
+    expect(
+      await service().proposedMovementChanges(user.id, assignment.id),
+    ).toEqual([
+      {
+        movementGroup: 'pull',
+        fromExerciseId: null,
+        fromExerciseName: null,
+        toExerciseId: members[1].id,
+        toExerciseName: members[1].name,
+      },
+    ]);
   });
 
-  it('proposes from the rung on record when there is one', async () => {
-    const { user, rungs, assignment, movement } = await pullDay();
-    await createSkillLevel(user.id, 'pull', 0);
+  it('proposes from the movement on record when there is one', async () => {
+    const { user, members, assignment, movement } = await pullDay();
+    await createSkillLevel(user.id, 'pull', members[0].id);
     await service().set(
       user.id,
       assignment.id,
       wodKey(movement.id),
-      rungs[2].id,
+      members[2].id,
     );
 
-    const [proposal] = await service().proposedRungChanges(
+    const [proposal] = await service().proposedMovementChanges(
       user.id,
       assignment.id,
     );
     expect(proposal).toMatchObject({
       movementGroup: 'pull',
-      fromRung: 0,
-      toRung: 2,
+      fromExerciseId: members[0].id,
+      fromExerciseName: members[0].name,
+      toExerciseId: members[2].id,
     });
   });
 
   it('proposes an easier movement as readily as a harder one', async () => {
     // Remembering what the athlete picked is not the app demoting them.
-    const { user, rungs, assignment, movement } = await pullDay();
-    await createSkillLevel(user.id, 'pull', 2);
+    const { user, members, assignment, movement } = await pullDay();
+    await createSkillLevel(user.id, 'pull', members[2].id);
     await service().set(
       user.id,
       assignment.id,
       wodKey(movement.id),
-      rungs[0].id,
+      members[0].id,
     );
 
-    const [proposal] = await service().proposedRungChanges(
+    const [proposal] = await service().proposedMovementChanges(
       user.id,
       assignment.id,
     );
-    expect(proposal).toMatchObject({ fromRung: 2, toRung: 0 });
+    expect(proposal).toMatchObject({
+      fromExerciseId: members[2].id,
+      toExerciseId: members[0].id,
+    });
   });
 
   it('proposes nothing when the swap matches the standing choice', async () => {
-    const { user, rungs, assignment, movement } = await pullDay();
-    await createSkillLevel(user.id, 'pull', 1);
+    const { user, members, assignment, movement } = await pullDay();
+    await createSkillLevel(user.id, 'pull', members[1].id);
     await service().set(
       user.id,
       assignment.id,
       wodKey(movement.id),
-      rungs[1].id,
+      members[1].id,
     );
 
-    expect(await service().proposedRungChanges(user.id, assignment.id)).toEqual(
-      [],
-    );
+    expect(
+      await service().proposedMovementChanges(user.id, assignment.id),
+    ).toEqual([]);
   });
 
   it('proposes nothing for a swap to the off-group alternative', async () => {
-    // It carries no rung, so there is no position on the group to remember.
+    // It is in no group, so there is no group's choice to move.
     const { user, fallback, assignment, movement } = await pullDay();
     await service().set(
       user.id,
@@ -476,9 +484,9 @@ describe('SubstitutionsService.proposedRungChanges', () => {
       fallback.id,
     );
 
-    expect(await service().proposedRungChanges(user.id, assignment.id)).toEqual(
-      [],
-    );
+    expect(
+      await service().proposedMovementChanges(user.id, assignment.id),
+    ).toEqual([]);
   });
 
   it('takes the choice made most recently when one movementGroup was swapped twice', async () => {
@@ -486,7 +494,7 @@ describe('SubstitutionsService.proposedRungChanges', () => {
     // A mocked client returns whatever the fixture lists and proves nothing
     // about that clause; here the rows are ordered by the database.
     const user = await createUser();
-    const { rungs } = await createGroup('pull', [
+    const { members } = await createGroup('pull', [
       'Negative chin-up',
       'Chin-up',
       'Pull-up',
@@ -494,8 +502,8 @@ describe('SubstitutionsService.proposedRungChanges', () => {
     const wod = await createWod({
       dominantPattern: 'pull',
       movements: [
-        { exerciseId: rungs[0].id, reps: 30, order: 0 },
-        { exerciseId: rungs[0].id, reps: 20, order: 1 },
+        { exerciseId: members[0].id, reps: 30, order: 0 },
+        { exerciseId: members[0].id, reps: 20, order: 1 },
       ],
     });
     const assignment = await createAssignment(user.id, { wodId: wod.id });
@@ -504,13 +512,13 @@ describe('SubstitutionsService.proposedRungChanges', () => {
       user.id,
       assignment.id,
       wodKey(wod.movements[0].id),
-      rungs[2].id,
+      members[2].id,
     );
     await service().set(
       user.id,
       assignment.id,
       wodKey(wod.movements[1].id),
-      rungs[1].id,
+      members[1].id,
     );
 
     // Stamp the timestamps apart so the intended order is unambiguous rather
@@ -526,23 +534,23 @@ describe('SubstitutionsService.proposedRungChanges', () => {
       '2026-09-16T10:05:00Z',
     );
 
-    const proposals = await service().proposedRungChanges(
+    const proposals = await service().proposedMovementChanges(
       user.id,
       assignment.id,
     );
     expect(proposals).toHaveLength(1);
-    // The pull-up was chosen first and the chin-up second: the later one wins,
-    // even though it is the lower rung.
-    expect(proposals[0]).toMatchObject({ toRung: 1, exerciseId: rungs[1].id });
+    // The pull-up was chosen first and the chin-up second: the later one
+    // wins, and there is no ordering it could have preferred instead.
+    expect(proposals[0]).toMatchObject({ toExerciseId: members[1].id });
   });
 
   it('proposes once per movementGroup, in a stable order', async () => {
     const user = await createUser();
-    const { rungs: pull } = await createGroup('pull', [
+    const { members: pull } = await createGroup('pull', [
       'Negative chin-up',
       'Chin-up',
     ]);
-    const { rungs: squat } = await createGroup('squat', [
+    const { members: squat } = await createGroup('squat', [
       'Air squat',
       'Pistol',
     ]);
@@ -567,7 +575,7 @@ describe('SubstitutionsService.proposedRungChanges', () => {
       pull[1].id,
     );
 
-    const proposals = await service().proposedRungChanges(
+    const proposals = await service().proposedMovementChanges(
       user.id,
       assignment.id,
     );
@@ -575,7 +583,7 @@ describe('SubstitutionsService.proposedRungChanges', () => {
   });
 
   it('ignores another athlete swaps on the same movement', async () => {
-    const { user, rungs, assignment, movement } = await pullDay();
+    const { user, members, assignment, movement } = await pullDay();
     const mallory = await createUser();
     const malloryAssignment = await createAssignment(mallory.id, {
       wodId: assignment.wodId!,
@@ -585,21 +593,21 @@ describe('SubstitutionsService.proposedRungChanges', () => {
       mallory.id,
       malloryAssignment.id,
       wodKey(movement.id),
-      rungs[2].id,
+      members[2].id,
     );
     await service().set(
       user.id,
       assignment.id,
       wodKey(movement.id),
-      rungs[1].id,
+      members[1].id,
     );
 
-    const proposals = await service().proposedRungChanges(
+    const proposals = await service().proposedMovementChanges(
       user.id,
       assignment.id,
     );
     expect(proposals).toHaveLength(1);
-    expect(proposals[0]).toMatchObject({ toRung: 1 });
+    expect(proposals[0]).toMatchObject({ toExerciseId: members[1].id });
   });
 });
 
@@ -613,7 +621,7 @@ describe('SubstitutionsService.proposedRungChanges', () => {
  */
 async function prescribedDay(options: { pinned?: string } = {}) {
   const user = await createUser();
-  const { rungs, fallback } = await createGroup(
+  const { members, fallback } = await createGroup(
     'pull',
     ['Negative chin-up', 'Chin-up', 'Pull-up'],
     { fallbackFor: 1 },
@@ -662,7 +670,7 @@ async function prescribedDay(options: { pinned?: string } = {}) {
   });
   return {
     user,
-    rungs,
+    members,
     fallback: fallback!,
     assignment,
     movement: slot.movements[0],
@@ -683,46 +691,46 @@ function prescribedKey(planSlotMovementId: string) {
  */
 describe('SubstitutionsService, on a prescribed day', () => {
   it('records a swap keyed by the prescribed movement', async () => {
-    const { user, rungs, assignment, movement } = await prescribedDay();
+    const { user, members, assignment, movement } = await prescribedDay();
 
     await service().set(
       user.id,
       assignment.id,
       prescribedKey(movement.id),
-      rungs[2].id,
+      members[2].id,
     );
 
     expect(await storedSwaps(assignment.id)).toMatchObject([
       {
         wodMovementId: null,
         planSlotMovementId: movement.id,
-        exerciseId: rungs[2].id,
+        exerciseId: members[2].id,
       },
     ]);
   });
 
   it('corrects the choice rather than stacking a second row', async () => {
-    const { user, rungs, assignment, movement } = await prescribedDay();
+    const { user, members, assignment, movement } = await prescribedDay();
 
     await service().set(
       user.id,
       assignment.id,
       prescribedKey(movement.id),
-      rungs[2].id,
+      members[2].id,
     );
     await service().set(
       user.id,
       assignment.id,
       prescribedKey(movement.id),
-      rungs[0].id,
+      members[0].id,
     );
 
     const stored = await storedSwaps(assignment.id);
     expect(stored).toHaveLength(1);
-    expect(stored[0].exerciseId).toBe(rungs[0].id);
+    expect(stored[0].exerciseId).toBe(members[0].id);
   });
 
-  it('allows the no-equipment alternative of a rung on the movementGroup', async () => {
+  it('allows the no-equipment alternative of a member of the movementGroup', async () => {
     // A group-prescribed row names no exercise, so the whole group and every
     // alternative hanging off it is a legal target -- which is what lets an
     // athlete dropped outside the group by equipment stay off it on purpose.
@@ -759,7 +767,7 @@ describe('SubstitutionsService, on a prescribed day', () => {
     // The prescribed-day half of "is this movement part of today?". Without
     // it, any program's slot in the database would be swappable against any
     // athlete's day.
-    const { user, rungs, assignment } = await prescribedDay();
+    const { user, members, assignment } = await prescribedDay();
     const elsewhere = await prescribedDay();
 
     await expect(
@@ -767,13 +775,13 @@ describe('SubstitutionsService, on a prescribed day', () => {
         user.id,
         assignment.id,
         prescribedKey(elsewhere.movement.id),
-        rungs[2].id,
+        members[2].id,
       ),
     ).rejects.toThrow(NotFoundException);
   });
 
   it('refuses a swap on a day already trained', async () => {
-    const { user, rungs, assignment, movement } = await prescribedDay();
+    const { user, members, assignment, movement } = await prescribedDay();
     await testPrisma().dailyAssignment.update({
       where: { id: assignment.id },
       data: { status: 'completed' },
@@ -784,7 +792,7 @@ describe('SubstitutionsService, on a prescribed day', () => {
         user.id,
         assignment.id,
         prescribedKey(movement.id),
-        rungs[2].id,
+        members[2].id,
       ),
     ).rejects.toThrow(BadRequestException);
   });
@@ -792,13 +800,13 @@ describe('SubstitutionsService, on a prescribed day', () => {
   it('holds an exercise-pinned row to that exercise own group', async () => {
     // The other half of PlanSlotMovement's xor. A pinned row names an
     // exercise, so the group is read from it exactly as a WOD movement's is.
-    const { rungs } = await createGroup('squat', ['Box squat', 'Air squat']);
+    const { members } = await createGroup('squat', ['Box squat', 'Air squat']);
     const {
       user,
-      rungs: pullRungs,
+      members: pullRungs,
       assignment,
       movement,
-    } = await prescribedDay({ pinned: rungs[0].id });
+    } = await prescribedDay({ pinned: members[0].id });
 
     await expect(
       service().set(
@@ -812,18 +820,18 @@ describe('SubstitutionsService, on a prescribed day', () => {
       user.id,
       assignment.id,
       prescribedKey(movement.id),
-      rungs[1].id,
+      members[1].id,
     );
     expect(await storedSwaps(assignment.id)).toHaveLength(1);
   });
 
   it('clears the swap through its own key', async () => {
-    const { user, rungs, assignment, movement } = await prescribedDay();
+    const { user, members, assignment, movement } = await prescribedDay();
     await service().set(
       user.id,
       assignment.id,
       prescribedKey(movement.id),
-      rungs[2].id,
+      members[2].id,
     );
 
     await service().clear(user.id, assignment.id, prescribedKey(movement.id));
@@ -835,9 +843,9 @@ describe('SubstitutionsService, on a prescribed day', () => {
     // The CHECK, which is the database's half of the rule the request schema
     // states. A swap attached to nothing is not a swap, and one attached to
     // two movements cannot say which the athlete tapped.
-    const { user, rungs, assignment, movement } = await prescribedDay();
+    const { user, members, assignment, movement } = await prescribedDay();
     const wod = await createWod({
-      movements: [{ exerciseId: rungs[0].id, reps: 30, order: 0 }],
+      movements: [{ exerciseId: members[0].id, reps: 30, order: 0 }],
     });
 
     await expect(
@@ -845,7 +853,7 @@ describe('SubstitutionsService, on a prescribed day', () => {
         data: {
           userId: user.id,
           assignmentId: assignment.id,
-          exerciseId: rungs[2].id,
+          exerciseId: members[2].id,
         },
       }),
     ).rejects.toThrow(/AssignmentSubstitution_movement_xor/);
@@ -854,7 +862,7 @@ describe('SubstitutionsService, on a prescribed day', () => {
         data: {
           userId: user.id,
           assignmentId: assignment.id,
-          exerciseId: rungs[2].id,
+          exerciseId: members[2].id,
           planSlotMovementId: movement.id,
           wodMovementId: wod.movements[0].id,
         },
@@ -866,14 +874,14 @@ describe('SubstitutionsService, on a prescribed day', () => {
     // The composite unique standing in for a partial index. Two prescribed
     // rows on the same day each carry their own swap; the same row twice
     // cannot.
-    const { user, rungs, assignment, movement } = await prescribedDay();
+    const { user, members, assignment, movement } = await prescribedDay();
 
     await testPrisma().assignmentSubstitution.create({
       data: {
         userId: user.id,
         assignmentId: assignment.id,
         planSlotMovementId: movement.id,
-        exerciseId: rungs[2].id,
+        exerciseId: members[2].id,
       },
     });
 
@@ -883,7 +891,7 @@ describe('SubstitutionsService, on a prescribed day', () => {
           userId: user.id,
           assignmentId: assignment.id,
           planSlotMovementId: movement.id,
-          exerciseId: rungs[0].id,
+          exerciseId: members[0].id,
         },
       }),
     ).rejects.toThrow(/assignmentId_planSlotMovementId/);

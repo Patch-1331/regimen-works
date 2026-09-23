@@ -624,8 +624,8 @@ describe('narrowToSlot', () => {
   });
 
   describe('reporting what it gave up', () => {
-    // One rung at a time: each case constrains every axis, and stocks the
-    // library with exactly the WOD that survives down to the rung under test.
+    // One step at a time: each case constrains every axis, and stocks the
+    // library with exactly the WOD that survives down to the step under test.
     // What is asserted is the report as much as the pool, because the report
     // is the only evidence anyone gets that the library has a hole (DN-14).
     const everything = constraints({

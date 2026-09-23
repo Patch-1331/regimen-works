@@ -34,7 +34,7 @@ type TrainedDay = { date: string; exerciseId: string; name: string };
  * Runs rather than a flat list because the question is when the movement
  * *changed* — twelve identical rows say less than "chin-ups since August".
  *
- * A day that trained two movements of the same group (a WOD naming two rungs)
+ * A day that trained two movements of the same group (a WOD naming two members)
  * ends a run and starts another, which is what actually happened; it is not
  * smoothed into one.
  */

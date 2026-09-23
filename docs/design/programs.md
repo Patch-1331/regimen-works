@@ -34,7 +34,7 @@ the scheduler, the today response, History and Stats.
 | `Plan` | name, summary, goal, scheduleMode, min/maxDaysPerWeek, defaultDays, minWeeks, maxWeeks, defaultWeeks | The program definition. Shared library content, like `Wod`. |
 | `PlanWeek` | planId, order, phase, label | One authored week. `phase` is `intro \| core \| peak`; core weeks are the block that repeats. |
 | `PlanSlot` | planWeekId, dayOfWeek, kind, priority, wodId?, prescription fields | One day. `kind` is `rest \| wod_pinned \| wod_generated \| movements`. |
-| `PlanEnrollment` | userId, planId, startDate, weeks, status, completedAt, startingRungs, summary | The athlete's run at a program. At most one `active` per user. `startingRungs` and `summary` are snapshots — see [Starting and finishing a program](#starting-and-finishing-a-program). |
+| `PlanEnrollment` | userId, planId, startDate, weeks, status, completedAt, startingMovements, summary | The athlete's run at a program. At most one `active` per user. `startingMovements` and `summary` are snapshots — see [Starting and finishing a program](#starting-and-finishing-a-program). |
 
 `DailyAssignment` gains `enrollmentId`, `planSlotId` and `planDayIndex`, all
 nullable, using the same composite `(id, userId)` foreign key the repo
@@ -206,7 +206,7 @@ core wk C → chin-up 5x5
    repeats → A B C A B C …
 ```
 
-No progression rule, no volume multiplier stacking on top of rung
+No progression rule, no volume multiplier stacking on top of movement
 substitution. Sets and reps stay authored per slot, where they can be read
 directly.
 
@@ -262,9 +262,10 @@ default WOD generation whenever `date < enrollment.startDate`. One active
 enrollment, a future start date, one rule — no second enrollment, no
 status-flipping job, and the partial unique index above still holds.
 
-### Snapshot the rungs at the start
+### Snapshot the choices at the start
 
-`PlanEnrollment.startingRungs` records every group's rung on the start date.
+`PlanEnrollment.startingMovements` records every group's chosen movement on the
+start date.
 `SkillLevel` only keeps the current value, so without this snapshot a
 finished program can count sessions but can't say what changed — which is
 the interesting half.
@@ -282,8 +283,8 @@ resumes, so Today always has a workout. A completion card sits above it:
 ```
 
 Ignoring the prompt still gets the athlete training — the app never blocks a
-workout to ask a question. The rung line comes from diffing current
-`SkillLevel` against `startingRungs`.
+workout to ask a question. The movement line comes from diffing current
+`SkillLevel` against `startingMovements`.
 
 ### Completed programs persist
 
@@ -336,15 +337,15 @@ athlete is about to train, not configure.
 
 ### The permanent change is confirmed from something real
 
-If the session was trained at a rung other than the one on record, the
+If the session was trained at a movement other than the one on record, the
 completion screen offers it: *"You did chin-ups today. Make that your pull
-movement?"* One tap, dismissible. The rung moves because of what the athlete
+movement?"* One tap, dismissible. The choice moves because of what the athlete
 actually did — a far better signal than metcon-round inference, and it is
 what makes the progression feel like theirs.
 
 ### Advancement is demoted, not deleted
 
-`computeRungChanges` stops writing rungs and starts proposing them — "you've
+`proposeMovementChanges` stops writing choices and starts proposing them — "you've
 hit 3x8 here three sessions running, ready to try pull-ups?" — offered before
 a workout and accepted by swapping. The encouragement survives; the authority
 doesn't.
@@ -361,7 +362,7 @@ an achievement or a demotion, so no value it could hold would mean anything.
 
 ### Completion is what gets celebrated
 
-The positive-feedback moment moves off the rung and onto the session: you
+The positive-feedback moment moves off the movement and onto the session: you
 finished the workout. That is the feedback the app owes an athlete, and it
 fires every time rather than on the rare session that happens to cross a
 threshold.
@@ -374,10 +375,10 @@ instead of a generic "done".
 
 ### Consequences elsewhere
 
-- **No onboarding calibration.** Everyone starts with no rung at all and
+- **No onboarding calibration.** Everyone starts with no choice at all and
   sets one in a tap on day one against a real workout — less setup friction
   than asking someone to self-assess in the abstract, and a more honest
-  answer. This is also what fixed the rung-0 provisioning problem (see
+  answer. This is also what fixed the bottom-of-the-ladder provisioning problem (see
   below).
 - **The resolver is untouched** (`resolveWodForToday`, renamed from
   `scaleWodToCurrentRung` in DN-88). It reads athlete-authored choices instead
@@ -388,14 +389,14 @@ instead of a generic "done".
 
 ### The provisioning problem this replaced
 
-`user-provisioning.service.ts` used to create every user at rung 0 on all
-eight lines — knee push-ups, supermans, air squats, knee planks. Someone who
+`user-provisioning.service.ts` used to create every user at the bottom of all
+eight ladders — knee push-ups, supermans, air squats, knee planks. Someone who
 could already do ten pull-ups got weeks of wrong workouts and had to grind up
 through the 3x8 rule to escape. Cheap substitution solves this without a
 wizard: the first workout is one tap from correct.
 
 Fixed in DN-86 by deleting the provisioning writes. A new athlete now has no
-`SkillLevel` rows, `applyCurrentRung` passes every movement through unchanged,
+`SkillLevel` rows, `applyRememberedChoice` passes every movement through unchanged,
 and the first row is written when they accept the completion screen's offer to
 keep what they just trained.
 
@@ -428,7 +429,7 @@ improvement that a total of 13 vs. 11 blurs and a flag erases. `5, 5, 3` and
 with fatigue, the other even pacing.
 
 It was also going to be what the demoted advancement nudge needed: "three
-sessions of clean 3x8, ready for the next rung?" depends on the sets having
+sessions of clean 3x8, ready for the next movement?" depends on the sets having
 been clean, which a total can reach by accident. DN-87 deleted the nudge
 instead of building that evidence — the swap panel already shows the next
 movement in order, so the athlete can see it without the app ranking them —
@@ -450,7 +451,7 @@ awkward against jsonb.
 
 A `movements` slot should name the **movement groups** ("pull, 5x3"), not a
 specific exercise, so one program fits every athlete and resolves through the
-rung the athlete owns. Pinning an exercise stays possible for cases where the
+movement the athlete chose. Pinning an exercise stays possible for cases where the
 specific variation is the point — a nullable `exerciseId` and a nullable
 `line` with a CHECK that exactly one is set.
 

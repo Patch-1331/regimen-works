@@ -14,7 +14,7 @@ import type {
   ScheduleCap,
   SetRoundSplitRequest,
   SetSkillLevelRequest,
-  ProposedRungChange,
+  ProposedMovementChange,
   SetSubstitutionRequest,
   Settings,
   SetupOptions,
@@ -154,7 +154,7 @@ export type ApiExercise = {
   unit: "reps" | "seconds";
   instructions: string | null;
   movementGroup: string | null;
-  rung: number | null;
+  sortOrder: number | null;
   fallbackExerciseId: string | null;
   phase: string | null;
   /** Null for global library content, set for the reading athlete's own. */
@@ -282,9 +282,9 @@ export const api = {
       body,
     ),
 
-  proposedRungChanges: (assignmentId: string) =>
-    request<ProposedRungChange[]>(
-      `/assignments/${assignmentId}/substitutions/rung-changes`,
+  proposedMovementChanges: (assignmentId: string) =>
+    request<ProposedMovementChange[]>(
+      `/assignments/${assignmentId}/substitutions/movement-changes`,
     ),
   setSubstitution: (assignmentId: string, body: SetSubstitutionRequest) =>
     postJson<void>(`/assignments/${assignmentId}/substitutions`, body),

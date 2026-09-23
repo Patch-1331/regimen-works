@@ -46,8 +46,8 @@ export function patternLabel(pattern: string): string {
 export type MovementOption = {
   id: string;
   name: string;
-  rung: number;
-  /** The one the athlete currently has on record for this line. */
+  sortOrder: number;
+  /** The one the athlete currently has on record for this group. */
   isChosen: boolean;
 };
 
@@ -55,8 +55,9 @@ export type MovementChoice = {
   movementGroup: string;
   /**
    * The movement the athlete last picked. Null only on a data gap — a stored
-   * rung with no exercise seeded at it — where naming nothing is better than
-   * naming the wrong movement.
+   * choice that is not among the movements this screen loaded, which since
+   * DN-139 means it was archived — where naming nothing is better than naming
+   * the wrong movement.
    */
   chosenName: string | null;
   /** Every movement on the group, in the group's own order. */
@@ -75,7 +76,7 @@ export type MovementChoice = {
  * One entry per group the athlete has actually chosen on, and deliberately not
  * one per group that exists. Rendering all eight with "not set yet" would turn
  * this screen into the calibration wizard DN-86 removed: the app asking what
- * you can do, in the abstract, before it has seen you train. A line appears
+ * you can do, in the abstract, before it has seen you train. A group appears
  * here once there is something true to say about it.
  */
 export function buildMovementChoices(
@@ -84,7 +85,7 @@ export function buildMovementChoices(
 ): MovementChoice[] {
   const exercisesByLine = new Map<string, ApiExercise[]>();
   for (const e of exercises) {
-    if (!e.movementGroup || e.rung === null) continue;
+    if (!e.movementGroup || e.sortOrder === null) continue;
     const list = exercisesByLine.get(e.movementGroup) ?? [];
     list.push(e);
     exercisesByLine.set(e.movementGroup, list);
@@ -92,17 +93,21 @@ export function buildMovementChoices(
 
   return skillLevels
     .slice()
-    .sort((a, b) => lineLabel(a.movementGroup).localeCompare(lineLabel(b.movementGroup)))
+    .sort((a, b) =>
+      lineLabel(a.movementGroup).localeCompare(lineLabel(b.movementGroup)),
+    )
     .map((skill) => {
       const lineExercises = (exercisesByLine.get(skill.movementGroup) ?? [])
         .slice()
-        .sort((a, b) => (a.rung ?? 0) - (b.rung ?? 0));
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
       const options: MovementOption[] = lineExercises.map((e) => ({
         id: e.id,
         name: e.name,
-        rung: e.rung ?? 0,
-        isChosen: (e.rung ?? 0) === skill.rung,
+        sortOrder: e.sortOrder ?? 0,
+        // By id since DN-139. Matching on position meant that reordering a
+        // group moved the tick to a movement the athlete never picked.
+        isChosen: e.id === skill.exerciseId,
       }));
 
       return {

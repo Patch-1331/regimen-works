@@ -1,4 +1,5 @@
 import { addIsoDays } from '@regimen-works/shared';
+import { usableChoice, type GroupMember } from '../plans/group-choice';
 
 /**
  * Pure scheduling logic — no DB, no Date.now(), no Math.random() calls
@@ -183,45 +184,48 @@ export function isRestDay(isoDate: string, trainingDays: number[]): boolean {
   return !trainingDays.includes(weekday);
 }
 
-export type ExerciseWithLine = {
-  movementGroup: string | null;
-};
+export type ExerciseWithLine = GroupMember;
 
 /**
- * Swaps each movement's exercise for the one the athlete last chose on that
- * movement's line, so they do not re-pick the same movement every session
+ * Swaps each movement's exercise for the one the athlete performs in that
+ * movement's group, so they do not re-pick the same movement every session
  * (Feature #2).
  *
  * This applies a remembered preference, not a verdict (DN-88). The app holds
- * no view about what anyone is capable of: the stored rung is the last thing
- * they picked, and the group it belongs to is a grouping and a sort order, not a
- * scale they are being measured against.
+ * no view about what anyone is capable of: the stored choice is the last thing
+ * they picked, and the group it belongs to is a set of interchangeable
+ * movements, not a scale they are being measured against.
  *
  * Reps are left untouched — only the exercise identity changes, matching
  * "preserve function" (source 01 in the design doc): same rep scheme, movement
  * substituted within its own pattern.
  *
- * Movements whose exercise isn't on a group (`line === null`, e.g.
- * cardio) pass through unchanged, as does any movement where the athlete has
- * chosen nothing or no exercise exists at that line+rung — a curated WOD
- * should never end up with a hole in its movement list because of a data gap.
+ * Movements in no group (`movementGroup === null`, e.g. cardio) pass through
+ * unchanged, and so does every movement of an athlete who has chosen nothing
+ * in its group: a WOD names a movement, so the authored one is already the
+ * answer and there is no gap for the group's default to fill. That is the one
+ * place this path differs from the prescription path, where a slot authors a
+ * group and nothing else (DN-139).
+ *
+ * A stored choice that is archived, or that the athlete owns nothing for,
+ * takes the same route as an absent one — all three reach the athlete as a
+ * movement they did not pick, and the authored movement is the honest answer
+ * to each.
  */
 export function applyRememberedChoice<
   M extends { exercise: E },
   E extends ExerciseWithLine,
 >(
   movements: M[],
-  chosenRung: Map<string, number>,
-  exerciseAtRung: Map<string, E>, // key: `${line}:${rung}`
+  chosen: ReadonlyMap<string, string>,
+  byId: ReadonlyMap<string, E>,
+  owned: ReadonlySet<string>,
 ): M[] {
   return movements.map((m) => {
     const movementGroup = m.exercise.movementGroup;
     if (!movementGroup) return m;
 
-    const rung = chosenRung.get(movementGroup);
-    if (rung === undefined) return m;
-
-    const substitute = exerciseAtRung.get(`${movementGroup}:${rung}`);
+    const substitute = usableChoice(movementGroup, chosen, byId, owned);
     if (!substitute) return m;
 
     return { ...m, exercise: substitute };
@@ -323,11 +327,11 @@ export function applyEquipmentAvailability<
  * what they picked some time ago, the swap is what they want today, and today
  * wins.
  *
- * Keyed by WodMovement id rather than by exercise or line, so a WOD naming
+ * Keyed by WodMovement id rather than by exercise or group, so a WOD naming
  * the same group twice moves only the row that was tapped.
  *
  * A swap whose exercise is missing from `exerciseById` passes through
- * unchanged rather than throwing, for the same reason a missing rung does:
+ * unchanged rather than throwing, for the same reason a missing choice does:
  * the athlete is about to train, and a data gap must not leave a hole in the
  * movement list.
  */

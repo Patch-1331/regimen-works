@@ -341,7 +341,7 @@ export function TodayPage() {
       : `/workout/${assignmentId}`;
   // True whenever at least one movement is on a tracked movement groups
   // (Feature #2) — the scheduler already substituted every such movement
-  // for the exercise at the user's current rung before this response left
+  // for the movement the athlete had chosen before this response left
   // the API. The badge says the plate has been fitted to the athlete, not
   // that it's fixed: those same rows are the ones that carry a swap control.
   const isAutoScaled = wod.movements.some((m) => m.exercise.movementGroup !== null);
@@ -658,7 +658,7 @@ function PrescribedName({
           {movement.exercise.name.toUpperCase()}
         </span>
         {/* Only equipment can move a prescribed movement without the athlete
-            asking (DN-19) — resolving the group through their rung is the
+            asking (DN-19) — resolving the group through their choice is the
             prescription rather than a substitution for it — so there is one
             word here where the WOD plate has two. */}
         {movement.prescribedName && (

@@ -5,7 +5,8 @@
  * Every runtime layer here degrades quietly rather than throwing, and each
  * says why in the same words: the athlete is about to train, so a data gap
  * must not leave a hole in the movement list. `applyRememberedChoice` passes
- * a movement through when no exercise sits at that rung, `applySubstitutions`
+ * a movement through when its group has no member to resolve to,
+ * `applySubstitutions`
  * when the substitute is missing, and `applyEquipmentAvailability` when there
  * is no alternative to fall to.
  *

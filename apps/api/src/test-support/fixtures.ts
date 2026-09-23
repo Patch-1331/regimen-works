@@ -28,7 +28,7 @@ export async function createExercise(overrides: Record<string, unknown> = {}) {
       pattern: 'push',
       unit: 'reps',
       movementGroup: 'push_horizontal',
-      rung: 0,
+      sortOrder: 0,
       ...overrides,
     },
   });
@@ -134,21 +134,26 @@ export async function createLog(
 export async function createSkillLevel(
   userId: string,
   movementGroup: string,
-  rung: number,
+  exerciseId: string,
 ) {
   return testPrisma().skillLevel.create({
-    data: { userId, movementGroup, rung },
+    data: { userId, movementGroup, exerciseId },
   });
 }
 
 /**
- * A movement groups as the athlete sees it: rungs 0..n-1 of one line, each
- * with an optional no-equipment alternative outside the group entirely.
+ * A movement group as the athlete sees it: `names` in list order, each with an
+ * optional no-equipment alternative outside the group entirely.
+ *
+ * The first member is the group's default unless `defaultAt` says otherwise,
+ * which keeps the common case to one argument while letting a test about
+ * DN-139's default resolution put the default somewhere other than the front —
+ * the whole point of declaring it rather than inferring it from the order.
  */
 export async function createGroup(
   movementGroup: string,
   names: string[],
-  options: { fallbackFor?: number } = {},
+  options: { fallbackFor?: number; defaultAt?: number } = {},
 ) {
   const fallback =
     options.fallbackFor === undefined
@@ -156,21 +161,30 @@ export async function createGroup(
       : await createExercise({
           name: unique('Row under table'),
           movementGroup: null,
-          rung: null,
+          sortOrder: null,
         });
 
-  const rungs: Awaited<ReturnType<typeof createExercise>>[] = [];
+  // One declared default per group, enforced by a partial unique index. A
+  // test that builds the same group twice -- two athletes' days, say -- gets
+  // one default across both, which is what a single library would hold.
+  const defaultAt = options.defaultAt ?? 0;
+  const declared =
+    (await testPrisma().exercise.count({
+      where: { movementGroup, isGroupDefault: true },
+    })) > 0;
+  const members: Awaited<ReturnType<typeof createExercise>>[] = [];
   for (const [index, name] of names.entries()) {
-    rungs.push(
+    members.push(
       await createExercise({
         name: unique(name),
         movementGroup,
-        rung: index,
+        sortOrder: index,
+        isGroupDefault: !declared && index === defaultAt,
         fallbackExerciseId: index === options.fallbackFor ? fallback!.id : null,
       }),
     );
   }
-  return { rungs, fallback };
+  return { members, fallback };
 }
 
 /**

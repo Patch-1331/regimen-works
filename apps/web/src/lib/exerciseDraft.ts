@@ -15,10 +15,10 @@ import type { ApiExercise, LibraryTier } from "./api";
  * `<select>` and an `<input>` have no null — they have "". Converting at the
  * edge, in `toWriteBody`, keeps the "" in one place instead of at each field.
  *
- * `rung` is the reason this matters rather than being a detail. It is a
+ * `sortOrder` is the reason this matters rather than being a detail. It is a
  * number the schema allows to be 0, and `Number("")` is also 0 — so a form
  * holding it as a number cannot tell an empty box from the first position
- * in a group, and would write rung 0 onto every movement that has none.
+ * in a group, and would write order 0 onto every movement that has none.
  */
 export type ExerciseDraft = {
   name: string;
@@ -28,7 +28,7 @@ export type ExerciseDraft = {
   unit: ExerciseUnit;
   instructions: string;
   movementGroup: MovementGroup | "";
-  rung: string;
+  sortOrder: string;
   fallbackExerciseId: string;
   phase: ExercisePhase | "";
 };
@@ -42,7 +42,7 @@ export const EMPTY_DRAFT: ExerciseDraft = {
   unit: "reps",
   instructions: "",
   movementGroup: "",
-  rung: "",
+  sortOrder: "",
   fallbackExerciseId: "",
   phase: "",
 };
@@ -57,13 +57,13 @@ export function toDraft(exercise: ApiExercise): ExerciseDraft {
     unit: exercise.unit,
     instructions: exercise.instructions ?? "",
     movementGroup: (exercise.movementGroup ?? "") as MovementGroup | "",
-    rung: exercise.rung === null ? "" : String(exercise.rung),
+    sortOrder: exercise.sortOrder === null ? "" : String(exercise.sortOrder),
     fallbackExerciseId: exercise.fallbackExerciseId ?? "",
     phase: (exercise.phase ?? "") as ExercisePhase | "",
   };
 }
 
-/** The draft as the API takes it — "" back to null, `rung` back to a number. */
+/** The draft as the API takes it — "" back to null, `sortOrder` back to a number. */
 export function toWriteBody(draft: ExerciseDraft): CreateExercise {
   return {
     name: draft.name.trim(),
@@ -74,7 +74,7 @@ export function toWriteBody(draft: ExerciseDraft): CreateExercise {
     instructions:
       draft.instructions.trim() === "" ? null : draft.instructions.trim(),
     movementGroup: draft.movementGroup === "" ? null : draft.movementGroup,
-    rung: draft.rung === "" ? null : Number(draft.rung),
+    sortOrder: draft.sortOrder === "" ? null : Number(draft.sortOrder),
     fallbackExerciseId: draft.fallbackExerciseId === "" ? null : draft.fallbackExerciseId,
     phase: draft.phase === "" ? null : draft.phase,
   };
@@ -124,12 +124,12 @@ export function problemsWith(
     problems.push("A movement needs a name.");
   }
 
-  // Half an answer is no answer: the remembered-choice lookup keys
-  // on `line:rung`, so a movement with one and not the other sits in a group it
-  // can never be selected from.
-  if ((draft.movementGroup === "") !== (draft.rung === "")) {
+  // Half an answer is no answer: a movement with a group and no order has
+  // nowhere to sit in the panel the athlete picks from, and one with an order
+  // and no group has no group to be ordered within.
+  if ((draft.movementGroup === "") !== (draft.sortOrder === "")) {
     problems.push(
-      "A movement on a progression movementGroup needs its position on it — set both the movementGroup and the rung, or neither.",
+      "A movement in a movement group needs its position in it — set both the movementGroup and the order, or neither.",
     );
   }
 

@@ -40,9 +40,9 @@ export const movementExerciseSchema = z.object({
   movementGroup: movementGroup.nullable(),
   // Where this exercise is listed among its group's members, and its
   // no-equipment fallback. Carried on the movement so the Today plate's
-  // swap panel (WOD-5) can mark the current choice and offer the fallback
+  // swap panel (WOD-5) can order the group's movements and offer the fallback
   // without a second request. Both null outside a group.
-  rung: z.number().int().nonnegative().nullable(),
+  sortOrder: z.number().int().nonnegative().nullable(),
   fallbackExerciseId: z.string().nullable(),
 });
 export type MovementExercise = z.infer<typeof movementExerciseSchema>;

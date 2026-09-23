@@ -11,7 +11,7 @@ import type {
 } from '@regimen-works/shared';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { snapshotRungs } from '../enrollments/starting-rungs';
+import { snapshotMovements } from '../enrollments/starting-movements';
 import { fixedDaysOf, setupRejection, startDateRange } from './setup.logic';
 
 /**
@@ -154,7 +154,7 @@ export class SetupService {
         planId: body.planId,
         startDate: body.startDate,
         weeks: body.weeks,
-        startingRungs: await snapshotRungs(tx, userId),
+        startingMovements: await snapshotMovements(tx, userId),
       };
       if (active) {
         await tx.planEnrollment.update({

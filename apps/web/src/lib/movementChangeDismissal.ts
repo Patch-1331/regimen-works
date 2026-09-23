@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 /**
- * Remembering that an athlete declined a rung change (WOD-6).
+ * Remembering that an athlete declined a change of movement (WOD-6).
  *
  * Per assignment, so coming back to edit a note doesn't re-ask a question
  * already answered. A browser-local convenience rather than domain state: it
@@ -9,7 +9,8 @@ import { useState } from "react";
  * on another device and nothing to the API.
  */
 
-const dismissedKey = (assignmentId: string) => `rung-change-dismissed:${assignmentId}`;
+const dismissedKey = (assignmentId: string) =>
+  `movement-change-dismissed:${assignmentId}`;
 
 export function wasDismissed(assignmentId: string): boolean {
   try {
@@ -30,7 +31,7 @@ export function rememberDismissed(assignmentId: string): void {
 }
 
 /** The state the card needs, kept here so the page stays about logging a result. */
-export function useRungChangeCard(assignmentId: string) {
+export function useMovementChangeCard(assignmentId: string) {
   const [dismissed, setDismissed] = useState(() => wasDismissed(assignmentId));
 
   return {

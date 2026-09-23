@@ -16,16 +16,16 @@ import {
 import { api } from "../lib/api";
 import { formatClock } from "../lib/clock";
 import { MinusIcon, PlusIcon } from "../components/StepperIcons";
-import { RungChangeCard } from "../components/RungChangeCard";
+import { MovementChangeCard } from "../components/MovementChangeCard";
 import { CompletionCard } from "../components/CompletionCard";
-import { useRungChangeCard } from "../lib/rungChangeDismissal";
+import { useMovementChangeCard } from "../lib/movementChangeDismissal";
 import { compareToLastSession, trainingDaysThisWeek } from "../lib/stats";
 
 /**
  * What today was, as this screen needs to read it (DN-126).
  *
  * The two kinds of day share this form rather than getting one each: the
- * header, the completion card, the rung-change offer, RPE, notes and the save
+ * header, the completion card, the movement-change offer, RPE, notes and the save
  * are the same screen either way, and only the result itself differs. A
  * union rather than two nullable fields, so "neither" and "both" cannot be
  * written down -- the same rule `todayAssignmentSchema` enforces at the API.
@@ -153,25 +153,25 @@ function LogResultForm({
   // What today's swaps offer to make permanent (WOD-6). Declining is
   // remembered per assignment, so coming back to edit a note doesn't re-ask a
   // question already answered.
-  const { dismissed, dismiss } = useRungChangeCard(assignmentId);
+  const { dismissed, dismiss } = useMovementChangeCard(assignmentId);
   const { data: proposals } = useQuery({
-    queryKey: ["rung-changes", assignmentId],
-    queryFn: () => api.proposedRungChanges(assignmentId),
+    queryKey: ["movement-changes", assignmentId],
+    queryFn: () => api.proposedMovementChanges(assignmentId),
     enabled: !dismissed,
   });
 
-  const acceptRungChanges = useMutation({
+  const acceptMovementChanges = useMutation({
     mutationFn: async () => {
       // Sequential rather than parallel: these are separate rows and a
       // partial failure should leave the earlier ones written, not race.
       for (const p of proposals ?? []) {
-        await api.setSkillLevel(p.movementGroup, { rung: p.toRung });
+        await api.setSkillLevel(p.movementGroup, { exerciseId: p.toExerciseId });
       }
     },
     onSuccess: async () => {
       dismiss();
       await queryClient.invalidateQueries({ queryKey: ["skillLevels"] });
-      // Today's plate reads through the rung, so it has to be re-derived.
+      // Today's plate reads through the choice, so it has to be re-derived.
       await queryClient.invalidateQueries({ queryKey: ["today"] });
     },
   });
@@ -265,11 +265,11 @@ function LogResultForm({
       )}
 
       {!dismissed && (
-        <RungChangeCard
+        <MovementChangeCard
           proposals={proposals ?? []}
-          onAccept={() => acceptRungChanges.mutate()}
+          onAccept={() => acceptMovementChanges.mutate()}
           onDismiss={dismiss}
-          isSaving={acceptRungChanges.isPending}
+          isSaving={acceptMovementChanges.isPending}
         />
       )}
 

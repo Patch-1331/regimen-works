@@ -1,8 +1,9 @@
 import type { Prisma } from '@prisma/client';
-import type { RungSnapshot } from '@regimen-works/shared';
+import type { MovementSnapshot } from '@regimen-works/shared';
 
 /**
- * Where every group the athlete has an opinion about stands right now (DN-18).
+ * Which movement the athlete performs in every group they have an opinion
+ * about, right now (DN-18).
  *
  * Taken when a run starts, because `SkillLevel` keeps only the current value:
  * without this a finished program can count its sessions but cannot say what
@@ -13,17 +14,18 @@ import type { RungSnapshot } from '@regimen-works/shared';
  * not broken today and reports nothing months later, which is the kind of
  * omission that is invisible exactly until it matters.
  *
- * Lines the athlete has never trained are simply absent, and that is the
- * honest shape: `rungChangesOver` reads an absent line as rung 0, and storing
- * a row of zeroes here instead would claim the athlete had answered.
+ * Groups the athlete has never chosen in are simply absent, and that is the
+ * honest shape: `movementChangesOver` reports a group they arrived with no
+ * choice in as a change from nothing, which is what happened. Filling the gap
+ * with the group's default (DN-139) would instead claim they had answered.
  */
-export async function snapshotRungs(
+export async function snapshotMovements(
   tx: Pick<Prisma.TransactionClient, 'skillLevel'>,
   userId: string,
-): Promise<RungSnapshot> {
+): Promise<MovementSnapshot> {
   const rows = await tx.skillLevel.findMany({
     where: { userId },
-    select: { movementGroup: true, rung: true },
+    select: { movementGroup: true, exerciseId: true },
   });
-  return Object.fromEntries(rows.map((r) => [r.movementGroup, r.rung]));
+  return Object.fromEntries(rows.map((r) => [r.movementGroup, r.exerciseId]));
 }

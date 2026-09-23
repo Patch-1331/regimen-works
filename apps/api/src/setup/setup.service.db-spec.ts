@@ -6,6 +6,7 @@ import { testPrisma } from '../test-support/database';
 import {
   createAssignment,
   createEnrollment,
+  createExercise,
   createFixedPlan,
   createLog,
   createPlan,
@@ -254,27 +255,29 @@ describe('SetupService.commit', () => {
     // program can count sessions but cannot say what changed, which is the
     // half of the card worth reading.
     const { userId } = await provisionedAthlete();
-    await createSkillLevel(userId, 'pull', 2);
-    await createSkillLevel(userId, 'squat', 1);
+    const chinUp = await createExercise({ movementGroup: 'pull' });
+    const goblet = await createExercise({ movementGroup: 'squat' });
+    await createSkillLevel(userId, 'pull', chinUp.id);
+    await createSkillLevel(userId, 'squat', goblet.id);
     const plan = await createPlan();
 
     await service().commit(userId, answers({ planId: plan.id }), TODAY);
 
-    expect((await activeEnrollment(userId)).startingRungs).toEqual({
-      pull: 2,
-      squat: 1,
+    expect((await activeEnrollment(userId)).startingMovements).toEqual({
+      pull: chinUp.id,
+      squat: goblet.id,
     });
   });
 
   it('snapshots nothing for an athlete who has trained nothing', async () => {
     // The ordinary first run: DN-86 provisions no SkillLevel rows, so every
-    // line starts absent and reads as rung 0 wherever it is diffed.
+    // group starts absent and diffs from null (DN-139).
     const { userId } = await provisionedAthlete();
     const plan = await createPlan();
 
     await service().commit(userId, answers({ planId: plan.id }), TODAY);
 
-    expect((await activeEnrollment(userId)).startingRungs).toEqual({});
+    expect((await activeEnrollment(userId)).startingMovements).toEqual({});
   });
 
   it('puts away a completion card the athlete has just answered', async () => {
@@ -285,7 +288,7 @@ describe('SetupService.commit', () => {
     const finished = await createEnrollment(userId, {
       status: 'completed',
       completedAt: new Date('2026-09-15T09:00:00.000Z'),
-      summary: { weeks: 6, sessions: 24, rungChanges: [] },
+      summary: { weeks: 6, sessions: 24, movementChanges: [] },
     });
     const plan = await createPlan();
 

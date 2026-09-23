@@ -21,7 +21,7 @@ const options: SwapOption[] = [
   {
     exerciseId: "row",
     name: "Row under table",
-    rung: null,
+    sortOrder: null,
     isCurrent: true,
     isAlternative: true,
     isPrescribed: false,
@@ -34,7 +34,7 @@ const withPrescribed: SwapOption[] = [
   {
     exerciseId: "pull-up",
     name: "Pull-up",
-    rung: null,
+    sortOrder: null,
     isCurrent: false,
     isAlternative: false,
     isPrescribed: true,

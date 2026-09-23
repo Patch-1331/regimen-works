@@ -6,9 +6,9 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { libraryVisibleTo } from '../library/visible-to';
 import {
-  proposeRungChanges,
-  type ProposedRungChange,
-} from './rung-changes.logic';
+  proposeMovementChanges,
+  type ProposedMovementChange,
+} from './movement-changes.logic';
 
 @Injectable()
 export class SubstitutionsService {
@@ -55,20 +55,20 @@ export class SubstitutionsService {
   }
 
   /**
-   * What this session offers to keep as the athlete's default (WOD-6) — the
-   * lines trained at something other than their standing choice.
+   * What this session offers to keep as the athlete's standing choice (WOD-6)
+   * — the groups trained at something other than it.
    *
    * Read from the substitutions rather than from the WOD, because the WOD says
    * what was prescribed and these rows say what was chosen -- which is why a
-   * prescribed day's swaps (DN-125) count here on exactly the same terms,
-   * with nothing to add: a rung trained is a rung trained. A swap to an
-   * fallback (the no-equipment stand-in) is not a group member, so it carries no position and
-   * there is no position on the group to remember and it proposes nothing.
+   * prescribed day's swaps (DN-125) count here on exactly the same terms, with
+   * nothing to add: a movement trained is a movement trained. A swap to a
+   * fallback (the no-equipment stand-in) is in no group, so there is no group's
+   * choice to move and it proposes nothing.
    */
-  async proposedRungChanges(
+  async proposedMovementChanges(
     userId: string,
     assignmentId: string,
-  ): Promise<ProposedRungChange[]> {
+  ): Promise<ProposedMovementChange[]> {
     const assignment = await this.prisma.dailyAssignment.findFirst({
       where: { id: assignmentId, userId },
       select: { id: true },
@@ -79,27 +79,32 @@ export class SubstitutionsService {
       this.prisma.assignmentSubstitution.findMany({
         where: { userId, assignmentId },
         include: { exercise: true },
-        // Oldest first: `proposeRungChanges` breaks a tie on the same group by
+        // Oldest first: `proposeMovementChanges` breaks a tie on the same group by
         // taking the choice made most recently (DN-88).
         orderBy: { updatedAt: 'asc' },
       }),
-      this.prisma.skillLevel.findMany({ where: { userId } }),
+      this.prisma.skillLevel.findMany({
+        where: { userId },
+        include: { exercise: { select: { id: true, name: true } } },
+      }),
     ]);
 
     const trained = substitutions
-      .filter(
-        (s) => s.exercise.movementGroup !== null && s.exercise.rung !== null,
-      )
+      .filter((s) => s.exercise.movementGroup !== null)
       .map((s) => ({
         movementGroup: s.exercise.movementGroup!,
-        rung: s.exercise.rung!,
         exerciseId: s.exercise.id,
         exerciseName: s.exercise.name,
       }));
 
-    return proposeRungChanges(
+    return proposeMovementChanges(
       trained,
-      new Map(skillLevels.map((s) => [s.movementGroup, s.rung])),
+      new Map(
+        skillLevels.map((s) => [
+          s.movementGroup,
+          { exerciseId: s.exercise.id, exerciseName: s.exercise.name },
+        ]),
+      ),
     );
   }
 
@@ -156,8 +161,8 @@ export class SubstitutionsService {
         );
       }
       // A group-prescribed row has no exercise of its own: the group *is* what
-      // it named, and which rung the athlete is standing on is resolved per
-      // read rather than stored. Null current exercise is right for it -- the
+      // it named, and which movement the athlete performs in it is resolved
+      // per read rather than stored. Null current exercise is right for it -- the
       // legality check then asks only whether the target is in that group.
       return movement.exercise
         ? {

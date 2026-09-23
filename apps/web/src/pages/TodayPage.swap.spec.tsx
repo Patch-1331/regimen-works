@@ -32,7 +32,7 @@ const doubleUnders = fixtures.apiExercise({
   pattern: "cardio",
   equipment: ROPE,
   movementGroup: null,
-  rung: null,
+  sortOrder: null,
   fallbackExercise: { id: "high-knees", name: "High knees" },
 });
 
@@ -41,7 +41,7 @@ const highKnees = fixtures.apiExercise({
   name: "High knees",
   pattern: "cardio",
   movementGroup: null,
-  rung: null,
+  sortOrder: null,
   fallbackExercise: null,
 });
 
@@ -77,7 +77,7 @@ function plateShowing(
                     unit: "reps",
                     instructions: null,
                     movementGroup: null,
-                    rung: null,
+                    sortOrder: null,
                     fallbackExerciseId: exercise.fallbackExercise?.id ?? null,
                   },
                 }),
@@ -142,20 +142,20 @@ describe("the swap control on an off-group movement", () => {
  * the way *off* it: an athlete who owned a rope and could not yet turn doubles
  * was shown high knees, which is the app taking away gear they have.
  */
-describe("a movementGroup where every rung needs the same equipment", () => {
+describe("a movementGroup where every member needs the same equipment", () => {
   const singleUnders = fixtures.apiExercise({
     id: "single-unders",
     name: "Single-unders",
     pattern: "cardio",
     equipment: ROPE,
     movementGroup: "cardio_rope",
-    rung: 0,
+    sortOrder: 0,
     fallbackExercise: { id: "high-knees", name: "High knees" },
   });
   const linedDoubleUnders = fixtures.apiExercise({
     ...doubleUnders,
     movementGroup: "cardio_rope",
-    rung: 1,
+    sortOrder: 1,
   });
 
   /** Rope Trick as an athlete who owns a rope is served it. */
@@ -181,7 +181,7 @@ describe("a movementGroup where every rung needs the same equipment", () => {
                       unit: "reps",
                       instructions: null,
                       movementGroup: "cardio_rope",
-                      rung: 1,
+                      sortOrder: 1,
                       fallbackExerciseId: "high-knees",
                     },
                   }),
@@ -194,7 +194,7 @@ describe("a movementGroup where every rung needs the same equipment", () => {
     );
   }
 
-  it("offers the easier rung instead of only the way off the rope", async () => {
+  it("offers the easier movement instead of only the way off the rope", async () => {
     ropeDay();
     renderRoute("/");
 
@@ -202,7 +202,7 @@ describe("a movementGroup where every rung needs the same equipment", () => {
       await screen.findByRole("button", { name: /swap double-unders/i }),
     );
 
-    // The whole line in order with the current rung marked, then the
+    // The whole group in order with the current movement marked, then the
     // bodyweight alternative last — the shape every other line already has.
     expect(screen.getByRole("button", { name: /^single-unders/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^double-unders/i })).toHaveAttribute(

@@ -1,86 +1,74 @@
 import {
   movementGroup,
   type EnrollmentSummary,
-  type RungChange,
-  type RungSnapshot,
+  type MovementChange,
+  type MovementSnapshot,
 } from '@regimen-works/shared';
 
 /**
  * What a finished program has to show for itself (DN-18).
  *
  * Pure, because every input is a fact the caller has already fetched and the
- * interesting part is the arithmetic on them: which lines moved, in which
- * direction, and what the movement was called at each end.
+ * interesting part is the arithmetic on them: which groups moved, and what the
+ * movement was called at each end.
  */
 
-/** The exercise seeded at a rung in a group, or undefined where none is. */
-export type RungNames = ReadonlyMap<string, string>;
-
-/** The key both sides of the diff look a name up by. */
-export function rungKey(movementGroup: string, rung: number): string {
-  return `${movementGroup}:${rung}`;
-}
-
-/**
- * A group the athlete has never chosen on reads as position 0, not as "no
- * answer".
- *
- * The reason once given for this -- "everyone starts at the bottom of every
- * ladder and fixes it in one tap on their first workout" -- describes the app
- * as it was before DN-86 stopped provisioning anyone onto anything, and it is
- * the wrong question here besides. This function decides what the card claims
- * *moved*, and an athlete who never chose did not move from anywhere: the
- * default invents a change that never happened.
- *
- * ADR-0004 settles it the other way -- an absent choice means the group did
- * not move, and the card says nothing about it.
- */
-function rungOf(
-  rungs: ReadonlyMap<string, number>,
-  movementGroup: string,
-): number {
-  return rungs.get(movementGroup) ?? 0;
-}
+/** Movement names by exercise id, for the groups in play. */
+export type MovementNames = ReadonlyMap<string, string>;
 
 /**
  * Which groups moved over the run, and what they moved between.
  *
- * Both directions are reported. A rung that went down is a real outcome of a
- * program -- an athlete who deloaded, or who corrected an over-ambitious first
- * guess -- and a card that showed only the rises would be flattering rather
- * than accurate.
+ * Both directions are reported, because "up" is not a thing this app has an
+ * opinion about (DN-88). A group is in the list when the athlete performs a
+ * different movement in it than they did on the start date, and that is the
+ * whole test — the summary describes what changed, not whether it improved.
  *
- * A line whose exercise cannot be named at either end is left out rather than
- * rendered with a gap in it. That happens when the library has no exercise
- * seeded at a rung the athlete somehow holds, which is a library hole and not
+ * A group the athlete had not chosen in when the run began reports a null
+ * `from`: they moved from nothing, which is what happened. Before DN-139 this
+ * read as rung 0, which invented a movement they were never shown and then
+ * reported them as having climbed off it. An absent choice is now absent all
+ * the way through.
+ *
+ * A group is left out when the athlete has no choice in it *now* — there is no
+ * destination to name — or when either end's movement cannot be named, which
+ * means the row was hard-deleted out from under the snapshot. Neither is
  * something the athlete should be shown a broken sentence about.
  */
-export function rungChangesOver(
-  startingRungs: RungSnapshot,
-  currentRungs: ReadonlyMap<string, number>,
-  names: RungNames,
-): RungChange[] {
-  const started = new Map(Object.entries(startingRungs));
-  const lines = new Set([...started.keys(), ...currentRungs.keys()]);
+export function movementChangesOver(
+  startingMovements: MovementSnapshot,
+  currentMovements: ReadonlyMap<string, string>,
+  names: MovementNames,
+): MovementChange[] {
+  const started = new Map(Object.entries(startingMovements));
+  const groups = new Set([...started.keys(), ...currentMovements.keys()]);
 
-  return [...lines]
+  return [...groups]
     .filter((group) => movementGroup.safeParse(group).success)
     .sort()
     .flatMap((group) => {
-      const fromRung = rungOf(started, group);
-      const toRung = rungOf(currentRungs, group);
-      if (fromRung === toRung) return [];
+      const fromExerciseId = started.get(group) ?? null;
+      const toExerciseId = currentMovements.get(group);
+      if (toExerciseId === undefined || fromExerciseId === toExerciseId)
+        return [];
 
-      const fromName = names.get(rungKey(group, fromRung));
-      const toName = names.get(rungKey(group, toRung));
-      if (fromName === undefined || toName === undefined) return [];
+      const toName = names.get(toExerciseId);
+      if (toName === undefined) return [];
+
+      // Null `from` is a real value; a `from` that is set but unnameable is a
+      // hole, and the two are deliberately not collapsed -- reporting a
+      // deleted movement as "nothing chosen yet" would tell the athlete they
+      // started from scratch when they did not.
+      const fromName =
+        fromExerciseId === null ? null : (names.get(fromExerciseId) ?? null);
+      if (fromExerciseId !== null && fromName === null) return [];
 
       return [
         {
-          movementGroup: group as RungChange['movementGroup'],
-          fromRung,
-          toRung,
+          movementGroup: group as MovementChange['movementGroup'],
+          fromExerciseId,
           fromName,
+          toExerciseId,
           toName,
         },
       ];
@@ -100,16 +88,16 @@ export function rungChangesOver(
 export function buildEnrollmentSummary(input: {
   weeks: number | null;
   sessions: number;
-  startingRungs: RungSnapshot;
-  currentRungs: ReadonlyMap<string, number>;
-  names: RungNames;
+  startingMovements: MovementSnapshot;
+  currentMovements: ReadonlyMap<string, string>;
+  names: MovementNames;
 }): EnrollmentSummary {
   return {
     weeks: input.weeks,
     sessions: input.sessions,
-    rungChanges: rungChangesOver(
-      input.startingRungs,
-      input.currentRungs,
+    movementChanges: movementChangesOver(
+      input.startingMovements,
+      input.currentMovements,
       input.names,
     ),
   };

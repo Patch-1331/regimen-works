@@ -34,19 +34,19 @@ describe("toWriteBody", () => {
       unit: "reps",
       instructions: null,
       movementGroup: null,
-      rung: null,
+      sortOrder: null,
       fallbackExerciseId: null,
       phase: null,
     });
   });
 
-  it("keeps rung 0 and does not invent one from an empty box", () => {
-    // The whole reason the draft holds `rung` as a string: `Number("")` is 0,
-    // and rung 0 is the a real position in a group.
-    expect(toWriteBody(draft({ movementGroup: "push_horizontal", rung: "0" })).rung).toBe(
+  it("keeps order 0 and does not invent one from an empty box", () => {
+    // The whole reason the draft holds `sortOrder` as a string: `Number("")`
+    // is 0, and 0 is a real position in a group.
+    expect(toWriteBody(draft({ movementGroup: "push_horizontal", sortOrder: "0" })).sortOrder).toBe(
       0,
     );
-    expect(toWriteBody(draft({ rung: "" })).rung).toBeNull();
+    expect(toWriteBody(draft({ sortOrder: "" })).sortOrder).toBeNull();
   });
 
   it("trims what was typed, so a name of spaces is not a name", () => {
@@ -65,7 +65,7 @@ describe("toDraft", () => {
       unit: "reps",
       instructions: "Chin over the bar.",
       movementGroup: "pull_vertical",
-      rung: 3,
+      sortOrder: 3,
       fallbackExerciseId: "exercise-9",
       phase: "warmup",
     });
@@ -76,7 +76,7 @@ describe("toDraft", () => {
       equipment: ["bar"],
       instructions: "Chin over the bar.",
       movementGroup: "pull_vertical",
-      rung: 3,
+      sortOrder: 3,
       fallbackExerciseId: "exercise-9",
       phase: "warmup",
     });
@@ -140,13 +140,13 @@ describe("problemsWith", () => {
   it("refuses half a group position, in either direction", () => {
     expect(
       problemsWith(draft({ movementGroup: "push_horizontal" }), alternatives).join(),
-    ).toMatch(/both the movementGroup and the rung/);
-    expect(problemsWith(draft({ rung: "2" }), alternatives).join()).toMatch(
-      /both the movementGroup and the rung/,
+    ).toMatch(/both the movementGroup and the order/);
+    expect(problemsWith(draft({ sortOrder: "2" }), alternatives).join()).toMatch(
+      /both the movementGroup and the order/,
     );
     expect(
       problemsWith(
-        draft({ movementGroup: "push_horizontal", rung: "2" }),
+        draft({ movementGroup: "push_horizontal", sortOrder: "2" }),
         alternatives,
       ),
     ).toEqual([]);

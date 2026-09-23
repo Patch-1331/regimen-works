@@ -47,28 +47,29 @@ function service(
 const TODAY = '2026-09-16';
 
 /**
- * A pull group where the rungs disagree about equipment, which is what makes
- * the layer ordering observable: rung 0 needs nothing, the two above it need
- * a bar, and the bar rungs fall back to a row under the table.
+ * A pull group whose members disagree about equipment, which is what makes
+ * the layer ordering observable: the row needs nothing, the two other members
+ * need a bar, and the bar members fall back to a row under the table.
  */
 async function pullGroup() {
   const row = await createExercise({
     name: 'Row under table',
     pattern: 'pull',
     movementGroup: null,
-    rung: null,
+    sortOrder: null,
   });
   const negative = await createExercise({
     name: 'Negative chin-up',
     pattern: 'pull',
     movementGroup: 'pull',
-    rung: 0,
+    sortOrder: 0,
+    isGroupDefault: true,
   });
   const chinUp = await createExercise({
     name: 'Chin-up',
     pattern: 'pull',
     movementGroup: 'pull',
-    rung: 1,
+    sortOrder: 1,
     equipment: ['bar'],
     fallbackExerciseId: row.id,
   });
@@ -76,7 +77,7 @@ async function pullGroup() {
     name: 'Pull-up',
     pattern: 'pull',
     movementGroup: 'pull',
-    rung: 2,
+    sortOrder: 2,
     equipment: ['bar'],
     fallbackExerciseId: row.id,
   });
@@ -119,8 +120,8 @@ async function servedMovement(userId: string) {
 }
 
 /**
- * A line where *every* rung needs the same piece of equipment (DN-115) — the
- * rope and box pairs. Every other line in the library has a bodyweight rung,
+ * A group where *every* member needs the same piece of equipment (DN-115) — the
+ * rope and box pairs. Every other group in the library has a bodyweight member,
  * so this is the first shape where the athlete's remembered choice cannot
  * itself be the way out.
  */
@@ -129,13 +130,14 @@ async function ropeGroup() {
     name: 'High knees',
     pattern: 'cardio',
     movementGroup: null,
-    rung: null,
+    sortOrder: null,
   });
   const single = await createExercise({
     name: 'Single-unders',
     pattern: 'cardio',
     movementGroup: 'cardio_rope',
-    rung: 0,
+    sortOrder: 0,
+    isGroupDefault: true,
     equipment: ['jump_rope'],
     fallbackExerciseId: highKnees.id,
   });
@@ -143,20 +145,20 @@ async function ropeGroup() {
     name: 'Double-unders',
     pattern: 'cardio',
     movementGroup: 'cardio_rope',
-    rung: 1,
+    sortOrder: 1,
     equipment: ['jump_rope'],
     fallbackExerciseId: highKnees.id,
   });
   return { highKnees, single, double };
 }
 
-describe('SchedulerService on a movementGroup where every rung needs the kit', () => {
+describe('SchedulerService on a movementGroup where every member needs the kit', () => {
   it('honours the remembered choice for an athlete who owns the rope', async () => {
     const { single, double } = await ropeGroup();
     const { user } = await assignedDay(double.id, {
       equipment: ['jump_rope'],
     });
-    await createSkillLevel(user.id, 'cardio_rope', 0);
+    await createSkillLevel(user.id, 'cardio_rope', single.id);
 
     const movement = await servedMovement(user.id);
 
@@ -167,16 +169,16 @@ describe('SchedulerService on a movementGroup where every rung needs the kit', (
     expect(movement.prescribedReason).toBe('remembered_choice');
   });
 
-  it('falls to the alternative, not to a lower rung, for an athlete with no rope', async () => {
-    const { highKnees, double } = await ropeGroup();
+  it('falls to the alternative, not to another member, for an athlete with no rope', async () => {
+    const { highKnees, single, double } = await ropeGroup();
     const { user } = await assignedDay(double.id, { equipment: [] });
-    await createSkillLevel(user.id, 'cardio_rope', 0);
+    await createSkillLevel(user.id, 'cardio_rope', single.id);
 
     const movement = await servedMovement(user.id);
 
-    // Their remembered rung needs the rope too, so the choice layer moves
+    // Their remembered choice needs the rope too, so the choice layer moves
     // them to a movement they still cannot do and the equipment layer has to
-    // catch it. On every other line rung 0 needs nothing, which is why this
+    // catch it. Elsewhere the group's default needs nothing, which is why this
     // composition was never exercised before.
     expect(movement.exercise.name).toBe(highKnees.name);
     expect(movement.prescribedReason).toBe('equipment');
@@ -227,11 +229,11 @@ describe('SchedulerService equipment resolution', () => {
   });
 
   it('carries the id of what the choice layer replaced, too', async () => {
-    const { chinUp } = await pullGroup();
+    const { negative, chinUp } = await pullGroup();
     const { user } = await assignedDay(chinUp.id, { equipment: ['bar'] });
-    await createSkillLevel(user.id, 'pull', 0);
+    await createSkillLevel(user.id, 'pull', negative.id);
 
-    // The library's movement, not the rung they chose: it is the one thing
+    // The library's movement, not the one they chose: it is the one thing
     // on this row they have no other way back to.
     expect((await servedMovement(user.id)).prescribedId).toBe(chinUp.id);
   });
@@ -239,11 +241,11 @@ describe('SchedulerService equipment resolution', () => {
   it('tells an equipment substitution apart from a remembered choice', async () => {
     // The two arrive through the same field and the screen says different
     // words for them, so the field has to distinguish them. Here the choice
-    // layer alone moved the row -- rung 0 needs nothing, and the athlete owns
-    // a bar besides.
+    // layer alone moved the row -- their choice needs nothing, and the
+    // athlete owns a bar besides.
     const { negative, chinUp } = await pullGroup();
     const { user } = await assignedDay(chinUp.id, { equipment: ['bar'] });
-    await createSkillLevel(user.id, 'pull', 0);
+    await createSkillLevel(user.id, 'pull', negative.id);
 
     const movement = await servedMovement(user.id);
 
@@ -252,19 +254,20 @@ describe('SchedulerService equipment resolution', () => {
     expect(movement.prescribedReason).toBe('remembered_choice');
   });
 
-  it('blames equipment, not the athlete, when both layers moved a row', async () => {
-    // Their standing choice landed on a bar they do not own, so what they are
-    // looking at is the app standing down -- calling that their pick would be
-    // the one reading that is untrue.
-    const { negative } = await pullGroup();
+  it('stands the choice down, not the WOD, when they own nothing for it', async () => {
+    // Their standing choice needs a bar they do not own. Since DN-139 the
+    // choice layer will not hand over a movement the athlete cannot do, so the
+    // WOD's own movement stands -- which is a better answer than the bar
+    // movement's off-group alternative, and nothing was replaced to say so.
+    const { negative, pullUp } = await pullGroup();
     const { user } = await assignedDay(negative.id, { equipment: [] });
-    await createSkillLevel(user.id, 'pull', 2);
+    await createSkillLevel(user.id, 'pull', pullUp.id);
 
     const movement = await servedMovement(user.id);
 
-    expect(movement.exercise.name).toBe('Row under table');
-    expect(movement.prescribedName).toBe('Negative chin-up');
-    expect(movement.prescribedReason).toBe('equipment');
+    expect(movement.exercise.name).toBe('Negative chin-up');
+    expect(movement.prescribedName).toBeNull();
+    expect(movement.prescribedReason).toBeNull();
   });
 
   it('names no prescription and no reason on an untouched movement', async () => {
@@ -305,7 +308,7 @@ describe('SchedulerService equipment resolution', () => {
       name: 'Bar muscle-up',
       pattern: 'pull',
       movementGroup: null,
-      rung: null,
+      sortOrder: null,
       equipment: ['bar'],
     });
     const { user } = await assignedDay(muscleUp.id, { equipment: [] });
@@ -329,19 +332,20 @@ describe('SchedulerService equipment resolution', () => {
 });
 
 describe('SchedulerService resolution ordering', () => {
-  it('checks equipment against the remembered choice, not the prescription', async () => {
-    // The prescription is on rung 0 and needs nothing; the athlete's standing
-    // choice is rung 2, which needs a bar they do not own. Equipment has to
-    // see what the choice resolved to — run the other way round it would find
-    // nothing to fault in the prescription and hand them a Pull-up.
-    const { negative, pullUp } = await pullGroup();
-    const { user } = await assignedDay(negative.id, { equipment: [] });
-    await createSkillLevel(user.id, 'pull', 2);
+  it('checks equipment against the remembered choice, not the WOD', async () => {
+    // The WOD names a movement that needs nothing; the athlete's standing
+    // choice needs a bar, which they own. Equipment has to judge what the
+    // choice resolved to -- run against the WOD's movement instead it would
+    // find nothing to fault either way, so the guarantee is that the row it
+    // sees is the one the athlete is actually being handed.
+    const { negative, chinUp } = await pullGroup();
+    const { user } = await assignedDay(negative.id, { equipment: ['bar'] });
+    await createSkillLevel(user.id, 'pull', chinUp.id);
 
     const movement = await servedMovement(user.id);
 
-    expect(movement.exercise.name).toBe('Row under table');
-    expect(movement.exercise.id).not.toBe(pullUp.id);
+    expect(movement.exercise.id).toBe(chinUp.id);
+    expect(movement.prescribedReason).toBe('remembered_choice');
   });
 
   it("lets today's swap stand on equipment the athlete does not own", async () => {
@@ -536,14 +540,14 @@ describe('SchedulerService.getToday', () => {
       pattern: 'pull',
       phase: 'warmup',
       movementGroup: null,
-      rung: null,
+      sortOrder: null,
     });
     await createExercise({
       name: 'Lat stretch',
       pattern: 'pull',
       phase: 'cooldown',
       movementGroup: null,
-      rung: null,
+      sortOrder: null,
     });
 
     const today = await service().getToday(user.id, TODAY);
@@ -641,13 +645,13 @@ describe('SchedulerService equipment floor', () => {
       name: 'High knees',
       pattern: 'cardio',
       movementGroup: null,
-      rung: null,
+      sortOrder: null,
     });
     const doubleUnders = await createExercise({
       name: 'Double-unders',
       pattern: 'cardio',
       movementGroup: null,
-      rung: null,
+      sortOrder: null,
       equipment: ['jump_rope'],
       fallbackExerciseId: highKnees.id,
     });
@@ -655,7 +659,7 @@ describe('SchedulerService equipment floor', () => {
       name: 'Air squat',
       pattern: 'squat',
       movementGroup: 'squat',
-      rung: 0,
+      sortOrder: 0,
     });
 
     const ropeWod = await createWod({
@@ -724,7 +728,7 @@ describe('SchedulerService equipment floor', () => {
   it('keeps a WOD whose pattern the athlete already trains on bodyweight', async () => {
     // The case that makes the floor read the *remembered choice* rather than
     // the prescription. This athlete owns no bar and settled in the group's
-    // bodyweight rung weeks ago, so nothing of theirs is being substituted
+    // bodyweight member weeks ago, so nothing of theirs is being substituted
     // for equipment — dropping their pull WODs would be the app arguing with
     // a choice they already made.
     const { negative, pullUp } = await pullGroup();
@@ -746,7 +750,7 @@ describe('SchedulerService equipment floor', () => {
     });
 
     const user = await athleteOwning([]);
-    await createSkillLevel(user.id, 'pull', 0);
+    await createSkillLevel(user.id, 'pull', negative.id);
 
     const random = jest.spyOn(Math, 'random').mockReturnValue(0);
     try {
@@ -776,7 +780,7 @@ describe('SchedulerService reads the stored pattern cooldown', () => {
    * this test.
    */
   async function libraryAndHistory(cooldownDays: number) {
-    const move = await createExercise({ movementGroup: null, rung: null });
+    const move = await createExercise({ movementGroup: null, sortOrder: null });
 
     // Yesterday's workout: an EMOM in the squat pattern.
     const helen = await createWod({
@@ -1051,7 +1055,7 @@ describe('SchedulerService.getToday, under a program', () => {
       name: 'Pull-up over a bar',
       pattern: 'pull',
       movementGroup: null,
-      rung: null,
+      sortOrder: null,
       equipment: ['bar'],
     });
     const user = await createUser();
@@ -1820,33 +1824,42 @@ describe('SchedulerService makeup days (DN-17)', () => {
  *
  * Through the real resolver and a real database, because what is worth
  * pinning down is the same thing the rest of this file is about — wiring. The
- * pure decisions (which rung, what happens when the library cannot answer)
+ * pure decisions (which member, what happens when the library cannot answer)
  * are fixed in `prescription.spec.ts`; these say that a program authoring a
- * line ends up handing this athlete a movement with a name on it, and that
+ * group ends up handing this athlete a movement with a name on it, and that
  * the day is recorded as a day.
  */
 describe('SchedulerService.getToday, on a prescribed day', () => {
-  /** A pull group whose upper rung needs a bar and falls back outside the group. */
-  async function pullRungs() {
+  /** A pull group whose upper members need a bar and fall back outside the group. */
+  /**
+   * `defaultTo` picks which member the group declares as its default, because
+   * the two shapes resolve differently for an athlete who owns nothing: a
+   * default that needs no kit is served as it stands, and one that needs a bar
+   * is what puts the equipment layer on a prescribed row at all (DN-139).
+   */
+  async function pullMembers(options: { defaultTo?: 'ring' | 'chinUp' } = {}) {
+    const defaultTo = options.defaultTo ?? 'ring';
     const fallback = await createExercise({
       name: 'Row under table',
       pattern: 'pull',
       movementGroup: null,
-      rung: null,
+      sortOrder: null,
     });
     const ring = await createExercise({
       name: 'Ring row',
       pattern: 'pull',
       movementGroup: 'pull',
-      rung: 0,
+      sortOrder: 0,
+      isGroupDefault: defaultTo === 'ring',
     });
     const chinUp = await createExercise({
       name: 'Chin-up',
       pattern: 'pull',
       movementGroup: 'pull',
-      rung: 1,
+      sortOrder: 1,
       equipment: ['pull_up_bar'],
       fallbackExerciseId: fallback.id,
+      isGroupDefault: defaultTo === 'chinUp',
     });
     return { fallback, ring, chinUp };
   }
@@ -1869,7 +1882,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
   }
 
   it('hands over the prescription instead of a WOD', async () => {
-    const { ring } = await pullRungs();
+    const { ring } = await pullMembers();
     const user = await athlete();
     await enrolled(user, (await prescribingPlan()).id);
 
@@ -1885,7 +1898,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
           reps: 3,
           restSeconds: 90,
           exercise: { id: ring.id, name: ring.name },
-          // The rung is not a substitution. A program that asked for "pull"
+          // The group default is not a substitution. A program that asked for "pull"
           // and handed over a ring row did exactly what it said, and naming
           // it as a replacement would tell the athlete something was taken
           // away from them.
@@ -1896,12 +1909,12 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     });
   });
 
-  it('meets the athlete at the rung they train the movementGroup at', async () => {
+  it('meets the athlete at the movement they train the movementGroup at', async () => {
     // The whole reason a program authors a group: one program, written once,
-    // fits the athlete on rung 0 and the one on rung 1.
-    const { chinUp } = await pullRungs();
+    // fits the athlete who does ring rows and the one who does chin-ups.
+    const { chinUp } = await pullMembers();
     const user = await athlete();
-    await createSkillLevel(user.id, 'pull', 1);
+    await createSkillLevel(user.id, 'pull', chinUp.id);
     await testPrisma().scheduleRule.update({
       where: { userId: user.id },
       data: { equipment: ['pull_up_bar'] },
@@ -1917,11 +1930,16 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
 
   it('drops off the movementGroup for an athlete who owns none of the kit, and says so', async () => {
     // Equipment is the one layer that replaced something the athlete was told
-    // about, so it is the one that gets named. The rung is not a substitution:
-    // a program that asked for "pull" and handed over a row did what it said.
-    const { fallback, chinUp } = await pullRungs();
+    // about, so it is the one that gets named. The choice is not a
+    // substitution: a program that asked for "pull" and handed over the
+    // movement this athlete performs in it did what it said.
+    //
+    // The group's default is the bar movement here, which is what leaves the
+    // equipment layer something to do: a stored choice the athlete owns
+    // nothing for never reaches it (the test below).
+    const { fallback, chinUp } = await pullMembers({ defaultTo: 'chinUp' });
     const user = await athlete();
-    await createSkillLevel(user.id, 'pull', 1);
+    await createSkillLevel(user.id, 'pull', chinUp.id);
     await enrolled(user, (await prescribingPlan()).id);
 
     const today = await programService().getToday(user.id, TODAY);
@@ -1938,7 +1956,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
   });
 
   it('records the day as an assignment with no WOD on it', async () => {
-    const { ring } = await pullRungs();
+    const { ring } = await pullMembers();
     const user = await athlete();
     await enrolled(user, (await prescribingPlan()).id);
 
@@ -1957,7 +1975,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     // The WOD-less row used to collapse to `assignment: null` on the way
     // back out, which would have turned a prescribed day into a blank screen
     // on every reload.
-    await pullRungs();
+    await pullMembers();
     const user = await athlete();
     await enrolled(user, (await prescribingPlan()).id);
 
@@ -1972,12 +1990,13 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
   });
 
   it('prescribes the movements in the order they were authored', async () => {
-    await pullRungs();
+    await pullMembers();
     await createExercise({
       name: 'Air squat',
       pattern: 'squat',
       movementGroup: 'squat',
-      rung: 0,
+      sortOrder: 0,
+      isGroupDefault: true,
     });
     const user = await athlete();
     await enrolled(
@@ -2035,11 +2054,11 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     });
   }
 
-  it("applies the day's swap over the rung the movementGroup resolved to", async () => {
-    // The third layer (DN-125). The rung and the equipment fallback are
+  it("applies the day's swap over the movement the movementGroup resolved to", async () => {
+    // The third layer (DN-125). The remembered choice and the equipment fallback are
     // standing facts about the athlete; this is what they want this morning,
     // so it goes on last.
-    const { ring, chinUp } = await pullRungs();
+    const { ring, chinUp } = await pullMembers();
     const user = await athlete();
     await enrolled(user, (await prescribingPlan()).id);
 
@@ -2065,13 +2084,15 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
   it('says nothing about the equipment fallback on a row the athlete swapped', async () => {
     // The plate does not argue with a decision just made (DN-116): the
     // fallback is still recorded by the resolver, and hidden here.
-    const { fallback, ring, chinUp } = await pullRungs();
+    const { fallback, ring, chinUp } = await pullMembers({
+      defaultTo: 'chinUp',
+    });
     const user = await athlete();
-    await createSkillLevel(user.id, 'pull', 1);
+    await createSkillLevel(user.id, 'pull', chinUp.id);
     await enrolled(user, (await prescribingPlan()).id);
 
     const first = await programService().getToday(user.id, TODAY);
-    // No bar, so the chin-up they train at fell to its off-line alternative.
+    // No bar, so the chin-up they train at fell to its off-group alternative.
     expect(first.assignment!.prescription!.movements[0]).toMatchObject({
       exercise: { id: fallback.id },
       prescribedName: chinUp.name,
@@ -2100,7 +2121,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     // there rather than the one its own upsert writes. Changing your mind
     // twice about whether to train should not quietly undo the choices made
     // in between.
-    const { chinUp } = await pullRungs();
+    const { chinUp } = await pullMembers();
     const user = await athlete();
     await enrolled(user, (await prescribingPlan()).id);
 
@@ -2126,7 +2147,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     // A makeup resolves against the whole week (DN-17), so a flexible
     // program's Saturday session is whatever it authored -- including straight
     // sets.
-    const { ring } = await pullRungs();
+    const { ring } = await pullMembers();
     const user = await athlete();
     await enrolled(user, (await prescribingPlan()).id);
 

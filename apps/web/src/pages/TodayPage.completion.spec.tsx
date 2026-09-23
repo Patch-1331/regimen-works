@@ -67,7 +67,9 @@ describe("the completion card", () => {
 
     renderRoute("/");
 
-    expect(await screen.findByRole("heading", { name: /fran/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: /fran/i }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /start/i })).toBeInTheDocument();
   });
 
@@ -83,7 +85,9 @@ describe("the completion card", () => {
 
     renderRoute("/");
 
-    expect(await screen.findByRole("heading", { name: /rest day/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: /rest day/i }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: /pull-up builder complete/i }),
     ).toBeInTheDocument();
@@ -104,7 +108,7 @@ describe("the completion card", () => {
     // program -- so the line is a short true sentence rather than a gap.
     todayIs({
       completedProgram: fixtures.completedProgram({
-        summary: { weeks: 6, sessions: 0, rungChanges: [] },
+        summary: { weeks: 6, sessions: 0, movementChanges: [] },
       }),
     });
 
@@ -116,7 +120,7 @@ describe("the completion card", () => {
   it("drops the length for an open-ended run that was ended by hand", async () => {
     todayIs({
       completedProgram: fixtures.completedProgram({
-        summary: { weeks: null, sessions: 12, rungChanges: [] },
+        summary: { weeks: null, sessions: 12, movementChanges: [] },
       }),
     });
 
@@ -128,7 +132,7 @@ describe("the completion card", () => {
   it("counts a single week and a single session in the singular", async () => {
     todayIs({
       completedProgram: fixtures.completedProgram({
-        summary: { weeks: 1, sessions: 1, rungChanges: [] },
+        summary: { weeks: 1, sessions: 1, movementChanges: [] },
       }),
     });
 
@@ -143,9 +147,9 @@ describe("the completion card", () => {
         summary: {
           weeks: 6,
           sessions: 24,
-          rungChanges: [
-            fixtures.rungChange(),
-            fixtures.rungChange({
+          movementChanges: [
+            fixtures.movementChange(),
+            fixtures.movementChange({
               movementGroup: "push_horizontal",
               fromName: "Knee push-up",
               toName: "Push-up",

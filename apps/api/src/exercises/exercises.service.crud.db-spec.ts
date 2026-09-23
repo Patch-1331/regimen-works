@@ -31,7 +31,7 @@ function body(overrides: Partial<CreateExercise> = {}): CreateExercise {
     unit: 'reps',
     instructions: null,
     movementGroup: null,
-    rung: null,
+    sortOrder: null,
     fallbackExerciseId: null,
     phase: null,
     ...overrides,
@@ -164,7 +164,7 @@ describe('what a patch means', () => {
         instructions: 'Chest to the bar.',
         phase: 'warmup',
         movementGroup: 'pull',
-        rung: 1,
+        sortOrder: 1,
       }),
     );
 
@@ -175,7 +175,7 @@ describe('what a patch means', () => {
     expect(updated.instructions).toBe('Chest to the bar.');
     expect(updated.phase).toBe('warmup');
     expect(updated.movementGroup).toBe('pull');
-    expect(updated.rung).toBe(1);
+    expect(updated.sortOrder).toBe(1);
     expect(updated.pattern).toBe('pull');
   });
 
@@ -187,7 +187,7 @@ describe('what a patch means', () => {
         instructions: 'Chest to the bar.',
         phase: 'warmup',
         movementGroup: 'pull',
-        rung: 1,
+        sortOrder: 1,
       }),
     );
 
@@ -196,7 +196,7 @@ describe('what a patch means', () => {
       phase: null,
       pattern: null,
       movementGroup: null,
-      rung: null,
+      sortOrder: null,
     });
 
     expect(updated.instructions).toBeNull();
@@ -241,7 +241,7 @@ describe('what a patch means', () => {
       unit: 'seconds',
       instructions: 'Elbows inside the knees.',
       movementGroup: 'squat',
-      rung: 3,
+      sortOrder: 3,
       fallbackExerciseId: fallback.id,
       phase: 'cooldown',
     });
@@ -249,7 +249,7 @@ describe('what a patch means', () => {
     expect(updated.name).toBe('Goblet squat');
     expect(updated.equipment).toEqual(['dumbbell']);
     expect(updated.fallbackExerciseId).toBe(fallback.id);
-    expect(updated.rung).toBe(3);
+    expect(updated.sortOrder).toBe(3);
   });
 });
 
@@ -370,29 +370,32 @@ describe('a movement needing equipment needs a way out', () => {
   });
 });
 
-describe('a position on a movementGroup is both halves', () => {
-  it('refuses a movementGroup with no rung', async () => {
+describe('a position in a movement group is both halves', () => {
+  it('refuses a movement group with no position in it', async () => {
     await expect(
-      exercises().create(ADMIN, body({ movementGroup: 'pull', rung: null })),
-    ).rejects.toThrow(/movementGroup and rung/i);
+      exercises().create(
+        ADMIN,
+        body({ movementGroup: 'pull', sortOrder: null }),
+      ),
+    ).rejects.toThrow(/movementGroup and sortOrder/i);
   });
 
-  it('refuses a rung with no movementGroup', async () => {
+  it('refuses a position with no movement group', async () => {
     await expect(
-      exercises().create(ADMIN, body({ movementGroup: null, rung: 2 })),
-    ).rejects.toThrow(/movementGroup and rung/i);
+      exercises().create(ADMIN, body({ movementGroup: null, sortOrder: 2 })),
+    ).rejects.toThrow(/movementGroup and sortOrder/i);
   });
 
   it('refuses a patch that clears only one of them', async () => {
     const global = await createExercise({
       name: 'Ring row',
       movementGroup: 'pull',
-      rung: 1,
+      sortOrder: 1,
     });
 
     await expect(
-      exercises().update(ADMIN, global.id, { rung: null }),
-    ).rejects.toThrow(/movementGroup and rung/i);
+      exercises().update(ADMIN, global.id, { sortOrder: null }),
+    ).rejects.toThrow(/movementGroup and sortOrder/i);
   });
 });
 

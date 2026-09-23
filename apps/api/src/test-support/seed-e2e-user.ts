@@ -78,16 +78,16 @@ export async function seedE2eUser(
     create: { userId },
   });
 
-  // A standing choice on two lines, so the progressions panel and the
+  // A standing choice in two groups, so the progressions panel and the
   // remembered-choice substitution both have something to show. Deliberately
-  // not all eight: an athlete who has chosen on every group is not what a real
+  // not all eight: an athlete who has chosen in every group is not what a real
   // one looks like, and DN-86 made "no choice yet" the ordinary case.
-  const lines = await pickSeededLines(prisma);
-  for (const { movementGroup, rung } of lines) {
+  const choices = await pickSeededChoices(prisma);
+  for (const { movementGroup, exerciseId } of choices) {
     await prisma.skillLevel.upsert({
       where: { userId_movementGroup: { userId, movementGroup } },
-      update: { rung },
-      create: { userId, movementGroup, rung },
+      update: { exerciseId },
+      create: { userId, movementGroup, exerciseId },
     });
   }
 
@@ -139,34 +139,39 @@ export async function seedE2eUser(
 }
 
 /**
- * Two lines that actually have exercises seeded, picked by name so the choice
- * is the same on every run. Hard-coding line names would break the seed the
- * first time the catalogue is reshaped.
+ * A choice in each of the first two groups that actually have members seeded,
+ * picked in a fixed order so the seeded athlete is the same on every run.
+ * Hard-coding group names would break the seed the first time the catalogue is
+ * reshaped.
+ *
+ * The *second* member where a group has one, so the seeded athlete's choice is
+ * visibly theirs rather than indistinguishable from the default they would
+ * have been handed anyway (DN-139).
  */
-async function pickSeededLines(
+async function pickSeededChoices(
   prisma: PrismaClient,
-): Promise<{ movementGroup: string; rung: number }[]> {
+): Promise<{ movementGroup: string; exerciseId: string }[]> {
   const exercises = await prisma.exercise.findMany({
-    where: { movementGroup: { not: null } },
-    select: { movementGroup: true, rung: true },
-    orderBy: [{ movementGroup: 'asc' }, { rung: 'asc' }],
+    where: { movementGroup: { not: null }, archivedAt: null, ownerId: null },
+    select: { id: true, movementGroup: true },
+    orderBy: [{ movementGroup: 'asc' }, { sortOrder: 'asc' }, { id: 'asc' }],
   });
 
-  const maxRungByLine = new Map<string, number>();
+  const byGroup = new Map<string, string[]>();
   for (const e of exercises) {
-    if (e.movementGroup === null || e.rung === null) continue;
-    maxRungByLine.set(
-      e.movementGroup,
-      Math.max(maxRungByLine.get(e.movementGroup) ?? 0, e.rung),
-    );
+    if (e.movementGroup === null) continue;
+    byGroup.set(e.movementGroup, [
+      ...(byGroup.get(e.movementGroup) ?? []),
+      e.id,
+    ]);
   }
 
-  return [...maxRungByLine.entries()]
+  return [...byGroup.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .slice(0, 2)
-    .map(([movementGroup, maxRung]) => ({
+    .map(([movementGroup, ids]) => ({
       movementGroup,
-      rung: Math.min(1, maxRung),
+      exerciseId: ids[Math.min(1, ids.length - 1)],
     }));
 }
 

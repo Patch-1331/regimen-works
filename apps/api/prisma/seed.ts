@@ -81,7 +81,8 @@ async function main() {
       scalable: e.scalable ?? false,
       unit: e.unit ?? 'reps',
       movementGroup: e.movementGroup ?? null,
-      rung: e.rung ?? null,
+      sortOrder: e.sortOrder ?? null,
+      isGroupDefault: e.isGroupDefault ?? false,
       phase: e.phase ?? null,
       instructions: e.instructions,
       // Re-seeding a retired movement brings it back (DN-25). The lookup

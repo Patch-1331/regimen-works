@@ -88,9 +88,9 @@ export class SessionsService {
       where: { userId },
     });
 
-    // The same resolution the Today plate showed -- current rung, then the
+    // The same resolution the Today plate showed -- their standing choice, then the
     // day's swaps -- pinned down as the movements this session trained
-    // (DN-90). Nothing else records it: the rung and the swap rows both keep
+    // (DN-90). Nothing else records it: the choice and the swap rows both keep
     // moving after today, so without this a past day re-reads as whatever
     // the settings say now.
     const movements = assignment.wod

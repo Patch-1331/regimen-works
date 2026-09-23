@@ -7,6 +7,9 @@ import { movementGroup, type SkillLevel } from '@regimen-works/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { libraryVisibleTo } from '../library/visible-to';
 
+/** What `toDto` needs: the row plus the movement it points at. */
+const withExercise = { exercise: { select: { name: true } } } as const;
+
 @Injectable()
 export class SkillLevelsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -15,27 +18,30 @@ export class SkillLevelsService {
     const rows = await this.prisma.skillLevel.findMany({
       where: { userId },
       orderBy: { movementGroup: 'asc' },
+      include: withExercise,
     });
     return rows.map(toDto);
   }
 
   /**
-   * Records the athlete's default movement for a group — what the completion
-   * screen writes when they accept "make that your pull movement", and what
-   * the Stats panel writes when they set one directly.
+   * Records the athlete's standing choice of movement for a group — what the
+   * completion screen writes when they accept "make that your pull movement",
+   * and what the Stats panel writes when they set one directly.
    *
    * An upsert rather than an update (DN-86). Since provisioning stopped
    * creating a row per group, a first choice has nothing to update, and that
    * first choice is the one most worth keeping — refusing it with a 404 would
    * mean the athlete re-swaps the same movement every session forever.
    *
-   * Bounded to a rung that actually has an exercise seeded for this line, so
-   * the scheduler substitution (#6) never has to fall back on a missing rung.
+   * The movement has to exist, be visible to this caller, and belong to the
+   * group in the path. That triple replaces the old rung ceiling (DN-139),
+   * which only ever asked "is this number in range" — and answered it against
+   * a list that could be reordered under it.
    */
-  async setRung(
+  async setChoice(
     userId: string,
     group: string,
-    rung: number,
+    exerciseId: string,
   ): Promise<SkillLevel> {
     // An unknown group used to be caught by the row not existing. With the
     // upsert there is nothing to miss, so the group is checked against the
@@ -45,21 +51,27 @@ export class SkillLevelsService {
       throw new NotFoundException(`"${group}" is not a movement group`);
     }
 
-    const maxRung = await this.prisma.exercise.aggregate({
-      where: { ...libraryVisibleTo(userId), movementGroup: group },
-      _max: { rung: true },
+    // Visibility is folded into the lookup rather than checked after it: a
+    // 404 for someone else's private movement and a 404 for a movement that
+    // does not exist are the same answer, which is the point.
+    const exercise = await this.prisma.exercise.findFirst({
+      where: { ...libraryVisibleTo(userId), id: exerciseId },
+      select: { id: true, name: true, movementGroup: true },
     });
-    const ceiling = maxRung._max.rung ?? 0;
-    if (rung > ceiling) {
+    if (exercise === null) {
+      throw new NotFoundException(`No exercise ${exerciseId}`);
+    }
+    if (exercise.movementGroup !== group) {
       throw new BadRequestException(
-        `Movement group "${group}" has no exercise seeded at rung ${rung} (max is ${ceiling})`,
+        `"${exercise.name}" is not in movement group "${group}"`,
       );
     }
 
     const saved = await this.prisma.skillLevel.upsert({
       where: { userId_movementGroup: { userId, movementGroup: group } },
-      update: { rung },
-      create: { userId, movementGroup: group, rung },
+      update: { exerciseId },
+      create: { userId, movementGroup: group, exerciseId },
+      include: withExercise,
     });
     return toDto(saved);
   }
@@ -68,13 +80,15 @@ export class SkillLevelsService {
 function toDto(row: {
   id: string;
   movementGroup: string;
-  rung: number;
+  exerciseId: string;
+  exercise: { name: string };
   updatedAt: Date;
 }): SkillLevel {
   return {
     id: row.id,
     movementGroup: row.movementGroup as SkillLevel['movementGroup'],
-    rung: row.rung,
+    exerciseId: row.exerciseId,
+    exerciseName: row.exercise.name,
     updatedAt: row.updatedAt.toISOString(),
   };
 }

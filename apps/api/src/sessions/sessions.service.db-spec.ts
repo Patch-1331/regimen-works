@@ -40,7 +40,7 @@ async function pullDay(
   } = {},
 ) {
   const user = await createUser();
-  const { rungs } = await createGroup('pull', [
+  const { members } = await createGroup('pull', [
     'Negative chin-up',
     'Chin-up',
     'Pull-up',
@@ -48,14 +48,14 @@ async function pullDay(
   const wod = await createWod({
     dominantPattern: 'pull',
     timeCapMinutes: options.timeCapMinutes ?? 12,
-    movements: [{ exerciseId: rungs[0].id, reps: 30, order: 0 }],
+    movements: [{ exerciseId: members[0].id, reps: 30, order: 0 }],
     ...options.wod,
   });
   const assignment = await createAssignment(user.id, {
     wodId: wod.id,
     ...(options.status ? { status: options.status } : {}),
   });
-  return { user, rungs, wod, assignment, movement: wod.movements[0] };
+  return { user, members, wod, assignment, movement: wod.movements[0] };
 }
 
 function storedSession(assignmentId: string) {
@@ -164,36 +164,36 @@ describe('SessionsService.start', () => {
   });
 
   it('snapshots the movement the athlete actually trains, not the template (DN-90)', async () => {
-    const { user, rungs, assignment } = await pullDay();
-    // Their standing choice is rung 2; the WOD prescribes rung 0.
-    await createSkillLevel(user.id, 'pull', 2);
+    const { user, members, assignment } = await pullDay();
+    // Their standing choice is the third member; the WOD prescribes the first.
+    await createSkillLevel(user.id, 'pull', members[2].id);
 
     const session = await service().start(user.id, assignment.id);
 
     expect(session.movements).toHaveLength(1);
     expect(session.movements[0]).toMatchObject({
-      exercise: { id: rungs[2].id, name: rungs[2].name, rung: 2 },
-      prescribedName: rungs[0].name,
+      exercise: { id: members[2].id, name: members[2].name, sortOrder: 2 },
+      prescribedName: members[0].name,
       isSwapped: false,
       reps: 30,
     });
   });
 
   it('marks a movement the athlete swapped today as their own choice', async () => {
-    const { user, rungs, assignment, movement } = await pullDay();
+    const { user, members, assignment, movement } = await pullDay();
     await testPrisma().assignmentSubstitution.create({
       data: {
         userId: user.id,
         assignmentId: assignment.id,
         wodMovementId: movement.id,
-        exerciseId: rungs[1].id,
+        exerciseId: members[1].id,
       },
     });
 
     const session = await service().start(user.id, assignment.id);
 
     expect(session.movements[0]).toMatchObject({
-      exercise: { id: rungs[1].id },
+      exercise: { id: members[1].id },
       isSwapped: true,
       // Null because nothing replaced it before they swapped -- no standing
       // choice, no equipment fallback. A swap on its own does not erase the
@@ -217,13 +217,13 @@ describe('SessionsService.start', () => {
       name: 'Supermans',
       pattern: 'pull',
       movementGroup: null,
-      rung: null,
+      sortOrder: null,
     });
     const pullUp = await createExercise({
       name: 'Pull-up',
       pattern: 'pull',
       movementGroup: 'pull',
-      rung: 0,
+      sortOrder: 0,
       equipment: ['bar'],
       fallbackExerciseId: floor.id,
     });
@@ -231,7 +231,7 @@ describe('SessionsService.start', () => {
       name: 'Ring row',
       pattern: 'pull',
       movementGroup: 'pull',
-      rung: 1,
+      sortOrder: 1,
     });
     const wod = await createWod({
       dominantPattern: 'pull',
@@ -270,7 +270,7 @@ describe('SessionsService.start', () => {
   });
 
   it('leaves a running session snapshot alone when a later swap lands', async () => {
-    const { user, rungs, assignment, movement } = await pullDay();
+    const { user, members, assignment, movement } = await pullDay();
     const first = await service().start(user.id, assignment.id);
 
     await testPrisma().assignmentSubstitution.create({
@@ -278,7 +278,7 @@ describe('SessionsService.start', () => {
         userId: user.id,
         assignmentId: assignment.id,
         wodMovementId: movement.id,
-        exerciseId: rungs[2].id,
+        exerciseId: members[2].id,
       },
     });
     const second = await service().start(user.id, assignment.id);
@@ -286,7 +286,7 @@ describe('SessionsService.start', () => {
     // The snapshot says what the workout began with, not what a later swap
     // would have made it.
     expect(second.movements).toEqual(first.movements);
-    expect(second.movements[0].exercise.id).toBe(rungs[0].id);
+    expect(second.movements[0].exercise.id).toBe(members[0].id);
   });
 
   it('refuses a rest day, which has no workout to start', async () => {
@@ -573,10 +573,15 @@ describe('SessionsService.advanceInterval', () => {
 describe('SessionsService.setRoundSplit', () => {
   async function groupDay() {
     const user = await createUser();
-    const { rungs } = await createGroup('pull', ['Chin-up']);
+    const { members } = await createGroup('pull', ['Chin-up']);
     const wod = await createWod({
       movements: [
-        { exerciseId: rungs[0].id, reps: 45, order: 0, repScheme: [21, 15, 9] },
+        {
+          exerciseId: members[0].id,
+          reps: 45,
+          order: 0,
+          repScheme: [21, 15, 9],
+        },
       ],
     });
     const assignment = await createAssignment(user.id, { wodId: wod.id });
@@ -783,7 +788,7 @@ describe('SessionsService.cancel', () => {
  */
 async function prescribedDay(options: { kind?: string } = {}) {
   const user = await createUser();
-  const { rungs } = await createGroup('pull', [
+  const { members } = await createGroup('pull', [
     'Negative chin-up',
     'Chin-up',
     'Pull-up',
@@ -837,7 +842,7 @@ async function prescribedDay(options: { kind?: string } = {}) {
       planSlotId: slot.id,
     },
   });
-  return { user, rungs, assignment, slot, movements: slot.movements };
+  return { user, members, assignment, slot, movements: slot.movements };
 }
 
 /**
@@ -896,15 +901,15 @@ describe('SessionsService, on a prescribed day', () => {
     });
   });
 
-  it("resolves the movementGroup to the athlete's own rung, as the plate did", async () => {
-    const { user, rungs, assignment } = await prescribedDay();
-    await createSkillLevel(user.id, 'pull', 2);
+  it("resolves the group to the athlete's own choice, as the plate did", async () => {
+    const { user, members, assignment } = await prescribedDay();
+    await createSkillLevel(user.id, 'pull', members[2].id);
 
     const session = await service().start(user.id, assignment.id);
 
-    // The whole reason the snapshot exists: the rung keeps moving afterwards,
+    // The whole reason the snapshot exists: the choice keeps moving afterwards,
     // so a day re-read through today's level would describe today.
-    expect(session.movements[0].exercise.id).toBe(rungs[2].id);
+    expect(session.movements[0].exercise.id).toBe(members[2].id);
   });
 
   it('moves the day from scheduled to in progress, as a WOD day does', async () => {

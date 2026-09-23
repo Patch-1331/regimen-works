@@ -18,14 +18,18 @@ export class SubstitutionsController {
 
   /**
    * Read before the completion screen renders. Declared above the
-   * `:wodMovementId` routes so "rung-changes" is never taken for a movement id.
+   * `:wodMovementId` routes so "movement-changes" is never taken for a
+   * movement id.
    */
-  @Get('rung-changes')
-  proposedRungChanges(
+  @Get('movement-changes')
+  proposedMovementChanges(
     @CurrentUser() userId: string,
     @Param('assignmentId') assignmentId: string,
   ) {
-    return this.substitutionsService.proposedRungChanges(userId, assignmentId);
+    return this.substitutionsService.proposedMovementChanges(
+      userId,
+      assignmentId,
+    );
   }
 
   @Post()
@@ -50,7 +54,7 @@ export class SubstitutionsController {
    * Undoing a swap on a prescribed day (DN-125). Its own route rather than a
    * discriminator on the one below, because a bare id in the path cannot say
    * which table it came from — and declared above it for the same reason
-   * "rung-changes" is, so the prefix is never taken for a movement id.
+   * "movement-changes" is, so the prefix is never taken for a movement id.
    */
   @Delete('prescribed/:planSlotMovementId')
   @HttpCode(204)

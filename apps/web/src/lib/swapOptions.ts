@@ -12,7 +12,7 @@ export type SwapOption = {
   exerciseId: string;
   name: string;
   /** Null on the no-equipment fallback, which is not a group member. */
-  rung: number | null;
+  sortOrder: number | null;
   isCurrent: boolean;
   /** The alternative is offered for equipment, not difficulty — labelled, not ranked. */
   isAlternative: boolean;
@@ -64,15 +64,15 @@ function groupOptions(
   movementGroup: string,
   currentExerciseId: string,
 ): SwapOption[] {
-  const rungs = exercises
-    .filter((e) => e.movementGroup === movementGroup && e.rung !== null)
-    .sort((a, b) => (a.rung ?? 0) - (b.rung ?? 0));
-  if (rungs.length === 0) return [];
+  const members = exercises
+    .filter((e) => e.movementGroup === movementGroup && e.sortOrder !== null)
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  if (members.length === 0) return [];
 
-  const options: SwapOption[] = rungs.map((e) => ({
+  const options: SwapOption[] = members.map((e) => ({
     exerciseId: e.id,
     name: e.name,
-    rung: e.rung,
+    sortOrder: e.sortOrder,
     isCurrent: e.id === currentExerciseId,
     isAlternative: false,
     isPrescribed: false,
@@ -83,7 +83,7 @@ function groupOptions(
     options.push({
       exerciseId: fallback.id,
       name: fallback.name,
-      rung: null,
+      sortOrder: null,
       isCurrent: fallback.id === currentExerciseId,
       isAlternative: true,
       isPrescribed: false,
@@ -127,7 +127,7 @@ function offGroupOptions(
     {
       exerciseId: current.id,
       name: current.name,
-      rung: null,
+      sortOrder: null,
       isCurrent: true,
       isAlternative: false,
       isPrescribed: false,
@@ -137,7 +137,7 @@ function offGroupOptions(
     options.push({
       exerciseId: current.fallbackExercise.id,
       name: current.fallbackExercise.name,
-      rung: null,
+      sortOrder: null,
       isCurrent: false,
       isAlternative: true,
       isPrescribed: false,
@@ -183,7 +183,7 @@ function addPrescribed(
     {
       exerciseId: prescribed.id,
       name: prescribed.name,
-      rung: prescribed.rung,
+      sortOrder: prescribed.sortOrder,
       isCurrent: false,
       isAlternative: false,
       isPrescribed: true,

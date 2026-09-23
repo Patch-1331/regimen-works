@@ -22,7 +22,7 @@ export class LogsService {
   /**
    * Creates or replaces the log for an assignment, and marks it completed.
    *
-   * Saving a result no longer moves any progression rung. The athlete owns
+   * Saving a result no longer moves the athlete's standing choice. They own
    * their level: they set it by swapping a movement before training, or by
    * confirming afterwards what they actually did. An inference drawn from
    * metcon rounds has no business overruling either, and the drop half of

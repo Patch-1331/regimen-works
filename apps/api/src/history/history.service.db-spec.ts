@@ -44,7 +44,7 @@ function snapshot(overrides: Partial<SessionMovement> = {}): SessionMovement {
       name: 'Chin-up',
       unit: 'reps',
       movementGroup: 'pull',
-      rung: 1,
+      sortOrder: 1,
     },
     ...overrides,
   };
@@ -147,7 +147,7 @@ describe('HistoryService.movements', () => {
             name: 'Row under table',
             unit: 'reps',
             movementGroup: null,
-            rung: null,
+            sortOrder: null,
           },
           prescribedName: 'Pull-up',
           prescribedReason: 'equipment',

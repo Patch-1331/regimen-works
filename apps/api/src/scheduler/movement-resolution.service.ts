@@ -5,6 +5,7 @@ import type { Exercise } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { libraryVisibleTo } from '../library/visible-to';
 import { attachPrescribedExercises } from '../plans/prescription';
+import { defaultsByGroup } from '../plans/group-choice';
 import type { ProgramSlotMovement } from '../plans/program-day';
 import {
   applyEquipmentAvailability,
@@ -106,20 +107,18 @@ export class MovementResolutionService {
         }),
       ]);
 
-    const chosenRung = new Map(
-      skillLevels.map((s) => [s.movementGroup, s.rung]),
+    const chosen = new Map(
+      skillLevels.map((s) => [s.movementGroup, s.exerciseId]),
     );
-    const exerciseAtRung = new Map(
-      linedExercises.map((e) => [`${e.movementGroup}:${e.rung}`, e]),
-    );
+    const byId = new Map(linedExercises.map((e) => [e.id, e]));
+    // What the athlete owns, read here as well as in `applyOwnership`: a
+    // stored choice they own nothing for gives way to the movement the WOD
+    // named, rather than dragging the row to that choice's fallback (DN-139).
+    const owned = new Set(rule?.equipment ?? DEFAULT_EQUIPMENT);
 
     // The remembered choice is what they picked some time ago; the swap is
     // what they want today. Today wins, so it goes on last (WOD-5).
-    const remembered = applyRememberedChoice(
-      movements,
-      chosenRung,
-      exerciseAtRung,
-    );
+    const remembered = applyRememberedChoice(movements, chosen, byId, owned);
     // Equipment sits between the two: after the choice, because the choice
     // itself can land on a bar movement; before the swap, because an athlete
     // who taps into a movement has overruled what they own (DN-79).
@@ -127,11 +126,7 @@ export class MovementResolutionService {
     // An athlete with no rule row reads as the baseline rather than as owning
     // nothing -- read the other way, a missing row would quietly cost them
     // every bar movement in the library.
-    const available = await this.applyOwnership(
-      userId,
-      remembered,
-      rule?.equipment ?? DEFAULT_EQUIPMENT,
-    );
+    const available = await this.applyOwnership(userId, remembered, owned);
     const swapped = applySubstitutions(
       available,
       new Map(substitutions.map((s) => [s.wodMovementId!, s.exerciseId])),
@@ -172,13 +167,13 @@ export class MovementResolutionService {
 
   /**
    * Turns what a program prescribed into what this athlete performs today
-   * (DN-19): the group resolved to their rung, then dropped to its alternative
-   * where they own nothing for it.
+   * (DN-19): the group resolved to the movement they perform in it, then
+   * dropped to its alternative where they own nothing for it.
    *
    * `resolve`'s three layers, differing in what the first one means. The
-   * remembered choice *is* the rung here rather than an override of it, so
-   * nothing is reported as a substitution for it -- a program that asks for
-   * "pull" and hands over a ring row has done exactly what it said. Only
+   * remembered choice *is* the prescription here rather than an override of
+   * it, so nothing is reported as a substitution for it -- a program that asks
+   * for "pull" and hands over a ring row has done exactly what it said. Only
    * equipment replaced something the athlete was told about, so only equipment
    * is named. Then the day's swap on top, the same way and for the same
    * reason: the app decides what you do, you decide how hard it is (DN-125).
@@ -232,22 +227,24 @@ export class MovementResolutionService {
         swapsQuery,
       ]);
 
-    const prescribed = attachPrescribedExercises(
-      movements,
-      new Map(skillLevels.map((s) => [s.movementGroup, s.rung])),
-      new Map(linedExercises.map((e) => [`${e.movementGroup}:${e.rung}`, e])),
-      new Map(pinned.map((e) => [e.id, e])),
-    );
-
     // Same missing-rule reading as `resolve`: no row is the baseline, not
     // owning nothing.
-    const available = await this.applyOwnership(
-      userId,
-      prescribed,
-      rule?.equipment ?? DEFAULT_EQUIPMENT,
+    const owned = new Set(rule?.equipment ?? DEFAULT_EQUIPMENT);
+
+    const prescribed = attachPrescribedExercises(
+      movements,
+      new Map(skillLevels.map((s) => [s.movementGroup, s.exerciseId])),
+      // One map for both lookups: a pinned row names an exercise by id and a
+      // grouped row resolves to one, and nothing is gained by keeping two
+      // maps that answer the same question.
+      new Map([...linedExercises, ...pinned].map((e) => [e.id, e])),
+      defaultsByGroup(linedExercises),
+      owned,
     );
 
-    // Last, the same as on a WOD day: the rung and the equipment fallback are
+    const available = await this.applyOwnership(userId, prescribed, owned);
+
+    // Last, the same as on a WOD day: the standing choice and the equipment fallback are
     // both standing facts about the athlete, and the swap is what they want
     // this morning.
     const swaps = new Map(
@@ -288,7 +285,7 @@ export class MovementResolutionService {
    *
    * Its own read rather than part of the batch above, because *which*
    * substitutes are wanted depends on what the choice layer resolved to —
-   * a rung the athlete last picked can need a bar the prescription did not.
+   * the movement the athlete last picked can need a bar the prescription did not.
    * Only the rows actually reached for are loaded, so the common day (the
    * baseline owns the bar, most of the pool needs nothing) runs no second
    * query at all.
@@ -296,9 +293,8 @@ export class MovementResolutionService {
   private async applyOwnership<M extends { exercise: Exercise }>(
     userId: string,
     movements: M[],
-    equipment: readonly string[],
+    owned: ReadonlySet<string>,
   ): Promise<M[]> {
-    const owned = new Set(equipment);
     const substituteIds = unperformableSubstituteIds(movements, owned);
     if (substituteIds.length === 0) return movements;
 

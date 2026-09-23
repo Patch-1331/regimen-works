@@ -9,7 +9,7 @@
  *
  * Deliberately not a modal and not dismissible. It makes no request of the
  * athlete, so there is nothing to accept or decline and nothing to get past —
- * which is what keeps it clear of the rung-change offer below, the one thing
+ * which is what keeps it clear of the movement-change offer below, the one thing
  * on this screen that does ask a question.
  *
  * On a prescribed day it now says something sharper — "8, 8, 8, up from
@@ -42,8 +42,10 @@ function comparisonLine(comparison: SessionComparison): string {
   const last = setsLabel(comparison.previous);
   // Keyed off the total, which is the only thing two different-shaped
   // sessions can be compared on at all.
-  if (comparison.direction === "up") return `${today}, up from ${last} last time.`;
-  if (comparison.direction === "down") return `${today}, down from ${last} last time.`;
+  if (comparison.direction === "up")
+    return `${today}, up from ${last} last time.`;
+  if (comparison.direction === "down")
+    return `${today}, down from ${last} last time.`;
   return `${today}, the same total as ${last} last time.`;
 }
 
@@ -72,7 +74,10 @@ export function CompletionCard({
   return (
     <div
       className="mt-4 p-4"
-      style={{ border: "1px solid var(--glow)", background: "var(--glow-tint)" }}
+      style={{
+        border: "1px solid var(--glow)",
+        background: "var(--glow-tint)",
+      }}
     >
       <p
         className="text-[10px] font-semibold tracking-[0.14em]"

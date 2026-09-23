@@ -135,16 +135,16 @@ async function trainsEveryDay(...userIds: string[]) {
 
 /** Enough of a library for the scheduler to have something to assign. */
 async function seedLibrary() {
-  const { rungs } = await createGroup('pull', [
+  const { members } = await createGroup('pull', [
     'Negative chin-up',
     'Chin-up',
     'Pull-up',
   ]);
   const wod = await createWod({
     dominantPattern: 'pull',
-    movements: [{ exerciseId: rungs[0].id, reps: 30, order: 0 }],
+    movements: [{ exerciseId: members[0].id, reps: 30, order: 0 }],
   });
-  return { rungs, wod };
+  return { members, wod };
 }
 
 async function todaysAssignmentId(userId: string) {
@@ -294,13 +294,13 @@ describe('GET /today', () => {
       name: 'Row under table',
       pattern: 'pull',
       movementGroup: null,
-      rung: null,
+      sortOrder: null,
     });
     const pullUp = await createExercise({
       name: 'Pull-up',
       pattern: 'pull',
       movementGroup: 'pull',
-      rung: 0,
+      sortOrder: 0,
       equipment: ['bar'],
       fallbackExerciseId: row.id,
     });
@@ -692,38 +692,54 @@ describe('settings and skill levels', () => {
   });
 
   it('sets a movementGroup standing choice', async () => {
-    await seedLibrary();
+    const { members } = await seedLibrary();
 
     const res = parsed(
       skillLevelSchema,
       await http()
         .patch('/skill-levels/pull')
         .set(...asUser(ALICE))
-        .send({ rung: 2 })
+        .send({ exerciseId: members[2].id })
         .expect(200),
     );
 
-    expect(res).toMatchObject({ movementGroup: 'pull', rung: 2 });
+    expect(res).toMatchObject({
+      movementGroup: 'pull',
+      exerciseId: members[2].id,
+      exerciseName: members[2].name,
+    });
   });
 
-  it('refuses a rung with no exercise seeded at it', async () => {
-    // Bounded to what exists, so the scheduler never has to fall back on a
-    // missing rung. The seeded pull group tops out at 2.
+  it('404s a movement that is not in the library', async () => {
+    // Bounded to what exists, so the scheduler is never handed a choice that
+    // resolves to nothing on every later read (DN-139).
     await seedLibrary();
 
     await http()
       .patch('/skill-levels/pull')
       .set(...asUser(ALICE))
-      .send({ rung: 9 })
+      .send({ exerciseId: 'no-such-exercise' })
+      .expect(404);
+  });
+
+  it('400s a movement from another movement group', async () => {
+    const squat = await createExercise({ movementGroup: 'squat' });
+
+    await http()
+      .patch('/skill-levels/pull')
+      .set(...asUser(ALICE))
+      .send({ exerciseId: squat.id })
       .expect(400);
   });
 
   it('404s a movementGroup that is not one of the eight', async () => {
     // "push" is a movement pattern; the groups are finer-grained than that.
+    const { members } = await seedLibrary();
+
     await http()
       .patch('/skill-levels/push')
       .set(...asUser(ALICE))
-      .send({ rung: 0 })
+      .send({ exerciseId: members[0].id })
       .expect(404);
   });
 });
@@ -794,7 +810,7 @@ describe('validation and not-found', () => {
 
 /** A slot prescribing `pull, 5x3`, and today's assignment pointing at it. */
 async function prescribedDay(userId: string) {
-  const { rungs } = await createGroup('pull', [
+  const { members } = await createGroup('pull', [
     'Negative chin-up',
     'Chin-up',
     'Pull-up',
@@ -840,7 +856,7 @@ async function prescribedDay(userId: string) {
       planSlotId: slot.id,
     },
   });
-  return { rungs, assignment, movement: slot.movements[0] };
+  return { members, assignment, movement: slot.movements[0] };
 }
 
 /**
@@ -858,12 +874,12 @@ describe('POST/DELETE /assignments/:id/substitutions, on a prescribed day', () =
       .set(...asUser(ALICE))
       .expect(200);
     const alice = await testPrisma().user.findFirstOrThrow();
-    const { rungs, assignment, movement } = await prescribedDay(alice.id);
+    const { members, assignment, movement } = await prescribedDay(alice.id);
 
     await http()
       .post(`/assignments/${assignment.id}/substitutions`)
       .set(...asUser(ALICE))
-      .send({ planSlotMovementId: movement.id, exerciseId: rungs[2].id })
+      .send({ planSlotMovementId: movement.id, exerciseId: members[2].id })
       .expect(201);
     expect(
       await testPrisma().assignmentSubstitution.count({
@@ -887,12 +903,12 @@ describe('POST/DELETE /assignments/:id/substitutions, on a prescribed day', () =
       .set(...asUser(ALICE))
       .expect(200);
     const alice = await testPrisma().user.findFirstOrThrow();
-    const { rungs, assignment } = await prescribedDay(alice.id);
+    const { members, assignment } = await prescribedDay(alice.id);
 
     await http()
       .post(`/assignments/${assignment.id}/substitutions`)
       .set(...asUser(ALICE))
-      .send({ exerciseId: rungs[2].id })
+      .send({ exerciseId: members[2].id })
       .expect(400);
   });
 });
@@ -1301,7 +1317,7 @@ describe('a program ending, end to end', () => {
     const startDate = addIsoDays(todayIsoDate(), -14);
     await testPrisma().planEnrollment.updateMany({
       where: { userId, status: 'active' },
-      data: { planId, startDate, weeks: 1, startingRungs: { pull: 0 } },
+      data: { planId, startDate, weeks: 1, startingMovements: {} },
     });
     const enrollment = await testPrisma().planEnrollment.findFirstOrThrow({
       where: { userId, status: 'active' },
@@ -1316,11 +1332,18 @@ describe('a program ending, end to end', () => {
   }
 
   it('hands back the card, a workout, and the finished run', async () => {
-    // seedLibrary's pull group is the one the rung change is read off.
+    // seedLibrary's pull group is the one the movement change is read off.
     const plan = await everyDayPlan({ name: 'Pull-Up Builder' });
     const enrollmentId = await ranOutLastWeek(ALICE, plan.id);
+    const pullChoice = await testPrisma().exercise.findFirstOrThrow({
+      where: { movementGroup: 'pull', isGroupDefault: false },
+    });
     await testPrisma().skillLevel.create({
-      data: { userId: ALICE, movementGroup: 'pull', rung: 2 },
+      data: {
+        userId: ALICE,
+        movementGroup: 'pull',
+        exerciseId: pullChoice.id,
+      },
     });
 
     const today = parsed(
@@ -1342,8 +1365,12 @@ describe('a program ending, end to end', () => {
       summary: {
         weeks: 1,
         sessions: 1,
-        rungChanges: [
-          expect.objectContaining({ movementGroup: 'pull', toRung: 2 }),
+        movementChanges: [
+          expect.objectContaining({
+            movementGroup: 'pull',
+            toExerciseId: pullChoice.id,
+            toName: pullChoice.name,
+          }),
         ],
       },
     });
