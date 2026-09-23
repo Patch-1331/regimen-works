@@ -3,6 +3,12 @@
 Research only. Nothing in this document was changed in the code; every claim cites a
 file and a line at the commit this branch was cut from (`df13a00`).
 
+> **Vocabulary note, added when this landed.** This research is what DN-134 acted on,
+> and DN-134 renamed the things it names: a *progression line* is now a **movement
+> group**, and `altExerciseId` is now `fallbackExerciseId`. The findings below hold —
+> read `line`/`rung` as `movementGroup`/`rung` and see
+> [ADR-0004](../adr/0004-movement-groups.md) for what the words mean now.
+
 There was no existing convention for research notes — `docs/` holds `adr/`, `agents/`,
 `design/` and `plan.md`. This file starts `docs/research/`.
 
