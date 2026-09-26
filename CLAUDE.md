@@ -58,7 +58,7 @@ somewhere other than the cause.
   `npm run prisma:generate --workspace apps/api`.
 - **A missing `VITE_*` var doesn't fail the web build** — it tree-shakes the code
   that reads it and succeeds, smaller and broken. Judge by bundle size: ~644 kB is
-  complete, ~391 kB means Clerk was dropped, ~275 kB means the app is gone.
+  complete, ~405 kB means Clerk was dropped, ~275 kB means the app is gone.
 - **Every query must be scoped by `userId`.** Auth is Clerk and the app is
   multi-tenant; an unscoped read compiles fine and returns other athletes' rows.
   `src/common/user-scoping.spec.ts` guards this — a failure there is a real finding.
