@@ -58,6 +58,7 @@ describe('SettingsService.get', () => {
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
       scheduleLock: null,
+      restPace: null,
     });
   });
 
@@ -78,6 +79,7 @@ describe('SettingsService.get', () => {
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
       scheduleLock: null,
+      restPace: null,
     });
   });
 
@@ -99,6 +101,7 @@ describe('SettingsService.get', () => {
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
       scheduleLock: null,
+      restPace: null,
     });
   });
 
@@ -167,6 +170,7 @@ describe('SettingsService.update', () => {
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
       scheduleLock: null,
+      restPace: null,
     });
   });
 
@@ -187,6 +191,7 @@ describe('SettingsService.update', () => {
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
       scheduleLock: null,
+      restPace: null,
     });
   });
 
@@ -201,6 +206,7 @@ describe('SettingsService.update', () => {
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
       scheduleLock: null,
+      restPace: null,
     });
   });
 
@@ -214,6 +220,7 @@ describe('SettingsService.update', () => {
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
       scheduleLock: null,
+      restPace: null,
     });
     expect(await storedRule(user.id)).not.toBeNull();
   });
@@ -322,6 +329,7 @@ describe('SettingsService.update', () => {
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
       scheduleLock: null,
+      restPace: null,
     });
   });
 

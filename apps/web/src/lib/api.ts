@@ -10,6 +10,7 @@ import type {
   Me,
   MovementHistory,
   MovementVolume,
+  RestPace,
   RoundSplit,
   ScheduleCap,
   SetRoundSplitRequest,
@@ -17,6 +18,7 @@ import type {
   ProposedMovementChange,
   SetSubstitutionRequest,
   Settings,
+  UpdateRestPace,
   SetupOptions,
   SkillLevel,
   TodayResponse,
@@ -362,6 +364,13 @@ export const api = {
   /** Starts the same program over: same plan, same length, from today. */
   runProgramAgain: (enrollmentId: string) =>
     postJson<{ enrollmentId: string }>(`/programs/${enrollmentId}/run-again`),
+
+  /**
+   * Changes the rest pace of the program being run (DN-143). Its own route
+   * rather than a Settings field: it belongs to the run, and ends with it.
+   */
+  updateRestPace: (body: UpdateRestPace) =>
+    patchJson<RestPace>("/programs/active/rest", body),
 
   settings: () => request<Settings>("/settings"),
   updateSettings: (body: UpdateSettings) =>

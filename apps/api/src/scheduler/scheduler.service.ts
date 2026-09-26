@@ -422,6 +422,7 @@ export class SchedulerService {
       userId,
       assignmentId,
       day.movements,
+      day.defaultRestSeconds,
     );
     // Same rendering rule as a WOD day (DN-116): the resolver records what an
     // automatic layer replaced even on a row the athlete swapped, and the

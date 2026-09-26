@@ -55,6 +55,7 @@ function program(overrides: Partial<ActiveProgram> = {}): ActiveProgram {
     scheduleMode: 'fixed',
     startDate: MONDAY,
     weeks: null,
+    defaultRestSeconds: null,
     authoredWeeks: [week([1, 3, 5])],
     ...overrides,
   };

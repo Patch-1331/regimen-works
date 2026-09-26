@@ -17,6 +17,7 @@ const FLEXIBLE: SetupPlanBounds = {
   maxDaysPerWeek: 5,
   minWeeks: 4,
   maxWeeks: 8,
+  restPaceRequired: false,
 };
 
 const FIXED: SetupPlanBounds = {
@@ -26,6 +27,7 @@ const FIXED: SetupPlanBounds = {
   maxDaysPerWeek: null,
   minWeeks: 6,
   maxWeeks: 6,
+  restPaceRequired: false,
 };
 
 const OPEN_ENDED: SetupPlanBounds = {
@@ -35,6 +37,7 @@ const OPEN_ENDED: SetupPlanBounds = {
   maxDaysPerWeek: 7,
   minWeeks: null,
   maxWeeks: null,
+  restPaceRequired: false,
 };
 
 /** Three weeks starting the day they were asked, nothing trained yet. */
@@ -46,6 +49,7 @@ function answers(overrides: Partial<CommitSetup> = {}): CommitSetup {
     trainingDays: [1, 3, 5],
     weeks: 6,
     startDate: '2026-09-19',
+    defaultRestSeconds: null,
     ...overrides,
   };
 }
@@ -327,6 +331,48 @@ describe('setupRejection: start date', () => {
     expect(
       setupRejection(FLEXIBLE, answers({ startDate: '2026-09-18' }), touched),
     ).toBe('That start date has already passed.');
+  });
+});
+
+describe('setupRejection: rest pace', () => {
+  // ADR 0005. The field may be left blank only where every movement in the
+  // program already states a rest; a program with holes asks once, here.
+  const WITH_HOLES: SetupPlanBounds = { ...FIXED, restPaceRequired: true };
+  const fixedAnswers = (overrides: Partial<CommitSetup> = {}) =>
+    answers({ trainingDays: null, weeks: 6, ...overrides });
+
+  it('asks nothing of a program that states rest everywhere', () => {
+    expect(setupRejection(FIXED, fixedAnswers(), RANGE)).toBeNull();
+  });
+
+  it('requires a pace from a program that leaves rest unstated', () => {
+    expect(setupRejection(WITH_HOLES, fixedAnswers(), RANGE)).toBe(
+      'Bar Muscle-Up does not say how long to rest after every movement, so choose a rest for this run.',
+    );
+  });
+
+  it('takes any pace as the answer, straight through included', () => {
+    // 0 is a pace -- "no rest, all run" -- not a blank that slipped past.
+    expect(
+      setupRejection(
+        WITH_HOLES,
+        fixedAnswers({ defaultRestSeconds: 0 }),
+        RANGE,
+      ),
+    ).toBeNull();
+    expect(
+      setupRejection(
+        WITH_HOLES,
+        fixedAnswers({ defaultRestSeconds: 90 }),
+        RANGE,
+      ),
+    ).toBeNull();
+  });
+
+  it('accepts a pace on a program that did not need one', () => {
+    expect(
+      setupRejection(FIXED, fixedAnswers({ defaultRestSeconds: 120 }), RANGE),
+    ).toBeNull();
   });
 });
 

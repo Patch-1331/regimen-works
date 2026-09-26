@@ -57,6 +57,7 @@ function program(overrides: Partial<ActiveProgram> = {}): ActiveProgram {
     scheduleMode: 'flexible',
     startDate: MONDAY,
     weeks: null,
+    defaultRestSeconds: null,
     authoredWeeks: [
       {
         order: 0,

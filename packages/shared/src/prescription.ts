@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { movementGroup, substitutionReason } from "./enums.js";
 import { refineRepShape, repShapeFields } from "./rep-shape.js";
+import { restSecondsSchema } from "./rest.js";
 import { movementExerciseSchema } from "./wod.js";
 
 /**
@@ -29,8 +30,12 @@ export const prescribedMovementSchema = z
      * `exercise.unit`, which makes a hold's "reps" seconds.
      */
     ...repShapeFields,
-    /** Prescribed rest between sets. 0 says "straight through", which is a prescription rather than an omission. */
-    restSeconds: z.number().int().nonnegative(),
+    /**
+     * The rest this athlete trains at, already resolved through their pace
+     * for the run — see `resolveRestSeconds`. 0 says "straight through",
+     * which is a prescription; null says nobody stated one, and no clock runs.
+     */
+    restSeconds: restSecondsSchema,
     /**
      * The line this was prescribed by, or null where the author pinned a
      * specific exercise because the variation was the point.

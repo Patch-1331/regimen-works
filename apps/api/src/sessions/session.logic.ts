@@ -130,7 +130,8 @@ export type ResolvedPrescribedInput = {
   reps: number | null;
   repsMax: number | null;
   toFailure: boolean;
-  restSeconds: number;
+  /** Already resolved through the athlete's pace; null runs no clock. */
+  restSeconds: number | null;
   isSwapped: boolean;
   prescribedName: string | null;
   prescribedReason: SubstitutionReason | null;

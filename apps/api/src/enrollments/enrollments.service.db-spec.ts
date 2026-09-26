@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
 import { testPrisma } from '../test-support/database';
@@ -398,6 +398,22 @@ describe('EnrollmentsService.runAgain', () => {
     expect(created.startingMovements).toEqual({ pull: members[2].id });
   });
 
+  it("carries the last run's rest pace forward, since nothing about it is new", async () => {
+    const user = await createUser();
+    const previous = await completedRun(user.id, { defaultRestSeconds: 120 });
+
+    const { enrollmentId } = await service().runAgain(
+      user.id,
+      previous.id,
+      TODAY,
+    );
+
+    const created = await testPrisma().planEnrollment.findUniqueOrThrow({
+      where: { id: enrollmentId },
+    });
+    expect(created.defaultRestSeconds).toBe(120);
+  });
+
   it('puts the card away as part of the same answer', async () => {
     const user = await createUser();
     const previous = await completedRun(user.id);
@@ -448,5 +464,121 @@ describe('EnrollmentsService.runAgain', () => {
     await expect(
       service().runAgain(user.id, enrollment.id, TODAY),
     ).rejects.toThrow(NotFoundException);
+  });
+});
+
+/**
+ * Changing the rest pace of the program being run (ADR 0005, DN-143): set at
+ * enrollment, and editable while it runs.
+ */
+describe('EnrollmentsService.updateRestPace', () => {
+  /** A program of one straight-sets day whose movements rest as given. */
+  async function restingPlan(rests: (number | null)[]) {
+    return createPlan({
+      weeks: {
+        create: [
+          {
+            order: 0,
+            phase: 'core',
+            slots: {
+              create: [
+                {
+                  dayOfWeek: 3,
+                  kind: 'movements',
+                  movements: {
+                    create: rests.map((restSeconds, order) => ({
+                      order,
+                      movementGroup: 'pull',
+                      sets: 3,
+                      reps: 5,
+                      restSeconds,
+                    })),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  it('sets the pace on the run under way', async () => {
+    const user = await createUser();
+    const plan = await restingPlan([90]);
+    const run = await createEnrollment(user.id, { planId: plan.id });
+
+    const pace = await service().updateRestPace(user.id, {
+      defaultRestSeconds: 60,
+    });
+
+    expect(pace).toMatchObject({
+      enrollmentId: run.id,
+      defaultRestSeconds: 60,
+      required: false,
+    });
+    const stored = await testPrisma().planEnrollment.findUniqueOrThrow({
+      where: { id: run.id },
+    });
+    expect(stored.defaultRestSeconds).toBe(60);
+  });
+
+  it("clears it back to the program's own where the program states every rest", async () => {
+    const user = await createUser();
+    const plan = await restingPlan([90, 0]);
+    await createEnrollment(user.id, {
+      planId: plan.id,
+      defaultRestSeconds: 60,
+    });
+
+    const pace = await service().updateRestPace(user.id, {
+      defaultRestSeconds: null,
+    });
+
+    expect(pace.defaultRestSeconds).toBeNull();
+  });
+
+  it('refuses to clear it where the program leaves some rest unstated', async () => {
+    // Clearing it would hand the athlete a set with no rest to run and nobody
+    // having been asked -- the same rule the wizard holds at the start.
+    const user = await createUser();
+    const plan = await restingPlan([90, null]);
+    const run = await createEnrollment(user.id, {
+      planId: plan.id,
+      defaultRestSeconds: 60,
+    });
+
+    await expect(
+      service().updateRestPace(user.id, { defaultRestSeconds: null }),
+    ).rejects.toThrow(BadRequestException);
+    const stored = await testPrisma().planEnrollment.findUniqueOrThrow({
+      where: { id: run.id },
+    });
+    expect(stored.defaultRestSeconds).toBe(60);
+  });
+
+  it('refuses a program with no sets to rest between', async () => {
+    // Just WODs has no straight sets, so a pace there would do nothing.
+    const user = await createUser();
+    await createEnrollment(user.id);
+
+    await expect(
+      service().updateRestPace(user.id, { defaultRestSeconds: 60 }),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it("leaves another athlete's run alone", async () => {
+    const user = await createUser();
+    const other = await createUser();
+    const plan = await restingPlan([90]);
+    await createEnrollment(user.id, { planId: plan.id });
+    const theirs = await createEnrollment(other.id, { planId: plan.id });
+
+    await service().updateRestPace(user.id, { defaultRestSeconds: 30 });
+
+    const stored = await testPrisma().planEnrollment.findUniqueOrThrow({
+      where: { id: theirs.id },
+    });
+    expect(stored.defaultRestSeconds).toBeNull();
   });
 });

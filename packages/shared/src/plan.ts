@@ -8,6 +8,7 @@ import {
   scheduleMode,
   wodType,
 } from "./enums.js";
+import { restSecondsSchema } from "./rest.js";
 import { SATURDAY, SUNDAY } from "./schedule.js";
 
 /**
@@ -57,8 +58,13 @@ export const planSlotMovementSchema = z
      * which documents all three and is the only place they are defined.
      */
     ...repShapeFields,
-    /** 0 is a prescription — "straight through" — rather than an omission. */
-    restSeconds: z.number().int().nonnegative(),
+    /**
+     * 0 is a prescription — "straight through" — rather than an omission, and
+     * null is the omission: the source said nothing about rest (ADR 0005). The
+     * two are different facts, and the athlete's pace at enrollment is what
+     * fills the second — see `resolveRestSeconds`.
+     */
+    restSeconds: restSecondsSchema,
   })
   .superRefine(refineRepShape)
   // Mirrors the PlanSlotMovement_line_xor_exercise CHECK. Neither set is a

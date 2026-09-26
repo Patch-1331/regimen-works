@@ -1,14 +1,22 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   enrollmentSummarySchema,
   movementSnapshotSchema,
   type CompletedProgram,
   type EnrollmentSummary,
   type MovementSnapshot,
+  type RestPace,
+  type UpdateRestPace,
 } from '@regimen-works/shared';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { libraryVisibleTo } from '../library/visible-to';
+import { loadActiveProgram } from '../plans/active-program';
+import { restPaceOf } from '../plans/rest-pace';
 import { buildEnrollmentSummary } from './enrollment-summary.logic';
 import { snapshotMovements } from './starting-movements';
 
@@ -136,7 +144,7 @@ export class EnrollmentsService {
   ): Promise<{ enrollmentId: string }> {
     const previous = await this.prisma.planEnrollment.findFirst({
       where: { id: enrollmentId, userId, status: 'completed' },
-      select: { id: true, planId: true, weeks: true },
+      select: { id: true, planId: true, weeks: true, defaultRestSeconds: true },
     });
     if (!previous) {
       throw new NotFoundException('That is not a program you have finished.');
@@ -166,12 +174,59 @@ export class EnrollmentsService {
           planId: previous.planId,
           startDate: today,
           weeks: previous.weeks,
+          // The pace too (ADR 0005): the same program again is the same
+          // answer to the same question, and asking it would be the first
+          // question "no questions" has had to make an exception for.
+          defaultRestSeconds: previous.defaultRestSeconds,
           startingMovements: await snapshotMovements(tx, userId),
         },
         select: { id: true },
       });
       return { enrollmentId: created.id };
     });
+  }
+
+  /**
+   * Changes the rest pace of the program being run (ADR 0005) -- the "editable
+   * while it runs" half of setting it at enrollment.
+   *
+   * Takes effect from the next read of a day. A session already under way
+   * keeps the rest it started with, the same way it keeps its movements
+   * (DN-90): the countdown between two sets should not change length because
+   * the athlete opened Settings between them.
+   *
+   * Blank is refused where the routine leaves some rest unstated, by the same
+   * rule the wizard applies -- clearing it would leave a set with no rest to
+   * run and nobody having been asked.
+   */
+  async updateRestPace(
+    userId: string,
+    body: UpdateRestPace,
+  ): Promise<RestPace> {
+    const pace = restPaceOf(await loadActiveProgram(this.prisma, userId));
+    if (!pace) {
+      throw new NotFoundException(
+        'You are not running a program with sets to rest between.',
+      );
+    }
+    if (pace.required && body.defaultRestSeconds === null) {
+      throw new BadRequestException(
+        `${pace.planName} does not say how long to rest after every movement, so it needs a rest from you.`,
+      );
+    }
+
+    // `status: 'active'` on the write as well as the read: a run that
+    // completed in between is history, and history does not take edits.
+    const { count } = await this.prisma.planEnrollment.updateMany({
+      where: { id: pace.enrollmentId, userId, status: 'active' },
+      data: { defaultRestSeconds: body.defaultRestSeconds },
+    });
+    if (count === 0) {
+      throw new NotFoundException(
+        'You are not running a program with sets to rest between.',
+      );
+    }
+    return { ...pace, defaultRestSeconds: body.defaultRestSeconds };
   }
 
   /**

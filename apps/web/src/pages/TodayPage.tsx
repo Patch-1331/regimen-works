@@ -672,13 +672,17 @@ function PrescribedName({
       </span>
       {/* Rest sits under the name rather than beside the count: it is part of
           the prescription, and a rest interval crammed in next to "5 × 3"
-          stops that being a number anyone reads at a glance. */}
-      <span
-        className="text-[10px] tracking-[0.1em] text-[var(--ink-faint)]"
-        style={{ fontFamily: "var(--font-mono)" }}
-      >
-        {restCopy(movement.restSeconds)}
-      </span>
+          stops that being a number anyone reads at a glance. No line at all
+          where nobody stated a rest: "STRAIGHT THROUGH" there would be a
+          prescription the source never made (DN-143). */}
+      {movement.restSeconds !== null && (
+        <span
+          className="text-[10px] tracking-[0.1em] text-[var(--ink-faint)]"
+          style={{ fontFamily: "var(--font-mono)" }}
+        >
+          {restCopy(movement.restSeconds)}
+        </span>
+      )}
     </span>
   );
   const count = (
@@ -730,7 +734,7 @@ function PrescribedName({
  *
  * Zero is a prescription rather than an omission — the author meant "straight
  * through" — so it gets words instead of "REST 0S", which reads as a field
- * nobody filled in.
+ * nobody filled in. Null -- no rest stated anywhere -- never reaches here.
  */
 function restCopy(restSeconds: number): string {
   if (restSeconds === 0) return "STRAIGHT THROUGH";

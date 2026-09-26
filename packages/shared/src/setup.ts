@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { planSchema } from "./plan.js";
+import { restSecondsSchema } from "./rest.js";
 import { SATURDAY, SUNDAY, trainingDaysSchema } from "./schedule.js";
 
 /**
@@ -47,6 +48,19 @@ export const setupProgramSchema = z.intersection(
      * is about to live.
      */
     fixedDays: z.array(z.number().int().min(SUNDAY).max(SATURDAY)).max(7),
+    /**
+     * Whether this program has any straight sets, and so a rest between sets
+     * for the athlete to set a pace for. False for Just WODs, where the
+     * wizard asks nothing about rest -- a field there would do nothing.
+     */
+    hasStraightSets: z.boolean(),
+    /**
+     * Whether some movement in this program leaves its rest unstated, which
+     * makes the wizard's rest field required (ADR 0005). Across every week,
+     * not just the first: a hole in week six is still a clock the athlete
+     * would reach with nothing to run.
+     */
+    restPaceRequired: z.boolean(),
   }),
 );
 export type SetupProgram = z.infer<typeof setupProgramSchema>;
@@ -84,6 +98,12 @@ export const setupOptionsSchema = z.object({
   earliestStartDate: z.string().date(),
   /** The last date offered, `SETUP_START_DATE_DAYS - 1` after the earliest. */
   latestStartDate: z.string().date(),
+  /**
+   * The rest pace the athlete set on their most recent run, to prefill the
+   * field with. Null where they have never set one, which leaves a fully
+   * specified program asking nothing at all.
+   */
+  lastRestSeconds: restSecondsSchema,
 });
 export type SetupOptions = z.infer<typeof setupOptionsSchema>;
 
@@ -114,5 +134,15 @@ export const commitSetupSchema = z.object({
    */
   weeks: z.number().int().positive().nullable(),
   startDate: z.string().date(),
+  /**
+   * The athlete's rest pace for this run, overriding every per-movement rest
+   * (ADR 0005). Null keeps the program's own, which is only an answer when
+   * the program states one everywhere -- the service refuses null on a
+   * program with holes.
+   *
+   * Defaults to null so a client that never asks sends the answer a fully
+   * specified program wants.
+   */
+  defaultRestSeconds: restSecondsSchema.default(null),
 });
 export type CommitSetup = z.infer<typeof commitSetupSchema>;

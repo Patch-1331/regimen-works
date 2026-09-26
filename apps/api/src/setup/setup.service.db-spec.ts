@@ -41,6 +41,7 @@ function answers(overrides: Partial<CommitSetup> = {}): CommitSetup {
     trainingDays: [1, 3, 5],
     weeks: 6,
     startDate: TODAY,
+    defaultRestSeconds: null,
     ...overrides,
   };
 }
@@ -485,5 +486,148 @@ describe('SetupService.commit', () => {
         TODAY,
       ),
     ).rejects.toThrow(BadRequestException);
+  });
+});
+
+/**
+ * The rest pace, asked at the one moment the athlete commits (ADR 0005,
+ * DN-143): required only of a program that leaves some rest unstated, and
+ * prefilled so that it is rarely a question at all.
+ */
+describe('SetupService, the rest pace', () => {
+  /**
+   * A flexible program whose one straight-sets day rests as given, with the
+   * unstated rests in the last of `weeks` -- every week is read, not only
+   * the first the picker looks at.
+   */
+  async function restingPlan(
+    rests: (number | null)[],
+    { weeks = 1 }: { weeks?: number } = {},
+  ) {
+    return createPlan({
+      weeks: {
+        create: Array.from({ length: weeks }, (_, order) => ({
+          order,
+          phase: 'core',
+          slots: {
+            create: [
+              {
+                dayOfWeek: 3,
+                kind: 'movements',
+                movements: {
+                  // Every week states its rest except the last, which is the
+                  // one the routine is silent in.
+                  create: rests.map((restSeconds, i) => ({
+                    order: i,
+                    movementGroup: 'pull',
+                    sets: 3,
+                    reps: 5,
+                    restSeconds: order === weeks - 1 ? restSeconds : 90,
+                  })),
+                },
+              },
+            ],
+          },
+        })),
+      },
+    });
+  }
+
+  it('asks nothing of a program that states rest everywhere', async () => {
+    const { userId } = await provisionedAthlete();
+    const plan = await restingPlan([90, 0]);
+
+    const options = await service().options(userId, TODAY);
+
+    expect(options.programs.find((p) => p.id === plan.id)).toMatchObject({
+      hasStraightSets: true,
+      restPaceRequired: false,
+    });
+    // Just WODs has no straight sets at all: no pace to offer, and nothing to
+    // leave unstated.
+    expect(
+      options.programs.find((p) => p.id === DEFAULT_PLAN_ID),
+    ).toMatchObject({ hasStraightSets: false, restPaceRequired: false });
+  });
+
+  it('requires a pace of a program with a hole in any week, not just the first', async () => {
+    const { userId } = await provisionedAthlete();
+    const plan = await restingPlan([90, null], { weeks: 3 });
+
+    const options = await service().options(userId, TODAY);
+
+    expect(
+      options.programs.find((p) => p.id === plan.id)!.restPaceRequired,
+    ).toBe(true);
+  });
+
+  it('prefills with the last pace the athlete set, skipping runs that set none', async () => {
+    const { userId } = await provisionedAthlete();
+    const plan = await createPlan();
+    await createEnrollment(userId, {
+      planId: plan.id,
+      status: 'completed',
+      defaultRestSeconds: 75,
+    });
+    // A later run on a program with its own rest set no pace, and says
+    // nothing about how this athlete likes to rest.
+    await createEnrollment(userId, {
+      planId: plan.id,
+      status: 'completed',
+      defaultRestSeconds: null,
+    });
+
+    expect((await service().options(userId, TODAY)).lastRestSeconds).toBe(75);
+  });
+
+  it('prefills nothing for an athlete who has never set a pace', async () => {
+    const { userId } = await provisionedAthlete();
+
+    expect((await service().options(userId, TODAY)).lastRestSeconds).toBeNull();
+  });
+
+  it('writes the pace onto the run', async () => {
+    const { userId } = await provisionedAthlete();
+    const plan = await restingPlan([90]);
+
+    await service().commit(
+      userId,
+      answers({ planId: plan.id, defaultRestSeconds: 120 }),
+      TODAY,
+    );
+
+    expect((await activeEnrollment(userId)).defaultRestSeconds).toBe(120);
+  });
+
+  it('refuses a blank pace for a program that leaves rest unstated, writing nothing', async () => {
+    const { userId, enrollmentId } = await provisionedAthlete();
+    const plan = await restingPlan([90, null]);
+
+    await expect(
+      service().commit(
+        userId,
+        answers({ planId: plan.id, defaultRestSeconds: null }),
+        TODAY,
+      ),
+    ).rejects.toThrow(BadRequestException);
+    const enrollment = await activeEnrollment(userId);
+    expect(enrollment.id).toBe(enrollmentId);
+    expect(enrollment.planId).toBe(DEFAULT_PLAN_ID);
+  });
+
+  it('takes a pace for a program that leaves rest unstated', async () => {
+    const { userId } = await provisionedAthlete();
+    const plan = await restingPlan([null]);
+
+    await service().commit(
+      userId,
+      answers({ planId: plan.id, defaultRestSeconds: 60 }),
+      TODAY,
+    );
+
+    expect(await activeEnrollment(userId)).toMatchObject({
+      planId: plan.id,
+      defaultRestSeconds: 60,
+    });
   });
 });

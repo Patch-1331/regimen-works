@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { equipment } from "./enums.js";
+import { restPaceSchema } from "./rest.js";
 import {
   SATURDAY,
   SUNDAY,
@@ -107,6 +108,12 @@ export const settingsSchema = z.object({
    * way to change it is to end the program.
    */
   scheduleLock: scheduleLockSchema.nullable(),
+  /**
+   * The rest pace of the program being run (ADR 0005). Read-only here for the
+   * same reason `scheduleLock` is -- it belongs to the enrollment, not to the
+   * athlete's preferences -- and changed through `PATCH /programs/active/rest`.
+   */
+  restPace: restPaceSchema.nullable(),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 
@@ -127,9 +134,16 @@ export type Settings = z.infer<typeof settingsSchema>;
  * the one thing DN-118 exists to say no to, and saying it with a 400 is
  * better than saying it by dropping the key and returning 200. `z.never()`
  * accepts the field's absence and nothing else.
+ *
+ * `restPace` is refused the same way and for a smaller reason: it is written
+ * to the enrollment, through its own endpoint, and a 200 here would claim a
+ * change this route never made.
  */
 export const updateSettingsSchema = settingsSchema
-  .omit({ scheduleLock: true })
+  .omit({ scheduleLock: true, restPace: true })
   .partial()
-  .extend({ scheduleLock: z.never().optional() });
+  .extend({
+    scheduleLock: z.never().optional(),
+    restPace: z.never().optional(),
+  });
 export type UpdateSettings = z.infer<typeof updateSettingsSchema>;

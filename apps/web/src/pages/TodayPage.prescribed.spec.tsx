@@ -100,6 +100,17 @@ describe("the prescribed plate", () => {
     expect(await screen.findByText("STRAIGHT THROUGH")).toBeInTheDocument();
   });
 
+  it("says nothing about rest where nobody stated one, which is not straight through", async () => {
+    // DN-143: null and 0 are different facts. Reading the first as the second
+    // would hand the athlete a prescription their routine never made.
+    prescribing([fixtures.prescribedMovement({ restSeconds: null })]);
+    renderRoute("/");
+
+    expect(await screen.findByText("CHIN-UP")).toBeInTheDocument();
+    expect(screen.queryByText("STRAIGHT THROUGH")).not.toBeInTheDocument();
+    expect(screen.queryByText(/^REST /)).not.toBeInTheDocument();
+  });
+
   it("reports what the day has rather than dimming what it hasn't", async () => {
     // A prescribed day has no time cap and no rounds. Dimming those two says
     // today is a lesser day; filling them in says something false. So the bank

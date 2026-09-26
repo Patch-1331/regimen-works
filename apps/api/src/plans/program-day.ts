@@ -34,7 +34,8 @@ export type ProgramSlotMovement = {
   reps: number | null;
   repsMax: number | null;
   toFailure: boolean;
-  restSeconds: number;
+  /** Null where the source was silent — not 0, which is "straight through" (ADR 0005). */
+  restSeconds: number | null;
 };
 
 /** Enough of an authored slot to decide and then record the day. */
@@ -74,6 +75,12 @@ export type ActiveProgram = {
   startDate: string;
   /** The run's length. Null for an open-ended program, which never completes. */
   weeks: number | null;
+  /**
+   * The athlete's rest pace for this run, or null to keep the routine's own
+   * (ADR 0005). Carried here because the prescription a day hands over is
+   * resolved through it -- see `resolveRestSeconds`.
+   */
+  defaultRestSeconds: number | null;
   authoredWeeks: ProgramWeek[];
 };
 
@@ -126,6 +133,8 @@ export type ProgramDay =
       kind: 'prescribed';
       day: ProgramDayContext;
       movements: ProgramSlotMovement[];
+      /** The run's rest pace, which the movements' own rest resolves through. */
+      defaultRestSeconds: number | null;
     }
   | { kind: 'generated'; day: ProgramDayContext; constraints: SlotConstraints };
 
@@ -255,6 +264,7 @@ export function resolveProgramDay(
       kind: 'prescribed',
       day,
       movements: [...slot.movements].sort((a, b) => a.order - b.order),
+      defaultRestSeconds: program.defaultRestSeconds,
     };
   }
 

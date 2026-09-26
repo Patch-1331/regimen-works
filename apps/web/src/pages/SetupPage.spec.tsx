@@ -187,6 +187,8 @@ describe("the three questions", () => {
       trainingDays: [1, 3, 5],
       weeks: 6,
       startDate: TODAY,
+      // Left blank: the program states its own rests (DN-143).
+      defaultRestSeconds: null,
     });
   });
 
@@ -614,6 +616,128 @@ describe("the start date", () => {
         .getAllByRole("button")
         .filter((b) => /^\w+day \d+ \w+$/.test(b.getAttribute("aria-label") ?? "")),
     ).toHaveLength(21);
+  });
+});
+
+/**
+ * The rest pace (ADR 0005, DN-143): one question for the whole run, required
+ * only of a program that leaves some rest unstated.
+ */
+describe("the rest pace", () => {
+  /** The Pull-Up Builder, leaving some rest unstated where `holes` says. */
+  function withRest(holes: boolean, lastRestSeconds: number | null = null) {
+    return newAthlete({
+      setup: {
+        programs: [
+          fixtures.setupProgram(),
+          fixtures.boundedProgram({ restPaceRequired: holes }),
+        ],
+        lastRestSeconds,
+      },
+    });
+  }
+
+  async function walkToReady(program = "Pull-Up Builder") {
+    await walkTo(program);
+    await click("Continue");
+    await click("Continue");
+  }
+
+  it("is optional where the program states every rest, and sends blank as no pace", async () => {
+    const sent = withRest(false);
+    renderRoute("/setup");
+    await walkToReady();
+
+    expect(screen.getByLabelText(/Rest between sets \(optional\)/)).toHaveValue("");
+    await click("Go to today");
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    // Null, never 0: blank is "rest as written", 0 is "straight through".
+    expect(sent[0].defaultRestSeconds).toBeNull();
+  });
+
+  it("does not prefill a program that states its own rests", async () => {
+    // The pace replaces every rest in the program; carrying the last one in
+    // unasked would quietly overrule the author on a screen tapped through.
+    withRest(false, 75);
+    renderRoute("/setup");
+    await walkToReady();
+
+    expect(screen.getByLabelText(/Rest between sets/)).toHaveValue("");
+  });
+
+  it("sends the pace the athlete chose over a program's own rests", async () => {
+    const sent = withRest(false);
+    renderRoute("/setup");
+    await walkToReady();
+
+    await userEvent.type(screen.getByLabelText(/Rest between sets/), "120");
+    await click("Go to today");
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0].defaultRestSeconds).toBe(120);
+  });
+
+  it("is required where the program leaves a rest unstated", async () => {
+    const sent = withRest(true);
+    renderRoute("/setup");
+    await walkToReady();
+
+    expect(screen.getByLabelText("Rest between sets")).toHaveValue("");
+    expect(
+      screen.getByText(
+        "Pull-Up Builder does not say how long to rest after every movement, so choose a rest for this run.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go to today" })).toBeDisabled();
+    expect(sent).toHaveLength(0);
+  });
+
+  it("takes straight through as an answer to it", async () => {
+    const sent = withRest(true);
+    renderRoute("/setup");
+    await walkToReady();
+
+    await userEvent.type(screen.getByLabelText("Rest between sets"), "0");
+    await click("Go to today");
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0].defaultRestSeconds).toBe(0);
+  });
+
+  it("prefills the last pace the athlete used where one is needed", async () => {
+    const sent = withRest(true, 75);
+    renderRoute("/setup");
+    await walkToReady();
+
+    expect(screen.getByLabelText("Rest between sets")).toHaveValue("75");
+    await click("Go to today");
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0].defaultRestSeconds).toBe(75);
+  });
+
+  it("will not send a rest that is not whole seconds", async () => {
+    withRest(false);
+    renderRoute("/setup");
+    await walkToReady();
+
+    await userEvent.type(screen.getByLabelText(/Rest between sets/), "-5");
+
+    expect(screen.getByText(/whole number of seconds/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go to today" })).toBeDisabled();
+  });
+
+  it("asks nothing about rest on a program with no straight sets", async () => {
+    const sent = withRest(false, 75);
+    renderRoute("/setup");
+    await walkToReady("Just WODs");
+
+    expect(screen.queryByLabelText(/Rest between sets/)).not.toBeInTheDocument();
+    await click("Go to today");
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0].defaultRestSeconds).toBeNull();
   });
 });
 

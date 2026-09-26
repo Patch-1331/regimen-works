@@ -1,6 +1,8 @@
-import { Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { updateRestPaceSchema } from '@regimen-works/shared';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { todayIsoDate } from '../common/today';
+import { validateBody } from '../common/validate';
 import { EnrollmentsService } from './enrollments.service';
 
 /**
@@ -22,6 +24,19 @@ export class EnrollmentsController {
   @Get('completed')
   listCompleted(@CurrentUser() userId: string) {
     return this.enrollments.listCompleted(userId);
+  }
+
+  /**
+   * The rest pace of the program being run (ADR 0005). `active` rather than an
+   * id, because there is exactly one run it can mean and a client holding a
+   * stale id should not be able to edit a finished one.
+   */
+  @Patch('active/rest')
+  updateRestPace(@CurrentUser() userId: string, @Body() body: unknown) {
+    return this.enrollments.updateRestPace(
+      userId,
+      validateBody(updateRestPaceSchema, body),
+    );
   }
 
   @Post(':enrollmentId/dismiss')

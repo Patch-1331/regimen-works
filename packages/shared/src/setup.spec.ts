@@ -32,6 +32,8 @@ function program(overrides: Record<string, unknown> = {}) {
     maxWeeks: 8,
     defaultWeeks: 6,
     fixedDays: [],
+    hasStraightSets: false,
+    restPaceRequired: false,
     ...overrides,
   };
 }
@@ -42,6 +44,7 @@ function options(overrides: Record<string, unknown> = {}) {
     trainingDays: [1, 3, 5],
     earliestStartDate: "2026-09-19",
     latestStartDate: "2026-10-09",
+    lastRestSeconds: null,
     ...overrides,
   };
 }
@@ -188,6 +191,22 @@ describe("commitSetupSchema", () => {
   it("refuses a start date that is not a date", () => {
     expect(
       commitSetupSchema.safeParse(answers({ startDate: "next Monday" })).success,
+    ).toBe(false);
+  });
+
+  it("keeps the program's own rest when no pace is sent", () => {
+    // A fully specified program asks nothing, so a client that never asked
+    // has sent the right answer by sending none (ADR 0005).
+    expect(commitSetupSchema.parse(answers()).defaultRestSeconds).toBeNull();
+  });
+
+  it("accepts a pace of straight through, and refuses a negative one", () => {
+    expect(
+      commitSetupSchema.parse(answers({ defaultRestSeconds: 0 }))
+        .defaultRestSeconds,
+    ).toBe(0);
+    expect(
+      commitSetupSchema.safeParse(answers({ defaultRestSeconds: -30 })).success,
     ).toBe(false);
   });
 });

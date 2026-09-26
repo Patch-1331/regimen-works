@@ -1909,6 +1909,47 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     });
   });
 
+  it("resolves rest through the run's pace, over the movement's own", async () => {
+    // ADR 0005: the athlete's pace governs the whole run. The plate shows the
+    // rest they will actually take, not the one they overrode.
+    await pullMembers();
+    const user = await athlete();
+    const plan = await prescribingPlan();
+    await createEnrollment(user.id, {
+      planId: plan.id,
+      startDate: MONDAY,
+      weeks: null,
+      defaultRestSeconds: 45,
+    });
+
+    const today = await programService().getToday(user.id, TODAY);
+
+    expect(today.assignment!.prescription!.movements[0].restSeconds).toBe(45);
+  });
+
+  it('hands over an unstated rest as unstated, not as straight through', async () => {
+    await pullMembers();
+    const user = await athlete();
+    await enrolled(
+      user,
+      (
+        await prescribingPlan([
+          {
+            order: 0,
+            movementGroup: 'pull',
+            sets: 5,
+            reps: 3,
+            restSeconds: null,
+          },
+        ])
+      ).id,
+    );
+
+    const today = await programService().getToday(user.id, TODAY);
+
+    expect(today.assignment!.prescription!.movements[0].restSeconds).toBeNull();
+  });
+
   it('meets the athlete at the movement they train the movementGroup at', async () => {
     // The whole reason a program authors a group: one program, written once,
     // fits the athlete who does ring rows and the one who does chin-ups.

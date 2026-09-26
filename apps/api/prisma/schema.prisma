@@ -813,10 +813,16 @@ model PlanSlotMovement {
   repsMax     Int?
   toFailure   Boolean @default(false)
 
-  // Prescribed rest between sets. Not nullable and not defaulted: rest is
-  // part of the prescription rather than a detail an author forgot, and 0
-  // says "straight through" out loud. A CHECK keeps it non-negative.
-  restSeconds Int
+  // Prescribed rest between sets, as the source stated it (ADR 0005). 0 says
+  // "straight through" out loud, which is a prescription. Null says the
+  // source was silent, which is not one -- the routine DN-131 measured states
+  // rest 0 times in 25 movements. Nothing converts one into the other.
+  //
+  // What the athlete actually rests is resolved against
+  // `PlanEnrollment.defaultRestSeconds` by `resolveRestSeconds` in the shared
+  // package, and nowhere else. The CHECK keeping it non-negative is in the
+  // rest_pace migration, written so a null cannot switch off the `sets` half.
+  restSeconds Int?
 
   @@unique([planSlotId, order])
 }
@@ -860,6 +866,17 @@ model PlanEnrollment {
   // Not a foreign key -- a hard-deleted movement should leave the history
   // saying what it said, and the card drops a change it cannot name.
   startingMovements  Json      @default("{}")
+  // The athlete's rest pace for this run (ADR 0005), set at the one moment
+  // they commit to a routine and editable while it runs. Overrides every
+  // `PlanSlotMovement.restSeconds` in the run, deliberately and silently --
+  // rest is how hard, not what, and the athlete decided it themselves.
+  //
+  // Null keeps the routine's own, which is only an answer when the routine
+  // states one everywhere; the wizard refuses null otherwise. Here rather
+  // than on the plan, so a shared routine never carries one athlete's pace,
+  // and rather than on the user, because a 5x5 day and a 15-20 day want
+  // different rests. Non-negative by a CHECK in the rest_pace migration.
+  defaultRestSeconds Int?
   // The completion card's figures, snapshotted when the enrollment completes
   // rather than recomputed on every read of the Completed list. Null while the
   // program is still running, which is also how "has this been completed" reads

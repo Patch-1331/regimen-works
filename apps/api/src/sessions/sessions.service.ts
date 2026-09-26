@@ -65,7 +65,13 @@ export class SessionsService {
     // Scoped by userId so another user's assignment id reads as not found.
     const assignment = await this.prisma.dailyAssignment.findFirst({
       where: { id: assignmentId, userId },
-      include: { wod: { include: resolvableMovementInclude } },
+      include: {
+        wod: { include: resolvableMovementInclude },
+        // The run's rest pace, which a prescribed day's rest resolves through
+        // (ADR 0005). The assignment's own enrollment rather than whichever is
+        // active now: it is the run that decided this day.
+        enrollment: { select: { defaultRestSeconds: true } },
+      },
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
 
@@ -106,6 +112,7 @@ export class SessionsService {
             userId,
             assignmentId,
             prescribed!.movements,
+            assignment.enrollment?.defaultRestSeconds ?? null,
           ),
         );
 
