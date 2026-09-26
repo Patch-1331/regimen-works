@@ -57,8 +57,9 @@ somewhere other than the cause.
   still passes. After any schema change:
   `npm run prisma:generate --workspace apps/api`.
 - **A missing `VITE_*` var doesn't fail the web build** — it tree-shakes the code
-  that reads it and succeeds, smaller and broken. Judge by bundle size: ~548 kB is
-  complete, ~391 kB means Clerk was dropped, ~275 kB means the app is gone.
+  that reads it and succeeds, smaller and broken. Judge by bundle size: ~644 kB is
+  complete; ~405 kB means `VITE_CLERK_PUBLISHABLE_KEY` was missing — `main.tsx`
+  throws on load, the app is tree-shaken out, and the deploy serves a blank page.
 - **Every query must be scoped by `userId`.** Auth is Clerk and the app is
   multi-tenant; an unscoped read compiles fine and returns other athletes' rows.
   `src/common/user-scoping.spec.ts` guards this — a failure there is a real finding.

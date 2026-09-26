@@ -395,6 +395,8 @@ export function settings(overrides: Partial<Settings> = {}): Settings {
     // No program is driving this athlete's week, which is the ordinary case:
     // Just WODs is flexible, so it defers to the days above (DN-118).
     scheduleLock: null,
+    // Nothing to pace: Just WODs has no straight sets (DN-143).
+    restPace: null,
     ...overrides,
   };
 }
@@ -420,6 +422,9 @@ export function setupProgram(
     maxWeeks: null,
     defaultWeeks: null,
     fixedDays: [],
+    // Just WODs has no rest between sets, so the wizard asks nothing about it.
+    hasStraightSets: false,
+    restPaceRequired: false,
     ...overrides,
   };
 }
@@ -442,6 +447,8 @@ export function boundedProgram(
     minWeeks: 4,
     maxWeeks: 8,
     defaultWeeks: 6,
+    // Straight sets, every rest stated: the pace is on offer, not asked for.
+    hasStraightSets: true,
     ...overrides,
   });
 }
@@ -465,6 +472,7 @@ export function fixedProgram(
     maxWeeks: 6,
     defaultWeeks: 6,
     fixedDays: [1, 2, 4, 5],
+    hasStraightSets: true,
     ...overrides,
   });
 }
@@ -481,6 +489,7 @@ export function setupOptions(
     trainingDays: [1, 2, 3, 4, 5],
     earliestStartDate: "2026-09-16",
     latestStartDate: "2026-10-06",
+    lastRestSeconds: null,
     ...overrides,
   };
 }

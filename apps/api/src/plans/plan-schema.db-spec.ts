@@ -444,6 +444,21 @@ describe('a prescribed movement names one movement and prescribes work', () => {
     await expect(prescribe({ restSeconds: 0 })).resolves.toBeDefined();
   });
 
+  it('accepts a rest the source never stated, as null rather than 0', async () => {
+    // ADR 0005: null is "the source was silent", a different fact from the
+    // "straight through" 0 says, and the column keeps them apart.
+    const row = await prescribe({ restSeconds: null });
+    expect(row.restSeconds).toBeNull();
+  });
+
+  it('still guards sets when the rest is unstated', async () => {
+    // `"sets" >= 1 AND NULL` is NULL, which a CHECK accepts. Left as it was,
+    // an unstated rest would have switched off the sets guard on its row.
+    await expect(prescribe({ sets: 0, restSeconds: null })).rejects.toThrow(
+      CHECK_VIOLATION,
+    );
+  });
+
   it('refuses two movements in the same position', async () => {
     const first = await prescribe();
     await expect(

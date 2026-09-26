@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { enrollmentStatus, movementGroup } from "./enums.js";
 import { planSchema } from "./plan.js";
+import { restSecondsSchema } from "./rest.js";
 
 /**
  * What the athlete had chosen in each group on a date, as
@@ -91,6 +92,13 @@ export const planEnrollmentSchema = z.object({
    * but cannot say what changed — the interesting half of the completion card.
    */
   startingMovements: movementSnapshotSchema,
+  /**
+   * The athlete's rest pace for this run, set when they committed to the
+   * routine and editable while it runs (ADR 0005). Overrides every
+   * per-movement rest; null leaves the routine's own in charge. See
+   * `resolveRestSeconds`.
+   */
+  defaultRestSeconds: restSecondsSchema,
   /** Null while the program is still running, which is also how "has this been completed" reads without a join. */
   summary: enrollmentSummarySchema.nullable(),
 });

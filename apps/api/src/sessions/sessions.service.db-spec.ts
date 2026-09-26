@@ -5,6 +5,7 @@ import { MovementResolutionService } from '../scheduler/movement-resolution.serv
 import { testPrisma, withSeparateConnections } from '../test-support/database';
 import {
   createAssignment,
+  createEnrollment,
   createExercise,
   createGroup,
   createPlan,
@@ -795,6 +796,11 @@ async function prescribedDay(
      * (DN-142), say.
      */
     movements?: Record<string, unknown>[];
+    /**
+     * Puts the day under a run with this rest pace (ADR 0005). Left out, the
+     * day belongs to no enrollment, the way most of these specs want it.
+     */
+    defaultRestSeconds?: number | null;
   } = {},
 ) {
   const user = await createUser();
@@ -844,12 +850,20 @@ async function prescribedDay(
     where: { planWeek: { planId: plan.id } },
     include: { movements: { orderBy: { order: 'asc' } } },
   });
+  const enrollment =
+    options.defaultRestSeconds === undefined
+      ? null
+      : await createEnrollment(user.id, {
+          planId: plan.id,
+          defaultRestSeconds: options.defaultRestSeconds,
+        });
   const assignment = await testPrisma().dailyAssignment.create({
     data: {
       userId: user.id,
       date: '2026-09-16',
       status: 'scheduled',
       planSlotId: slot.id,
+      enrollmentId: enrollment?.id ?? null,
     },
   });
   return { user, members, assignment, slot, movements: slot.movements };
@@ -1333,6 +1347,77 @@ describe('SessionsService, on a day prescribed in ranges and to failure', () => 
       prescribedToFailure: true,
       actualReps: 14,
     });
+  });
+});
+
+/**
+ * Rest, resolved through the run's pace as the session starts (ADR 0005,
+ * DN-143). The snapshot is what the runner's clock reads, so this is where
+ * "the source was silent" either stays silent or gets quietly called zero.
+ */
+describe('SessionsService, resolving rest through the athlete pace', () => {
+  const pull = (restSeconds: number | null) => ({
+    order: 0,
+    movementGroup: 'pull',
+    sets: 3,
+    reps: 5,
+    restSeconds,
+  });
+
+  it("snapshots the athlete's pace over every movement's own", async () => {
+    const { user, assignment } = await prescribedDay({
+      defaultRestSeconds: 150,
+    });
+
+    const session = await service().start(user.id, assignment.id);
+
+    // 90 and 60 were authored; the athlete chose 150 for the whole run.
+    expect(session.movements.map((m) => m.restSeconds)).toEqual([150, 150]);
+  });
+
+  it("keeps the movement's own where the run has no pace", async () => {
+    const { user, assignment } = await prescribedDay({
+      defaultRestSeconds: null,
+    });
+
+    const session = await service().start(user.id, assignment.id);
+
+    expect(session.movements.map((m) => m.restSeconds)).toEqual([90, 60]);
+  });
+
+  it('fills an unstated rest from the pace', async () => {
+    const { user, assignment } = await prescribedDay({
+      movements: [pull(null)],
+      defaultRestSeconds: 75,
+    });
+
+    const session = await service().start(user.id, assignment.id);
+
+    expect(session.movements[0].restSeconds).toBe(75);
+  });
+
+  // The regression that matters: two facts that both run no clock, and must
+  // not collapse into one on the way to the runner.
+  it('keeps an unstated rest unstated where the run has no pace', async () => {
+    const { user, assignment } = await prescribedDay({
+      movements: [pull(null)],
+      defaultRestSeconds: null,
+    });
+
+    const session = await service().start(user.id, assignment.id);
+
+    expect(session.movements[0].restSeconds).toBeNull();
+  });
+
+  it('keeps straight through as straight through, not as unstated', async () => {
+    const { user, assignment } = await prescribedDay({
+      movements: [pull(0)],
+      defaultRestSeconds: null,
+    });
+
+    const session = await service().start(user.id, assignment.id);
+
+    expect(session.movements[0].restSeconds).toBe(0);
   });
 });
 

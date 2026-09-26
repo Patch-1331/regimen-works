@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DEFAULT_EQUIPMENT } from '@regimen-works/shared';
+import { DEFAULT_EQUIPMENT, resolveRestSeconds } from '@regimen-works/shared';
 import type { SubstitutionReason } from '@regimen-works/shared';
 import type { Exercise } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -183,6 +183,12 @@ export class MovementResolutionService {
    * generate a WOD for instead. Nothing is lost by it: a swap is made against
    * a day already on screen, so a day with no row has none.
    *
+   * Rest is resolved here too, through the run's `defaultRestSeconds`: the
+   * athlete's pace if they set one, else the movement's own, else nothing
+   * (ADR 0005). Here rather than in a view, because the Today plate and the
+   * session snapshot both read this, and a second place deciding what an
+   * unstated rest means is a second chance to call it zero.
+   *
    * Returns fewer rows than it was given where the library cannot answer, and
    * possibly none -- see `attachPrescribedExercises`. The caller treats an
    * empty result as a day with nothing prescribed.
@@ -191,6 +197,7 @@ export class MovementResolutionService {
     userId: string,
     assignmentId: string | null,
     movements: ProgramSlotMovement[],
+    defaultRestSeconds: number | null,
   ) {
     // Typed rather than inferred, because the empty case is a literal and the
     // query's own row type is what the map below reads.
@@ -265,7 +272,10 @@ export class MovementResolutionService {
         reps: m.movement.reps,
         repsMax: m.movement.repsMax,
         toFailure: m.movement.toFailure,
-        restSeconds: m.movement.restSeconds,
+        restSeconds: resolveRestSeconds(
+          defaultRestSeconds,
+          m.movement.restSeconds,
+        ),
         // What the *program* asked for, kept even where equipment moved the
         // athlete off it: the group is the session's intent, and a screen that
         // showed only the substitute could not say what the day was for.

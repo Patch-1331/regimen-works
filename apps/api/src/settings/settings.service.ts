@@ -7,12 +7,14 @@ import {
 } from '@regimen-works/shared';
 import type {
   Equipment,
+  RestPace,
   ScheduleLock,
   Settings,
   UpdateSettings,
 } from '@regimen-works/shared';
 import type { ScheduleRule } from '@prisma/client';
 import { loadActiveProgram } from '../plans/active-program';
+import { restPaceOf } from '../plans/rest-pace';
 import { resolveScheduleLock } from '../plans/schedule-lock';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -52,15 +54,23 @@ const DEFAULTS: Settings = {
   // the week is never a property of the ScheduleRule row, so every caller
   // fills this in from the enrollment afterwards.
   scheduleLock: null,
+  // The same: it belongs to the enrollment, and is filled in from it.
+  restPace: null,
+};
+
+/** What Settings reports about the enrollment rather than the ScheduleRule row. */
+type FromEnrollment = {
+  scheduleLock: ScheduleLock | null;
+  restPace: RestPace | null;
 };
 
 function toSettings(
   rule: ScheduleRule | null,
-  scheduleLock: ScheduleLock | null,
+  enrollment: FromEnrollment,
 ): Settings {
-  if (!rule) return { ...DEFAULTS, scheduleLock };
+  if (!rule) return { ...DEFAULTS, ...enrollment };
   return {
-    scheduleLock,
+    ...enrollment,
     warmupCooldownEnabled: rule.warmupCooldownEnabled,
     autoStopAtCapEnabled: rule.autoStopAtCapEnabled,
     equipment: ownedEquipment(rule.equipment),
@@ -84,7 +94,10 @@ export class SettingsService {
       this.prisma.scheduleRule.findUnique({ where: { userId } }),
       loadActiveProgram(this.prisma, userId),
     ]);
-    return toSettings(rule, resolveScheduleLock(program, today));
+    return toSettings(rule, {
+      scheduleLock: resolveScheduleLock(program, today),
+      restPace: restPaceOf(program),
+    });
   }
 
   /**
@@ -106,10 +119,8 @@ export class SettingsService {
     patch: UpdateSettings,
     today: string,
   ): Promise<Settings> {
-    const lock = resolveScheduleLock(
-      await loadActiveProgram(this.prisma, userId),
-      today,
-    );
+    const program = await loadActiveProgram(this.prisma, userId);
+    const lock = resolveScheduleLock(program, today);
 
     // Refused rather than stored-and-ignored. A write that returns 200 and
     // then has no effect on a single training day is the worst of the three
@@ -132,6 +143,9 @@ export class SettingsService {
       create: { userId, ...patch },
     });
 
-    return toSettings(rule, lock);
+    return toSettings(rule, {
+      scheduleLock: lock,
+      restPace: restPaceOf(program),
+    });
   }
 }

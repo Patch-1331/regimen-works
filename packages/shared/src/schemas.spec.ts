@@ -551,6 +551,7 @@ describe("settingsSchema", () => {
     trainingDays: [1, 2, 3, 4, 5],
     patternCooldownDays: 5,
     scheduleLock: null,
+    restPace: null,
     ...overrides,
   });
 
@@ -594,6 +595,21 @@ describe("settingsSchema", () => {
     expect(
       updateSettingsSchema.safeParse({
         scheduleLock: { planId: "p", planName: "Pull-Up Builder", days: [1] },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("refuses a PATCH that tries to write the rest pace", () => {
+    // It belongs to the enrollment and has its own endpoint; a 200 here would
+    // claim a change this route never made.
+    expect(
+      updateSettingsSchema.safeParse({
+        restPace: {
+          enrollmentId: "e",
+          planName: "Pull-Up Builder",
+          defaultRestSeconds: 90,
+          required: false,
+        },
       }).success,
     ).toBe(false);
   });
@@ -1724,6 +1740,11 @@ describe("planSlotSchema's prescription refinement", () => {
       planSlotSchema.safeParse(movementDay([prescribed({ restSeconds: 0 })]))
         .success,
     ).toBe(true);
+    // And null is the omission: the source said nothing (ADR 0005).
+    expect(
+      planSlotSchema.safeParse(movementDay([prescribed({ restSeconds: null })]))
+        .success,
+    ).toBe(true);
     expect(
       planSlotSchema.safeParse(movementDay([prescribed({ restSeconds: -1 })]))
         .success,
@@ -1879,6 +1900,7 @@ describe("planEnrollmentSchema", () => {
     status: "active",
     completedAt: null,
     startingMovements: { pull: "ex-chin-up", squat: "ex-goblet-squat" },
+    defaultRestSeconds: null,
     summary: null,
     ...overrides,
   });

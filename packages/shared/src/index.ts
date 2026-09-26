@@ -24,3 +24,4 @@ export * from "./history.js";
 export * from "./straight-sets.js";
 export * from "./rep-shape.js";
 export * from "./setup.js";
+export * from "./rest.js";

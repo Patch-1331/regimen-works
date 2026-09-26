@@ -38,7 +38,13 @@ const PLAN_FOR_PICKER = {
 
 type PlanForPicker = Prisma.PlanGetPayload<typeof PLAN_FOR_PICKER>;
 
-function toSetupProgram(plan: PlanForPicker): SetupProgram {
+/** Which programs have straight sets to pace, and which of those leave a rest unstated. */
+interface RestShape {
+  paced: Set<string>;
+  unstated: Set<string>;
+}
+
+function toSetupProgram(plan: PlanForPicker, rest: RestShape): SetupProgram {
   return {
     id: plan.id,
     name: plan.name,
@@ -55,6 +61,8 @@ function toSetupProgram(plan: PlanForPicker): SetupProgram {
     maxWeeks: plan.maxWeeks,
     defaultWeeks: plan.defaultWeeks,
     fixedDays: fixedDaysOf(plan),
+    hasStraightSets: rest.paced.has(plan.id),
+    restPaceRequired: rest.unstated.has(plan.id),
   };
 }
 
@@ -69,22 +77,25 @@ export class SetupService {
    * itself could not be tested on the boundary the whole rule turns on.
    */
   async options(userId: string, today: string): Promise<SetupOptions> {
-    const [plans, rule, touched] = await Promise.all([
+    const [plans, rule, touched, lastRestSeconds] = await Promise.all([
       this.selectablePlans(userId),
       this.prisma.scheduleRule.findUnique({
         where: { userId },
         select: { trainingDays: true },
       }),
       this.todayIsTouched(userId, today),
+      this.lastRestSeconds(userId),
     ]);
+    const rest = await this.restShapeOf(plans.map((p) => p.id));
 
     return {
-      programs: plans.map(toSetupProgram),
+      programs: plans.map((p) => toSetupProgram(p, rest)),
       // Provisioning writes a ScheduleRule on first sign-in, so the fallback
       // is for an athlete whose row is somehow absent rather than for the
       // ordinary case. The wizard is the worst screen in the app to 500 on.
       trainingDays: rule?.trainingDays ?? [...DEFAULT_TRAINING_DAYS],
       ...startDateRange(today, touched),
+      lastRestSeconds,
     };
   }
 
@@ -120,7 +131,12 @@ export class SetupService {
       today,
       await this.todayIsTouched(userId, today),
     );
-    const rejection = setupRejection(plan, body, range);
+    const { unstated } = await this.restShapeOf([plan.id]);
+    const rejection = setupRejection(
+      { ...plan, restPaceRequired: unstated.has(plan.id) },
+      body,
+      range,
+    );
     if (rejection) throw new BadRequestException(rejection);
 
     const onboardedAt = await this.prisma.$transaction(async (tx) => {
@@ -154,6 +170,9 @@ export class SetupService {
         planId: body.planId,
         startDate: body.startDate,
         weeks: body.weeks,
+        // Written on update too: pointing the run at a different program is
+        // committing to that program, and the pace belongs to the commitment.
+        defaultRestSeconds: body.defaultRestSeconds,
         startingMovements: await snapshotMovements(tx, userId),
       };
       if (active) {
@@ -217,6 +236,56 @@ export class SetupService {
       ...plans.filter((p) => p.id === DEFAULT_PLAN_ID),
       ...plans.filter((p) => p.id !== DEFAULT_PLAN_ID),
     ];
+  }
+
+  /**
+   * Which of these programs have straight sets at all -- the wizard asks for
+   * a pace only where there is a rest between sets to pace -- and which of
+   * those leave some movement's rest unstated, which makes the question
+   * required (ADR 0005).
+   *
+   * Every week, not the picker's first: a hole in week six is still a clock
+   * the athlete will reach. Asked of the database rather than loaded, because
+   * the answer is two bits per program and the rows behind it are the whole
+   * calendar.
+   */
+  private async restShapeOf(planIds: string[]): Promise<RestShape> {
+    const plansWith = async (movement: Prisma.PlanSlotMovementWhereInput) => {
+      const weeks = await this.prisma.planWeek.findMany({
+        where: {
+          planId: { in: planIds },
+          slots: { some: { movements: { some: movement } } },
+        },
+        select: { planId: true },
+        distinct: ['planId'],
+      });
+      return new Set(weeks.map((w) => w.planId));
+    };
+    const [paced, unstated] = await Promise.all([
+      plansWith({}),
+      plansWith({ restSeconds: null }),
+    ]);
+    return { paced, unstated };
+  }
+
+  /**
+   * The pace the athlete set on their most recent run that had one, to
+   * prefill the field with -- so the one question, where it is asked at all,
+   * usually arrives already answered.
+   *
+   * Null where they have never set one. Not "the most recent run's value",
+   * which is null for every run on a program that stated its own rest: an
+   * athlete who once chose 90 seconds has said something about how they
+   * train, and a built-in program in between should not make them say it
+   * again.
+   */
+  private async lastRestSeconds(userId: string): Promise<number | null> {
+    const last = await this.prisma.planEnrollment.findFirst({
+      where: { userId, defaultRestSeconds: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      select: { defaultRestSeconds: true },
+    });
+    return last?.defaultRestSeconds ?? null;
   }
 
   /**

@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { EQUIPMENT_CATALOG, type Equipment, type UpdateSettings } from "@regimen-works/shared";
+import { EQUIPMENT_CATALOG, type Equipment, type RestPace, type UpdateSettings } from "@regimen-works/shared";
 import { api } from "../lib/api";
+import { parseRestDraft, restDraftOf, restSecondsOf } from "../lib/rest";
 import { WEEKDAYS } from "../lib/weekdays";
 
 export function SettingsPage() {
@@ -20,6 +21,17 @@ export function SettingsPage() {
       // different cache key. Without this, changing the days here leaves Stats
       // drawing the old cap until something else happens to refetch it.
       await queryClient.invalidateQueries({ queryKey: ["scheduleRule"] });
+    },
+  });
+
+  const restMutation = useMutation({
+    mutationFn: (defaultRestSeconds: number | null) => api.updateRestPace({ defaultRestSeconds }),
+    onSuccess: async (restPace) => {
+      queryClient.setQueryData(["settings"], (previous: typeof settings) =>
+        previous ? { ...previous, restPace } : previous,
+      );
+      // Today's plate shows the rest each movement resolves to, which is this.
+      await queryClient.invalidateQueries({ queryKey: ["today"] });
     },
   });
 
@@ -63,6 +75,19 @@ export function SettingsPage() {
             pending={toggleMutation.isPending}
             onChange={(patternCooldownDays) => toggleMutation.mutate({ patternCooldownDays })}
           />
+          {/* Only while a program with straight sets is running: the pace
+              belongs to the run, and Just WODs has no rest between sets. */}
+          {settings.restPace && (
+            <RestPaceSetting
+              // Keyed on the run, so a draft typed against one program never
+              // survives into the next.
+              key={settings.restPace.enrollmentId}
+              pace={settings.restPace}
+              pending={restMutation.isPending}
+              error={restMutation.error?.message ?? null}
+              onChange={(seconds) => restMutation.mutate(seconds)}
+            />
+          )}
           {/* A workout already under way keeps the rule it started with, so
               say so rather than leaving the athlete to find out at the cap.
               It covers equipment too, and more sharply: unticking a piece
@@ -376,6 +401,104 @@ function PatternCooldownSetting({
         0 turns it off. {MAX_COOLDOWN_DAYS} is the longest the scheduler can hold to — it looks back{" "}
         {MAX_COOLDOWN_DAYS} days and no further.
       </p>
+    </div>
+  );
+}
+
+/**
+ * The rest pace for the program being run (ADR 0005, DN-143) -- the same one
+ * number the wizard asked for, changeable while the run goes on.
+ *
+ * Drafted and committed on blur or Enter, like the cooldown. Blank hands the
+ * run back to the program's own rests, which is only an answer where it has
+ * them everywhere; where it does not, a blank box is put back rather than
+ * sent, and says why.
+ */
+function RestPaceSetting({
+  pace,
+  pending,
+  error,
+  onChange,
+}: {
+  pace: RestPace;
+  pending: boolean;
+  error: string | null;
+  onChange: (seconds: number | null) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [refused, setRefused] = useState<string | null>(null);
+  const shown = draft ?? restDraftOf(pace.defaultRestSeconds);
+
+  function commit() {
+    const parsed = parseRestDraft(shown);
+    setDraft(null);
+    if (parsed.kind === "invalid") {
+      setRefused("Rest is a whole number of seconds — 0 for straight through.");
+      return;
+    }
+    if (parsed.kind === "blank" && pace.required) {
+      setRefused(`${pace.planName} leaves some rests unstated, so this run needs a pace.`);
+      return;
+    }
+    setRefused(null);
+    const next = restSecondsOf(parsed);
+    if (next !== pace.defaultRestSeconds) onChange(next);
+  }
+
+  const message = refused ?? error;
+
+  return (
+    <div className="p-4" style={{ background: "var(--panel)", border: "1px solid var(--border)" }}>
+      <label
+        htmlFor="rest-pace"
+        className="font-semibold uppercase"
+        style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}
+      >
+        Rest between sets
+      </label>
+      <p className="mt-1 text-xs text-[var(--ink-faint)]">
+        For every set of {pace.planName}, for as long as this run lasts.
+      </p>
+
+      <div className="mt-3 flex items-center gap-3">
+        <input
+          id="rest-pace"
+          inputMode="numeric"
+          value={shown}
+          disabled={pending}
+          aria-invalid={message !== null}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+          }}
+          className="w-20 px-2 py-1.5 text-[14px] disabled:opacity-50"
+          style={{
+            background: "var(--panel-2)",
+            border: "1px solid var(--border)",
+            color: "var(--ink)",
+            fontFamily: "var(--font-mono)",
+          }}
+        />
+        <span className="text-[12px] text-[var(--ink-soft)]">
+          {pace.defaultRestSeconds === null
+            ? `As ${pace.planName} is written`
+            : pace.defaultRestSeconds === 0
+              ? "Straight through"
+              : "seconds"}
+        </span>
+      </div>
+
+      <p className="mt-2 text-[11px] text-[var(--ink-faint)]">
+        {pace.required
+          ? "0 means straight through."
+          : `0 means straight through. Leave it blank to rest as ${pace.planName} is written.`}
+      </p>
+      {message && (
+        <p className="mt-2 text-[12px] text-[var(--danger)]" role="status">
+          {message}
+        </p>
+      )}
     </div>
   );
 }

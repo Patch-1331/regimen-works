@@ -543,6 +543,7 @@ describe('settings and skill levels', () => {
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
       scheduleLock: null,
+      restPace: null,
     });
   });
 
@@ -569,6 +570,7 @@ describe('settings and skill levels', () => {
       trainingDays: [1, 2, 3, 4, 5],
       patternCooldownDays: 5,
       scheduleLock: null,
+      restPace: null,
     });
   });
 

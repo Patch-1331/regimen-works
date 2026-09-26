@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   repsLabel,
+  restClockSeconds,
   restStateAt,
   straightSetsStateAt,
   type SessionMovement,
@@ -77,11 +78,14 @@ export function StraightSetsWorkout({
   );
   const movement = movements[state.movementIndex] as SessionMovement | undefined;
 
-  const restSeconds = movement?.restSeconds ?? 0;
+  // Null for straight through and for a rest nobody stated alike: neither has
+  // a countdown. Never `?? 0` here -- the snapshot's null is a fact about the
+  // prescription, and the resolver upstream is the only place it may be filled.
+  const restClock = restClockSeconds(movement?.restSeconds ?? null);
   const rest =
-    session.restStartedAtSeconds === null || state.isComplete
+    session.restStartedAtSeconds === null || state.isComplete || restClock === null
       ? null
-      : restStateAt(elapsedSeconds, session.restStartedAtSeconds, restSeconds);
+      : restStateAt(elapsedSeconds, session.restStartedAtSeconds, restClock);
   const isResting = rest !== null && !rest.isOver;
 
   // One cue per transition, and none on the first pass: a screen reopened
@@ -117,8 +121,8 @@ export function StraightSetsWorkout({
   }, [rest?.secondsRemaining, rest?.isOver, setsCompleted, isFinished]);
 
   /**
-   * A set is done. The rest starts now unless this movement prescribes none,
-   * or unless that was the last set of the day -- resting after the workout is
+   * A set is done. The rest starts now unless this movement has no clock --
+   * straight through, or no rest stated anywhere -- or unless that was the last set of the day -- resting after the workout is
    * a countdown to nothing.
    */
   function handleSetDone() {
@@ -127,7 +131,7 @@ export function StraightSetsWorkout({
     logSetMutation.mutate({
       setsCompleted: next,
       restStartedAtSeconds:
-        isLast || restSeconds === 0 ? null : Math.floor(elapsedSeconds),
+        isLast || restClock === null ? null : Math.floor(elapsedSeconds),
     });
   }
 

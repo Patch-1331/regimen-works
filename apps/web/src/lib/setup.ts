@@ -1,5 +1,6 @@
 import { addIsoDays } from "@regimen-works/shared";
 import type { SetupProgram } from "@regimen-works/shared";
+import type { RestDraft } from "./rest";
 import { WEEKDAYS } from "./weekdays";
 
 /**
@@ -133,4 +134,26 @@ export function listDays(days: number[]): string {
   // "and" before the last, because this is a sentence rather than a list of
   // chips — the readout is read aloud by a screen reader either way.
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/**
+ * Why the rest pace will not do, in the API's words, or null if it will
+ * (DN-143).
+ *
+ * Blank is fine wherever the program states every rest -- the athlete is then
+ * choosing to train at its own -- and refused only where some movement states
+ * none, because there blank would leave a clock with nothing to run.
+ */
+export function restPaceWarning(
+  program: SetupProgram,
+  draft: RestDraft,
+): string | null {
+  if (!program.hasStraightSets) return null;
+  if (draft.kind === "invalid") {
+    return "Rest is a whole number of seconds — 0 for straight through.";
+  }
+  if (draft.kind === "blank" && program.restPaceRequired) {
+    return `${program.name} does not say how long to rest after every movement, so choose a rest for this run.`;
+  }
+  return null;
 }

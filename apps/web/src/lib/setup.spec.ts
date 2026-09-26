@@ -4,10 +4,12 @@ import {
   dayCountWarning,
   formatStartDate,
   listDays,
+  restPaceWarning,
   startDateChoices,
   weekdayOf,
   weeksChoice,
 } from "./setup";
+import { parseRestDraft } from "./rest";
 
 /**
  * What the wizard works out before the API sees it (DN-15).
@@ -152,5 +154,35 @@ describe("listDays", () => {
     // A flexible program's `fixedDays` is empty. Nothing here reads it, but
     // returning "undefined" if something ever did would be worse than "".
     expect(listDays([])).toBe("");
+  });
+});
+
+describe("restPaceWarning", () => {
+  const holes = fixtures.boundedProgram({ restPaceRequired: true });
+  const stated = fixtures.boundedProgram();
+
+  it("requires a pace where the program leaves a rest unstated", () => {
+    expect(restPaceWarning(holes, parseRestDraft(""))).toBe(
+      "Pull-Up Builder does not say how long to rest after every movement, so choose a rest for this run.",
+    );
+    expect(restPaceWarning(holes, parseRestDraft("90"))).toBeNull();
+  });
+
+  it("takes 0 as an answer to that, not as a blank", () => {
+    expect(restPaceWarning(holes, parseRestDraft("0"))).toBeNull();
+  });
+
+  it("leaves the pace optional where the program states every rest", () => {
+    expect(restPaceWarning(stated, parseRestDraft(""))).toBeNull();
+  });
+
+  it("refuses a pace that is not whole seconds, required or not", () => {
+    expect(restPaceWarning(stated, parseRestDraft("-5"))).toMatch(/whole number/);
+  });
+
+  it("says nothing for a program with no straight sets", () => {
+    expect(
+      restPaceWarning(fixtures.setupProgram(), parseRestDraft("abc")),
+    ).toBeNull();
   });
 });

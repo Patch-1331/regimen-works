@@ -17,6 +17,8 @@ export type SetupPlanBounds = {
   maxDaysPerWeek: number | null;
   minWeeks: number | null;
   maxWeeks: number | null;
+  /** Some movement leaves its rest unstated, so blank is not an answer (ADR 0005). */
+  restPaceRequired: boolean;
 };
 
 export type StartDateRange = {
@@ -96,8 +98,24 @@ export function setupRejection(
   return (
     trainingDaysRejection(plan, body.trainingDays) ??
     weeksRejection(plan, body.weeks) ??
-    startDateRejection(body.startDate, range)
+    startDateRejection(body.startDate, range) ??
+    restPaceRejection(plan, body.defaultRestSeconds)
   );
+}
+
+/**
+ * A blank pace keeps the program's own rest, which is only an answer where the
+ * program states one everywhere (ADR 0005). Otherwise the athlete would reach
+ * a set with no rest to run and nobody having been asked -- the one question
+ * this exists to ask once, rather than 25 times.
+ */
+function restPaceRejection(
+  plan: SetupPlanBounds,
+  defaultRestSeconds: number | null,
+): string | null {
+  return plan.restPaceRequired && defaultRestSeconds === null
+    ? `${plan.name} does not say how long to rest after every movement, so choose a rest for this run.`
+    : null;
 }
 
 function trainingDaysRejection(

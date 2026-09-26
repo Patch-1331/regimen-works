@@ -7,10 +7,12 @@ import {
   dayCountWarning,
   formatStartDate,
   listDays,
+  restPaceWarning,
   startDateChoices,
   weekdayOf,
   weeksChoice,
 } from "../lib/setup";
+import { parseRestDraft, restDraftOf, restSecondsOf } from "../lib/rest";
 import { WEEKDAYS, localIsoDate } from "../lib/weekdays";
 
 /**
@@ -66,10 +68,16 @@ function Wizard({ options }: { options: SetupOptions }) {
     () => weeksChoice(options.programs[0])?.start ?? null,
   );
   const [startDate, setStartDate] = useState(options.earliestStartDate);
+  // Null until the athlete types, so the prefill can follow the program: see
+  // `restPrefill`.
+  const [restEdit, setRestEdit] = useState<string | null>(null);
 
   const program =
     options.programs.find((p) => p.id === planId) ?? options.programs[0];
   const isFixed = program.scheduleMode === "fixed";
+  const restDraft = restEdit ?? restPrefill(program, options.lastRestSeconds);
+  const rest = parseRestDraft(restDraft);
+  const restWarning = restPaceWarning(program, rest);
 
   const commit = useMutation({
     mutationFn: () =>
@@ -80,6 +88,9 @@ function Wizard({ options }: { options: SetupOptions }) {
         trainingDays: isFixed ? null : days,
         weeks,
         startDate,
+        // Only where there is a rest between sets to pace -- a pace on Just
+        // WODs would be stored and never read.
+        defaultRestSeconds: program.hasStraightSets ? restSecondsOf(rest) : null,
       }),
     onSuccess: async ({ onboardedAt }) => {
       // Written straight into the cache the route guard reads, so the
@@ -161,6 +172,9 @@ function Wizard({ options }: { options: SetupOptions }) {
           days={isFixed ? program.fixedDays : days}
           weeks={weeks}
           startDate={startDate}
+          restDraft={restDraft}
+          restWarning={restWarning}
+          onRest={setRestEdit}
           pending={commit.isPending}
           error={commit.error?.message ?? null}
           onBack={() => setStep("start")}
@@ -169,6 +183,18 @@ function Wizard({ options }: { options: SetupOptions }) {
       )}
     </Frame>
   );
+}
+
+/**
+ * What the rest field holds before the athlete touches it (DN-143).
+ *
+ * Their last pace, but only where the program needs one. Where it states every
+ * rest itself, a prefilled pace would quietly replace the author's numbers on
+ * a screen the athlete may tap straight through -- the pace overrides
+ * everything, so it should only ever be one they chose for this run.
+ */
+function restPrefill(program: SetupProgram, last: number | null): string {
+  return program.restPaceRequired ? restDraftOf(last) : "";
 }
 
 /**
@@ -636,6 +662,9 @@ function ReadyStep({
   days,
   weeks,
   startDate,
+  restDraft,
+  restWarning,
+  onRest,
   pending,
   error,
   onBack,
@@ -645,6 +674,9 @@ function ReadyStep({
   days: number[];
   weeks: number | null;
   startDate: string;
+  restDraft: string;
+  restWarning: string | null;
+  onRest: (draft: string) => void;
   pending: boolean;
   error: string | null;
   onBack: () => void;
@@ -673,13 +705,22 @@ function ReadyStep({
 
       {program.scheduleMode === "fixed" && <WhileItRuns program={program} />}
 
+      {program.hasStraightSets && (
+        <RestPaceField
+          program={program}
+          draft={restDraft}
+          warning={restWarning}
+          onChange={onRest}
+        />
+      )}
+
       {error && (
         <p className="mt-3 text-sm text-[var(--danger)]" role="alert">
           {error}
         </p>
       )}
 
-      <PrimaryButton onClick={onGo} disabled={pending}>
+      <PrimaryButton onClick={onGo} disabled={pending || restWarning !== null}>
         {pending ? "Saving…" : "Go to today"}
       </PrimaryButton>
       <BackButton onClick={onBack} />
@@ -725,6 +766,65 @@ function WhileItRuns({ program }: { program: SetupProgram }) {
         </li>
       </ul>
     </section>
+  );
+}
+
+/**
+ * The one question about rest, asked once for the whole run (ADR 0005,
+ * DN-143).
+ *
+ * Here rather than on a step of its own: it is a fact about how the athlete
+ * trains, not about the program, and for every built-in routine it is
+ * optional -- a whole screen for an optional question is a speed bump.
+ */
+function RestPaceField({
+  program,
+  draft,
+  warning,
+  onChange,
+}: {
+  program: SetupProgram;
+  draft: string;
+  warning: string | null;
+  onChange: (draft: string) => void;
+}) {
+  return (
+    <div className="mt-4">
+      <label
+        htmlFor="rest-pace"
+        className="text-xs uppercase tracking-[0.1em] text-[var(--ink-faint)]"
+      >
+        Rest between sets{program.restPaceRequired ? "" : " (optional)"}
+      </label>
+      <div className="mt-2 flex items-center gap-2">
+        <input
+          id="rest-pace"
+          inputMode="numeric"
+          value={draft}
+          onChange={(e) => onChange(e.target.value)}
+          aria-invalid={warning !== null}
+          aria-describedby="rest-pace-help"
+          className="w-24 px-3 py-2 text-lg"
+          style={{
+            background: "var(--panel-2)",
+            border: "1px solid var(--border)",
+            color: "var(--ink)",
+            fontFamily: "var(--font-mono)",
+          }}
+        />
+        <span className="text-sm text-[var(--ink-soft)]">seconds</span>
+      </div>
+      <p id="rest-pace-help" className="mt-2 text-xs text-[var(--ink-faint)]">
+        {program.restPaceRequired
+          ? `${program.name} leaves some rests to you. This one number covers every set; 0 means straight through.`
+          : `Leave it blank to rest as ${program.name} is written. A number here replaces every rest in it; 0 means straight through.`}
+      </p>
+      {warning && (
+        <p className="mt-2 text-sm text-[var(--danger)]" role="status">
+          {warning}
+        </p>
+      )}
+    </div>
   );
 }
 

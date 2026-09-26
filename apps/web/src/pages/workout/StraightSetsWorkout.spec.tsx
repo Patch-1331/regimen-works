@@ -166,6 +166,35 @@ describe("the straight-sets runner", () => {
     expect(posted[0].restStartedAtSeconds).toBeNull();
   });
 
+  // DN-143: the pair that used to be one. A null rest used to reach this
+  // screen as `?? 0`, which is the right *behaviour* for the wrong reason --
+  // the tests below pin the behaviour to the value that actually arrives.
+  it("starts no rest on a movement whose rest nobody stated", async () => {
+    const posted = running({
+      movements: [fixtures.sessionMovement({ restSeconds: null })],
+    });
+    renderRoute(`/workout/${ID}`);
+
+    await userEvent.click(await screen.findByText("SET DONE"));
+
+    expect(posted[0].restStartedAtSeconds).toBeNull();
+  });
+
+  it("invents no countdown for an unstated rest, even with a rest start on record", async () => {
+    // A stored start with nothing to count from is not a 0-second rest that is
+    // already over, nor any other length: the screen is simply at work.
+    running({
+      movements: [fixtures.sessionMovement({ restSeconds: null })],
+      setsCompleted: 1,
+      startedAt: new Date(Date.now() - 20_000).toISOString(),
+      restStartedAtSeconds: 10,
+    });
+    renderRoute(`/workout/${ID}`);
+
+    expect(await screen.findByText("WORK")).toBeInTheDocument();
+    expect(screen.queryByText("REST")).not.toBeInTheDocument();
+  });
+
   it("counts the rest down from when it started, not from when the screen opened", async () => {
     // 30 seconds into a 90-second rest that began at the 10-second mark.
     running({

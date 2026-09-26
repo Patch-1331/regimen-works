@@ -54,6 +54,7 @@ export async function loadActiveProgram(
     scheduleMode: enrollment.plan.scheduleMode,
     startDate: enrollment.startDate,
     weeks: enrollment.weeks,
+    defaultRestSeconds: enrollment.defaultRestSeconds,
     authoredWeeks: enrollment.plan.weeks,
   };
 }
