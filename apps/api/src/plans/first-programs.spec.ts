@@ -54,6 +54,11 @@ function asDetail(program: (typeof FIRST_PROGRAMS)[number]): PlanDetail {
           exerciseId: null,
           sets: movement.sets,
           reps: movement.reps,
+          // The authored programs are all the fixed shape (DN-142). Written
+          // out rather than defaulted, so a seed that one day prescribes a
+          // range has to come through here and say so.
+          repsMax: null,
+          toFailure: false,
           restSeconds: movement.restSeconds,
         })),
       })),

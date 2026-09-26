@@ -19,6 +19,8 @@ function movement(overrides: Partial<ProgramSlotMovement> = {}) {
     exerciseId: null,
     sets: 5,
     reps: 3,
+    repsMax: null,
+    toFailure: false,
     restSeconds: 90,
     ...overrides,
   };

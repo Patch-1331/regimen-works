@@ -359,6 +359,82 @@ describe('a prescribed movement names one movement and prescribes work', () => {
     await expect(prescribe({ reps: 0 })).rejects.toThrow(CHECK_VIOLATION);
   });
 
+  /**
+   * The three shapes a prescribed count comes in (DN-142).
+   *
+   * The constraint is the deliverable here: `repsMax` and `toFailure` are
+   * three ordinary nullable columns as far as Prisma is concerned, and the
+   * only thing stopping a writer from setting all three at once is the CHECK
+   * the migration adds. `rep-shape.spec.ts` mirrors these in Zod; if the two
+   * ever disagree, this file is the one that is right.
+   */
+  describe('the rep shape', () => {
+    it('accepts a fixed count', async () => {
+      await expect(prescribe({ reps: 3 })).resolves.toMatchObject({
+        reps: 3,
+        repsMax: null,
+        toFailure: false,
+      });
+    });
+
+    it('accepts a range', async () => {
+      await expect(prescribe({ reps: 8, repsMax: 12 })).resolves.toMatchObject({
+        reps: 8,
+        repsMax: 12,
+      });
+    });
+
+    it('accepts a set prescribed to failure', async () => {
+      await expect(
+        prescribe({ reps: null, toFailure: true }),
+      ).resolves.toMatchObject({ reps: null, repsMax: null, toFailure: true });
+    });
+
+    it('refuses a range whose top is not above its bottom', async () => {
+      // 8-8 is a fixed prescription written the long way. Admitting it would
+      // mean two spellings of one prescription, and every reader choosing.
+      await expect(prescribe({ reps: 8, repsMax: 8 })).rejects.toThrow(
+        CHECK_VIOLATION,
+      );
+      await expect(prescribe({ reps: 8, repsMax: 5 })).rejects.toThrow(
+        CHECK_VIOLATION,
+      );
+    });
+
+    it('refuses a top with no bottom', async () => {
+      await expect(prescribe({ reps: null, repsMax: 12 })).rejects.toThrow(
+        CHECK_VIOLATION,
+      );
+    });
+
+    it('refuses a failure set that names a count anyway', async () => {
+      await expect(prescribe({ reps: 3, toFailure: true })).rejects.toThrow(
+        CHECK_VIOLATION,
+      );
+      await expect(
+        prescribe({ reps: null, repsMax: 12, toFailure: true }),
+      ).rejects.toThrow(CHECK_VIOLATION);
+    });
+
+    it('refuses a prescription with no count at all', async () => {
+      // Nullable `reps` is what makes failure sayable, and this is the hole it
+      // opens: a row that is neither a count, nor a range, nor an instruction.
+      await expect(prescribe({ reps: null })).rejects.toThrow(CHECK_VIOLATION);
+    });
+
+    it('still guards sets and rest now that reps may be null', async () => {
+      // The old CHECK named `reps` alongside these two. `TRUE AND NULL` is
+      // NULL and a CHECK only fails on FALSE, so left as it was it would have
+      // stopped refusing anything on a failure set. The migration splits it.
+      await expect(
+        prescribe({ reps: null, toFailure: true, sets: 0 }),
+      ).rejects.toThrow(CHECK_VIOLATION);
+      await expect(
+        prescribe({ reps: null, toFailure: true, restSeconds: -30 }),
+      ).rejects.toThrow(CHECK_VIOLATION);
+    });
+  });
+
   it('refuses negative rest, and accepts none at all', async () => {
     // 0 says "straight through" out loud, which is a real prescription; -30
     // is arithmetic the rest of the stack would carry.

@@ -30,7 +30,10 @@ export type ProgramSlotMovement = {
   movementGroup: string | null;
   exerciseId: string | null;
   sets: number;
-  reps: number;
+  /** The prescribed count, in all three of its shapes — see `repShapeFields`. */
+  reps: number | null;
+  repsMax: number | null;
+  toFailure: boolean;
   restSeconds: number;
 };
 

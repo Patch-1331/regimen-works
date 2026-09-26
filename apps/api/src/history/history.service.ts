@@ -88,7 +88,16 @@ export class HistoryService {
     if (sessions.length === 0) return [];
 
     const rows = await this.prisma.workoutSetLog.findMany({
-      where: { userId, sessionId: { in: sessions.map((s) => s.id) } },
+      // Sets with no recorded count are left out (DN-142). This history is
+      // what came *out* of the sessions, and a set prescribed to failure holds
+      // no number until the athlete supplies one at log time -- counting it as
+      // 0 would report a set attempted and not made, which is a different
+      // fact. It joins the history the moment they enter the count.
+      where: {
+        userId,
+        sessionId: { in: sessions.map((s) => s.id) },
+        actualReps: { not: null },
+      },
       select: {
         sessionId: true,
         movementOrder: true,
@@ -111,7 +120,9 @@ export class HistoryService {
         assignmentId: session.assignmentId,
         movementOrder: row.movementOrder,
         setNumber: row.setNumber,
-        actualReps: row.actualReps,
+        // Non-null by the `where` above; Prisma cannot narrow a filtered
+        // column, so the assertion is where the filter's promise is cashed.
+        actualReps: row.actualReps!,
       };
     });
 

@@ -25,6 +25,8 @@ function movement(
     restSeconds: null,
     order: 0,
     reps: 30,
+    repsMax: null,
+    toFailure: false,
     repScheme: [],
     isSwapped: false,
     prescribedName: null,

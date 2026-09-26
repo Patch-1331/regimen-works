@@ -18,8 +18,17 @@ export const movementHistoryDaySchema = z.object({
   date: z.string(),
   /** The WOD's name, or what the day was — `"Strength"` on a prescribed one (DN-126). */
   name: z.string(),
-  /** Count in the movement's own unit, as prescribed that day. */
-  reps: z.number().int().positive(),
+  /**
+   * Count in the movement's own unit, as prescribed that day — in all three of
+   * its shapes (DN-142). Carried whole rather than flattened, so a day that
+   * asked for 8-10 does not read back as a day that asked for 8.
+   *
+   * `repsMax` and `toFailure` default, because every day trained before ranges
+   * existed was the fixed shape.
+   */
+  reps: z.number().int().positive().nullable(),
+  repsMax: z.number().int().positive().nullable().default(null),
+  toFailure: z.boolean().default(false),
   /** True where the athlete swapped into this movement themselves that day. */
   isSwapped: z.boolean(),
   /**
@@ -43,9 +52,13 @@ export const movementHistorySchema = z.object({
   /** How many sessions it appeared in — `days.length`, carried so a caller need not count. */
   sessions: z.number().int().positive(),
   /**
-   * Everything prescribed across those days, in `unit`. Deliberately not
-   * normalised across movements: seconds of plank and reps of pull-up are not
-   * the same quantity, and adding them would invent one.
+   * Everything prescribed across those days, in `unit` — **the floor of what
+   * was prescribed**, never an estimate of what was done. A range contributes
+   * its bottom and a day worked to failure contributes nothing, because
+   * neither names a number that can be added without inventing one (DN-142).
+   *
+   * Deliberately not normalised across movements: seconds of plank and reps of
+   * pull-up are not the same quantity, and adding them would invent one.
    */
   total: z.number().int().nonnegative(),
   firstTrained: z.string(),

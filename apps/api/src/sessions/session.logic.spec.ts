@@ -130,6 +130,11 @@ describe('snapshotMovements', () => {
         restSeconds: null,
         order: 1,
         reps: 45,
+        // A WOD is always the fixed shape (DN-142): a round of "as many as
+        // you can" is a different format, not a rep count, and no WOD carries
+        // one -- so these are written flat rather than left to a default.
+        repsMax: null,
+        toFailure: false,
         repScheme: [21, 15, 9],
         isSwapped: true,
         prescribedName: null,
@@ -193,6 +198,8 @@ describe('snapshotPrescribedMovements', () => {
     order: 1,
     sets: 5,
     reps: 3,
+    repsMax: null,
+    toFailure: false,
     restSeconds: 90,
     isSwapped: false,
     prescribedName: 'Chin-up',

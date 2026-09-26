@@ -57,8 +57,10 @@ export function toSetLogDto(row: {
   movementOrder: number;
   setNumber: number;
   exerciseId: string;
-  prescribedReps: number;
-  actualReps: number;
+  prescribedReps: number | null;
+  prescribedRepsMax: number | null;
+  prescribedToFailure: boolean;
+  actualReps: number | null;
 }): WorkoutSetLogDto {
   return {
     id: row.id,
@@ -66,6 +68,8 @@ export function toSetLogDto(row: {
     setNumber: row.setNumber,
     exerciseId: row.exerciseId,
     prescribedReps: row.prescribedReps,
+    prescribedRepsMax: row.prescribedRepsMax,
+    prescribedToFailure: row.prescribedToFailure,
     actualReps: row.actualReps,
   };
 }

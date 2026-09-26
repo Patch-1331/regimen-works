@@ -48,6 +48,11 @@ export function snapshotMovements(
       restSeconds: null,
       order: m.order,
       reps: m.reps,
+      // A WOD is always the fixed shape (DN-142). "As many as you can" is a
+      // format -- an AMRAP -- rather than a rep count, so no WOD movement
+      // carries a range or a set worked to failure.
+      repsMax: null,
+      toFailure: false,
       repScheme: [...m.repScheme],
       isSwapped: m.isSwapped,
       prescribedName: m.prescribedName,
@@ -121,7 +126,10 @@ export type ResolvedPrescribedInput = {
   id: string;
   order: number;
   sets: number;
-  reps: number;
+  /** The prescribed count, in all three of its shapes — see `repShapeFields`. */
+  reps: number | null;
+  repsMax: number | null;
+  toFailure: boolean;
   restSeconds: number;
   isSwapped: boolean;
   prescribedName: string | null;
@@ -162,7 +170,12 @@ export function snapshotPrescribedMovements(
       sets: m.sets,
       restSeconds: m.restSeconds,
       order: m.order,
+      // All three shapes carry through from the prescription (DN-142): the
+      // snapshot is what the runner renders, so a range collapsed to its floor
+      // here would show the athlete a number the day never asked for.
       reps: m.reps,
+      repsMax: m.repsMax,
+      toFailure: m.toFailure,
       // A prescribed movement is the same count every set, so there is no
       // ladder to record. Empty rather than [reps] repeated: a repScheme means
       // "the counts descend as written", which this is not.
