@@ -44,6 +44,8 @@ export function buildMovementHistory(days: TrainedDay[]): MovementHistory[] {
         date: day.date,
         name: day.name,
         reps: movement.reps,
+        repsMax: movement.repsMax,
+        toFailure: movement.toFailure,
         isSwapped: movement.isSwapped,
         prescribedName: movement.prescribedName,
         prescribedReason: movement.prescribedReason,
@@ -57,7 +59,7 @@ export function buildMovementHistory(days: TrainedDay[]): MovementHistory[] {
           movementGroup: movement.exercise.movementGroup,
           unit: movement.exercise.unit,
           sessions: 1,
-          total: movement.reps,
+          total: movement.reps ?? 0,
           firstTrained: day.date,
           lastTrained: day.date,
           days: [entry],
@@ -70,7 +72,11 @@ export function buildMovementHistory(days: TrainedDay[]): MovementHistory[] {
       // is volume, not a second session.
       const sameDay = existing.days.some((d) => d.date === day.date);
       if (!sameDay) existing.sessions += 1;
-      existing.total += movement.reps;
+      // The floor of what was prescribed. A range adds its bottom, and a set
+      // worked to failure adds nothing -- it named no number, and the only
+      // other options are to invent one or to stop reporting volume at all
+      // (DN-142).
+      existing.total += movement.reps ?? 0;
       // Days arrive newest first, so every later one is older than what is
       // already there. Only the first day sets `lastTrained`.
       existing.firstTrained = day.date;

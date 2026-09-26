@@ -1086,6 +1086,8 @@ describe("todayResponseSchema", () => {
       order: 0,
       sets: 5,
       reps: 3,
+      repsMax: null,
+      toFailure: false,
       restSeconds: 90,
       movementGroup: "pull",
       exercise: movement().exercise,
@@ -1637,6 +1639,8 @@ describe("planSlotSchema's prescription refinement", () => {
     exerciseId: null,
     sets: 5,
     reps: 3,
+    repsMax: null,
+    toFailure: false,
     restSeconds: 90,
     ...overrides,
   });

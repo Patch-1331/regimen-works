@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { refineRepShape, repShapeFields } from "./rep-shape.js";
 import {
   movementPattern,
   planPhase,
@@ -29,7 +30,7 @@ export const DEFAULT_PLAN_ID = "plan_just_wods";
  * "chin-up", and keeping the two shapes apart is what stops a client
  * resolving the choice for itself.
  *
- * Sets and reps sit here directly: no multiplier, no progression rule. An
+ * Sets and the rep count sit here directly: no multiplier, no progression rule. An
  * author wanting escalation writes a core block that already waves
  * (3x5 / 4x5 / 5x5), which `expandPlanWeeks` repeats as a wave. A multiplier
  * would put the same fact in two places and let them disagree.
@@ -51,10 +52,15 @@ export const planSlotMovementSchema = z
      */
     exerciseId: z.string().nullable(),
     sets: z.number().int().positive(),
-    reps: z.number().int().positive(),
+    /**
+     * The prescribed count, in one of three shapes — see `repShapeFields`,
+     * which documents all three and is the only place they are defined.
+     */
+    ...repShapeFields,
     /** 0 is a prescription — "straight through" — rather than an omission. */
     restSeconds: z.number().int().nonnegative(),
   })
+  .superRefine(refineRepShape)
   // Mirrors the PlanSlotMovement_line_xor_exercise CHECK. Neither set is a
   // rep count attached to nothing; both set is two different instructions in
   // one row, and a reader picking one would be guessing at the author.
@@ -117,11 +123,15 @@ export const planSlotSchema = z
   // same reason a pinned day with nothing pinned is: both are rows whose
   // `kind` and `wodId` tell different stories, and whichever one a reader
   // believes, the other is a bug waiting to surface.
-  .refine((slot) => (slot.kind === planSlotKind.enum.wod_pinned) === (slot.wodId !== null), {
-    message:
-      "a wod_pinned slot needs a wodId, and no other kind may carry one",
-    path: ["wodId"],
-  })
+  .refine(
+    (slot) =>
+      (slot.kind === planSlotKind.enum.wod_pinned) === (slot.wodId !== null),
+    {
+      message:
+        "a wod_pinned slot needs a wodId, and no other kind may carry one",
+      path: ["wodId"],
+    },
+  )
   // The rule no CHECK can hold, because `kind` and the prescription rows live
   // in different tables (DN-19). Stated as the same biconditional for the same
   // reason as the one above: a rest day carrying sets and reps and a
@@ -134,8 +144,7 @@ export const planSlotSchema = z
   // to crash on one that got in anyway.
   .refine(
     (slot) =>
-      (slot.kind === planSlotKind.enum.movements) ===
-      (slot.movements.length > 0),
+      (slot.kind === planSlotKind.enum.movements) === slot.movements.length > 0,
     {
       message:
         "a movements slot needs at least one prescribed movement, and no other kind may carry any",

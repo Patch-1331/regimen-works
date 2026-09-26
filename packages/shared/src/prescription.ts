@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { movementGroup, substitutionReason } from "./enums.js";
+import { refineRepShape, repShapeFields } from "./rep-shape.js";
 import { movementExerciseSchema } from "./wod.js";
 
 /**
@@ -16,48 +17,54 @@ import { movementExerciseSchema } from "./wod.js";
  * is `planSlotMovementSchema` in `plan.ts`, and the two are deliberately
  * different: an author writes "pull", an athlete reads "chin-up".
  */
-export const prescribedMovementSchema = z.object({
-  /** The `PlanSlotMovement` id. Stable across reads, which is what a per-set log will key on (DN-21). */
-  id: z.string(),
-  order: z.number().int().nonnegative(),
-  sets: z.number().int().positive(),
-  /** Count in whatever unit the exercise uses — see `exercise.unit`, which makes a hold's "reps" seconds. */
-  reps: z.number().int().positive(),
-  /** Prescribed rest between sets. 0 says "straight through", which is a prescription rather than an omission. */
-  restSeconds: z.number().int().nonnegative(),
-  /**
-   * The line this was prescribed by, or null where the author pinned a
-   * specific exercise because the variation was the point.
-   *
-   * Carried rather than inferred from `exercise.line`: those are the same
-   * value in a group-prescribed row and mean different things — this one is
-   * what the *program* asked for, and it survives the athlete being dropped
-   * outside the group entirely by an equipment fallback.
-   */
-  movementGroup: movementGroup.nullable(),
-  /** What this athlete actually trains today. */
-  exercise: movementExerciseSchema,
-  /** True where the athlete swapped this row themselves, for today only (DN-125). */
-  isSwapped: z.boolean(),
-  /**
-   * What the group resolved to before an automatic layer replaced it, and
-   * which layer did — the same honesty rule the WOD plate follows (DN-79,
-   * DN-88): an app that quietly hands somebody a different movement should
-   * at least say so.
-   *
-   * Only `equipment` can appear here today. A WOD's `remembered_choice`
-   * has no counterpart on this shape, because resolving through the
-   * athlete's standing choice *is* the prescription rather than a
-   * substitution for it.
-   *
-   * All three are null on a row the athlete swapped: naming what a swap
-   * overrode would argue with a decision just made (DN-116).
-   */
-  prescribedName: z.string().nullable(),
-  /** The prescribed exercise's id, so the swap panel can offer it back (DN-110). */
-  prescribedId: z.string().nullable(),
-  prescribedReason: substitutionReason.nullable(),
-});
+export const prescribedMovementSchema = z
+  .object({
+    /** The `PlanSlotMovement` id. Stable across reads, which is what a per-set log will key on (DN-21). */
+    id: z.string(),
+    order: z.number().int().nonnegative(),
+    sets: z.number().int().positive(),
+    /**
+     * The prescribed count, in one of three shapes — see `repShapeFields`, which
+     * documents all three. Counted in whatever unit the exercise uses: see
+     * `exercise.unit`, which makes a hold's "reps" seconds.
+     */
+    ...repShapeFields,
+    /** Prescribed rest between sets. 0 says "straight through", which is a prescription rather than an omission. */
+    restSeconds: z.number().int().nonnegative(),
+    /**
+     * The line this was prescribed by, or null where the author pinned a
+     * specific exercise because the variation was the point.
+     *
+     * Carried rather than inferred from `exercise.line`: those are the same
+     * value in a group-prescribed row and mean different things — this one is
+     * what the *program* asked for, and it survives the athlete being dropped
+     * outside the group entirely by an equipment fallback.
+     */
+    movementGroup: movementGroup.nullable(),
+    /** What this athlete actually trains today. */
+    exercise: movementExerciseSchema,
+    /** True where the athlete swapped this row themselves, for today only (DN-125). */
+    isSwapped: z.boolean(),
+    /**
+     * What the group resolved to before an automatic layer replaced it, and
+     * which layer did — the same honesty rule the WOD plate follows (DN-79,
+     * DN-88): an app that quietly hands somebody a different movement should
+     * at least say so.
+     *
+     * Only `equipment` can appear here today. A WOD's `remembered_choice`
+     * has no counterpart on this shape, because resolving through the
+     * athlete's standing choice *is* the prescription rather than a
+     * substitution for it.
+     *
+     * All three are null on a row the athlete swapped: naming what a swap
+     * overrode would argue with a decision just made (DN-116).
+     */
+    prescribedName: z.string().nullable(),
+    /** The prescribed exercise's id, so the swap panel can offer it back (DN-110). */
+    prescribedId: z.string().nullable(),
+    prescribedReason: substitutionReason.nullable(),
+  })
+  .superRefine(refineRepShape);
 export type PrescribedMovement = z.infer<typeof prescribedMovementSchema>;
 
 /**

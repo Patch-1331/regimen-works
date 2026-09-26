@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  repsLabel,
   restStateAt,
   straightSetsStateAt,
   type SessionMovement,
@@ -201,7 +202,7 @@ export function StraightSetsWorkout({
                   textShadow: "0 0 20px var(--glow-tint), 0 0 4px var(--glow)",
                 }}
               >
-                {movement ? repsLabel(movement) : "—"}
+                {movement ? repsLabel(movement, movement.exercise.unit) : "—"}
               </div>
             )}
 
@@ -262,13 +263,6 @@ export function StraightSetsWorkout({
       )}
     </div>
   );
-}
-
-/** What one set asks for, in the exercise's own unit. */
-function repsLabel(movement: SessionMovement): string {
-  return movement.exercise.unit === "seconds"
-    ? `${movement.reps}s`
-    : String(movement.reps);
 }
 
 /**

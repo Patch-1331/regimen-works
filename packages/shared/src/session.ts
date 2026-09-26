@@ -44,8 +44,23 @@ export const sessionMovementSchema = z
     /** Seconds of rest between those sets; 0 means straight through. */
     restSeconds: z.number().int().nonnegative().nullable().default(null),
     order: z.number().int().nonnegative(),
-    /** Total count, in the exercise's own unit; with a repScheme this is the ladder's sum. */
-    reps: z.number().int().positive(),
+    /**
+     * Total count, in the exercise's own unit; with a repScheme this is the
+     * ladder's sum, and on a range it is the **bottom** of the range.
+     *
+     * Null only on a straight-sets row prescribed to failure (DN-142). A WOD
+     * movement is always the fixed shape: a round of "as many as you can" is a
+     * different format, not a rep count, and no WOD carries one.
+     */
+    reps: z.number().int().positive().nullable(),
+    /**
+     * The top of a prescribed range, and null everywhere else -- including on
+     * every session snapshotted before ranges existed, which is why it
+     * defaults rather than being required.
+     */
+    repsMax: z.number().int().positive().nullable().default(null),
+    /** True where the day prescribed no count at all. Defaults for the same reason. */
+    toFailure: z.boolean().default(false),
     repScheme: z.array(z.number().int().positive()),
     /** True when this is the athlete's own swap for the day rather than their standing choice. */
     isSwapped: z.boolean(),
@@ -210,9 +225,26 @@ export const workoutSetLogSchema = z.object({
   /** 1-based within that movement, the way `straightSetsStateAt` counts. */
   setNumber: z.number().int().positive(),
   exerciseId: z.string(),
-  prescribedReps: z.number().int().positive(),
-  /** 0 is a real answer: a set attempted and not made is a fact about the session. */
-  actualReps: z.number().int().nonnegative(),
+  /**
+   * What the day asked for, in the same three shapes the prescription carries
+   * (DN-142) -- copied whole, because recording a range as its floor would make
+   * the log claim the day asked for something it did not.
+   *
+   * Both extra fields default, so sets written before ranges existed still
+   * parse as the fixed shape they were.
+   */
+  prescribedReps: z.number().int().positive().nullable(),
+  prescribedRepsMax: z.number().int().positive().nullable().default(null),
+  prescribedToFailure: z.boolean().default(false),
+  /**
+   * What the athlete actually did. 0 is a real answer: a set attempted and not
+   * made is a fact about the session.
+   *
+   * **Null is a different answer** -- nobody has said yet. It is what a set
+   * prescribed to failure records until the athlete supplies the number at log
+   * time, because the runner cannot witness a count it never asked for.
+   */
+  actualReps: z.number().int().nonnegative().nullable(),
 });
 export type WorkoutSetLog = z.infer<typeof workoutSetLogSchema>;
 

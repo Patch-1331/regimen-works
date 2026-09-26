@@ -31,6 +31,8 @@ function movement(
       date,
       name: "Cindy",
       reps: 30,
+      repsMax: null,
+      toFailure: false,
       isSwapped: false,
       prescribedName: null,
       prescribedReason: null,

@@ -261,7 +261,10 @@ export class MovementResolutionService {
         id: m.movement.id,
         order: m.movement.order,
         sets: m.movement.sets,
+        // All three shapes, carried rather than flattened (DN-142).
         reps: m.movement.reps,
+        repsMax: m.movement.repsMax,
+        toFailure: m.movement.toFailure,
         restSeconds: m.movement.restSeconds,
         // What the *program* asked for, kept even where equipment moved the
         // athlete off it: the group is the session's intent, and a screen that

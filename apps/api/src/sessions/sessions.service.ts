@@ -279,7 +279,21 @@ export class SessionsService {
           finished - 1,
         );
         const movement = movements[at.movementIndex];
-        const prescribedReps = movement.reps;
+        // What the day asked for, copied whole rather than flattened to a
+        // number (DN-142). A range recorded as its floor would have history
+        // claim the day asked for 8 when it asked for 8-10.
+        const prescribed = {
+          prescribedReps: movement.reps,
+          prescribedRepsMax: movement.repsMax,
+          prescribedToFailure: movement.toFailure,
+        };
+        // The runner records the day as prescribed, so what the athlete did is
+        // what they were asked for -- except on a set prescribed to failure,
+        // which asked for no number. Null there rather than a guess: the app
+        // did not witness the count, and 0 is already taken by "attempted and
+        // not made". The athlete supplies it at log time, the way a corrected
+        // set is supplied.
+        const actualReps = movement.toFailure ? null : movement.reps;
 
         await tx.workoutSetLog.upsert({
           // Upsert rather than create because the counter is what decides a
@@ -296,19 +310,19 @@ export class SessionsService {
               setNumber: at.setNumber,
             },
           },
-          update: { actualReps: prescribedReps },
+          update: { actualReps },
           create: {
             userId,
             sessionId: session.id,
             movementOrder: at.movementIndex,
             setNumber: at.setNumber,
             exerciseId: movement.exercise.id,
-            prescribedReps,
+            ...prescribed,
             // The runner records the day as prescribed. It is asking the
             // athlete to count reps mid-set that would cost more than the
             // reading is worth, so a set that did not go as asked is
             // corrected at log time through `editSetLogs`.
-            actualReps: prescribedReps,
+            actualReps,
           },
         });
       }

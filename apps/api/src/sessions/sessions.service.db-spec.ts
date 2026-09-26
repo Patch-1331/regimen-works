@@ -786,7 +786,17 @@ describe('SessionsService.cancel', () => {
  * happens when a movement's sets run out — a single movement would let a
  * broken roll-over pass.
  */
-async function prescribedDay(options: { kind?: string } = {}) {
+async function prescribedDay(
+  options: {
+    kind?: string;
+    /**
+     * The day's prescription, where the default 5x3 pull then 3x8 push-ups is
+     * not what the test is about -- a rep shape other than a fixed count
+     * (DN-142), say.
+     */
+    movements?: Record<string, unknown>[];
+  } = {},
+) {
   const user = await createUser();
   const { members } = await createGroup('pull', [
     'Negative chin-up',
@@ -806,7 +816,7 @@ async function prescribedDay(options: { kind?: string } = {}) {
                 dayOfWeek: 3,
                 kind: options.kind ?? 'movements',
                 movements: {
-                  create: [
+                  create: options.movements ?? [
                     {
                       order: 0,
                       movementGroup: 'pull',
@@ -1212,6 +1222,117 @@ describe('SessionsService.logSet, the rows it writes (DN-21)', () => {
 
     expect((await storedSession(assignment.id))?.setsCompleted).toBe(3);
     expect(await storedSetLogs(session.id)).toHaveLength(3);
+  });
+});
+
+/**
+ * A day whose counts are not plain numbers (DN-142).
+ *
+ * The runner pre-fills `actualReps` from the prescription, which is the whole
+ * reason these shapes reach it: there is no number to pre-fill a failure set
+ * with, and a range's floor is not what the athlete did. Both are recorded as
+ * "nobody has said yet" and answered on the log screen.
+ */
+describe('SessionsService, on a day prescribed in ranges and to failure', () => {
+  async function running() {
+    const day = await prescribedDay({
+      movements: [
+        {
+          order: 0,
+          movementGroup: 'pull',
+          sets: 2,
+          reps: null,
+          toFailure: true,
+          restSeconds: 90,
+        },
+        {
+          order: 1,
+          movementGroup: 'pull',
+          sets: 1,
+          reps: 8,
+          repsMax: 12,
+          restSeconds: 60,
+        },
+      ],
+    });
+    const session = await service().start(day.user.id, day.assignment.id);
+    return { ...day, session };
+  }
+
+  it('snapshots the shape the day was written in, not an approximation of it', async () => {
+    const { session } = await running();
+
+    expect(session.movements[0]).toMatchObject({
+      reps: null,
+      repsMax: null,
+      toFailure: true,
+    });
+    expect(session.movements[1]).toMatchObject({
+      reps: 8,
+      repsMax: 12,
+      toFailure: false,
+    });
+  });
+
+  it('records a failure set with no count on either side of it', async () => {
+    const { user, assignment } = await running();
+
+    await service().logSet(user.id, assignment.id, {
+      setsCompleted: 1,
+      restStartedAtSeconds: 90,
+    });
+
+    // Null rather than 0 on both. The prescription named no number, and 0
+    // would say the athlete attempted the set and made none of it.
+    expect(await service().setLogs(user.id, assignment.id)).toMatchObject([
+      {
+        movementOrder: 0,
+        setNumber: 1,
+        prescribedReps: null,
+        prescribedRepsMax: null,
+        prescribedToFailure: true,
+        actualReps: null,
+      },
+    ]);
+  });
+
+  it('carries a range into the log whole, rather than flattening it to its floor', async () => {
+    const { user, assignment } = await running();
+    for (let n = 1; n <= 3; n++) {
+      await service().logSet(user.id, assignment.id, {
+        setsCompleted: n,
+        restStartedAtSeconds: null,
+      });
+    }
+
+    // 8 here would be the log claiming the day asked for 8, which it did not.
+    // `actualReps` is pre-filled with the floor for the same reason it is
+    // pre-filled at all: it is the likeliest reading, and it is editable.
+    expect((await service().setLogs(user.id, assignment.id))[2]).toMatchObject({
+      movementOrder: 1,
+      setNumber: 1,
+      prescribedReps: 8,
+      prescribedRepsMax: 12,
+      prescribedToFailure: false,
+      actualReps: 8,
+    });
+  });
+
+  it('takes the count for a failure set when the athlete supplies it at log time', async () => {
+    const { user, assignment } = await running();
+    await service().logSet(user.id, assignment.id, {
+      setsCompleted: 1,
+      restStartedAtSeconds: null,
+    });
+
+    await service().editSetLogs(user.id, assignment.id, {
+      sets: [{ movementOrder: 0, setNumber: 1, actualReps: 14 }],
+    });
+
+    expect((await service().setLogs(user.id, assignment.id))[0]).toMatchObject({
+      prescribedToFailure: true,
+      actualReps: 14,
+    });
   });
 });
 

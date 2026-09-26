@@ -4,8 +4,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   formatSetsResult,
   parseSetsResult,
+  repsLabel,
   wasCappedFinish,
   PRESCRIBED_DAY_NAME,
+  type ExerciseUnit,
   type Prescription,
   type ResultType,
   type WorkoutLog,
@@ -337,6 +339,7 @@ function LogResultForm({
                 key={row.id}
                 row={row}
                 name={movementName(day.prescription, row.movementOrder)}
+                unit={movementUnit(day.prescription, row.movementOrder)}
                 value={editedReps[keyOf(row)] ?? row.actualReps}
                 onChange={(n) =>
                   setEditedReps((edits) => ({ ...edits, [keyOf(row)]: n }))
@@ -410,15 +413,33 @@ function movementName(prescription: Prescription, movementOrder: number): string
   return movement?.exercise.name ?? `Movement ${movementOrder + 1}`;
 }
 
+/**
+ * The unit that movement counts in, so a hold reads in seconds. Falls back to
+ * reps for the same reason `movementName` falls back to a position: a
+ * reordered slot must not cost the athlete the row.
+ */
+function movementUnit(
+  prescription: Prescription,
+  movementOrder: number,
+): ExerciseUnit {
+  const movement = prescription.movements.find((m) => m.order === movementOrder);
+  return movement?.exercise.unit ?? "reps";
+}
+
 function SetRepsRow({
   row,
   name,
+  unit,
   value,
   onChange,
 }: {
   row: WorkoutSetLog;
   name: string;
-  value: number;
+  unit: ExerciseUnit;
+  // Null where nobody has said yet -- a set prescribed to failure, which the
+  // runner had no number to pre-fill. The box shows empty rather than 0: a 0
+  // here would be the athlete reporting a set they attempted and did not make.
+  value: number | null;
   onChange: (n: number) => void;
 }) {
   return (
@@ -432,7 +453,7 @@ function SetRepsRow({
       <input
         type="number"
         min={0}
-        value={value}
+        value={value ?? ""}
         // Named with the set it belongs to, because a column of bare number
         // boxes says nothing about which set a reading is for.
         aria-label={`${name} set ${row.setNumber} reps`}
@@ -441,7 +462,19 @@ function SetRepsRow({
         style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
       />
       <span className="w-14 text-right text-xs text-[var(--ink-faint)]" style={{ fontFamily: "var(--font-mono)" }}>
-        of {row.prescribedReps}
+        {/* What the day asked for, in whichever of the three shapes it asked
+            in (DN-142) -- a range reads as a range and failure as failure,
+            because picking a number out of either would put words in the
+            prescription's mouth. */}
+        of{" "}
+        {repsLabel(
+          {
+            reps: row.prescribedReps,
+            repsMax: row.prescribedRepsMax,
+            toFailure: row.prescribedToFailure,
+          },
+          unit,
+        )}
       </span>
     </div>
   );
