@@ -1,16 +1,18 @@
 import { NavLink } from "react-router-dom";
 
 /**
- * The two halves of the library (DN-29).
+ * The views of the library (DN-29): movements, workouts, and the routines
+ * built from them (DN-145).
  *
- * A sub-nav rather than two bottom tabs: movements and workouts are one
- * library seen two ways, and a five-tab bar that grew to six would be saying
- * they are two unrelated places. It sits under the heading on both screens, so
- * whichever one you land on tells you the other exists.
+ * A sub-nav rather than more bottom tabs: these are one library seen several
+ * ways, and a five-tab bar that grew would be saying they are unrelated
+ * places. It sits under the heading on every view, so whichever one you land
+ * on tells you the others exist.
  */
 const views = [
   { to: "/library", label: "Movements", end: true },
   { to: "/library/wods", label: "Workouts", end: false },
+  { to: "/library/routines", label: "Routines", end: false },
 ];
 
 export function LibraryNav() {
