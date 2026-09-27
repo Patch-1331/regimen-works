@@ -14,6 +14,8 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { WarmupPage } from "./pages/WarmupPage";
 import { CooldownPage } from "./pages/CooldownPage";
 import { SetupPage } from "./pages/SetupPage";
+// PROTOTYPE — DN-137, throwaway; lives on the prototype branch only.
+import { RoutineEditorPrototype } from "./pages/prototype/routine-editor/RoutineEditorPrototype";
 
 function TabbedLayout() {
   return (
@@ -91,6 +93,9 @@ function App() {
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/library/wods" element={<WodLibraryPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            {import.meta.env.DEV && (
+              <Route path="/prototype/routine-editor" element={<RoutineEditorPrototype />} />
+            )}
           </Route>
           <Route
             path="/workout/:assignmentId"
