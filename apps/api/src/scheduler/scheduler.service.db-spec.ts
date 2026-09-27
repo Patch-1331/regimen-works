@@ -1909,6 +1909,26 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     });
   });
 
+  it('keeps prescribing from a routine archived under a run', async () => {
+    // ADR 0006, decision 5: archiving takes a routine out of the picker, not
+    // out from under the athlete already running it. Every read that follows
+    // an enrollment has to reach an archived plan exactly as a live one.
+    const { ring } = await pullMembers();
+    const user = await athlete();
+    const plan = await prescribingPlan();
+    await enrolled(user, plan.id);
+    await testPrisma().plan.update({
+      where: { id: plan.id },
+      data: { archivedAt: new Date() },
+    });
+
+    const today = await programService().getToday(user.id, TODAY);
+
+    expect(today.assignment!.prescription).toMatchObject({
+      movements: [{ movementGroup: 'pull', exercise: { id: ring.id } }],
+    });
+  });
+
   it("resolves rest through the run's pace, over the movement's own", async () => {
     // ADR 0005: the athlete's pace governs the whole run. The plate shows the
     // rest they will actually take, not the one they overrode.

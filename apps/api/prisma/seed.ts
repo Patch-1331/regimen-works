@@ -6,10 +6,6 @@ import { PrismaClient } from '@prisma/client';
 import { GLOBAL_LIBRARY } from '../src/library/visible-to';
 import { upsertJustWods } from '../src/plans/just-wods';
 import {
-  FIRST_PROGRAMS,
-  upsertFirstPrograms,
-} from '../src/plans/first-programs';
-import {
   assertSubstitutesReachable,
   assertSubstituteUnitsMatch,
 } from '../src/seed/substitute-guard';
@@ -184,11 +180,12 @@ async function main() {
   // who may never sign in. The ids are shared, so whichever runs first wins
   // and the other is a no-op. The difference is that this one *updates*, so
   // a change to the definition reaches an existing deploy.
+  //
+  // It is the only program seeded. The first programs this once wrote beside
+  // it were retired by migration (ADR 0006, decision 3); the global library is
+  // authored in the app now, and a deploy must not undo an admin's edits.
   console.log('Seeding the Just WODs program...');
   await upsertJustWods(prisma);
-
-  console.log('Seeding the first programs...');
-  await upsertFirstPrograms(prisma);
 
   // Enrollments are not seeded. They are per-user rows, and the users this
   // would backfill are exactly the ones UserProvisioningService reaches on
@@ -197,8 +194,7 @@ async function main() {
   // exercised again. An athlete who never signs in again gets no enrollment
   // and needs none, having no Today to render.
   console.log(
-    `Done: ${exercises.length} exercises, ${wods.length} WODs, ` +
-      `${FIRST_PROGRAMS.length + 1} programs.`,
+    `Done: ${exercises.length} exercises, ${wods.length} WODs, 1 program.`,
   );
 }
 
