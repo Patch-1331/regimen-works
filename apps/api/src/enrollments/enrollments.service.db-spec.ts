@@ -339,6 +339,25 @@ describe('EnrollmentsService.dismiss', () => {
     expect(after.summaryDismissedAt).toBeNull();
   });
 
+  it('refuses a program archived since, and writes nothing', async () => {
+    // ADR 0006, decision 5: an archived routine cannot be started, and a new
+    // run is a start. After a structural edit (decision 6) the finished run
+    // points at the archived original, so allowing this would quietly run
+    // the version the author replaced.
+    const user = await createUser();
+    const plan = await createPlan({ archivedAt: new Date() });
+    const previous = await completedRun(user.id, { planId: plan.id });
+
+    await expect(
+      service().runAgain(user.id, previous.id, TODAY),
+    ).rejects.toThrow(NotFoundException);
+    await expect(
+      testPrisma().planEnrollment.count({
+        where: { userId: user.id, status: 'active' },
+      }),
+    ).resolves.toBe(0);
+  });
+
   it('refuses a program that has not finished', async () => {
     const user = await createUser();
     const enrollment = await createEnrollment(user.id);
