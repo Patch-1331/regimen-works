@@ -126,7 +126,8 @@ export class EnrollmentsService {
   }
 
   /**
-   * Starts the same program over: same plan, same length, from today.
+   * Starts the same program over: same plan, same length, from today --
+   * unless that plan has been archived since.
    *
    * No questions, because none of them have new answers -- the athlete has
    * just run this program and is saying they want it again. Choosing a
@@ -144,10 +145,24 @@ export class EnrollmentsService {
   ): Promise<{ enrollmentId: string }> {
     const previous = await this.prisma.planEnrollment.findFirst({
       where: { id: enrollmentId, userId, status: 'completed' },
-      select: { id: true, planId: true, weeks: true, defaultRestSeconds: true },
+      select: {
+        id: true,
+        planId: true,
+        weeks: true,
+        defaultRestSeconds: true,
+        plan: { select: { archivedAt: true } },
+      },
     });
     if (!previous) {
       throw new NotFoundException('That is not a program you have finished.');
+    }
+    // A new run is a start, and an archived routine cannot be started (ADR
+    // 0006, decision 5) -- after a fork it is the version the author replaced.
+    // The card stays up: the athlete has not answered it.
+    if (previous.plan.archivedAt) {
+      throw new NotFoundException(
+        'That program has been archived and cannot be run again.',
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {

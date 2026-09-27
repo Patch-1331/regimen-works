@@ -313,7 +313,14 @@ export class SetupService {
   }
 }
 
-/** Global rows plus this athlete's own — the tier rule, in one place. */
+/**
+ * Global rows plus this athlete's own, live ones only — the tier rule, in one
+ * place. Archived routines leave the picker (ADR 0006, decision 5); reads that
+ * follow an enrollment already under way must not use this.
+ */
 function selectableBy(userId: string): Prisma.PlanWhereInput {
-  return { OR: [{ ownerId: null }, { ownerId: userId }] };
+  return {
+    archivedAt: null,
+    OR: [{ ownerId: null }, { ownerId: userId }],
+  };
 }

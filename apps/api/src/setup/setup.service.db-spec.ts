@@ -96,6 +96,18 @@ describe('SetupService.options', () => {
     expect(options.programs.map((p) => p.id)).toContain(mine.id);
   });
 
+  it('does not offer an archived program, global or owned', async () => {
+    const { userId } = await provisionedAthlete();
+    const global = await createPlan({ archivedAt: new Date() });
+    const mine = await createPlan({ ownerId: userId, archivedAt: new Date() });
+
+    const options = await service().options(userId, TODAY);
+
+    const ids = options.programs.map((p) => p.id);
+    expect(ids).not.toContain(global.id);
+    expect(ids).not.toContain(mine.id);
+  });
+
   it('does not offer somebody else programs', async () => {
     // The tier rule from DN-93, as it applies to plans. A picker that listed
     // every athlete's private program would be a directory of them.
@@ -436,6 +448,21 @@ describe('SetupService.commit', () => {
 
     await expect(
       service().commit(userId, answers({ planId: theirs.id }), TODAY),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('refuses an archived program, even the athlete own', async () => {
+    // ADR 0006, decision 5: an archived routine leaves the picker so nobody
+    // new can start it. Hiding it from `options` alone would leave the door
+    // open to anyone who kept the id.
+    const { userId } = await provisionedAthlete();
+    const archived = await createPlan({
+      ownerId: userId,
+      archivedAt: new Date(),
+    });
+
+    await expect(
+      service().commit(userId, answers({ planId: archived.id }), TODAY),
     ).rejects.toThrow(NotFoundException);
   });
 

@@ -214,6 +214,45 @@ describe('plan names', () => {
       createPlan({ name: 'Mine', ownerId: user.id }),
     ).rejects.toThrow(UNIQUE_VIOLATION);
   });
+
+  // Archiving frees the name (ADR 0006): a structural edit forks a routine
+  // into a new row that keeps the name while the old one is archived. The
+  // opposite of Exercise and Wod, so both tiers are pinned here.
+  const archived = { archivedAt: new Date('2026-09-01T00:00:00Z') };
+
+  it('lets a live global plan share a name with an archived one', async () => {
+    await createPlan({ name: 'Forked', ...archived });
+
+    await expect(createPlan({ name: 'Forked' })).resolves.toBeDefined();
+  });
+
+  it('lets an athlete reuse the name of their own archived plan', async () => {
+    const user = await createUser();
+    await createPlan({ name: 'Mine', ownerId: user.id, ...archived });
+
+    await expect(
+      createPlan({ name: 'Mine', ownerId: user.id }),
+    ).resolves.toBeDefined();
+  });
+
+  it('still refuses a second live global plan beside an archived one', async () => {
+    await createPlan({ name: 'Forked', ...archived });
+    await createPlan({ name: 'Forked' });
+
+    await expect(createPlan({ name: 'Forked' })).rejects.toThrow(
+      UNIQUE_VIOLATION,
+    );
+  });
+
+  it('still refuses an athlete a second live plan beside an archived one', async () => {
+    const user = await createUser();
+    await createPlan({ name: 'Mine', ownerId: user.id, ...archived });
+    await createPlan({ name: 'Mine', ownerId: user.id });
+
+    await expect(
+      createPlan({ name: 'Mine', ownerId: user.id }),
+    ).rejects.toThrow(UNIQUE_VIOLATION);
+  });
 });
 
 describe("an assignment cannot claim another athlete's enrollment", () => {

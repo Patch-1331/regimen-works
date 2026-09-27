@@ -660,12 +660,24 @@ model Plan {
   weeks       PlanWeek[]
   enrollments PlanEnrollment[]
 
-  // Scoped to the owner, and paired with a partial unique index over global
-  // names, for the reasons written out in full on Exercise: Postgres treats
-  // NULLs as distinct, so this alone would permit two global plans of the
-  // same name. The partial index cannot be expressed here and lives only in
-  // the migration -- `prisma migrate dev` will offer to drop it. Keep it.
-  @@unique([ownerId, name])
+  // Soft delete (ADR 0006, decision 5), meaning what it means on Exercise and
+  // Wod: the row leaves the picker, so nobody new can start it, while every
+  // read that follows an existing enrollment still resolves it. A run already
+  // under way finishes on it unchanged, and history keeps its name.
+  //
+  // Unlike Exercise and Wod, archiving FREES the name. A structural edit to a
+  // routine somebody has enrolled in forks it (decision 6): the new row keeps
+  // the name and the old one is archived, so the two must coexist. Name
+  // uniqueness is therefore over live rows only -- see below.
+  archivedAt DateTime?
+
+  // No @@unique here, on purpose. Names are unique per owner and, separately,
+  // across the global tier (Postgres treats NULLs as distinct, so the first
+  // cannot cover the second -- the reasons are on Exercise). Both are partial
+  // indexes over live rows, `WHERE "archivedAt" IS NULL`, which Prisma cannot
+  // express, so they live only in the migration: `Plan_live_owned_name_key`
+  // and `Plan_live_global_name_key`. `prisma migrate dev` will offer to drop
+  // them on the next model change. Keep them.
 }
 
 // One authored week of a program.
