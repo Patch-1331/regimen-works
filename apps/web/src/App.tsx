@@ -14,6 +14,8 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { WarmupPage } from "./pages/WarmupPage";
 import { CooldownPage } from "./pages/CooldownPage";
 import { SetupPage } from "./pages/SetupPage";
+import { RoutinesPage } from "./pages/RoutinesPage";
+import { RoutineEditorPage } from "./pages/RoutineEditorPage";
 
 function TabbedLayout() {
   return (
@@ -63,6 +65,12 @@ function AuthGate({ children }: { children: React.ReactNode }) {
  * not access control — the API owns what setup writes — it is the difference
  * between a configured app and an unconfigured one.
  */
+/**
+ * Where an athlete who has not finished setup may be: the wizard, and the
+ * routine editor its "Build your own" card opens (DN-145).
+ */
+const SETUP_PATHS = new Set(["/setup", "/library/routines/new"]);
+
 function SetupGate({ children }: { children: React.ReactNode }) {
   const { data: me, isPending } = useQuery({
     queryKey: ["me"],
@@ -71,7 +79,7 @@ function SetupGate({ children }: { children: React.ReactNode }) {
   const location = useLocation();
 
   if (isPending) return null;
-  if (me?.onboardedAt === null && location.pathname !== "/setup") {
+  if (me?.onboardedAt === null && !SETUP_PATHS.has(location.pathname)) {
     return <Navigate to="/setup" replace />;
   }
   return <>{children}</>;
@@ -90,6 +98,7 @@ function App() {
               same home, and they belong under one word, not two tabs. */}
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/library/wods" element={<WodLibraryPage />} />
+            <Route path="/library/routines" element={<RoutinesPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
           <Route
@@ -106,6 +115,12 @@ function App() {
           {/* Outside the tabbed layout: there is nowhere else to be until the
             three questions are answered. */}
           <Route path="/setup" element={<SetupPage />} />
+          {/* Full-screen, and reachable before setup is finished: the
+            wizard's "Build your own" opens it (DN-145). */}
+          <Route
+            path="/library/routines/new"
+            element={<RoutineEditorPage />}
+          />
         </Routes>
       </SetupGate>
     </AuthGate>

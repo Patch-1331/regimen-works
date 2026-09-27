@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import type { Me, SetupOptions, SetupProgram } from "@regimen-works/shared";
 import { api } from "../lib/api";
 import {
@@ -33,7 +33,11 @@ const STEPS = ["welcome", "program", "cadence", "start", "ready"] as const;
 type Step = (typeof STEPS)[number];
 
 export function SetupPage() {
-  const { data: options, isLoading, error } = useQuery({
+  const {
+    data: options,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["setup"],
     queryFn: api.setup,
   });
@@ -59,13 +63,20 @@ function Wizard({ options }: { options: SetupOptions }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [step, setStep] = useState<Step>("welcome");
-  const [planId, setPlanId] = useState(options.programs[0].id);
+  // Back from "Build your own" (DN-145): the editor hands over the routine it
+  // just saved, and the wizard picks up at the picker with it chosen.
+  const handedBack = (useLocation().state as { planId?: string } | null)
+    ?.planId;
+  const authored = options.programs.find((p) => p.id === handedBack);
+  const first = authored ?? options.programs[0];
+
+  const [step, setStep] = useState<Step>(authored ? "program" : "welcome");
+  const [planId, setPlanId] = useState(first.id);
   const [days, setDays] = useState<number[]>(() =>
-    initialDays(options.programs[0], options.trainingDays),
+    initialDays(first, options.trainingDays),
   );
   const [weeks, setWeeks] = useState<number | null>(
-    () => weeksChoice(options.programs[0])?.start ?? null,
+    () => weeksChoice(first)?.start ?? null,
   );
   const [startDate, setStartDate] = useState(options.earliestStartDate);
   // Null until the athlete types, so the prefill can follow the program: see
@@ -90,7 +101,9 @@ function Wizard({ options }: { options: SetupOptions }) {
         startDate,
         // Only where there is a rest between sets to pace -- a pace on Just
         // WODs would be stored and never read.
-        defaultRestSeconds: program.hasStraightSets ? restSecondsOf(rest) : null,
+        defaultRestSeconds: program.hasStraightSets
+          ? restSecondsOf(rest)
+          : null,
       }),
     onSuccess: async ({ onboardedAt }) => {
       // Written straight into the cache the route guard reads, so the
@@ -206,7 +219,9 @@ function restPrefill(program: SetupProgram, last: number | null): string {
  * its slots are shown instead, so what this returns is never read.
  */
 function initialDays(program: SetupProgram, stored: number[]): number[] {
-  return program.defaultDays.length > 0 ? [...program.defaultDays] : [...stored];
+  return program.defaultDays.length > 0
+    ? [...program.defaultDays]
+    : [...stored];
 }
 
 /** The wizard's own chrome: no tab bar, because there is nowhere else to be. */
@@ -282,7 +297,10 @@ function Welcome({ onBegin }: { onBegin: () => void }) {
       </Lede>
       <ol
         className="mt-6 flex flex-col gap-2 p-4 text-sm"
-        style={{ background: "var(--panel)", border: "1px solid var(--border)" }}
+        style={{
+          background: "var(--panel)",
+          border: "1px solid var(--border)",
+        }}
       >
         <li className="text-[var(--ink-soft)]">01 — Your program</li>
         <li className="text-[var(--ink-soft)]">02 — Training days</li>
@@ -326,7 +344,10 @@ function ProgramStep({
             >
               <span
                 className="block font-semibold uppercase"
-                style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}
+                style={{
+                  fontFamily: "var(--font-display)",
+                  color: "var(--ink)",
+                }}
               >
                 {program.name}
               </span>
@@ -348,13 +369,15 @@ function ProgramStep({
           </li>
         ))}
         <li>
-          {/* The Program Editor is its own project. Shown disabled rather
-              than hidden, because "you could build your own" is a true thing
-              about this app and a first-run screen is where an athlete forms
-              their idea of what it does. */}
-          <div
-            className="w-full p-4 opacity-50"
-            style={{ background: "var(--panel)", border: "1px dashed var(--border)" }}
+          {/* Opens the routine editor (DN-145), which comes back here with
+              what was written already chosen. */}
+          <Link
+            to="/library/routines/new?from=setup"
+            className="block w-full p-4"
+            style={{
+              background: "var(--panel)",
+              border: "1px dashed var(--border)",
+            }}
           >
             <span
               className="block font-semibold uppercase"
@@ -363,9 +386,9 @@ function ProgramStep({
               Build your own
             </span>
             <span className="mt-2 block text-sm text-[var(--ink-soft)]">
-              Write your own weeks, day by day. Coming soon.
+              Write your own week, day by day.
             </span>
-          </div>
+          </Link>
         </li>
       </ul>
       <BackButton onClick={onBack} />
@@ -383,12 +406,15 @@ function programMeta(program: SetupProgram): string {
         : `${program.minWeeks}–${program.maxWeeks} weeks`;
   const cadence =
     program.scheduleMode === "fixed"
-      ? `Fixed schedule · ${program.fixedDays.length} days`
+      ? `Fixed schedule · ${daysLabel(program.fixedDays.length)}`
       : program.minDaysPerWeek === program.maxDaysPerWeek
-        ? `${program.minDaysPerWeek} days a week`
+        ? `${daysLabel(program.minDaysPerWeek)} a week`
         : `${program.minDaysPerWeek}–${program.maxDaysPerWeek} days a week`;
   return `${length} · ${cadence}`;
 }
+
+// An authored routine can train a single day (DN-145); the seeded ones never did.
+const daysLabel = (n: number | null) => `${n} day${n === 1 ? "" : "s"}`;
 
 function CadenceStep({
   program,
@@ -418,7 +444,9 @@ function CadenceStep({
 
   return (
     <div>
-      <Title>{isFixed ? "Your training week" : "Which days do you train?"}</Title>
+      <Title>
+        {isFixed ? "Your training week" : "Which days do you train?"}
+      </Title>
       {isFixed ? (
         <Lede>
           {program.name} trains {listDays(program.fixedDays)} — the same days
@@ -692,7 +720,10 @@ function ReadyStep({
 
       <dl
         className="mt-5 flex flex-col gap-2 p-4 text-sm"
-        style={{ background: "var(--panel)", border: "1px solid var(--border)" }}
+        style={{
+          background: "var(--panel)",
+          border: "1px solid var(--border)",
+        }}
       >
         <Readout label="Program" value={program.name} />
         <Readout label="Days" value={listDays(days)} />
@@ -761,8 +792,8 @@ function WhileItRuns({ program }: { program: SetupProgram }) {
           out the run and come back when it finishes.
         </li>
         <li>
-          Rest days stay rest days — nothing will offer to move a missed
-          session onto one. The gaps are as much the program as the sessions.
+          Rest days stay rest days — nothing will offer to move a missed session
+          onto one. The gaps are as much the program as the sessions.
         </li>
       </ul>
     </section>
