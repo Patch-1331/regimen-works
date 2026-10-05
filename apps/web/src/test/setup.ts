@@ -18,11 +18,11 @@ afterEach(() => {
 });
 
 // The API is stubbed at the network boundary for every suite (DN-49).
-// `onUnhandledRequest: "error"` is the point of it: a page that starts calling
+// `onUnhandledFrame: "error"` is the point of it: a page that starts calling
 // a new endpoint fails loudly here instead of quietly rendering a loading
 // state forever.
 beforeAll(() => {
-  server.listen({ onUnhandledRequest: "error" });
+  server.listen({ onUnhandledFrame: "error" });
 });
 afterEach(() => {
   server.resetHandlers();

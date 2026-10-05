@@ -37,6 +37,19 @@ describe('request logging', () => {
     return { lines, stream };
   }
 
+  /**
+   * One sink for the whole file. nestjs-pino 5 builds a single pino-http
+   * instance per process on first use and every later app reuses it, so a
+   * fresh stream per test would only ever receive the first test's lines (and
+   * an assertion that nothing was written would pass vacuously). Every app here
+   * is built from the same `loggerParams('production')`, so sharing loses
+   * nothing; each test starts from an empty sink instead.
+   */
+  const sink = collector();
+  beforeEach(() => {
+    sink.lines.length = 0;
+  });
+
   /** A probe route that stands in for a real one, with a user already stashed. */
   @Controller()
   class ProbeController {
@@ -51,11 +64,11 @@ describe('request logging', () => {
     }
   }
 
-  async function appWriting(lines: ReturnType<typeof collector>) {
+  async function appWriting() {
     const moduleRef = await Test.createTestingModule({
       imports: [
         LoggerModule.forRoot({
-          pinoHttp: [{ ...loggerParams('production') }, lines.stream],
+          pinoHttp: [{ ...loggerParams('production') }, sink.stream],
         }),
       ],
       controllers: [ProbeController],
@@ -74,8 +87,7 @@ describe('request logging', () => {
   it('never writes the session token it was handed', async () => {
     // The reason redaction is not a nicety: this header carries a live Clerk
     // credential on every authenticated request.
-    const sink = collector();
-    const app = await appWriting(sink);
+    const app = await appWriting();
 
     await request(app.getHttpServer())
       .get('/today')
@@ -90,8 +102,7 @@ describe('request logging', () => {
   });
 
   it('correlates the log line with the id Cloudflare gave the request', async () => {
-    const sink = collector();
-    const app = await appWriting(sink);
+    const app = await appWriting();
 
     await request(app.getHttpServer())
       .get('/today')
@@ -106,8 +117,7 @@ describe('request logging', () => {
   });
 
   it('says which athlete a request belonged to', async () => {
-    const sink = collector();
-    const app = await appWriting(sink);
+    const app = await appWriting();
 
     await request(app.getHttpServer()).get('/today').expect(200);
     await app.close();
@@ -118,8 +128,7 @@ describe('request logging', () => {
   it('writes nothing for the health probe', async () => {
     // Render probes it continuously. Unignored, it is most of the log volume
     // and every real request is lost in it.
-    const sink = collector();
-    const app = await appWriting(sink);
+    const app = await appWriting();
 
     await request(app.getHttpServer()).get('/health').expect(200);
     await app.close();
