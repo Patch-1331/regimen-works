@@ -53,6 +53,10 @@ afterAll(async () => {
   await app.close();
 });
 
+// Await anything a request needs before building it, never inside the chain:
+// from supertest 7.3 the server a chain listens on closes once every request
+// in flight settles, so `.send(await globalExercise())` lets the inner request
+// close it under the outer one, which then fails with ECONNREFUSED.
 function http() {
   return request(app.getHttpServer());
 }
@@ -118,12 +122,13 @@ async function globalExercise(name = 'Air squat'): Promise<string> {
 
 describe('an athlete writing their own WODs', () => {
   it('creates one only they can see', async () => {
+    const exerciseId = await globalExercise();
     const created = parsed(
       wodSchema,
       await http()
         .post('/wods')
         .set(...asUser(ALICE))
-        .send(wodBody(await globalExercise()))
+        .send(wodBody(exerciseId))
         .expect(201),
     );
     expect(created.movements).toHaveLength(1);
@@ -163,10 +168,11 @@ describe('an athlete writing their own WODs', () => {
   });
 
   it('retires it and brings it back', async () => {
+    const exerciseId = await globalExercise();
     const created = await http()
       .post('/wods')
       .set(...asUser(ALICE))
-      .send(wodBody(await globalExercise()))
+      .send(wodBody(exerciseId))
       .expect(201);
     const id = wodId(created);
 
@@ -196,10 +202,11 @@ describe('an athlete writing their own WODs', () => {
   });
 
   it('is refused a WOD with no movements', async () => {
+    const exerciseId = await globalExercise();
     await http()
       .post('/wods')
       .set(...asUser(ALICE))
-      .send(wodBody(await globalExercise(), { movements: [] }))
+      .send(wodBody(exerciseId, { movements: [] }))
       .expect(400);
   });
 
@@ -238,10 +245,11 @@ describe('an athlete writing their own WODs', () => {
 
 describe('an admin curating the shared pool', () => {
   it('creates one every athlete can see', async () => {
+    const exerciseId = await globalExercise();
     await http()
       .post('/admin/wods')
       .set(...asUser(ADMIN))
-      .send(wodBody(await globalExercise()))
+      .send(wodBody(exerciseId))
       .expect(201);
 
     for (const who of [ALICE, BOB]) {
@@ -254,10 +262,11 @@ describe('an admin curating the shared pool', () => {
   });
 
   it('retires it, taking it out of everyone’s pool at once', async () => {
+    const exerciseId = await globalExercise();
     const created = await http()
       .post('/admin/wods')
       .set(...asUser(ADMIN))
-      .send(wodBody(await globalExercise()))
+      .send(wodBody(exerciseId))
       .expect(201);
 
     await http()
@@ -275,10 +284,11 @@ describe('an admin curating the shared pool', () => {
   });
 
   it('is refused an athlete’s own WOD on the admin routes', async () => {
+    const exerciseId = await globalExercise();
     const hers = await http()
       .post('/wods')
       .set(...asUser(ALICE))
-      .send(wodBody(await globalExercise()))
+      .send(wodBody(exerciseId))
       .expect(201);
 
     await http()
@@ -350,10 +360,11 @@ describe('the boundary between them', () => {
   // Not a 404: the athlete can read this row through GET /wods, so hiding it
   // would only tell them their pool had lost a workout.
   it('refuses an athlete editing a global WOD through their own route', async () => {
+    const exerciseId = await globalExercise();
     const global = await http()
       .post('/admin/wods')
       .set(...asUser(ADMIN))
-      .send(wodBody(await globalExercise()))
+      .send(wodBody(exerciseId))
       .expect(201);
 
     await http()
