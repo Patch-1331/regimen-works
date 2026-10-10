@@ -7,6 +7,7 @@ import { SchedulerService } from '../scheduler/scheduler.service';
 import { MovementResolutionService } from '../scheduler/movement-resolution.service';
 import { EnrollmentsService } from '../enrollments/enrollments.service';
 import { WodsService } from '../wods/wods.service';
+import { RoutinesService } from '../plans/routines.service';
 import type { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -80,6 +81,14 @@ function recordingPrisma() {
         return Promise.resolve([]);
       }),
       findUnique: record('wod.findUnique'),
+    },
+    plan: {
+      findMany: jest.fn((args: unknown) => {
+        (calls['plan.findMany'] ??= []).push(args);
+        return Promise.resolve([]);
+      }),
+      findFirst: record('plan.findFirst'),
+      create: record('plan.create'),
     },
     planEnrollment: {
       findFirst: record('planEnrollment.findFirst'),
@@ -340,6 +349,53 @@ describe('library ownership scoping', () => {
       .setChoice(ALICE, 'push_horizontal', 'some-exercise')
       .catch(() => undefined);
     for (const where of whereOf(prisma, 'exercise.findFirst')) {
+      expectLibraryScope(where);
+    }
+  });
+
+  it('scopes "My routines" to the caller’s own, not the global programs', async () => {
+    // Deliberately *not* the library scope: this list is what the caller
+    // wrote. The global half here would show every athlete the curated
+    // programs as if they had authored them.
+    const prisma = recordingPrisma();
+    await new RoutinesService(prisma).listOwn(ALICE);
+    for (const where of whereOf(prisma, 'plan.findMany')) {
+      expect(where).toBe(JSON.stringify({ ownerId: ALICE }));
+    }
+  });
+
+  it('scopes the exercises a routine may name, and the name it may not reuse', async () => {
+    const prisma = recordingPrisma();
+    await new RoutinesService(prisma)
+      .create(
+        { ownerId: ALICE },
+        {
+          name: 'Mine',
+          summary: null,
+          scheduleMode: 'fixed',
+          days: [
+            {
+              dayOfWeek: 1,
+              lines: [
+                {
+                  movementGroup: null,
+                  exerciseId: 'ex-1',
+                  sets: 3,
+                  reps: 5,
+                  repsMax: null,
+                  toFailure: false,
+                  restSeconds: null,
+                },
+              ],
+            },
+          ],
+        },
+      )
+      .catch(() => undefined);
+    for (const where of whereOf(prisma, 'plan.findFirst')) {
+      expect(where).toContain(ALICE);
+    }
+    for (const where of whereOf(prisma, 'exercise.findMany')) {
       expectLibraryScope(where);
     }
   });

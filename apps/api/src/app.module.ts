@@ -23,6 +23,7 @@ import { SettingsModule } from './settings/settings.module';
 import { MeModule } from './me/me.module';
 import { SetupModule } from './setup/setup.module';
 import { EnrollmentsModule } from './enrollments/enrollments.module';
+import { PlansModule } from './plans/plans.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { EnrollmentsModule } from './enrollments/enrollments.module';
     MeModule,
     SetupModule,
     EnrollmentsModule,
+    PlansModule,
   ],
   controllers: [AppController],
   providers: [
