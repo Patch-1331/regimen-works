@@ -30,6 +30,8 @@ import type {
   WorkoutLogListItem,
   WorkoutSession,
   WorkoutSetLog,
+  CreateRoutine,
+  RoutineSummary,
 } from "@regimen-works/shared";
 
 // Defaults to the "/api" prefix that vite.config.ts proxies to the local API,
@@ -348,6 +350,12 @@ export const api = {
    */
   commitSetup: (body: CommitSetup) =>
     postJson<{ onboardedAt: string }>("/setup", body),
+
+  /** The routines this athlete wrote (DN-145), live first, archived marked. */
+  routines: () => request<RoutineSummary[]>("/routines"),
+  /** Always the athlete's own tier: the route decides, never the body. */
+  createRoutine: (body: CreateRoutine) =>
+    postJson<RoutineSummary>("/routines", body),
 
   /**
    * Every program the athlete has finished (DN-18), most recent first.
