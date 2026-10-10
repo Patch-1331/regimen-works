@@ -7,6 +7,7 @@ import { renderRoute } from "../test/renderRoute";
 import { server, http, HttpResponse } from "../test/server";
 import * as fixtures from "../test/fixtures";
 import { localIsoDate } from "../lib/weekdays";
+import { formatStartDate } from "../lib/setup";
 
 vi.mock("@clerk/clerk-react", async () => {
   const { clerkTestDouble } = await import("../test/clerk");
@@ -270,11 +271,10 @@ describe("going back", () => {
     await walkTo("Pull-Up Builder");
     await click("Continue");
 
-    const monday = screen
-      .getAllByRole("button")
-      .find((b) => b.getAttribute("aria-label")?.startsWith("Monday"))!;
-    await userEvent.click(monday);
-    const chosen = monday.getAttribute("aria-label")!;
+    // A week out rather than "the Monday": on a Monday that button is today,
+    // the default, and the assertion below cannot tell the two apart.
+    const chosen = formatStartDate(addIsoDays(TODAY, 7));
+    await userEvent.click(screen.getByRole("button", { name: chosen }));
 
     await click("Back");
     await click("Continue");
