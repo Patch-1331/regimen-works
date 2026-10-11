@@ -10,7 +10,7 @@ describe('buildChecklist', () => {
     id: '1',
     name: 'Arm circles',
     pattern: 'push',
-    phase: 'warmup',
+    kind: 'warmup',
     instructions: [
       'Arms out at shoulder height, small circles forward then back.',
     ],
@@ -19,7 +19,7 @@ describe('buildChecklist', () => {
     id: '2',
     name: 'Leg swings',
     pattern: 'hinge',
-    phase: 'warmup',
+    kind: 'warmup',
     instructions: [
       'Hold a wall, swing one leg front to back, then side to side.',
     ],
@@ -28,34 +28,48 @@ describe('buildChecklist', () => {
     id: '3',
     name: 'Light jogging in place',
     pattern: null,
-    phase: 'warmup',
+    kind: 'warmup',
     instructions: ['Easy jog on the spot, feet barely leaving the floor.'],
   };
   const catCow: ExerciseForChecklist = {
     id: '4',
     name: 'Cat-cow',
     pattern: 'core',
-    phase: 'cooldown',
+    kind: 'cooldown',
     instructions: [
       'On hands and knees, alternate arching and rounding the spine.',
     ],
   };
-  const pushUp: ExerciseForChecklist = {
+  const chestStretch: ExerciseForChecklist = {
     id: '5',
-    name: 'Push-up',
+    name: 'Doorway chest stretch',
     pattern: 'push',
-    phase: null, // regular pool exercise, not checklist content
+    kind: 'cooldown',
     instructions: [
-      'Plank position, lower until the chest grazes the floor, press back up.',
+      'Forearm on a doorframe, step through until the chest opens.',
     ],
   };
 
-  const pool = [armCircles, legSwings, jogging, catCow, pushUp];
+  const pool = [armCircles, legSwings, jogging, catCow, chestStretch];
 
-  it('only considers exercises tagged with the requested phase', () => {
-    const result = buildChecklist(pool, 'warmup', 'hinge', 4);
+  it('only considers entries on the requested checklist', () => {
+    const result = buildChecklist(pool, 'warmup', 'push', 4);
     expect(result).not.toContainEqual(catCow);
-    expect(result).not.toContainEqual(pushUp);
+    expect(result).not.toContainEqual(chestStretch);
+  });
+
+  it('lets one exercise be on both checklists, each under its own entry', () => {
+    // An entry, not the exercise, says which list it is on (DN-172), so the
+    // same movement can open a session and close it.
+    const rehearsal: ExerciseForChecklist = {
+      ...armCircles,
+      kind: 'cooldown',
+      instructions: ['Slow, wide circles to let the shoulders settle.'],
+    };
+    const both = [armCircles, rehearsal];
+
+    expect(buildChecklist(both, 'warmup', 'push', 4)).toEqual([armCircles]);
+    expect(buildChecklist(both, 'cooldown', 'push', 4)).toEqual([rehearsal]);
   });
 
   it('puts pattern-matching exercises ahead of generic filler', () => {
@@ -81,11 +95,11 @@ describe('buildChecklist', () => {
     expect(result).toEqual([legSwings]);
   });
 
-  it('returns an empty list when the pool has nothing for that phase', () => {
-    expect(buildChecklist([pushUp], 'warmup', 'push', 4)).toEqual([]);
+  it('returns an empty list when the pool has nothing on that checklist', () => {
+    expect(buildChecklist([chestStretch], 'warmup', 'push', 4)).toEqual([]);
   });
 
-  it('buildWarmupChecklist and buildCooldownChecklist delegate to the right phase', () => {
+  it('buildWarmupChecklist and buildCooldownChecklist delegate to the right checklist', () => {
     expect(buildWarmupChecklist(pool, 'push')).toEqual(
       buildChecklist(pool, 'warmup', 'push'),
     );

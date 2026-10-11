@@ -5,7 +5,6 @@ import {
   exerciseForce,
   exerciseLevel,
   exerciseMechanic,
-  exercisePhase,
   exerciseUnit,
   muscle,
   movementPattern,
@@ -29,7 +28,8 @@ export type InstructionSteps = z.infer<typeof instructionSteps>;
 export const exerciseSchema = z.object({
   id: z.string(),
   name: z.string(),
-  // Null only for general warm-up/cool-down filler not tied to a pattern.
+  // Null for a movement no pattern describes, like light jogging or deep
+  // breathing.
   pattern: movementPattern.nullable(),
   // What the movement needs beyond the athlete's own body. Empty is the
   // baseline: bodyweight is the absence of a tag rather than a tag of its own.
@@ -44,7 +44,6 @@ export const exerciseSchema = z.object({
   // choice resolves through it.
   sortOrder: z.number().int().nonnegative().nullable(),
   fallbackExerciseId: z.string().nullable(),
-  phase: exercisePhase.nullable(),
   /**
    * The stable identity the library import matches on (DN-165, ADR-0007):
    * free-exercise-db's own id, or an `rw-` prefixed one for the app's own
@@ -106,7 +105,6 @@ export const createExerciseSchema = z.object({
   // choice resolves through it.
   sortOrder: z.number().int().nonnegative().nullable(),
   fallbackExerciseId: z.string().nullable(),
-  phase: exercisePhase.nullable(),
 });
 export type CreateExercise = z.infer<typeof createExerciseSchema>;
 

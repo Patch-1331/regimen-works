@@ -70,6 +70,14 @@ athlete's capability. If a design implies otherwise, it is wrong.
 athlete says they own. One vocabulary for both sides. `bodyweight` is deliberately
 *not* a member: the baseline is the absence of a tag.
 
+**Checklist entry** (`ChecklistEntry`) — one line of a WOD's warm-up or cool-down
+list: a pointer at an ordinary exercise, with the list it is on (`kind`), the WOD
+pattern it is chosen for, and optionally its own copy. **A property of the entry,
+never of the exercise** — there is no warm-up exercise, only an exercise some
+entry puts on the warm-up. The same movement can be in a workout and on both
+lists. It replaced `Exercise.phase`; see
+[ADR-0008](../../docs/adr/0008-checklists-point-at-exercises.md).
+
 **Training days** — the weekdays an athlete trains on. At least one, always;
 duplicates are refused rather than quietly collapsed.
 

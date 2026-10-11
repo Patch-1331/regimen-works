@@ -28,9 +28,10 @@ model User {
 
   // Library content this athlete authored (DN-93). Global rows carry no
   // owner and appear in nobody's list here.
-  ownExercises Exercise[]
-  ownWods      Wod[]
-  ownPlans     Plan[]
+  ownExercises        Exercise[]
+  ownWods             Wod[]
+  ownPlans            Plan[]
+  ownChecklistEntries ChecklistEntry[]
 
   enrollments PlanEnrollment[]
 }
@@ -38,8 +39,8 @@ model User {
 model Exercise {
   id       String  @id @default(cuid())
   name     String
-  // Null only for general warm-up/cool-down filler not tied to a pattern
-  // (Feature #63, e.g. light jogging, deep breathing).
+  // Null for a movement no pattern describes (e.g. light jogging, deep
+  // breathing).
   pattern  String? // push | pull | squat | hinge | core | cardio | null
   scalable Boolean @default(false)
   unit     String  @default("reps") // reps | seconds — seconds for timed holds (e.g. plank family)
@@ -89,13 +90,13 @@ model Exercise {
 
   // How the movement loads, from the dataset. Each validated in the
   // application, the same way `pattern` is, and null where nobody has said.
-  force     String? // push | pull | static
-  mechanic  String? // compound | isolation
+  force    String? // push | pull | static
+  mechanic String? // compound | isolation
   // A fact about the exercise, never the athlete (ADR-0007). Read for one
   // rule only: an automatic swap is never harder. Not to be confused with
   // SkillLevel, which is the athlete's standing choice of movement.
-  level     String? // beginner | intermediate | expert
-  category  String? // strength | stretching | plyometrics | cardio | powerlifting | olympic_weightlifting
+  level    String? // beginner | intermediate | expert
+  category String? // strength | stretching | plyometrics | cardio | powerlifting | olympic_weightlifting
 
   // The movement group this belongs to (Feature #2, ADR-0004): movements
   // that accomplish the same thing in a program and are freely
@@ -124,12 +125,6 @@ model Exercise {
   // dev` will offer to drop it on the next model change. Keep it.
   isGroupDefault Boolean @default(false)
 
-  // Warm-up/cool-down tagging (Feature #63) — independent of `pattern`/`line`
-  // so an exercise still carries its `pattern` for WOD matching while also
-  // being usable as warm-up/cool-down content. Null for exercises not part
-  // of either checklist.
-  phase String? // warmup | cooldown | null
-
   fallbackExerciseId String?
   fallbackExercise   Exercise?  @relation("ExerciseFallback", fields: [fallbackExerciseId], references: [id])
   fallbackFor        Exercise[] @relation("ExerciseFallback")
@@ -145,15 +140,17 @@ model Exercise {
   ownerId String?
   owner   User?   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
-  wodMovements  WodMovement[]
-  substitutedIn AssignmentSubstitution[]
+  wodMovements     WodMovement[]
+  substitutedIn    AssignmentSubstitution[]
   // The program slots that pin this exercise by name rather than by line
   // (DN-19).
-  prescribedIn  PlanSlotMovement[]
-  setLogs       WorkoutSetLog[]
+  prescribedIn     PlanSlotMovement[]
+  setLogs          WorkoutSetLog[]
   // The athletes who have picked this movement as their default for its
   // group (DN-139).
-  chosenBy      SkillLevel[]
+  chosenBy         SkillLevel[]
+  // The warm-up and cool-down checklists this movement is on (DN-172).
+  checklistEntries ChecklistEntry[]
 
   // Soft delete (DN-25). Archiving hides the row from every pool and picker --
   // `libraryVisibleTo` filters it out, so the scheduler, the group and the
@@ -181,6 +178,61 @@ model Exercise {
   @@unique([ownerId, name])
 }
 
+// One movement on a WOD's warm-up or cool-down checklist (Feature #63,
+// DN-172, ADR-0008).
+//
+// The checklist is a list that points at exercises, not a property of them.
+// It used to be `Exercise.phase`, and one value per row meant a movement could
+// be warm-up content or a workout movement but never both -- so the squat the
+// squat group prescribes and the squat the warm-up rehearses were two rows of
+// the same movement. Pointing at an ordinary exercise lets any movement in the
+// library be on a checklist, and stay in every workout it was already in.
+//
+// Read by `WodsService.getChecklists` and nothing else.
+model ChecklistEntry {
+  id String @id @default(cuid())
+
+  // Which checklist: warmup | cooldown (`checklistKind` in packages/shared).
+  // Validated in the application, the same way `Exercise.pattern` is.
+  kind String
+
+  // The WOD pattern this entry prepares for or winds down from. Null is
+  // general filler that suits any day. Its own field rather than the
+  // exercise's `pattern`: the pattern a movement *is* and the day it *helps*
+  // need not be the same, and the exercise's is not this list's to change.
+  pattern String? // push | pull | squat | hinge | core | cardio | null
+
+  // Copy for this movement as a checklist item, when it should read
+  // differently there -- "easy reps, a little deeper each time" for a squat
+  // whose own instructions describe a working set. Empty means the
+  // exercise's own steps are what the checklist shows.
+  instructions String[] @default([])
+
+  exerciseId String
+  // Cascade: an entry is a reference to a movement and nothing else, so a
+  // movement hard-deleted out of the library takes its checklist entries with
+  // it. Archiving does not delete, and the checklist read skips archived
+  // exercises the way every pool does.
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  // The tier, exactly as on Exercise (DN-93): null is global content, set is
+  // that athlete's own. An athlete's entry may point at a global exercise or
+  // one of their own; a global entry points only at a global exercise, which
+  // the seed is the only writer of today.
+  ownerId String?
+  owner   User?   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  // A movement is on each checklist at most once per tier. Postgres treats
+  // NULLs as distinct, so this alone would allow a global entry twice; a
+  // partial unique index over (exerciseId, kind) WHERE "ownerId" IS NULL
+  // closes that, and it lives only in the migration
+  // (20261012000000_checklist_entries). Keep it.
+  @@unique([ownerId, exerciseId, kind])
+  @@index([exerciseId])
+}
+
 // The athlete's standing choice of movement per group — the last thing they
 // picked, remembered so they need not re-pick it every session. One row per
 // group, and only once they have chosen: nobody is provisioned onto one
@@ -191,9 +243,9 @@ model Exercise {
 // the reason the seed already warns about: a stored position is an index into
 // a list that must then never move.
 model SkillLevel {
-  id            String   @id @default(cuid())
+  id            String @id @default(cuid())
   userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   // The canonical list lives in `movementGroup` in packages/shared -- that Zod
   // enum is what refuses an unknown value, and this column is a plain string.
   movementGroup String
@@ -208,9 +260,9 @@ model SkillLevel {
   // is the ordinary path and does NOT touch it -- the choice survives, stops
   // being resolvable while the movement is hidden, and comes back intact if
   // it is unarchived.
-  exerciseId    String
-  exercise      Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
-  updatedAt     DateTime @updatedAt
+  exerciseId String
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  updatedAt  DateTime @updatedAt
 
   @@unique([userId, movementGroup])
 }
@@ -567,17 +619,17 @@ model WorkoutSetLog {
   /// Copied, not joined, for the same reason the snapshot copies its exercise
   /// fields: a renamed or re-rung exercise must not rewrite what was trained.
   /// This is also the column the cross-session index reads.
-  exerciseId     String
-  exercise       Exercise @relation(fields: [exerciseId], references: [id])
+  exerciseId          String
+  exercise            Exercise @relation(fields: [exerciseId], references: [id])
   /// What the day asked for, copied so a later edit to the slot cannot change
   /// what a past set was measured against. The same three shapes
   /// `PlanSlotMovement` carries (DN-142), copied whole: recording a range as
   /// its floor would make history claim the day asked for something it did
   /// not. No CHECK here -- these are a snapshot of a row that was already
   /// checked, and a set logged against a WOD is always the fixed shape.
-  prescribedReps     Int?
-  prescribedRepsMax  Int?
-  prescribedToFailure Boolean @default(false)
+  prescribedReps      Int?
+  prescribedRepsMax   Int?
+  prescribedToFailure Boolean  @default(false)
   /// What the athlete actually did. 0 is a real answer -- a set attempted and
   /// not made is a fact about the session, not a missing row. **Null is a
   /// different answer**: nobody has said yet. The runner fills this in as the
@@ -585,7 +637,7 @@ model WorkoutSetLog {
   /// and leaves it null on a set prescribed to failure, where inventing one
   /// would be the app reporting a result it did not witness (DN-142). The
   /// athlete supplies it at log time, the same way a corrected set is.
-  actualReps     Int?
+  actualReps          Int?
 
   completedAt DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -832,7 +884,7 @@ model PlanSlotMovement {
   // decide how hard it is.
   substitutedIn AssignmentSubstitution[]
 
-  sets        Int
+  sets Int
 
   // **The prescribed count, in exactly one of three shapes** (DN-142). A CHECK
   // in this field's migration admits those three and nothing else, because
@@ -854,9 +906,9 @@ model PlanSlotMovement {
   // Deliberately **not** `WodMovement.repScheme`, which is a descending ladder
   // (21-15-9) held to `reps = sum(repScheme)`. `[8, 10]` there would mean "do
   // 8, then do 10" -- a different workout in the same array.
-  reps        Int?
-  repsMax     Int?
-  toFailure   Boolean @default(false)
+  reps      Int?
+  repsMax   Int?
+  toFailure Boolean @default(false)
 
   // Prescribed rest between sets, as the source stated it (ADR 0005). 0 says
   // "straight through" out loud, which is a prescription. Null says the

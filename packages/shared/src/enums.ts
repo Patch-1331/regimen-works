@@ -114,9 +114,17 @@ export type SubstitutionReason = z.infer<typeof substitutionReason>;
 export const exerciseUnit = z.enum(["reps", "seconds"]);
 export type ExerciseUnit = z.infer<typeof exerciseUnit>;
 
-/** Tags an Exercise as warm-up/cool-down checklist content (Feature #63). Null for regular pool exercises. */
-export const exercisePhase = z.enum(["warmup", "cooldown"]);
-export type ExercisePhase = z.infer<typeof exercisePhase>;
+/**
+ * Which of a WOD's two checklists an entry is on (Feature #63).
+ *
+ * A property of the entry, never of the exercise (DN-172, ADR-0008). It used
+ * to be `Exercise.phase`, and one value per row meant a movement could be a
+ * warm-up or a workout movement but not both — so the same squat lived in the
+ * library twice. An entry points at an ordinary exercise instead, and any
+ * exercise can be on a checklist and in a workout at once.
+ */
+export const checklistKind = z.enum(["warmup", "cooldown"]);
+export type ChecklistKind = z.infer<typeof checklistKind>;
 
 /*
  * What an exercise is, in free-exercise-db's own vocabulary (DN-165,

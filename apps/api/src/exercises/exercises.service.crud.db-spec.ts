@@ -33,7 +33,6 @@ function body(overrides: Partial<CreateExercise> = {}): CreateExercise {
     movementGroup: null,
     sortOrder: null,
     fallbackExerciseId: null,
-    phase: null,
     ...overrides,
   };
 }
@@ -162,7 +161,6 @@ describe('what a patch means', () => {
       { ownerId: alice.id },
       body({
         instructions: ['Chest to the bar.'],
-        phase: 'warmup',
         movementGroup: 'pull',
         sortOrder: 1,
       }),
@@ -173,7 +171,6 @@ describe('what a patch means', () => {
     });
 
     expect(updated.instructions).toEqual(['Chest to the bar.']);
-    expect(updated.phase).toBe('warmup');
     expect(updated.movementGroup).toBe('pull');
     expect(updated.sortOrder).toBe(1);
     expect(updated.pattern).toBe('pull');
@@ -187,7 +184,6 @@ describe('what a patch means', () => {
       { ownerId: alice.id },
       body({
         instructions: ['Chest to the bar.'],
-        phase: 'warmup',
         movementGroup: 'pull',
         sortOrder: 1,
       }),
@@ -195,14 +191,12 @@ describe('what a patch means', () => {
 
     const updated = await exercises().update({ ownerId: alice.id }, hers.id, {
       instructions: [],
-      phase: null,
       pattern: null,
       movementGroup: null,
       sortOrder: null,
     });
 
     expect(updated.instructions).toEqual([]);
-    expect(updated.phase).toBeNull();
     expect(updated.pattern).toBeNull();
     expect(updated.movementGroup).toBeNull();
   });
@@ -245,7 +239,6 @@ describe('what a patch means', () => {
       movementGroup: 'squat',
       sortOrder: 3,
       fallbackExerciseId: fallback.id,
-      phase: 'cooldown',
     });
 
     expect(updated.name).toBe('Goblet squat');

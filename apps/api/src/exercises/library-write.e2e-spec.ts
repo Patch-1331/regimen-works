@@ -84,7 +84,6 @@ function body(overrides: Record<string, unknown> = {}) {
     movementGroup: null,
     sortOrder: null,
     fallbackExerciseId: null,
-    phase: null,
     ...overrides,
   };
 }

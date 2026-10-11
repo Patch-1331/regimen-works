@@ -151,8 +151,8 @@ function patchJson<T>(path: string, body: unknown) {
  * written against `pattern: string` and a nested `fallbackExercise`; adopting the
  * shared type wholesale is a refactor of that logic, not of this type. What
  * changed for DN-28 is that the fields the shared schema grew — `ownerId`,
- * `archivedAt`, `instructions`, `phase`, `fallbackExerciseId` — stopped being
- * missing here, because the library page needs all five. DN-165 added the
+ * `archivedAt`, `instructions`, `fallbackExerciseId` — stopped being missing
+ * here, because the library page needs all four. DN-165 added the
  * dataset's description of the exercise the same way: the swap panel (DN-170)
  * and the library page (DN-171) both read it.
  */
@@ -168,7 +168,6 @@ export type ApiExercise = {
   movementGroup: string | null;
   sortOrder: number | null;
   fallbackExerciseId: string | null;
-  phase: string | null;
   /** The dataset's id for a global exercise; always null on the athlete's own. */
   key: string | null;
   primaryMuscles: Muscle[];

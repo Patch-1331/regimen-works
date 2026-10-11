@@ -37,7 +37,6 @@ function merged(existing: Exercise, patch: UpdateExercise) {
       patch.fallbackExerciseId === undefined
         ? existing.fallbackExerciseId
         : patch.fallbackExerciseId,
-    phase: patch.phase === undefined ? existing.phase : patch.phase,
   };
 }
 

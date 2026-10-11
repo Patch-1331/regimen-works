@@ -310,16 +310,37 @@ export class WodsService {
 
   /** Warm-up/cool-down checklists for a WOD's dominant pattern (Feature #63). */
   async getChecklists(userId: string, dominantPattern: string) {
-    const pool = await this.prisma.exercise.findMany({
-      where: { ...libraryVisibleTo(userId), phase: { not: null } },
-      select: {
-        id: true,
-        name: true,
-        pattern: true,
-        phase: true,
-        instructions: true,
+    // Two scopes, and both are needed. The entry's own tier keeps another
+    // athlete's list out; the exercise's keeps out a movement this athlete
+    // cannot see -- someone else's, or one that has been retired, which
+    // drops off every list that points at it without the list being edited.
+    const entries = await this.prisma.checklistEntry.findMany({
+      where: {
+        ...libraryOwnedBy(userId),
+        exercise: libraryVisibleTo(userId),
       },
+      select: {
+        kind: true,
+        pattern: true,
+        instructions: true,
+        exercise: { select: { id: true, name: true, instructions: true } },
+      },
+      // Seed order, so the list reads the same on every load.
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
+
+    const pool = entries.map((entry) => ({
+      id: entry.exercise.id,
+      name: entry.exercise.name,
+      pattern: entry.pattern,
+      kind: entry.kind,
+      // The entry's own copy when it has some -- the warm-up squat is not
+      // the working-set squat -- and the movement's otherwise.
+      instructions:
+        entry.instructions.length > 0
+          ? entry.instructions
+          : entry.exercise.instructions,
+    }));
 
     return {
       warmup: buildWarmupChecklist(pool, dominantPattern),
