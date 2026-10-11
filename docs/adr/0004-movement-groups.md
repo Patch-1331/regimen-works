@@ -39,6 +39,8 @@ equivalence group removes the tension instead of managing it.
 program, freely interchangeable. Membership is a statement about role, not about
 difficulty. An athlete's stored choice is a movement, not a position.**
 
+> **Amended by [ADR-0007](0007-exercise-library.md):** a group is now a slot's identity and the key for the remembered choice, no longer the list of choices — the swap panel computes its options from the whole library.
+
 Concretely:
 
 1. **`progressionLine` becomes `movementGroup`.** Rejected: `equivalenceGroup`
