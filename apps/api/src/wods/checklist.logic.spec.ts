@@ -11,39 +11,43 @@ describe('buildChecklist', () => {
     name: 'Arm circles',
     pattern: 'push',
     phase: 'warmup',
-    instructions:
+    instructions: [
       'Arms out at shoulder height, small circles forward then back.',
+    ],
   };
   const legSwings: ExerciseForChecklist = {
     id: '2',
     name: 'Leg swings',
     pattern: 'hinge',
     phase: 'warmup',
-    instructions:
+    instructions: [
       'Hold a wall, swing one leg front to back, then side to side.',
+    ],
   };
   const jogging: ExerciseForChecklist = {
     id: '3',
     name: 'Light jogging in place',
     pattern: null,
     phase: 'warmup',
-    instructions: 'Easy jog on the spot, feet barely leaving the floor.',
+    instructions: ['Easy jog on the spot, feet barely leaving the floor.'],
   };
   const catCow: ExerciseForChecklist = {
     id: '4',
     name: 'Cat-cow',
     pattern: 'core',
     phase: 'cooldown',
-    instructions:
+    instructions: [
       'On hands and knees, alternate arching and rounding the spine.',
+    ],
   };
   const pushUp: ExerciseForChecklist = {
     id: '5',
     name: 'Push-up',
     pattern: 'push',
     phase: null, // regular pool exercise, not checklist content
-    instructions:
+    instructions: [
       'Plank position, lower until the chest grazes the floor, press back up.',
+    ],
   };
 
   const pool = [armCircles, legSwings, jogging, catCow, pushUp];

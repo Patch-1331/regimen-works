@@ -26,6 +26,7 @@ export type ExerciseDraft = {
   equipment: Equipment[];
   scalable: boolean;
   unit: ExerciseUnit;
+  /** One step per line, as the textarea holds them; see `toSteps`. */
   instructions: string;
   movementGroup: MovementGroup | "";
   sortOrder: string;
@@ -55,12 +56,24 @@ export function toDraft(exercise: ApiExercise): ExerciseDraft {
     equipment: exercise.equipment as Equipment[],
     scalable: exercise.scalable,
     unit: exercise.unit,
-    instructions: exercise.instructions ?? "",
+    instructions: exercise.instructions.join("\n"),
     movementGroup: (exercise.movementGroup ?? "") as MovementGroup | "",
     sortOrder: exercise.sortOrder === null ? "" : String(exercise.sortOrder),
     fallbackExerciseId: exercise.fallbackExerciseId ?? "",
     phase: (exercise.phase ?? "") as ExercisePhase | "",
   };
+}
+
+/**
+ * The textarea's lines as steps (DN-165): one per line, trimmed, blank lines
+ * dropped. The schema refuses a blank step, and a line left empty between two
+ * steps for breathing room is not a step anyone wrote.
+ */
+export function toSteps(text: string): string[] {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
 }
 
 /** The draft as the API takes it — "" back to null, `sortOrder` back to a number. */
@@ -71,8 +84,7 @@ export function toWriteBody(draft: ExerciseDraft): CreateExercise {
     equipment: draft.equipment,
     scalable: draft.scalable,
     unit: draft.unit,
-    instructions:
-      draft.instructions.trim() === "" ? null : draft.instructions.trim(),
+    instructions: toSteps(draft.instructions),
     movementGroup: draft.movementGroup === "" ? null : draft.movementGroup,
     sortOrder: draft.sortOrder === "" ? null : Number(draft.sortOrder),
     fallbackExerciseId: draft.fallbackExerciseId === "" ? null : draft.fallbackExerciseId,

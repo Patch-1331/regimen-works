@@ -7,6 +7,7 @@ import {
   substitutionReason,
   wodType,
 } from "./enums.js";
+import { instructionSteps } from "./exercise.js";
 
 /**
  * The exercise as a training screen is handed it: what it is, what it needs,
@@ -30,10 +31,10 @@ export const movementExerciseSchema = z.object({
   // bodyweight baseline, which is most of the pool.
   equipment: z.array(equipment),
   unit: exerciseUnit,
-  // How the movement is performed, in prose — carried on the movement so
+  // How the movement is performed, step by step — carried on the movement so
   // every screen that lists a WOD can offer it without a second request.
-  // Null on exercises added outside the seed.
-  instructions: z.string().nullable(),
+  // Empty on exercises nobody has written copy for.
+  instructions: instructionSteps,
   // Progression tracking (Feature #2) — null for movements in no group
   // (e.g. cardio). See MovementGroup for why this is finer-grained than
   // `pattern`.

@@ -118,6 +118,81 @@ export type ExerciseUnit = z.infer<typeof exerciseUnit>;
 export const exercisePhase = z.enum(["warmup", "cooldown"]);
 export type ExercisePhase = z.infer<typeof exercisePhase>;
 
+/*
+ * What an exercise is, in free-exercise-db's own vocabulary (DN-165,
+ * ADR-0007). The library is built from that dataset, and the matcher that
+ * finds an athlete a substitute reads these fields, so they describe
+ * exercises the way the dataset does rather than in words of our own.
+ *
+ * Spelled in this file's snake_case: the dataset writes "lower back" and
+ * "olympic weightlifting", and the import maps a space to an underscore.
+ */
+
+/**
+ * The muscles a movement works — the dataset's seventeen, all of them. An
+ * exercise lists its prime mover first among its primary muscles.
+ */
+export const muscle = z.enum([
+  "abdominals",
+  "abductors",
+  "adductors",
+  "biceps",
+  "calves",
+  "chest",
+  "forearms",
+  "glutes",
+  "hamstrings",
+  "lats",
+  "lower_back",
+  "middle_back",
+  "neck",
+  "quadriceps",
+  "shoulders",
+  "traps",
+  "triceps",
+]);
+export type Muscle = z.infer<typeof muscle>;
+
+/** Which way the movement moves the load. A hold is `static`. */
+export const exerciseForce = z.enum(["push", "pull", "static"]);
+export type ExerciseForce = z.infer<typeof exerciseForce>;
+
+/** Whether the movement works across several joints or one. */
+export const exerciseMechanic = z.enum(["compound", "isolation"]);
+export type ExerciseMechanic = z.infer<typeof exerciseMechanic>;
+
+/**
+ * How demanding the dataset says an exercise is. **A fact about the exercise,
+ * never the athlete** (ADR-0007, and ADR-0004's "no ability assessment"):
+ * nothing stores a level for a person, infers one from what they log, or
+ * compares a person with an exercise.
+ *
+ * It is read for one rule only: a swap the app makes on its own is never to a
+ * harder exercise. The athlete may always pick a harder one themselves.
+ *
+ * Not `SkillLevel`, which despite its name is the athlete's standing choice of
+ * movement in a group and holds no level of anything.
+ */
+export const exerciseLevel = z.enum(["beginner", "intermediate", "expert"]);
+export type ExerciseLevel = z.infer<typeof exerciseLevel>;
+
+/**
+ * The kind of training an exercise is. The matcher's category classes are
+ * built from these, so strength never becomes a stretch or a jump.
+ *
+ * The dataset's `strongman` is not a member: those exercises are left out of
+ * the library along with the kit they need (ADR-0007 decision 9).
+ */
+export const exerciseCategory = z.enum([
+  "strength",
+  "stretching",
+  "plyometrics",
+  "cardio",
+  "powerlifting",
+  "olympic_weightlifting",
+]);
+export type ExerciseCategory = z.infer<typeof exerciseCategory>;
+
 export const wodType = z.enum(["amrap", "for_time", "emom", "tabata"]);
 export type WodType = z.infer<typeof wodType>;
 

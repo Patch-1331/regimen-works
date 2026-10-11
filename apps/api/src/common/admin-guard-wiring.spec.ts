@@ -52,7 +52,7 @@ const BODY = {
   equipment: [],
   scalable: false,
   unit: 'reps',
-  instructions: null,
+  instructions: [],
   movementGroup: null,
   sortOrder: null,
   fallbackExerciseId: null,

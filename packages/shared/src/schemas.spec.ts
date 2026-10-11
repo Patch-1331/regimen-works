@@ -54,7 +54,7 @@ function exercise(overrides: Record<string, unknown> = {}) {
     pattern: "push",
     equipment: [],
     unit: "reps",
-    instructions: null,
+    instructions: [],
     movementGroup: "push_horizontal",
     sortOrder: 2,
     fallbackExerciseId: null,
@@ -828,11 +828,18 @@ describe("exerciseSchema", () => {
     equipment: [],
     scalable: true,
     unit: "reps",
-    instructions: null,
+    instructions: [],
     movementGroup: "push_horizontal",
     sortOrder: 2,
     fallbackExerciseId: null,
     phase: null,
+    key: null,
+    primaryMuscles: [],
+    secondaryMuscles: [],
+    force: null,
+    mechanic: null,
+    level: null,
+    category: null,
     ownerId: null,
     archivedAt: null,
     ...overrides,
@@ -871,6 +878,81 @@ describe("exerciseSchema", () => {
     ).toBe(true);
   });
 
+  it("carries what the dataset says about an exercise (DN-165)", () => {
+    const described = libraryExercise({
+      key: "Pushups",
+      instructions: [
+        "Lie on the floor face down, hands a little wider than your shoulders.",
+        "Push yourself up until your arms are straight.",
+      ],
+      primaryMuscles: ["chest"],
+      secondaryMuscles: ["shoulders", "triceps"],
+      force: "push",
+      mechanic: "compound",
+      level: "beginner",
+      category: "strength",
+    });
+    expect(exerciseSchema.safeParse(described).success).toBe(true);
+  });
+
+  it("accepts an exercise nobody has described, as athlete-owned ones are", () => {
+    // Empty muscles and null facts are the shape every athlete-owned row has.
+    // The matcher reads that as unmatchable; the schema only has to admit it.
+    expect(
+      exerciseSchema.safeParse(libraryExercise({ ownerId: "user_alice" })).success,
+    ).toBe(true);
+  });
+
+  it("rejects a muscle outside the dataset's vocabulary", () => {
+    expect(
+      exerciseSchema.safeParse(libraryExercise({ primaryMuscles: ["pecs"] })).success,
+    ).toBe(false);
+    // The dataset's own spelling is mapped on import, not accepted raw.
+    expect(
+      exerciseSchema.safeParse(libraryExercise({ primaryMuscles: ["lower back"] }))
+        .success,
+    ).toBe(false);
+  });
+
+  it("rejects a blank step, which a numbered list would print as a bare number", () => {
+    expect(
+      exerciseSchema.safeParse(libraryExercise({ instructions: ["Stand tall.", "  "] }))
+        .success,
+    ).toBe(false);
+  });
+
+  it("no longer takes instructions as prose", () => {
+    expect(
+      exerciseSchema.safeParse(libraryExercise({ instructions: "Stand tall." })).success,
+    ).toBe(false);
+    expect(
+      exerciseSchema.safeParse(libraryExercise({ instructions: null })).success,
+    ).toBe(false);
+  });
+
+  it("keeps the dataset's fields out of a write", () => {
+    // The import writes them; the editor does not (DN-165).
+    const written = createExerciseSchema.safeParse({
+      name: "Push-up",
+      pattern: "push",
+      equipment: [],
+      scalable: true,
+      unit: "reps",
+      instructions: [],
+      movementGroup: null,
+      sortOrder: null,
+      fallbackExerciseId: null,
+      phase: null,
+      key: "Pushups",
+      level: "beginner",
+      primaryMuscles: ["chest"],
+    });
+    expect(written.success).toBe(true);
+    expect(written.success && "key" in written.data).toBe(false);
+    expect(written.success && "level" in written.data).toBe(false);
+    expect(written.success && "primaryMuscles" in written.data).toBe(false);
+  });
+
   it("carries which tier the row is in and whether it is retired", () => {
     // Both nullable, and both meaningful when set (DN-93, DN-25): an owner id
     // marks the row as one athlete's own rather than shared, and a timestamp
@@ -893,7 +975,7 @@ describe("exerciseSchema", () => {
       equipment: [],
       scalable: true,
       unit: "reps",
-      instructions: null,
+      instructions: [],
       movementGroup: null,
       sortOrder: null,
       fallbackExerciseId: null,
@@ -1025,7 +1107,7 @@ describe("todayResponseSchema", () => {
       session: null,
     },
     warmupCooldownEnabled: true,
-    warmup: [{ id: "c-1", name: "Arm circles", instructions: null }],
+    warmup: [{ id: "c-1", name: "Arm circles", instructions: [] }],
     cooldown: [],
     plan: null,
     completedProgram: null,

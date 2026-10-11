@@ -1,5 +1,10 @@
 import type {
   AdvanceInterval,
+  ExerciseCategory,
+  ExerciseForce,
+  ExerciseLevel,
+  ExerciseMechanic,
+  Muscle,
   CreateExercise,
   EditSetLogs,
   UpdateExercise,
@@ -147,7 +152,9 @@ function patchJson<T>(path: string, body: unknown) {
  * shared type wholesale is a refactor of that logic, not of this type. What
  * changed for DN-28 is that the fields the shared schema grew — `ownerId`,
  * `archivedAt`, `instructions`, `phase`, `fallbackExerciseId` — stopped being
- * missing here, because the library page needs all five.
+ * missing here, because the library page needs all five. DN-165 added the
+ * dataset's description of the exercise the same way: the swap panel (DN-170)
+ * and the library page (DN-171) both read it.
  */
 export type ApiExercise = {
   id: string;
@@ -156,11 +163,21 @@ export type ApiExercise = {
   equipment: string[];
   scalable: boolean;
   unit: "reps" | "seconds";
-  instructions: string | null;
+  /** Numbered steps; empty where the exercise has no written copy. */
+  instructions: string[];
   movementGroup: string | null;
   sortOrder: number | null;
   fallbackExerciseId: string | null;
   phase: string | null;
+  /** The dataset's id for a global exercise; always null on the athlete's own. */
+  key: string | null;
+  primaryMuscles: Muscle[];
+  secondaryMuscles: Muscle[];
+  force: ExerciseForce | null;
+  mechanic: ExerciseMechanic | null;
+  /** How demanding the exercise is — never a statement about the athlete. */
+  level: ExerciseLevel | null;
+  category: ExerciseCategory | null;
   /** Null for global library content, set for the reading athlete's own. */
   ownerId: string | null;
   /** When it was retired, or null while it is live. */

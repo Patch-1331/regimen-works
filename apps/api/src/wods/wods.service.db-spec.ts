@@ -134,7 +134,7 @@ describe('WodsService.getChecklists', () => {
     // beyond the name -- an omission here reads as a checklist of bare titles.
     const stored = await createPhaseExercise('warmup', {
       name: 'Arm circles',
-      instructions: 'Ten each way, slowly.',
+      instructions: ['Ten each way, slowly.'],
     });
 
     const [move] = (await service().getChecklists(ANY_ATHLETE, 'push')).warmup;
@@ -144,7 +144,7 @@ describe('WodsService.getChecklists', () => {
       name: 'Arm circles',
       pattern: 'push',
       phase: 'warmup',
-      instructions: 'Ten each way, slowly.',
+      instructions: ['Ten each way, slowly.'],
     });
   });
 

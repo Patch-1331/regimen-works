@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { InstructionsCaret, InstructionsPanel } from "../components/MovementInstructions";
+import { hasInstructions } from "../lib/instructions";
 
 export function CooldownPage() {
   const { assignmentId = "" } = useParams();
@@ -93,7 +94,7 @@ export function CooldownPage() {
                       {item.name.toUpperCase()}
                     </span>
                   </button>
-                  {item.instructions && (
+                  {hasInstructions(item.instructions) && (
                     <button
                       onClick={() => setOpenItemId(isOpen ? null : item.id)}
                       aria-expanded={isOpen}
@@ -105,8 +106,8 @@ export function CooldownPage() {
                     </button>
                   )}
                 </div>
-                {isOpen && item.instructions && (
-                  <InstructionsPanel id={panelId} text={item.instructions} />
+                {isOpen && hasInstructions(item.instructions) && (
+                  <InstructionsPanel id={panelId} steps={item.instructions} />
                 )}
               </div>
             );

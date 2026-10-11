@@ -29,7 +29,7 @@ function body(overrides: Partial<CreateExercise> = {}): CreateExercise {
     equipment: [],
     scalable: false,
     unit: 'reps',
-    instructions: null,
+    instructions: [],
     movementGroup: null,
     sortOrder: null,
     fallbackExerciseId: null,
@@ -161,7 +161,7 @@ describe('what a patch means', () => {
     const hers = await exercises().create(
       { ownerId: alice.id },
       body({
-        instructions: 'Chest to the bar.',
+        instructions: ['Chest to the bar.'],
         phase: 'warmup',
         movementGroup: 'pull',
         sortOrder: 1,
@@ -172,19 +172,21 @@ describe('what a patch means', () => {
       scalable: true,
     });
 
-    expect(updated.instructions).toBe('Chest to the bar.');
+    expect(updated.instructions).toEqual(['Chest to the bar.']);
     expect(updated.phase).toBe('warmup');
     expect(updated.movementGroup).toBe('pull');
     expect(updated.sortOrder).toBe(1);
     expect(updated.pattern).toBe('pull');
   });
 
+  // Instructions are a list (DN-165), so clearing them is the empty list
+  // rather than null; the other fields here still clear with null.
   it('clears what it explicitly nulls', async () => {
     const alice = await createUser();
     const hers = await exercises().create(
       { ownerId: alice.id },
       body({
-        instructions: 'Chest to the bar.',
+        instructions: ['Chest to the bar.'],
         phase: 'warmup',
         movementGroup: 'pull',
         sortOrder: 1,
@@ -192,14 +194,14 @@ describe('what a patch means', () => {
     );
 
     const updated = await exercises().update({ ownerId: alice.id }, hers.id, {
-      instructions: null,
+      instructions: [],
       phase: null,
       pattern: null,
       movementGroup: null,
       sortOrder: null,
     });
 
-    expect(updated.instructions).toBeNull();
+    expect(updated.instructions).toEqual([]);
     expect(updated.phase).toBeNull();
     expect(updated.pattern).toBeNull();
     expect(updated.movementGroup).toBeNull();
@@ -239,7 +241,7 @@ describe('what a patch means', () => {
       equipment: ['dumbbell'],
       scalable: true,
       unit: 'seconds',
-      instructions: 'Elbows inside the knees.',
+      instructions: ['Elbows inside the knees.', 'Sit between your heels.'],
       movementGroup: 'squat',
       sortOrder: 3,
       fallbackExerciseId: fallback.id,

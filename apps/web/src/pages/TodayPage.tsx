@@ -11,10 +11,8 @@ import {
 } from "@regimen-works/shared";
 import { api } from "../lib/api";
 import { DigitReadout } from "../components/DigitReadout";
-import {
-  InstructionsCaret,
-  InstructionsPanel,
-} from "../components/MovementInstructions";
+import { InstructionsCaret, InstructionsPanel } from "../components/MovementInstructions";
+import { hasInstructions } from "../lib/instructions";
 import { SwapButton, SwapPanel } from "../components/MovementSwap";
 import { buildSwapOptions } from "../lib/swapOptions";
 
@@ -259,8 +257,8 @@ export function TodayPage() {
                       />
                     )}
                   </div>
-                  {isOpen && instructions && (
-                    <InstructionsPanel id={panelId} text={instructions} />
+                  {isOpen && hasInstructions(instructions) && (
+                    <InstructionsPanel id={panelId} steps={instructions} />
                   )}
                   {isSwapOpen && (
                     <SwapPanel
@@ -492,7 +490,7 @@ export function TodayPage() {
                       as it was. A movement with no copy is still an inert
                       label — but the row it sits in is no longer inert, so
                       the two halves are separate controls rather than one. */}
-                  {instructions ? (
+                  {hasInstructions(instructions) ? (
                     <button
                       type="button"
                       onClick={() => {
@@ -543,8 +541,8 @@ export function TodayPage() {
                     />
                   )}
                 </div>
-                {isOpen && instructions && (
-                  <InstructionsPanel id={panelId} text={instructions} />
+                {isOpen && hasInstructions(instructions) && (
+                  <InstructionsPanel id={panelId} steps={instructions} />
                 )}
                 {isSwapOpen && (
                   <SwapPanel
@@ -642,7 +640,7 @@ function PrescribedName({
   movement,
   onToggle,
 }: {
-  instructions: string | null;
+  instructions: readonly string[];
   isOpen: boolean;
   panelId: string;
   movement: PrescribedMovement;
@@ -699,7 +697,7 @@ function PrescribedName({
     </span>
   );
 
-  if (!instructions) {
+  if (!hasInstructions(instructions)) {
     return (
       <div className="flex min-w-0 flex-1 items-center justify-between gap-3 py-3 pl-4">
         <span className="flex min-w-0 items-center gap-2">

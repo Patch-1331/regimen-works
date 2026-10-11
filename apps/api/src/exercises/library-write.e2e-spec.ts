@@ -80,7 +80,7 @@ function body(overrides: Record<string, unknown> = {}) {
     equipment: [],
     scalable: false,
     unit: 'reps',
-    instructions: null,
+    instructions: [],
     movementGroup: null,
     sortOrder: null,
     fallbackExerciseId: null,

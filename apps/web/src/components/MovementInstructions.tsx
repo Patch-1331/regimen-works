@@ -9,11 +9,36 @@ import { useEffect } from "react";
  * owns its row and its open/closed state; these just keep the caret and the
  * prose looking the same wherever they land.
  *
- * Two shapes, chosen by what the screen can afford. Off the clock the prose
- * expands in place (`InstructionsPanel`). On a live timer nothing may move —
+ * Two shapes, chosen by what the screen can afford. Off the clock the steps
+ * expand in place (`InstructionsPanel`). On a live timer nothing may move —
  * the round button has to stay exactly where the thumb last found it — so
- * the same prose arrives as an overlay instead (`InstructionsPeek`).
+ * the same steps arrive as an overlay instead (`InstructionsPeek`).
  */
+
+
+/**
+ * The steps themselves, in whichever frame holds them. One step is a
+ * paragraph, because a numbered list of one reads as a list with the rest
+ * missing — and every row from before the import is exactly one step, its
+ * old prose whole. Two or more are numbered, in the dataset's order.
+ */
+function Steps({ steps, className }: { steps: readonly string[]; className: string }) {
+  const style = { borderColor: "var(--glow-dim)", color: "var(--ink-soft)" };
+  if (steps.length === 1) {
+    return (
+      <p className={className} style={style}>
+        {steps[0]}
+      </p>
+    );
+  }
+  return (
+    <ol className={`${className} list-inside list-decimal space-y-1.5`} style={style}>
+      {steps.map((step, i) => (
+        <li key={i}>{step}</li>
+      ))}
+    </ol>
+  );
+}
 
 /** Caret for a row that can expand — points right when closed, down when open. */
 export function InstructionsCaret({ open }: { open: boolean }) {
@@ -40,29 +65,24 @@ export function InstructionsCaret({ open }: { open: boolean }) {
 }
 
 /**
- * The prose itself. Rendered only when a row is open, and only ever for a
- * movement that has copy — a null `instructions` means the row doesn't
- * expand at all rather than opening onto an empty panel.
+ * The steps, in place. Rendered only when a row is open, and only ever for a
+ * movement that has copy — no steps means the row doesn't expand at all
+ * rather than opening onto an empty panel.
  */
-export function InstructionsPanel({ id, text }: { id: string; text: string }) {
+export function InstructionsPanel({ id, steps }: { id: string; steps: readonly string[] }) {
   return (
     <div
       id={id}
       className="px-4 pb-3.5 pt-0.5"
       style={{ background: "var(--panel-2)" }}
     >
-      <p
-        className="border-l-2 pl-3 text-[13px] leading-relaxed"
-        style={{ borderColor: "var(--glow-dim)", color: "var(--ink-soft)" }}
-      >
-        {text}
-      </p>
+      <Steps steps={steps} className="border-l-2 pl-3 text-[13px] leading-relaxed" />
     </div>
   );
 }
 
 /**
- * The live-timer form: the same prose over the top of the screen instead of
+ * The live-timer form: the same steps over the top of the screen instead of
  * inside it, so a mid-workout read costs no layout shift — the clock, the
  * round count and the round button are all exactly where they were when it
  * closes.
@@ -76,7 +96,7 @@ export function InstructionsPanel({ id, text }: { id: string; text: string }) {
  */
 export function InstructionsPeek({
   name,
-  text,
+  steps,
   onDismiss,
   // Default suits the case this exists for — a clock already running, where
   // saying so is half the reassurance. The interval screen overrides it
@@ -84,7 +104,7 @@ export function InstructionsPeek({
   dismissLabel = "BACK TO THE CLOCK",
 }: {
   name: string;
-  text: string;
+  steps: readonly string[];
   onDismiss: () => void;
   dismissLabel?: string;
 }) {
@@ -124,12 +144,7 @@ export function InstructionsPeek({
         >
           {name}
         </h2>
-        <p
-          className="mt-3 border-l-2 pl-3 text-sm leading-relaxed"
-          style={{ borderColor: "var(--glow-dim)", color: "var(--ink-soft)" }}
-        >
-          {text}
-        </p>
+        <Steps steps={steps} className="mt-3 border-l-2 pl-3 text-sm leading-relaxed" />
         <button
           onClick={onDismiss}
           className="mt-5 w-full py-3.5 text-xs font-bold tracking-[0.14em]"

@@ -1,5 +1,5 @@
 import { movementGroup } from '@regimen-works/shared';
-import { exercises } from '../../prisma/exercise-seed';
+import { exercises, seedSteps } from '../../prisma/exercise-seed';
 import { SCHEMA_WORDS } from './exercise-draft';
 import {
   mismatchedSubstituteUnits,
@@ -111,11 +111,15 @@ describe('the seeded exercise library', () => {
       // rename was safe across identifiers and unsafe across prose. That will
       // be true of the next domain word too; this is the check that survives
       // it.
+      // Over every step as stored (DN-165), not over the seed's prose: the
+      // check has to read what the athlete is shown.
       const offenders = exercises
         .flatMap((e) =>
-          schemaWords
-            .filter((word) => e.instructions.includes(word))
-            .map((word) => `${e.name}: "${word}"`),
+          seedSteps(e).flatMap((step, i) =>
+            schemaWords
+              .filter((word) => step.includes(word))
+              .map((word) => `${e.name} step ${i + 1}: "${word}"`),
+          ),
         )
         .sort();
 

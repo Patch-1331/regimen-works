@@ -15,6 +15,7 @@ import { elapsedSecondsSince, formatClock } from "../../lib/clock";
 import { roundCompleteCue, capReachedCue } from "../../lib/cues";
 import { MinusIcon, PlusIcon } from "../../components/StepperIcons";
 import { InstructionsCaret, InstructionsPeek } from "../../components/MovementInstructions";
+import { hasInstructions } from "../../lib/instructions";
 import { useNow } from "./useWorkoutSession";
 import { WorkoutChrome } from "./WorkoutChrome";
 
@@ -328,12 +329,12 @@ export function RoundTapWorkout({
                   {/* Trailing rather than leading: the count is what the eye
                       comes here for mid-round, and nothing should sit between
                       the name and it. */}
-                  {m.exercise.instructions ? <InstructionsCaret open={false} /> : <span aria-hidden="true" style={{ width: 12 }} />}
+                  {hasInstructions(m.exercise.instructions) ? <InstructionsCaret open={false} /> : <span aria-hidden="true" style={{ width: 12 }} />}
                 </span>
               </>
             );
 
-            return m.exercise.instructions ? (
+            return hasInstructions(m.exercise.instructions) ? (
               <button
                 key={m.id}
                 onClick={() => setPeekMovementId(m.id)}
@@ -405,10 +406,10 @@ export function RoundTapWorkout({
         </div>
       </div>
 
-      {peekMovement?.exercise.instructions && (
+      {peekMovement && hasInstructions(peekMovement.exercise.instructions) && (
         <InstructionsPeek
           name={peekMovement.exercise.name}
-          text={peekMovement.exercise.instructions}
+          steps={peekMovement.exercise.instructions}
           onDismiss={() => setPeekMovementId(null)}
         />
       )}
