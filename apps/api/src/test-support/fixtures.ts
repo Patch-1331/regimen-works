@@ -35,6 +35,20 @@ export async function createExercise(overrides: Record<string, unknown> = {}) {
 }
 
 /**
+ * A warm-up or cool-down entry pointing at `exerciseId` (DN-172). Global
+ * unless `ownerId` says otherwise, like the library it points into.
+ */
+export async function createChecklistEntry(
+  exerciseId: string,
+  kind: 'warmup' | 'cooldown',
+  overrides: Record<string, unknown> = {},
+) {
+  return testPrisma().checklistEntry.create({
+    data: { exerciseId, kind, pattern: 'push', ...overrides },
+  });
+}
+
+/**
  * A WOD with one movement on it. Pass `movements` to shape them yourself;
  * anything nested is created in one call so a test never has to order the
  * writes itself.

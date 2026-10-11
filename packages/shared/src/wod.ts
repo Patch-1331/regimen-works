@@ -13,8 +13,8 @@ import { instructionSteps } from "./exercise.js";
  * The exercise as a training screen is handed it: what it is, what it needs,
  * and which group it belongs to.
  *
- * Narrower than `exerciseSchema` on purpose -- no `ownerId`, no `archivedAt`,
- * no `phase`. Those answer questions the library management screen asks, and
+ * Narrower than `exerciseSchema` on purpose -- no `ownerId`, no `archivedAt`.
+ * Those answer questions the library management screen asks, and
  * a plate that carried them would invite a client to make training decisions
  * out of library bookkeeping.
  *

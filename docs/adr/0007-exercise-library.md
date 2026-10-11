@@ -259,6 +259,7 @@ nothing an athlete has: every reference is by primary key.
 - **The matcher's numbers** — weights, category classes, the minimum score. DN-169.
 - **The exact pairing.** Whether any of the 49 does have a dataset twin after all,
   and whether near-duplicates (Air squat beside "Bodyweight Squats") merge. DN-167,
-  with the project owner's review.
+  with the project owner's review. (That pair has been settled: they merged, and
+  the warm-up became an entry pointing at Air squat. ADR-0008, DN-172.)
 - **Re-admitting the specialist kit.** Decision 9 makes it cheap; nothing here
   schedules it.

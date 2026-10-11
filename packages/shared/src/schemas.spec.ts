@@ -832,7 +832,6 @@ describe("exerciseSchema", () => {
     movementGroup: "push_horizontal",
     sortOrder: 2,
     fallbackExerciseId: null,
-    phase: null,
     key: null,
     primaryMuscles: [],
     secondaryMuscles: [],
@@ -849,12 +848,32 @@ describe("exerciseSchema", () => {
     expect(exerciseSchema.safeParse(libraryExercise()).success).toBe(true);
   });
 
-  it("accepts a null pattern, which warm-up filler has", () => {
+  it("accepts a null pattern, which a movement like deep breathing has", () => {
     expect(
       exerciseSchema.safeParse(
-        libraryExercise({ pattern: null, phase: "warmup" }),
+        libraryExercise({ name: "Deep breathing", pattern: null }),
       ).success,
     ).toBe(true);
+  });
+
+  it("drops a checklist phase from a write rather than storing it", () => {
+    // Which checklist a movement is on belongs to the entry that puts it
+    // there, not to the exercise (DN-172). An old client still sending the
+    // field must not be able to write it back somewhere.
+    const written = createExerciseSchema.safeParse({
+      name: "Arm circles",
+      pattern: "push",
+      equipment: [],
+      scalable: false,
+      unit: "reps",
+      instructions: [],
+      movementGroup: null,
+      sortOrder: null,
+      fallbackExerciseId: null,
+      phase: "warmup",
+    });
+    expect(written.success).toBe(true);
+    expect(written.success && "phase" in written.data).toBe(false);
   });
 
   it("accepts an exercise with no movementGroup or sort order", () => {
@@ -942,7 +961,6 @@ describe("exerciseSchema", () => {
       movementGroup: null,
       sortOrder: null,
       fallbackExerciseId: null,
-      phase: null,
       key: "Pushups",
       level: "beginner",
       primaryMuscles: ["chest"],
@@ -979,7 +997,6 @@ describe("exerciseSchema", () => {
       movementGroup: null,
       sortOrder: null,
       fallbackExerciseId: null,
-      phase: null,
       ownerId: null,
     });
     expect(written.success).toBe(true);

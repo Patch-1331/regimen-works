@@ -1,4 +1,9 @@
-import { movementGroup } from '@regimen-works/shared';
+import {
+  checklistKind,
+  movementGroup,
+  movementPattern,
+} from '@regimen-works/shared';
+import { checklistEntries, entrySteps } from '../../prisma/checklist-seed';
 import { exercises, seedSteps } from '../../prisma/exercise-seed';
 import { SCHEMA_WORDS } from './exercise-draft';
 import {
@@ -119,6 +124,22 @@ describe('the seeded exercise library', () => {
             schemaWords
               .filter((word) => step.includes(word))
               .map((word) => `${e.name} step ${i + 1}: "${word}"`),
+          ),
+        )
+        .sort();
+
+      expect(offenders).toEqual([]);
+    });
+
+    it('nor in the copy a checklist entry carries of its own', () => {
+      // The warm-up squat's copy is shown in place of Air squat's (DN-172),
+      // so it is prose the athlete reads like any other.
+      const offenders = checklistEntries
+        .flatMap((c) =>
+          entrySteps(c).flatMap((step) =>
+            schemaWords
+              .filter((word) => step.includes(word))
+              .map((word) => `${c.kind} ${c.exercise}: "${word}"`),
           ),
         )
         .sort();
@@ -326,6 +347,55 @@ describe('the seeded exercise library', () => {
       const carries = exercises.filter((e) => e.name.endsWith('carry'));
       expect(carries).toHaveLength(2);
       expect(carries.every((e) => e.unit === 'seconds')).toBe(true);
+    });
+  });
+
+  describe('the warm-up and cool-down lists (DN-172)', () => {
+    const names = new Set(exercises.map((e) => e.name));
+
+    it('points every entry at a movement the library seeds', () => {
+      // The seed throws on one it cannot find; this says so before a deploy.
+      expect(checklistEntries.filter((c) => !names.has(c.exercise))).toEqual(
+        [],
+      );
+    });
+
+    it('puts a movement on each checklist at most once', () => {
+      const keys = checklistEntries.map((c) => `${c.kind} ${c.exercise}`);
+      expect(keys.filter((k, i) => keys.indexOf(k) !== i)).toEqual([]);
+    });
+
+    it('speaks only the checklist and pattern words the app knows', () => {
+      for (const c of checklistEntries) {
+        expect(checklistKind.options).toContain(c.kind);
+        if (c.pattern !== null) {
+          expect(movementPattern.options).toContain(c.pattern);
+        }
+      }
+    });
+
+    it('warms up with the squat the squat group prescribes, not a twin of it', () => {
+      // The row that forced the change: one movement, two rows, because a
+      // row could be checklist content or a workout movement but not both.
+      expect(names.has('Bodyweight squats')).toBe(false);
+      expect(exercises.find((e) => e.name === 'Air squat')?.movementGroup).toBe(
+        'squat',
+      );
+      expect(
+        checklistEntries.find(
+          (c) => c.exercise === 'Air squat' && c.kind === 'warmup',
+        )?.instructions,
+      ).toMatch(/not a set to work at/);
+    });
+
+    it('gives both checklists a filler for a day nothing else matches', () => {
+      // A cardio day matches no entry; the filler is all it gets.
+      for (const kind of checklistKind.options) {
+        const filler = checklistEntries.some(
+          (c) => c.kind === kind && c.pattern === null,
+        );
+        expect([kind, filler]).toEqual([kind, true]);
+      }
     });
   });
 });

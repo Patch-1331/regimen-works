@@ -377,7 +377,6 @@ export function apiExercise(overrides: Partial<ApiExercise> = {}): ApiExercise {
     sortOrder: 2,
     instructions: [],
     fallbackExerciseId: null,
-    phase: null,
     key: null,
     primaryMuscles: [],
     secondaryMuscles: [],

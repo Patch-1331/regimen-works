@@ -1,6 +1,11 @@
 import type { PrismaService } from '../prisma/prisma.service';
 import { testPrisma } from '../test-support/database';
-import { createExercise, createWod } from '../test-support/fixtures';
+import {
+  createChecklistEntry,
+  createExercise,
+  createUser,
+  createWod,
+} from '../test-support/fixtures';
 import { WodsService } from './wods.service';
 
 /**
@@ -16,12 +21,18 @@ function service(): WodsService {
   return new WodsService(testPrisma() as unknown as PrismaService);
 }
 
-/** A phase-tagged exercise: the pool `getChecklists` draws from. */
-function createPhaseExercise(
-  phase: string,
-  overrides: Record<string, unknown> = {},
+/**
+ * An exercise on one checklist: the pool `getChecklists` draws from. The
+ * entry serves the exercise's own pattern unless `entry` says otherwise.
+ */
+async function createOnChecklist(
+  kind: 'warmup' | 'cooldown',
+  exercise: Record<string, unknown> = {},
+  entry: Record<string, unknown> = {},
 ) {
-  return createExercise({ phase, ...overrides });
+  const row = await createExercise(exercise);
+  await createChecklistEntry(row.id, kind, { pattern: row.pattern, ...entry });
+  return row;
 }
 
 /**
@@ -93,9 +104,9 @@ describe('WodsService.findAll', () => {
 });
 
 describe('WodsService.getChecklists', () => {
-  it('splits the pool by phase', async () => {
-    await createPhaseExercise('warmup', { name: 'Arm circles' });
-    await createPhaseExercise('cooldown', { name: 'Couch stretch' });
+  it('splits the entries by checklist', async () => {
+    await createOnChecklist('warmup', { name: 'Arm circles' });
+    await createOnChecklist('cooldown', { name: 'Couch stretch' });
 
     const { warmup, cooldown } = await service().getChecklists(
       ANY_ATHLETE,
@@ -106,18 +117,11 @@ describe('WodsService.getChecklists', () => {
     expect(cooldown.map((e) => e.name)).toEqual(['Couch stretch']);
   });
 
-  it('never offers an untagged exercise', async () => {
-    // Every movement in the library is an untagged row, so this is the
-    // property that keeps thrusters out of the warm-up.
-    //
-    // Guarded twice, and this test cannot tell which guard did it: the
-    // service's `phase: { not: null }` narrows the query, and
-    // `buildChecklist` filters by phase again on the way out. Deleting the
-    // `where` leaves the answer identical and this test green -- it is there
-    // to stop the library being fetched, not to change the result. The
-    // contract is worth asserting either way.
+  it('never offers an exercise no entry points at', async () => {
+    // Every movement in the library is such a row, so this is the property
+    // that keeps thrusters out of the warm-up.
     await createExercise({ name: 'Thruster' });
-    await createPhaseExercise('warmup', { name: 'Arm circles' });
+    await createOnChecklist('warmup', { name: 'Arm circles' });
 
     const { warmup, cooldown } = await service().getChecklists(
       ANY_ATHLETE,
@@ -129,10 +133,10 @@ describe('WodsService.getChecklists', () => {
     ]);
   });
 
-  it('brings the instructions along', async () => {
-    // Part of the `select`, and the one column the checklist screens render
-    // beyond the name -- an omission here reads as a checklist of bare titles.
-    const stored = await createPhaseExercise('warmup', {
+  it("brings the exercise's instructions along when the entry has none", async () => {
+    // The one thing the checklist screens render beyond the name -- an
+    // omission here reads as a checklist of bare titles.
+    const stored = await createOnChecklist('warmup', {
       name: 'Arm circles',
       instructions: ['Ten each way, slowly.'],
     });
@@ -143,16 +147,65 @@ describe('WodsService.getChecklists', () => {
       id: stored.id,
       name: 'Arm circles',
       pattern: 'push',
-      phase: 'warmup',
+      kind: 'warmup',
       instructions: ['Ten each way, slowly.'],
     });
   });
 
+  it("shows the entry's own instructions over the exercise's", async () => {
+    // The warm-up squat is not the working-set squat: same movement, asked
+    // for differently, and the workout keeps its own copy.
+    const squat = await createExercise({
+      name: 'Air squat',
+      pattern: 'squat',
+      instructions: ['Hip crease below the knee, then stand all the way up.'],
+    });
+    await createChecklistEntry(squat.id, 'warmup', {
+      pattern: 'squat',
+      instructions: ['Easy reps, a little deeper each time.'],
+    });
+
+    const [move] = (await service().getChecklists(ANY_ATHLETE, 'squat')).warmup;
+
+    expect(move.id).toBe(squat.id);
+    expect(move.instructions).toEqual([
+      'Easy reps, a little deeper each time.',
+    ]);
+  });
+
+  it('puts one exercise on a checklist and in a workout at once', async () => {
+    // What `Exercise.phase` could not say, and why it went (DN-172).
+    const squat = await createExercise({ name: 'Air squat', pattern: 'squat' });
+    await createChecklistEntry(squat.id, 'warmup', { pattern: 'squat' });
+    await createWod({
+      name: 'Squat day',
+      movements: [{ exerciseId: squat.id, reps: 50, order: 0 }],
+    });
+
+    const [wod] = await service().findAll(ANY_ATHLETE);
+    const { warmup } = await service().getChecklists(ANY_ATHLETE, 'squat');
+
+    expect(wod.movements[0].exercise.id).toBe(squat.id);
+    expect(warmup.map((e) => e.id)).toEqual([squat.id]);
+  });
+
+  it("matches the day on the entry's pattern, not the exercise's", async () => {
+    // Inchworms are filed as core but warm up a pull day just as well; the
+    // entry is what says which day it is chosen for.
+    await createOnChecklist(
+      'warmup',
+      { name: 'Inchworms', pattern: 'core' },
+      { pattern: 'pull' },
+    );
+
+    const { warmup } = await service().getChecklists(ANY_ATHLETE, 'pull');
+
+    expect(warmup.map((e) => e.name)).toEqual(['Inchworms']);
+  });
+
   it("offers the moves that match the day's pattern before the generic ones", async () => {
-    // The handoff to checklist.logic: the query is unordered, so this is the
-    // service actually passing dominantPattern through rather than dropping it.
-    await createPhaseExercise('warmup', { name: 'Generic', pattern: null });
-    await createPhaseExercise('warmup', {
+    await createOnChecklist('warmup', { name: 'Generic', pattern: null });
+    await createOnChecklist('warmup', {
       name: 'Pull specific',
       pattern: 'pull',
     });
@@ -162,7 +215,61 @@ describe('WodsService.getChecklists', () => {
     expect(warmup.map((e) => e.name)).toEqual(['Pull specific', 'Generic']);
   });
 
-  it('answers with empty lists when nothing is tagged', async () => {
+  it('keeps the order the entries were written in', async () => {
+    // The query is ordered, so the list reads the same on every load rather
+    // than in whatever order the table happens to return.
+    for (const name of ['Jog', 'Skip', 'Shuffle']) {
+      await createOnChecklist('warmup', { name, pattern: null });
+    }
+
+    const { warmup } = await service().getChecklists(ANY_ATHLETE, 'push');
+
+    expect(warmup.map((e) => e.name)).toEqual(['Jog', 'Skip', 'Shuffle']);
+  });
+
+  it('drops a retired exercise without anyone editing the list', async () => {
+    await createOnChecklist('warmup', {
+      name: 'Retired',
+      archivedAt: new Date(),
+    });
+
+    expect((await service().getChecklists(ANY_ATHLETE, 'push')).warmup).toEqual(
+      [],
+    );
+  });
+
+  it("shows an athlete their own entries and nobody else's", async () => {
+    const alice = await createUser();
+    const bob = await createUser();
+    await createOnChecklist(
+      'warmup',
+      { name: 'Band pull-aparts', ownerId: alice.id },
+      { ownerId: alice.id },
+    );
+
+    const forAlice = await service().getChecklists(alice.id, 'push');
+    const forBob = await service().getChecklists(bob.id, 'push');
+
+    expect(forAlice.warmup.map((e) => e.name)).toEqual(['Band pull-aparts']);
+    expect(forBob.warmup).toEqual([]);
+  });
+
+  it('never resolves a global entry to an exercise the athlete cannot see', async () => {
+    // Belt and braces: nothing writes such an entry today, but the read is
+    // scoped on both rows so that a bad one cannot hand out someone's own
+    // movement.
+    const alice = await createUser();
+    const bob = await createUser();
+    const hers = await createExercise({
+      name: 'Her move',
+      ownerId: alice.id,
+    });
+    await createChecklistEntry(hers.id, 'warmup');
+
+    expect((await service().getChecklists(bob.id, 'push')).warmup).toEqual([]);
+  });
+
+  it('answers with empty lists when nothing is on either checklist', async () => {
     expect(await service().getChecklists(ANY_ATHLETE, 'push')).toEqual({
       warmup: [],
       cooldown: [],

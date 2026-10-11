@@ -85,7 +85,6 @@ describe('Exercise.key', () => {
         movementGroup: null,
         sortOrder: null,
         fallbackExerciseId: null,
-        phase: null,
       },
     );
 

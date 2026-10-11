@@ -9,6 +9,7 @@ import {
   assertSubstitutesReachable,
   assertSubstituteUnitsMatch,
 } from '../src/seed/substitute-guard';
+import { checklistEntries, entrySteps } from './checklist-seed';
 import { exercises, seedSteps } from './exercise-seed';
 import { wods, type WodMovementSeed, type WodSeed } from './wod-seed';
 
@@ -79,7 +80,6 @@ async function main() {
       movementGroup: e.movementGroup ?? null,
       sortOrder: e.sortOrder ?? null,
       isGroupDefault: e.isGroupDefault ?? false,
-      phase: e.phase ?? null,
       instructions: seedSteps(e),
       // Re-seeding a retired movement brings it back (DN-25). The lookup
       // below deliberately does not filter on `archivedAt`: archiving does
@@ -125,6 +125,33 @@ async function main() {
       where: { id: idByName.get(e.name)! },
       data: { fallbackExerciseId: fallbackId },
     });
+  }
+
+  console.log('Seeding warm-up and cool-down lists...');
+  for (const c of checklistEntries) {
+    const exerciseId = idByName.get(c.exercise);
+    if (!exerciseId)
+      throw new Error(
+        `Unknown exercise "${c.exercise}" on the ${c.kind} checklist`,
+      );
+    const fields = { pattern: c.pattern, instructions: entrySteps(c) };
+
+    // Found by hand for the reason the exercise loop is (DN-93): the global
+    // tier's uniqueness is a partial index Prisma cannot name in a `where`.
+    const existing = await prisma.checklistEntry.findFirst({
+      where: { ...GLOBAL_LIBRARY, exerciseId, kind: c.kind },
+      select: { id: true },
+    });
+    if (existing) {
+      await prisma.checklistEntry.update({
+        where: { id: existing.id },
+        data: fields,
+      });
+    } else {
+      await prisma.checklistEntry.create({
+        data: { exerciseId, kind: c.kind, ...fields },
+      });
+    }
   }
 
   console.log('Seeding WOD library...');
@@ -194,7 +221,7 @@ async function main() {
   // exercised again. An athlete who never signs in again gets no enrollment
   // and needs none, having no Today to render.
   console.log(
-    `Done: ${exercises.length} exercises, ${wods.length} WODs, 1 program.`,
+    `Done: ${exercises.length} exercises, ${checklistEntries.length} checklist entries, ${wods.length} WODs, 1 program.`,
   );
 }
 

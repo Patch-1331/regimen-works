@@ -4,6 +4,7 @@ import type { PrismaService } from '../prisma/prisma.service';
 import { testPrisma } from '../test-support/database';
 import {
   createAssignment,
+  createChecklistEntry,
   createEnrollment,
   createExercise,
   createPlan,
@@ -535,20 +536,20 @@ describe('SchedulerService.getToday', () => {
       where: { userId: user.id },
       data: { warmupCooldownEnabled: true },
     });
-    await createExercise({
+    const armCircles = await createExercise({
       name: 'Arm circles',
       pattern: 'pull',
-      phase: 'warmup',
       movementGroup: null,
       sortOrder: null,
     });
-    await createExercise({
+    await createChecklistEntry(armCircles.id, 'warmup', { pattern: 'pull' });
+    const latStretch = await createExercise({
       name: 'Lat stretch',
       pattern: 'pull',
-      phase: 'cooldown',
       movementGroup: null,
       sortOrder: null,
     });
+    await createChecklistEntry(latStretch.id, 'cooldown', { pattern: 'pull' });
 
     const today = await service().getToday(user.id, TODAY);
 

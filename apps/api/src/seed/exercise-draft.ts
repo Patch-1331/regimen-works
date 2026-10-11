@@ -225,7 +225,7 @@ export function draftExercises(
       notes.push('counted in seconds: the source calls it a static hold');
     }
     if (exercise.category === 'stretching') {
-      notes.push("a stretch: maybe phase: 'cooldown'");
+      notes.push('a stretch: maybe a cooldown entry in checklist-seed.ts');
     }
 
     drafts.push({ seed, notes });

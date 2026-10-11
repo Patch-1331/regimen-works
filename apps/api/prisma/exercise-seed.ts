@@ -14,8 +14,8 @@
 
 export type ExerciseSeed = {
   name: string;
-  // Null only for general warm-up/cool-down filler not tied to a pattern
-  // (e.g. light jogging, deep breathing).
+  // Null only for a movement no pattern describes (e.g. light jogging, deep
+  // breathing).
   pattern: string | null;
   // What the movement needs beyond the athlete's own body (DN-31), from the
   // shared catalog: bar | jump_rope | box | dumbbell | kettlebell. Omitted
@@ -43,9 +43,6 @@ export type ExerciseSeed = {
   isGroupDefault?: boolean;
   // Defaults to "reps" — set to "seconds" for timed holds (plank family).
   unit?: 'reps' | 'seconds';
-  // Warm-up/cool-down tagging (Feature #63). Null/omitted for regular pool
-  // exercises — only checklist content gets a phase.
-  phase?: 'warmup' | 'cooldown';
   // How the movement is performed, in prose: setup, what one rep is, and the
   // cue or two that decide whether it's the movement at all. Required rather
   // than optional so a movement can't join the library with no way for the
@@ -645,91 +642,72 @@ export const exercises: ExerciseSeed[] = [
       'One jump, two passes of the rope. Jump a little higher than a single-under and turn the wrists faster rather than pulling the knees up — tucking the legs is what turns a set into a string of misses. Trip the rope and you start the next rep, not the set again.',
   },
 
-  // Warm-up (Feature #63) — tagged with the pattern they best prep, so a
-  // WOD's dominantPattern can pull in relevant moves.
+  // Checklist movements (Feature #63): exercises like any other, which today
+  // only the warm-up and cool-down lists in `checklist-seed.ts` point at.
   {
     name: 'Arm circles',
     pattern: 'push',
-    phase: 'warmup',
     instructions:
       'Arms straight out at shoulder height. Draw small circles forward, growing them gradually, then reverse. About twenty seconds each direction is enough to warm the shoulders.',
   },
   {
     name: 'Leg swings',
     pattern: 'hinge',
-    phase: 'warmup',
     instructions:
       'Hold a wall for balance and swing one leg forward and back, then side to side across the body, ten or so each way before switching legs. Swing to the edge of a comfortable range, not into a stretch.',
   },
   {
-    name: 'Bodyweight squats',
-    pattern: 'squat',
-    phase: 'warmup',
-    instructions:
-      'Easy, unloaded air squats at a steady pace, sinking a little deeper each rep. This is a rehearsal to get the hips and knees moving, not a set to work at.',
-  },
-  {
     name: 'Inchworms',
     pattern: 'core',
-    phase: 'warmup',
     instructions:
       'From standing, fold forward, walk the hands out to a plank, hold a beat, then walk the feet up to the hands and stand. Keeps the hamstrings, shoulders and stomach all in the warm-up at once.',
   },
   {
     name: 'Scapular pull-ups',
     pattern: 'pull',
-    phase: 'warmup',
     instructions:
       'Hang from the bar with straight arms and pull the shoulder blades down and together to lift yourself an inch or two, then relax back into the hang. The elbows stay straight throughout — it is a very short range on purpose.',
   },
   {
     name: 'Light jogging in place',
     pattern: null,
-    phase: 'warmup',
     instructions:
       'An easy jog on the spot, feet barely leaving the floor, for a minute or so. Aim for warm and slightly out of breath, nothing more.',
   },
 
-  // Cool-down (Feature #63)
   {
     name: 'Static quad stretch',
     pattern: 'squat',
-    phase: 'cooldown',
     instructions:
       'Standing, pull one heel toward the glute with knees together and hips pushed slightly forward. Hold for twenty to thirty seconds, then switch legs. Hold a wall if balance is a problem.',
   },
   {
     name: "Child's pose",
     pattern: 'hinge',
-    phase: 'cooldown',
     instructions:
       'Kneel, sit the hips back onto the heels and reach the arms forward on the floor, forehead down. Breathe slowly and let the lower back and shoulders settle for thirty seconds or more.',
   },
   {
     name: 'Cat-cow',
     pattern: 'core',
-    phase: 'cooldown',
     instructions:
       'On hands and knees, alternate between arching the back and rounding it, moving with the breath. Slow and easy — this is about moving the spine through its range, not stretching hard.',
   },
   {
     name: 'Doorway chest stretch',
     pattern: 'push',
-    phase: 'cooldown',
     instructions:
       'Put a forearm on a doorframe with the elbow at shoulder height and step gently through until you feel the chest open. Hold twenty to thirty seconds a side; ease off if it pinches at the front of the shoulder.',
   },
   {
     name: 'Cross-body shoulder stretch',
     pattern: 'pull',
-    phase: 'cooldown',
     instructions:
       'Bring one arm straight across the chest and use the other forearm to draw it closer. Hold twenty to thirty seconds, then switch. Keep the shoulder down rather than shrugged toward the ear.',
   },
   {
     name: 'Deep breathing',
     pattern: null,
-    phase: 'cooldown',
     instructions:
       'Lie or sit comfortably and breathe in through the nose for four counts, out through the mouth for six, for around a minute. The long exhale is what brings the heart rate down.',
   },

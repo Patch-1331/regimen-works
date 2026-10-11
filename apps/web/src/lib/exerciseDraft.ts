@@ -1,7 +1,6 @@
 import type {
   CreateExercise,
   Equipment,
-  ExercisePhase,
   ExerciseUnit,
   MovementPattern,
   MovementGroup,
@@ -31,7 +30,6 @@ export type ExerciseDraft = {
   movementGroup: MovementGroup | "";
   sortOrder: string;
   fallbackExerciseId: string;
-  phase: ExercisePhase | "";
 };
 
 /** What a new movement starts as: the bodyweight baseline, in no group. */
@@ -45,7 +43,6 @@ export const EMPTY_DRAFT: ExerciseDraft = {
   movementGroup: "",
   sortOrder: "",
   fallbackExerciseId: "",
-  phase: "",
 };
 
 /** An existing movement, opened for editing. */
@@ -60,7 +57,6 @@ export function toDraft(exercise: ApiExercise): ExerciseDraft {
     movementGroup: (exercise.movementGroup ?? "") as MovementGroup | "",
     sortOrder: exercise.sortOrder === null ? "" : String(exercise.sortOrder),
     fallbackExerciseId: exercise.fallbackExerciseId ?? "",
-    phase: (exercise.phase ?? "") as ExercisePhase | "",
   };
 }
 
@@ -88,7 +84,6 @@ export function toWriteBody(draft: ExerciseDraft): CreateExercise {
     movementGroup: draft.movementGroup === "" ? null : draft.movementGroup,
     sortOrder: draft.sortOrder === "" ? null : Number(draft.sortOrder),
     fallbackExerciseId: draft.fallbackExerciseId === "" ? null : draft.fallbackExerciseId,
-    phase: draft.phase === "" ? null : draft.phase,
   };
 }
 

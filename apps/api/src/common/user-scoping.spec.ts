@@ -68,6 +68,12 @@ function recordingPrisma() {
       }),
     },
     skillLevelUpsert: record('skillLevel.upsert'),
+    checklistEntry: {
+      findMany: jest.fn((args: unknown) => {
+        (calls['checklistEntry.findMany'] ??= []).push(args);
+        return Promise.resolve([]);
+      }),
+    },
     exercise: {
       findMany: jest.fn((args: unknown) => {
         (calls['exercise.findMany'] ??= []).push(args);
@@ -260,13 +266,22 @@ describe('library ownership scoping', () => {
     }
   });
 
-  it('scopes the warm-up/cool-down pool', async () => {
-    // Pulled by `phase` rather than by id, so an unscoped read here hands the
-    // athlete somebody else's movement inside a checklist they did not author.
+  it('scopes the warm-up/cool-down entries and the exercises they name', async () => {
+    // Two rows, two scopes (DN-172). Unscoped, the entry read hands the
+    // athlete a list somebody else wrote; the exercise half, somebody else's
+    // movement -- or a retired one -- inside a list they did. Asserted apart,
+    // because the whole `where` contains both halves' words and would pass
+    // with either one missing.
     const prisma = recordingPrisma();
     await new WodsService(prisma).getChecklists(ALICE, 'push');
-    for (const where of whereOf(prisma, 'exercise.findMany')) {
-      expectLibraryScope(where);
+    for (const json of whereOf(prisma, 'checklistEntry.findMany')) {
+      const { exercise, ...entry } = JSON.parse(json) as {
+        exercise?: unknown;
+      };
+      const ownTier = JSON.stringify(entry);
+      expect(ownTier).toContain('"ownerId":null');
+      expect(ownTier).toContain(ALICE);
+      expectLibraryScope(JSON.stringify(exercise ?? {}));
     }
   });
 

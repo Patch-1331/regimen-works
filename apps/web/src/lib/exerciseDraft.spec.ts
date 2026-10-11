@@ -36,7 +36,6 @@ describe("toWriteBody", () => {
       movementGroup: null,
       sortOrder: null,
       fallbackExerciseId: null,
-      phase: null,
     });
   });
 
@@ -74,7 +73,6 @@ describe("toDraft", () => {
       movementGroup: "pull_vertical",
       sortOrder: 3,
       fallbackExerciseId: "exercise-9",
-      phase: "warmup",
     });
 
     expect(toWriteBody(toDraft(exercise))).toMatchObject({
@@ -85,7 +83,6 @@ describe("toDraft", () => {
       movementGroup: "pull_vertical",
       sortOrder: 3,
       fallbackExerciseId: "exercise-9",
-      phase: "warmup",
     });
   });
 });

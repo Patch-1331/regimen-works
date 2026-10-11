@@ -56,7 +56,6 @@ const BODY = {
   movementGroup: null,
   sortOrder: null,
   fallbackExerciseId: null,
-  phase: null,
 };
 
 /**

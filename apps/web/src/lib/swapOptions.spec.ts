@@ -20,7 +20,6 @@ function exercise(partial: Partial<ApiExercise> & { id: string }): ApiExercise {
     sortOrder: 0,
     instructions: [],
     fallbackExerciseId: null,
-    phase: null,
     key: null,
     primaryMuscles: [],
     secondaryMuscles: [],

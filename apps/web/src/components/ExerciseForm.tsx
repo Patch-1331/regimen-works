@@ -3,7 +3,6 @@ import {
   EQUIPMENT_CATALOG,
   type CreateExercise,
   type Equipment,
-  exercisePhase,
   exerciseUnit,
   movementPattern,
   movementGroup,
@@ -119,8 +118,8 @@ export function ExerciseForm({
               set("pattern", e.target.value as ExerciseDraft["pattern"])
             }
           >
-            {/* Null is a real answer: general warm-up and cool-down filler is
-                not tied to a pattern. */}
+            {/* Null is a real answer: some movements, like light jogging or
+                deep breathing, belong to no pattern. */}
             <option value="">None</option>
             {movementPattern.options.map((p) => (
               <option key={p} value={p}>
@@ -201,27 +200,6 @@ export function ExerciseForm({
             onChange={(e) => set("sortOrder", e.target.value)}
           />
         </div>
-      </div>
-
-      <div>
-        <Label htmlFor="exercise-phase">Warm-up / cool-down</Label>
-        <select
-          id="exercise-phase"
-          className={field}
-          style={fieldStyle}
-          value={draft.phase}
-          onChange={(e) =>
-            set("phase", e.target.value as ExerciseDraft["phase"])
-          }
-        >
-          {/* Most movements are neither — they are the workout itself. */}
-          <option value="">Neither</option>
-          {exercisePhase.options.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
       </div>
 
       <fieldset>
