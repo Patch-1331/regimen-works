@@ -10,7 +10,13 @@ export default tseslint.config(
     // than a list of directories (DN-117), so what is *not* linted is stated
     // here, once — a new directory of TypeScript is covered by default
     // instead of being missed until someone notices.
-    ignores: ['eslint.config.mjs', 'dist/**', 'coverage/**'],
+    // `exercise-drafts.generated.ts` is a git-ignored review file (DN-157).
+    ignores: [
+      'eslint.config.mjs',
+      'dist/**',
+      'coverage/**',
+      'prisma/exercise-drafts.generated.ts',
+    ],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
