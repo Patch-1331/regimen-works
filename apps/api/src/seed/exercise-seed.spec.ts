@@ -1,5 +1,6 @@
 import { movementGroup } from '@regimen-works/shared';
 import { exercises } from '../../prisma/exercise-seed';
+import { SCHEMA_WORDS } from './exercise-draft';
 import {
   mismatchedSubstituteUnits,
   unreachableSubstitutes,
@@ -93,15 +94,10 @@ describe('the seeded exercise library', () => {
      * word a coaching cue would want. These are the ones a project-wide
      * rename can walk into a sentence without anything failing: the string
      * still compiles, the seed still upserts, and the athlete is told to hold
-     * their body in one `movementGroup`.
+     * their body in one `movementGroup`. Shared with the draft importer
+     * (DN-157), which refuses them on the way in.
      */
-    const schemaWords = [
-      'movementGroup',
-      'sortOrder',
-      'exerciseId',
-      'fallbackExerciseId',
-      'isGroupDefault',
-    ];
+    const schemaWords = SCHEMA_WORDS;
 
     it('never puts a schema identifier in an instruction', () => {
       // DN-134 renamed `line` to `movementGroup` across the repo and caught
