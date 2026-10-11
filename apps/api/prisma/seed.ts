@@ -9,7 +9,7 @@ import {
   assertSubstitutesReachable,
   assertSubstituteUnitsMatch,
 } from '../src/seed/substitute-guard';
-import { exercises } from './exercise-seed';
+import { exercises, seedSteps } from './exercise-seed';
 import { wods, type WodMovementSeed, type WodSeed } from './wod-seed';
 
 // Prisma 7 requires a driver adapter — a bare `new PrismaClient()` throws at
@@ -80,7 +80,7 @@ async function main() {
       sortOrder: e.sortOrder ?? null,
       isGroupDefault: e.isGroupDefault ?? false,
       phase: e.phase ?? null,
-      instructions: e.instructions,
+      instructions: seedSteps(e),
       // Re-seeding a retired movement brings it back (DN-25). The lookup
       // below deliberately does not filter on `archivedAt`: archiving does
       // not free the name, so skipping archived rows would make this try to

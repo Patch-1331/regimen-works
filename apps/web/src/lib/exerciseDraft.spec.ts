@@ -32,7 +32,7 @@ describe("toWriteBody", () => {
       equipment: [],
       scalable: false,
       unit: "reps",
-      instructions: null,
+      instructions: [],
       movementGroup: null,
       sortOrder: null,
       fallbackExerciseId: null,
@@ -52,7 +52,14 @@ describe("toWriteBody", () => {
   it("trims what was typed, so a name of spaces is not a name", () => {
     const body = toWriteBody(draft({ name: "  Ring row  ", instructions: " " }));
     expect(body.name).toBe("Ring row");
-    expect(body.instructions).toBeNull();
+    expect(body.instructions).toEqual([]);
+  });
+
+  it("sends each line as a step, without the blank ones between", () => {
+    const body = toWriteBody(
+      draft({ instructions: "  Hang from the bar.\n\n  Pull your chin over it.  \n" }),
+    );
+    expect(body.instructions).toEqual(["Hang from the bar.", "Pull your chin over it."]);
   });
 });
 
@@ -63,7 +70,7 @@ describe("toDraft", () => {
       pattern: "pull",
       equipment: ["bar"],
       unit: "reps",
-      instructions: "Chin over the bar.",
+      instructions: ["Hang from the bar.", "Chin over the bar."],
       movementGroup: "pull_vertical",
       sortOrder: 3,
       fallbackExerciseId: "exercise-9",
@@ -74,7 +81,7 @@ describe("toDraft", () => {
       name: "Pull-up",
       pattern: "pull",
       equipment: ["bar"],
-      instructions: "Chin over the bar.",
+      instructions: ["Hang from the bar.", "Chin over the bar."],
       movementGroup: "pull_vertical",
       sortOrder: 3,
       fallbackExerciseId: "exercise-9",

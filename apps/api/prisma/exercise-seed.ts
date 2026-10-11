@@ -57,6 +57,20 @@ export type ExerciseSeed = {
   instructions: string;
 };
 
+/**
+ * The steps a seeded exercise's prose is stored as (DN-165).
+ *
+ * One step, the prose whole. The column became a list for the dataset the
+ * library is moving to, whose instructions are numbered; this hand-written
+ * seed predates it and is replaced by that import (DN-167), so splitting
+ * sentences here would be rewriting copy that is about to go. Both the seed
+ * and the DN-141 check read through this, so what is checked is what is
+ * stored.
+ */
+export function seedSteps(e: Pick<ExerciseSeed, 'instructions'>): string[] {
+  return [e.instructions];
+}
+
 export const exercises: ExerciseSeed[] = [
   // Push · Horizontal
   {

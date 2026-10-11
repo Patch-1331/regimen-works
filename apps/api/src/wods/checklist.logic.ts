@@ -8,9 +8,9 @@ export type ExerciseForChecklist = {
   name: string;
   pattern: string | null;
   phase: string | null; // 'warmup' | 'cooldown' | null
-  // Prose for how the movement is performed; passed straight through to the
-  // checklist screens. Null on rows added outside the seed.
-  instructions: string | null;
+  // How the movement is performed, step by step; passed straight through to
+  // the checklist screens. Empty on rows nobody has written copy for.
+  instructions: string[];
 };
 
 const DEFAULT_TARGET_COUNT = 4;

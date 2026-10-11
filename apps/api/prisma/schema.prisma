@@ -55,14 +55,47 @@ model Exercise {
   // by the database, the same way `pattern` and `line` are.
   equipment String[] @default([])
 
-  // How the movement is performed, in prose — the setup, the rep, and the
-  // one or two cues that decide whether it's the movement at all. Every
-  // seeded exercise has one (the seed type requires it); nullable only so a
-  // row added outside the seed isn't blocked on copy that hasn't been
-  // written yet. Never the home of rep counts or scaling advice: counts are
-  // WodMovement.reps, and the no-equipment stand-in is already
+  // How the movement is performed, as numbered steps — the setup, the rep,
+  // and the one or two cues that decide whether it's the movement at all.
+  // A list rather than prose because the dataset the library comes from
+  // writes them that way (DN-165, ADR-0007); the hand-written rows that
+  // predate it are one step each. Empty, not null, when no copy has been
+  // written: a Postgres array cannot be optional in Prisma, and "no steps" is
+  // already an honest answer. Never the home of rep counts or scaling advice:
+  // counts are WodMovement.reps, and the no-equipment stand-in is already
   // fallbackExerciseId (equipment, not difficulty -- see ADR-0004).
-  instructions String?
+  instructions String[] @default([])
+
+  // The stable identity the library import matches on (DN-165, ADR-0007
+  // decision 4) -- free-exercise-db's own `id` for a dataset exercise, or an
+  // `rw-` prefixed id for one of the app's own. The name is a label that can
+  // change; this cannot, which is what lets a rename happen in place.
+  //
+  // Global rows only. Unique among them -- archived rows included, because an
+  // identity does not stop being taken when the row is retired -- by a
+  // partial unique index, and null on every athlete-owned row by a CHECK.
+  // Both live only in the migration (20261011000000_exercise_library_fields):
+  // Prisma can express neither, so `prisma migrate dev` will offer to drop
+  // them on the next model change. Keep them.
+  key String?
+
+  // What the movement works, in free-exercise-db's 17-muscle vocabulary
+  // (`muscle` in packages/shared). The prime mover comes first in
+  // `primaryMuscles`. Both empty on a row nobody has described -- every
+  // athlete-owned exercise today -- and the matcher must read empty as "cannot
+  // be matched", never as "matches anything".
+  primaryMuscles   String[] @default([])
+  secondaryMuscles String[] @default([])
+
+  // How the movement loads, from the dataset. Each validated in the
+  // application, the same way `pattern` is, and null where nobody has said.
+  force     String? // push | pull | static
+  mechanic  String? // compound | isolation
+  // A fact about the exercise, never the athlete (ADR-0007). Read for one
+  // rule only: an automatic swap is never harder. Not to be confused with
+  // SkillLevel, which is the athlete's standing choice of movement.
+  level     String? // beginner | intermediate | expert
+  category  String? // strength | stretching | plyometrics | cardio | powerlifting | olympic_weightlifting
 
   // The movement group this belongs to (Feature #2, ADR-0004): movements
   // that accomplish the same thing in a program and are freely

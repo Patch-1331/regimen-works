@@ -151,9 +151,12 @@ export function ExerciseForm({
 
       <div>
         <Label htmlFor="exercise-instructions">How it is performed</Label>
+        {/* One step per line: the plate numbers them when there are two or
+            more (DN-165). */}
         <textarea
           id="exercise-instructions"
-          rows={3}
+          rows={4}
+          placeholder="One step per line"
           className={field}
           style={fieldStyle}
           value={draft.instructions}

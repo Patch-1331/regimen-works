@@ -113,7 +113,7 @@ describe('snapshotMovements', () => {
       // The rest of an Exercise row rides along on the resolved movement and
       // must not end up in the snapshot -- it describes the exercise in
       // general, not this day's training.
-      instructions: 'Lean back, pull the rings to the chest.',
+      instructions: ['Lean back, pull the rings to the chest.'],
       equipment: [],
       fallbackExerciseId: 'ex-table',
     },
@@ -210,7 +210,7 @@ describe('snapshotPrescribedMovements', () => {
       unit: 'reps',
       movementGroup: 'pull',
       sortOrder: 1,
-      instructions: 'Lean back, pull the rings to the chest.',
+      instructions: ['Lean back, pull the rings to the chest.'],
       equipment: [],
       fallbackExerciseId: 'ex-table',
     },
