@@ -63,6 +63,16 @@ export type MovementGroup = z.infer<typeof movementGroup>;
  * athlete and every movement is one every reader has to filter back out, so
  * the catalog holds only things an athlete can actually be without.
  *
+ * `bar` is the pull-up bar — something to hang from — and `barbell` is the
+ * loaded bar you lift. They share a word and nothing else: owning a doorway bar
+ * says nothing about owning plates, and a barbell on the floor is no use for a
+ * pull-up. `bar` kept its name from `Exercise.needsBar` (DN-31) long before a
+ * barbell joined the catalog (DN-166), so read it as "hang".
+ *
+ * `gym_machines` is one switch for every cable and machine exercise, because
+ * an athlete has both or neither: the question it answers is "do you train at
+ * a gym", not which machine is in it (ADR-0007).
+ *
  * Display labels and what each piece accepts live in `equipment.ts`.
  */
 export const equipment = z.enum([
@@ -71,6 +81,15 @@ export const equipment = z.enum([
   "box",
   "dumbbell",
   "kettlebell",
+  "barbell",
+  "bench",
+  "dip_bars",
+  "bands",
+  "medicine_ball",
+  "stability_ball",
+  "foam_roller",
+  "gym_machines",
+  "suspension_trainer",
 ]);
 export type Equipment = z.infer<typeof equipment>;
 

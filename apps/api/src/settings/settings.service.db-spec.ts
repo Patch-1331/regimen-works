@@ -4,6 +4,7 @@ import {
   createPlan,
   createUser,
 } from '../test-support/fixtures';
+import { DEFAULT_EQUIPMENT, equipment } from '@regimen-works/shared';
 import { SettingsService } from './settings.service';
 import type { PrismaClient } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
@@ -116,6 +117,19 @@ describe('SettingsService.get', () => {
     expect(await service().get(withoutRow.id)).toEqual(
       await service().get(withRow.id),
     );
+  });
+
+  it('starts a fresh row on exactly DEFAULT_EQUIPMENT', async () => {
+    // The column default in schema.prisma and DEFAULT_EQUIPMENT in shared are
+    // two copies of one decision with nothing linking them. DN-166 grew the
+    // catalog to fourteen pieces and deliberately left the default at the bar,
+    // so no athlete's workouts change; this is the line that says so.
+    const user = await createUser();
+    await testPrisma().scheduleRule.create({ data: { userId: user.id } });
+
+    expect((await storedRule(user.id))?.equipment).toEqual([
+      ...DEFAULT_EQUIPMENT,
+    ]);
   });
 
   it('does not create a row just by being read', async () => {
@@ -293,6 +307,21 @@ describe('SettingsService.update', () => {
     await service().update(user.id, { trainingDays: [2, 6] });
 
     expect((await service().get(user.id)).trainingDays).toEqual([2, 6]);
+  });
+
+  it('stores every piece in the catalog', async () => {
+    // Validated in the application, not by a column check, so a piece the
+    // service filtered out would vanish silently rather than fail.
+    const user = await createUser();
+
+    const settings = await service().update(user.id, {
+      equipment: [...equipment.options],
+    });
+
+    expect(settings.equipment).toEqual([...equipment.options]);
+    expect((await storedRule(user.id))?.equipment).toEqual([
+      ...equipment.options,
+    ]);
   });
 
   it('leaves the training days alone when the patch does not mention them', async () => {

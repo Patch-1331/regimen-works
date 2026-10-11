@@ -67,10 +67,11 @@ export const SCHEMA_WORDS = [
  * The source's equipment words that mean something in our catalog.
  *
  * "barbell" is deliberately absent. Our `bar` is a pull-up bar -- something
- * to hang from -- and a barbell is a different object that no Settings row
- * asks about. Everything else the source lists (machine, cable, bands, ...)
- * is gym kit the catalog has no word for, so the movement is skipped rather
- * than prescribed to someone who cannot do it.
+ * to hang from -- and a barbell is a different object. The catalog has had
+ * words for it and for most of the rest the source lists (machine, cable,
+ * bands, ...) since DN-166, but this draft predates them and skips those
+ * movements rather than prescribing them to someone who cannot do them. The
+ * import that replaces this draft (DN-167) maps them.
  */
 const EQUIPMENT: Record<string, Equipment[]> = {
   'body only': [],
