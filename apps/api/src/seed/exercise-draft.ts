@@ -156,7 +156,7 @@ export function nameKey(name: string): string {
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter(Boolean)
-    .map((word) => (word.length > 3 ? word.replace(/s$/, '') : word))
+    .map((word) => (word.length > 2 ? word.replace(/([^s])s$/, '$1') : word))
     .join('');
 }
 

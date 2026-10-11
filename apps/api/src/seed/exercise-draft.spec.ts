@@ -157,6 +157,8 @@ describe('nameKey', () => {
     expect(nameKey('Push-up')).toBe(nameKey('Pushups'));
     expect(nameKey('Air squat')).toBe(nameKey('Air  Squats'));
     expect(nameKey('Goblet squat')).not.toBe(nameKey('Air squat'));
+    // A hyphen splits "pull-ups" so the plural lands on a three-letter word.
+    expect(nameKey('Scapular pull-ups')).toBe(nameKey('Scapular Pull-up'));
   });
 });
 
