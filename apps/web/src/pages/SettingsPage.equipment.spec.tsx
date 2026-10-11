@@ -54,6 +54,42 @@ describe("equipment in Settings", () => {
     });
   });
 
+  it("lists the nine pieces the exercise library added, unticked for an athlete on the default", async () => {
+    // DN-166: nothing here is assumed. An athlete who never opens Settings
+    // keeps the workouts they had.
+    settingsOwning(["bar"]);
+    renderRoute("/settings");
+
+    for (const name of [
+      /^barbell$/i,
+      /^bench$/i,
+      /dip bars/i,
+      /resistance bands/i,
+      /medicine ball/i,
+      /stability ball/i,
+      /foam roller/i,
+      /gym machines/i,
+      /suspension trainer/i,
+    ]) {
+      expect(await screen.findByRole("checkbox", { name })).not.toBeChecked();
+    }
+    // The catalog's copy for the barbell is what keeps it apart from the bar.
+    expect(screen.getByText(/not the pull-up bar/i)).toBeInTheDocument();
+  });
+
+  it("saves a new piece alongside the kit already owned", async () => {
+    const patches = settingsOwning(["bar", "dumbbell"]);
+    renderRoute("/settings");
+
+    await userEvent.click(await screen.findByRole("checkbox", { name: /gym machines/i }));
+
+    await waitFor(() => expect(patches).toHaveLength(1));
+    expect(patches[0].equipment).toEqual(["bar", "dumbbell", "gym_machines"]);
+    await waitFor(() =>
+      expect(screen.getByRole("checkbox", { name: /gym machines/i })).toBeChecked(),
+    );
+  });
+
   it("offers the bar like any other piece", async () => {
     // DN-35 said to leave the bar out as the assumed baseline; the catalog
     // written after it says the opposite, and an athlete with no doorway to

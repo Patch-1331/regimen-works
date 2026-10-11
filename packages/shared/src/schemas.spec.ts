@@ -990,7 +990,7 @@ describe("exerciseSchema", () => {
     // The column is a bare String[] -- this schema is the only thing standing
     // between a typo in the seed and a tag no ownership check will ever match.
     expect(
-      exerciseSchema.safeParse(libraryExercise({ equipment: ["barbell"] }))
+      exerciseSchema.safeParse(libraryExercise({ equipment: ["sled"] }))
         .success,
     ).toBe(false);
   });

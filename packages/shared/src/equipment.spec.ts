@@ -36,6 +36,53 @@ describe("EQUIPMENT_CATALOG", () => {
   it("leads with the bar, the piece the app already assumed", () => {
     expect(EQUIPMENT_CATALOG[0].value).toBe("bar");
   });
+
+  it("lists the pieces most likely to be at home first, and gym machines last", () => {
+    // The order is the Settings screen's order (DN-166): an easy yes, yes, no
+    // down the page, ending on the one piece that says where you train rather
+    // than what you own.
+    expect(EQUIPMENT_CATALOG.map((info) => info.value)).toEqual([
+      "bar",
+      "jump_rope",
+      "bands",
+      "box",
+      "bench",
+      "dip_bars",
+      "dumbbell",
+      "kettlebell",
+      "foam_roller",
+      "stability_ball",
+      "medicine_ball",
+      "barbell",
+      "suspension_trainer",
+      "gym_machines",
+    ]);
+  });
+
+  it("names each piece the way Settings shows it", () => {
+    expect(Object.fromEntries(EQUIPMENT_CATALOG.map((i) => [i.value, i.label]))).toEqual({
+      bar: "Pull-up bar",
+      jump_rope: "Jump rope",
+      bands: "Resistance bands",
+      box: "Box or step",
+      bench: "Bench",
+      dip_bars: "Dip bars",
+      dumbbell: "Dumbbell",
+      kettlebell: "Kettlebell",
+      foam_roller: "Foam roller",
+      stability_ball: "Stability ball",
+      medicine_ball: "Medicine ball",
+      barbell: "Barbell",
+      suspension_trainer: "Suspension trainer",
+      gym_machines: "Gym machines",
+    });
+  });
+
+  it("keeps the pull-up bar and the barbell apart", () => {
+    // One word, two pieces: `bar` is for hanging, `barbell` is for lifting.
+    expect(equipmentInfo("barbell").description).toMatch(/not the pull-up bar/i);
+    expect(equipmentInfo("barbell").description).toMatch(/EZ/);
+  });
 });
 
 describe("the enum", () => {
@@ -46,7 +93,12 @@ describe("the enum", () => {
   });
 
   it("rejects anything not in the catalog", () => {
-    expect(equipment.safeParse("barbell").success).toBe(false);
+    // The dataset's own words for kit the catalog folds together or leaves
+    // out: cable and machine are both `gym_machines`, and the sled is a
+    // specialist piece kept out of the library for now (ADR-0007).
+    expect(equipment.safeParse("cable").success).toBe(false);
+    expect(equipment.safeParse("machine").success).toBe(false);
+    expect(equipment.safeParse("sled").success).toBe(false);
     expect(equipment.safeParse("").success).toBe(false);
   });
 

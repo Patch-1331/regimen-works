@@ -26,7 +26,9 @@ export type EquipmentInfo = {
  * Every piece an athlete can own, in the order Settings shows them.
  *
  * Ordered most to least likely to already be in a garage or a doorway, so the
- * list reads as an easy yes, yes, no rather than a shopping list. `bar` leads
+ * list reads as an easy yes, yes, no rather than a shopping list. Gym machines
+ * come last because they are the one piece nobody keeps at home: ticking it is
+ * saying where you train, not what you own. `bar` leads
  * because it is the one piece the app has always assumed -- it was the whole
  * of equipment, as `Exercise.needsBar`, until these tags replaced it (DN-31).
  *
@@ -46,10 +48,28 @@ export const EQUIPMENT_CATALOG: readonly EquipmentInfo[] = [
     description: "Any skipping rope long enough to clear your head.",
   },
   {
+    value: "bands",
+    label: "Resistance bands",
+    description:
+      "Any band you can pull against — loop bands, tube bands with handles, or a long physio band. Light ones count.",
+  },
+  {
     value: "box",
     label: "Box or step",
     description:
       "A stable surface around knee height to step or jump onto — a plyo box, a bench, a sturdy chair, or the bottom stair.",
+  },
+  {
+    value: "bench",
+    label: "Bench",
+    description:
+      "Something flat to lie or sit on at about knee height — a weight bench, flat or adjustable. A sturdy box or a solid chair does the job for most moves.",
+  },
+  {
+    value: "dip_bars",
+    label: "Dip bars",
+    description:
+      "Two parallel handholds you can press yourself up between — a dip station, parallel bars at a park, or the backs of two sturdy chairs.",
   },
   {
     value: "dumbbell",
@@ -62,6 +82,42 @@ export const EQUIPMENT_CATALOG: readonly EquipmentInfo[] = [
     label: "Kettlebell",
     description:
       "One or more kettlebells, any weight. The swing is what makes this its own row — a dumbbell held by one end substitutes for most of the rest.",
+  },
+  {
+    value: "foam_roller",
+    label: "Foam roller",
+    description:
+      "Any roller firm enough to lie on — foam, a hollow grid roller, or at a pinch a rolled-up yoga mat.",
+  },
+  {
+    value: "stability_ball",
+    label: "Stability ball",
+    description:
+      "An inflatable ball big enough to lie back over — also sold as an exercise or Swiss ball.",
+  },
+  {
+    value: "medicine_ball",
+    label: "Medicine ball",
+    description:
+      "A weighted ball you can throw, slam or hold — a slam ball or wall ball counts, any weight.",
+  },
+  {
+    value: "barbell",
+    label: "Barbell",
+    description:
+      "A bar you load with plates — an Olympic or standard bar, or an EZ curl bar — and the plates to go on it. Not the pull-up bar: this is the one you lift.",
+  },
+  {
+    value: "suspension_trainer",
+    label: "Suspension trainer",
+    description:
+      "Straps that hang from an anchor and take your bodyweight — gymnastic rings or a TRX.",
+  },
+  {
+    value: "gym_machines",
+    label: "Gym machines",
+    description:
+      "Cable stations and weight machines. One switch for all of them: tick it if you train at a gym that has them.",
   },
 ];
 
