@@ -98,6 +98,13 @@ model Exercise {
   level    String? // beginner | intermediate | expert
   category String? // strength | stretching | plyometrics | cardio | powerlifting | olympic_weightlifting
 
+  // Whether a person has curated it (DN-168): one of the app's own, or a
+  // dataset twin with a curation entry -- what the seeded WODs, groups and
+  // checklists prescribe. Written by the library import, false on every
+  // athlete-owned row. Read for one rule: where two muscle matches score the
+  // same, the curated one wins (DN-169).
+  curated  Boolean @default(false)
+
   // The movement group this belongs to (Feature #2, ADR-0004): movements
   // that accomplish the same thing in a program and are freely
   // interchangeable. Finer-grained than `pattern`, since a pattern like push

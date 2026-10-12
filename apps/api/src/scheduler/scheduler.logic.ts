@@ -295,10 +295,14 @@ export function unperformableSubstituteIds<E extends ExerciseWithEquipment>(
  * alternative is performable on the baseline" a property the seed owes
  * (DN-83) rather than something recomputed per athlete, per day.
  *
- * A movement with no substitute, or one whose substitute is missing from
- * `substituteById`, passes through unchanged rather than throwing — the same
- * discipline the layers either side keep. The athlete is about to train, and
- * a data gap must not leave a hole in the movement list.
+ * **Where no one wrote a fallback, the muscle match (DN-169).** `matchFor`
+ * is asked only then, and its answer is taken the same way: as given. It may
+ * answer null, and the movement passes through as written.
+ *
+ * A movement whose substitute is missing from `substituteById` passes
+ * through unchanged rather than throwing — the same discipline the layers
+ * either side keep. The athlete is about to train, and a data gap must not
+ * leave a hole in the movement list.
  */
 export function applyEquipmentAvailability<
   M extends { exercise: E },
@@ -307,12 +311,16 @@ export function applyEquipmentAvailability<
   movements: M[],
   owned: ReadonlySet<string>,
   substituteById: ReadonlyMap<string, E>,
+  matchFor: (exercise: E) => E | null = () => null,
 ): M[] {
   return movements.map((m) => {
     if (isPerformable(m.exercise, owned)) return m;
 
     const fallbackId = m.exercise.fallbackExerciseId;
-    if (fallbackId === null) return m;
+    if (fallbackId === null) {
+      const match = matchFor(m.exercise);
+      return match ? { ...m, exercise: match } : m;
+    }
 
     const substitute = substituteById.get(fallbackId);
     if (!substitute) return m;

@@ -13,6 +13,11 @@ import {
   applySubstitutions,
   unperformableSubstituteIds,
 } from './scheduler.logic';
+import {
+  muscleMatch,
+  muscleMatchTargets,
+  muscleMatchWhere,
+} from './muscle-match';
 
 /** The shape every resolver caller loads a WOD's movements in. */
 export const resolvableMovementInclude = {
@@ -294,14 +299,16 @@ export class MovementResolutionService {
 
   /**
    * Drops every movement the athlete owns no equipment for to its
-   * alternative.
+   * alternative: the fallback someone wrote, or else the best muscle match
+   * they can perform (DN-169).
    *
    * Its own read rather than part of the batch above, because *which*
    * substitutes are wanted depends on what the choice layer resolved to —
    * the movement the athlete last picked can need a bar the prescription did not.
    * Only the rows actually reached for are loaded, so the common day (the
    * baseline owns the bar, most of the pool needs nothing) runs no second
-   * query at all.
+   * query at all; and the muscle match loads only candidates sharing a
+   * muscle with a movement that needs one, never the library.
    */
   private async applyOwnership<M extends { exercise: Exercise }>(
     userId: string,
@@ -309,16 +316,33 @@ export class MovementResolutionService {
     owned: ReadonlySet<string>,
   ): Promise<M[]> {
     const substituteIds = unperformableSubstituteIds(movements, owned);
-    if (substituteIds.length === 0) return movements;
+    const targets = muscleMatchTargets(movements, owned);
+    if (substituteIds.length === 0 && targets.length === 0) return movements;
 
-    const substitutes = await this.prisma.exercise.findMany({
-      where: { ...libraryVisibleTo(userId), id: { in: substituteIds } },
-    });
+    const none: Promise<Exercise[]> = Promise.resolve([]);
+    const [substitutes, candidates] = await Promise.all([
+      substituteIds.length === 0
+        ? none
+        : this.prisma.exercise.findMany({
+            where: { ...libraryVisibleTo(userId), id: { in: substituteIds } },
+          }),
+      targets.length === 0
+        ? none
+        : this.prisma.exercise.findMany({
+            // AND rather than a spread: both clauses carry an `OR`, and a
+            // spread would let the muscles' overwrite the ownership one --
+            // reading every athlete's own exercises (DN-93).
+            where: {
+              AND: [libraryVisibleTo(userId), muscleMatchWhere(targets, owned)],
+            },
+          }),
+    ]);
 
     return applyEquipmentAvailability(
       movements,
       owned,
       new Map(substitutes.map((e) => [e.id, e])),
+      (exercise) => muscleMatch(exercise, candidates, owned),
     );
   }
 }

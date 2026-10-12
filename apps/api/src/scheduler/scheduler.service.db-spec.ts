@@ -332,6 +332,97 @@ describe('SchedulerService equipment resolution', () => {
   });
 });
 
+/**
+ * A barbell bench press nobody wrote a fallback for, and the push-up the
+ * muscle match should find for it (DN-169). Both described the way the
+ * library import writes them.
+ */
+async function benchWithoutFallback(
+  pushUpOverrides: Record<string, unknown> = {},
+) {
+  const described = {
+    pattern: 'push',
+    movementGroup: null,
+    sortOrder: null,
+    category: 'strength',
+    level: 'beginner',
+    primaryMuscles: ['chest'],
+    secondaryMuscles: ['shoulders', 'triceps'],
+    force: 'push',
+    mechanic: 'compound',
+  };
+  const bench = await createExercise({
+    ...described,
+    name: 'Barbell bench press',
+    equipment: ['barbell', 'bench'],
+  });
+  const pushUp = await createExercise({
+    ...described,
+    name: 'Pushups',
+    curated: true,
+    ...pushUpOverrides,
+  });
+  return { bench, pushUp, described };
+}
+
+describe('SchedulerService muscle-match substitution (DN-169)', () => {
+  it('serves the best muscle match where no one wrote a fallback', async () => {
+    const { bench } = await benchWithoutFallback();
+    const { user } = await assignedDay(bench.id, { equipment: [] });
+
+    const movement = await servedMovement(user.id);
+
+    expect(movement.exercise.name).toBe('Pushups');
+    expect(movement.reps).toBe(30);
+    expect(movement.prescribedName).toBe('Barbell bench press');
+    expect(movement.prescribedReason).toBe('equipment');
+  });
+
+  it('leaves the movement as written where nothing clears the bar', async () => {
+    // A harder push-up is no stand-in: an automatic swap is never harder.
+    const { bench } = await benchWithoutFallback({ level: 'expert' });
+    const { user } = await assignedDay(bench.id, { equipment: [] });
+
+    const movement = await servedMovement(user.id);
+
+    expect(movement.exercise.name).toBe('Barbell bench press');
+    expect(movement.prescribedReason).toBeNull();
+  });
+
+  it('never matches to another athlete’s own exercise', async () => {
+    // The candidate query carries the ownership clause and the muscle clause
+    // both; a spread would let one overwrite the other (DN-93).
+    const { bench, described } = await benchWithoutFallback({
+      archivedAt: new Date(),
+    });
+    const stranger = await createUser();
+    await createExercise({
+      ...described,
+      name: 'Their push-up',
+      ownerId: stranger.id,
+    });
+    const { user } = await assignedDay(bench.id, { equipment: [] });
+
+    expect((await servedMovement(user.id)).exercise.name).toBe(
+      'Barbell bench press',
+    );
+  });
+
+  it('matches to the athlete’s own exercise where it is described', async () => {
+    const { bench, described } = await benchWithoutFallback({
+      archivedAt: new Date(),
+    });
+    const { user } = await assignedDay(bench.id, { equipment: [] });
+    await createExercise({
+      ...described,
+      name: 'My push-up',
+      ownerId: user.id,
+    });
+
+    expect((await servedMovement(user.id)).exercise.name).toBe('My push-up');
+  });
+});
+
 describe('SchedulerService resolution ordering', () => {
   it('checks equipment against the remembered choice, not the WOD', async () => {
     // The WOD names a movement that needs nothing; the athlete's standing

@@ -60,6 +60,7 @@ export async function importLibrary(
       mechanic: e.mechanic,
       level: e.level,
       category: e.category,
+      curated: e.curated,
       // Re-seeding a retired movement brings it back (DN-25). Neither lookup
       // filters on `archivedAt`: a retired row still holds its key and its
       // name, so skipping it would mean creating a second one.

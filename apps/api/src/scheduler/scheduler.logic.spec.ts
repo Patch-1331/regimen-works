@@ -437,6 +437,49 @@ describe('applyEquipmentAvailability', () => {
     expect(result[1].exercise).toBe(burpee);
     expect(result[2].exercise).toBe(lunge);
   });
+  describe('the muscle match, where no one wrote a fallback (DN-169)', () => {
+    const asked: string[] = [];
+    const matchFor = (e: FakeExercise) => {
+      asked.push(e.id);
+      return e.id === 'muscle-up' ? rowUnderTable : null;
+    };
+    beforeEach(() => asked.splice(0));
+
+    it('takes the match for a movement with no fallback', () => {
+      const [result] = applyEquipmentAvailability(
+        [{ reps: 5, exercise: barMuscleUp }],
+        owning(),
+        substituteById,
+        matchFor,
+      );
+      expect(result).toEqual({ reps: 5, exercise: rowUnderTable });
+    });
+
+    it('asks only where a fallback is missing and the movement cannot be done', () => {
+      applyEquipmentAvailability(
+        [
+          { reps: 5, exercise: pullUp },
+          { reps: 5, exercise: burpee },
+          { reps: 5, exercise: barMuscleUp },
+        ],
+        owning(),
+        substituteById,
+        matchFor,
+      );
+      expect(asked).toEqual(['muscle-up']);
+    });
+
+    it('leaves the movement as written when nothing matches', () => {
+      const lonely: FakeExercise = { ...barMuscleUp, id: 'lonely' };
+      const [result] = applyEquipmentAvailability(
+        [{ reps: 5, exercise: lonely }],
+        owning(),
+        substituteById,
+        matchFor,
+      );
+      expect(result.exercise).toBe(lonely);
+    });
+  });
 });
 
 describe('unperformableSubstituteIds', () => {
