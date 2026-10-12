@@ -3,8 +3,24 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { Exercise } from '@prisma/client';
+import {
+  DEFAULT_EQUIPMENT,
+  type SwapOption,
+  type SwapOptionsResponse,
+} from '@regimen-works/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { libraryVisibleTo } from '../library/visible-to';
+import {
+  defaultsByGroup,
+  resolveGroupChoice,
+  usableChoice,
+} from '../plans/group-choice';
+import {
+  swapCandidatesWhere,
+  swapSections,
+  type SwapSections,
+} from '../scheduler/muscle-match';
 import {
   proposeMovementChanges,
   type ProposedMovementChange,
@@ -52,6 +68,42 @@ export class SubstitutionsService {
       update: { exerciseId },
       create: { userId, assignmentId, wodMovementId, exerciseId },
     });
+  }
+
+  /**
+   * The swap panel's options for one movement (DN-170): the whole library,
+   * matched by muscle against the movement and split three ways -- see
+   * `swapSections`. Each section is capped for display; legality reads them
+   * whole, so nothing past the cap is refused, it is only not listed.
+   *
+   * The hand-written fallback heads the main list where the athlete can
+   * perform it: someone chose it for exactly this movement, which no score
+   * says better.
+   */
+  async options(
+    userId: string,
+    assignmentId: string,
+    key: SwapKey,
+  ): Promise<SwapOptionsResponse> {
+    const movement = await this.loadSwappableMovement(
+      userId,
+      assignmentId,
+      key,
+    );
+    const { sections, fallbackId } = await this.sectionsFor(userId, movement);
+    const shown = (rows: Exercise[]): SwapOption[] =>
+      rows.slice(0, SECTION_CAP).map((e) => ({
+        exerciseId: e.id,
+        name: e.name,
+        level: e.level as SwapOption['level'],
+        equipment: e.equipment as SwapOption['equipment'],
+        isFallback: e.id === fallbackId,
+      }));
+    return {
+      main: shown(sections.main),
+      harder: shown(sections.harder),
+      needsEquipment: shown(sections.needsEquipment),
+    };
   }
 
   /**
@@ -169,11 +221,15 @@ export class SubstitutionsService {
             currentExerciseId: movement.exercise.id,
             movementGroup: movement.exercise.movementGroup,
             fallbackExerciseId: movement.exercise.fallbackExerciseId,
+            written: movement.exercise,
+            followsChoice: false,
           }
         : {
             currentExerciseId: null,
             movementGroup: movement.movementGroup,
             fallbackExerciseId: null,
+            written: null,
+            followsChoice: true,
           };
     }
 
@@ -188,14 +244,17 @@ export class SubstitutionsService {
       currentExerciseId: movement.exerciseId,
       movementGroup: movement.exercise.movementGroup,
       fallbackExerciseId: movement.exercise.fallbackExerciseId,
+      written: movement.exercise,
+      followsChoice: movement.exercise.movementGroup !== null,
     };
   }
 
   /**
-   * A swap moves to another member of the movement's group, or to a
-   * no-equipment fallback. Anything else isn't scaling, it's a different
-   * workout — and the reps stay as prescribed, so an unrelated target would
-   * leave the athlete with a rep count that means nothing.
+   * A swap moves to another member of the movement's group, to a
+   * no-equipment fallback, or to anything the swap panel offers (DN-170).
+   * Anything else isn't scaling, it's a different workout -- and the reps stay
+   * as prescribed, so an unrelated target would leave the athlete with a rep
+   * count that means nothing.
    *
    * Members and their fallbacks are one flat legal set, in both directions
    * and at any distance: the group is unordered, so there is no such thing as
@@ -206,10 +265,13 @@ export class SubstitutionsService {
    * exercise, because the athlete sees the group as it stands after their
    * remembered choice has been applied.
    *
-   * Outside a group there is nothing to move between, but the fallback is
-   * still a legal target (DN-80): cardio carries no group and a fallback
-   * both, and refusing it left an athlete holding a movement they own no
-   * equipment for with nowhere to go.
+   * Outside a group the fallback is still a legal target (DN-80): cardio
+   * carries no group and a fallback both, and refusing it left an athlete
+   * holding a movement they own no equipment for with nowhere to go.
+   *
+   * The panel's sections are checked whole rather than as capped, and last,
+   * because they cost a library read the group check does not: what the
+   * panel offers is legal whether or not it was on screen.
    */
   private async assertLegalTarget(
     userId: string,
@@ -217,33 +279,143 @@ export class SubstitutionsService {
     exerciseId: string,
   ) {
     if (exerciseId === movement.currentExerciseId) return;
+    if (exerciseId === movement.fallbackExerciseId) return;
 
     const movementGroup = movement.movementGroup;
-    if (!movementGroup) {
-      if (exerciseId === movement.fallbackExerciseId) return;
-      throw new BadRequestException(
-        'This movement is not in a movement group, so it can only be swapped for its alternative',
-      );
+    if (movementGroup) {
+      const inGroup = await this.prisma.exercise.findMany({
+        where: { ...libraryVisibleTo(userId), movementGroup },
+        select: { id: true, fallbackExerciseId: true },
+      });
+      for (const e of inGroup) {
+        if (e.id === exerciseId || e.fallbackExerciseId === exerciseId) return;
+      }
     }
 
-    const inGroup = await this.prisma.exercise.findMany({
-      where: { ...libraryVisibleTo(userId), movementGroup },
-      select: { id: true, fallbackExerciseId: true },
+    const { anchorId, sections } = await this.sectionsFor(userId, movement);
+    const offered = [
+      ...sections.main,
+      ...sections.harder,
+      ...sections.needsEquipment,
+    ];
+    if (exerciseId === anchorId || offered.some((e) => e.id === exerciseId)) {
+      return;
+    }
+
+    throw new BadRequestException(
+      'That exercise is not one this movement can be swapped for',
+    );
+  }
+
+  /**
+   * The panel's sections for `movement`, uncapped, matched against its
+   * anchor -- see `anchorFor`.
+   *
+   * The candidate query composes the visibility clause and the muscle clause
+   * with AND, not a spread: both carry an `OR`, and spreading one over the
+   * other would drop the ownership half and read every athlete's exercises
+   * (DN-93).
+   */
+  private async sectionsFor(
+    userId: string,
+    movement: SwappableMovement,
+  ): Promise<{
+    anchorId: string | null;
+    fallbackId: string | null;
+    sections: SwapSections<Exercise>;
+  }> {
+    const rule = await this.prisma.scheduleRule.findUnique({
+      where: { userId },
+      select: { equipment: true },
     });
+    // No rule is the baseline, not owning nothing -- the scheduler's reading.
+    const owned = new Set(rule?.equipment ?? DEFAULT_EQUIPMENT);
 
-    const legal = new Set<string>();
-    for (const e of inGroup) {
-      legal.add(e.id);
-      if (e.fallbackExerciseId) legal.add(e.fallbackExerciseId);
+    const anchor = await this.anchorFor(userId, movement, owned);
+    const empty = { main: [], harder: [], needsEquipment: [] };
+    if (!anchor) return { anchorId: null, fallbackId: null, sections: empty };
+
+    const [candidates, fallback] = await Promise.all([
+      this.prisma.exercise.findMany({
+        where: {
+          AND: [libraryVisibleTo(userId), swapCandidatesWhere(anchor)],
+        },
+      }),
+      anchor.fallbackExerciseId === null
+        ? null
+        : this.prisma.exercise.findFirst({
+            where: {
+              ...libraryVisibleTo(userId),
+              id: anchor.fallbackExerciseId,
+              archivedAt: null,
+            },
+          }),
+    ]);
+
+    const sections = swapSections(anchor, candidates, owned);
+    if (fallback && fallback.equipment.every((piece) => owned.has(piece))) {
+      sections.main = [
+        fallback,
+        ...sections.main.filter((e) => e.id !== fallback.id),
+      ];
+      sections.harder = sections.harder.filter((e) => e.id !== fallback.id);
     }
+    return {
+      anchorId: anchor.id,
+      fallbackId: fallback?.id ?? null,
+      sections,
+    };
+  }
 
-    if (!legal.has(exerciseId)) {
-      throw new BadRequestException(
-        'That exercise is not one this movement can be swapped for',
+  /**
+   * What the panel matches against: the movement as the athlete would be
+   * handed it before equipment and before today's swap. On a WOD row that is
+   * their remembered choice in its group, where they have a usable one, and
+   * the movement as written otherwise; on a prescribed row, the slot's own
+   * exercise, or the group resolved the way the prescription resolves it.
+   *
+   * Not the movement on screen: equipment may already have dropped a barbell
+   * bench press to push-ups, and the dumbbell press is still the closest
+   * thing to what the day asked for. And not today's swap either, so the
+   * options hold still while the athlete moves between them.
+   */
+  private async anchorFor(
+    userId: string,
+    movement: SwappableMovement,
+    owned: ReadonlySet<string>,
+  ): Promise<Exercise | null> {
+    if (!movement.followsChoice) return movement.written;
+    const group = movement.movementGroup;
+    if (group === null) return movement.written;
+
+    const [skillLevels, lined] = await Promise.all([
+      this.prisma.skillLevel.findMany({ where: { userId } }),
+      this.prisma.exercise.findMany({
+        where: { ...libraryVisibleTo(userId), movementGroup: { not: null } },
+      }),
+    ]);
+    const chosen = new Map(
+      skillLevels.map((s) => [s.movementGroup, s.exerciseId]),
+    );
+    const byId = new Map(lined.map((e) => [e.id, e]));
+
+    if (movement.written === null) {
+      return (
+        resolveGroupChoice(
+          group,
+          chosen,
+          byId,
+          defaultsByGroup(lined),
+          owned,
+        ) ?? null
       );
     }
+    return usableChoice(group, chosen, byId, owned) ?? movement.written;
   }
 }
+
+/** How many of each section the panel lists (DN-170). */
+export const SECTION_CAP = 8;
 
 /**
  * Which movement the athlete tapped: exactly one of the two, the same xor the
@@ -269,4 +441,8 @@ type SwappableMovement = {
   currentExerciseId: string | null;
   movementGroup: string | null;
   fallbackExerciseId: string | null;
+  /** The exercise the row names, or null on a group-prescribed row. */
+  written: Exercise | null;
+  /** Whether the athlete's remembered choice in the group stands in for it. */
+  followsChoice: boolean;
 };

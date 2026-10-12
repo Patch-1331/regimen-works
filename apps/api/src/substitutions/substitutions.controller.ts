@@ -6,8 +6,12 @@ import {
   HttpCode,
   Param,
   Post,
+  Query,
 } from '@nestjs/common';
-import { setSubstitutionRequestSchema } from '@regimen-works/shared';
+import {
+  setSubstitutionRequestSchema,
+  swapOptionsQuerySchema,
+} from '@regimen-works/shared';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { validateBody } from '../common/validate';
 import { SubstitutionsService } from './substitutions.service';
@@ -30,6 +34,22 @@ export class SubstitutionsController {
       userId,
       assignmentId,
     );
+  }
+
+  /**
+   * The swap panel's options for one movement (DN-170), read when the panel
+   * opens. Above the `:wodMovementId` routes for the reason the read above is.
+   */
+  @Get('options')
+  options(
+    @CurrentUser() userId: string,
+    @Param('assignmentId') assignmentId: string,
+    @Query() query: unknown,
+  ) {
+    // The same validator as a body: a query string is an object of strings
+    // too, and the either-or is the schema's to state.
+    const key = validateBody(swapOptionsQuerySchema, query);
+    return this.substitutionsService.options(userId, assignmentId, key);
   }
 
   @Post()

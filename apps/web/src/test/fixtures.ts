@@ -3,6 +3,7 @@ import type {
   Settings,
   SkillLevel,
   PrescribedMovement,
+  SwapOption,
   SessionMovement,
   TodayPlan,
   TodayResponse,
@@ -52,6 +53,7 @@ export function movement(overrides: Partial<WodMovement> = {}): WodMovement {
       movementGroup: "push_horizontal",
       sortOrder: 2,
       fallbackExerciseId: null,
+      primaryMuscles: ["chest"],
       ...overrides.exercise,
     },
   };
@@ -93,6 +95,7 @@ export function prescribedMovement(
       movementGroup: "pull",
       sortOrder: 1,
       fallbackExerciseId: null,
+      primaryMuscles: ["lats"],
       ...overrides.exercise,
     },
   };
@@ -387,6 +390,18 @@ export function apiExercise(overrides: Partial<ApiExercise> = {}): ApiExercise {
     ownerId: null,
     archivedAt: null,
     fallbackExercise: null,
+    ...overrides,
+  };
+}
+
+/** One row of the swap panel's options (DN-170). */
+export function swapOption(overrides: Partial<SwapOption> = {}): SwapOption {
+  return {
+    exerciseId: "exercise-1",
+    name: "Push-up",
+    level: "beginner",
+    equipment: [],
+    isFallback: false,
     ...overrides,
   };
 }

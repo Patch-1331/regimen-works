@@ -1,6 +1,7 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
-import type { SwapOption } from "../lib/swapOptions";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+import type { SwapRow, SwapRows } from "../lib/swapOptions";
 import { SwapPanel } from "./MovementSwap";
 
 /**
@@ -17,35 +18,33 @@ import { SwapPanel } from "./MovementSwap";
  * whole point: the reason field exists to be read by an athlete.
  */
 
-const options: SwapOption[] = [
-  {
-    exerciseId: "row",
-    name: "Row under table",
-    sortOrder: null,
-    isCurrent: true,
-    isAlternative: true,
-    isPrescribed: false,
-  },
-];
+const row = (overrides: Partial<SwapRow> & { exerciseId: string; name: string }): SwapRow => ({
+  isCurrent: false,
+  isAlternative: false,
+  isPrescribed: false,
+  ...overrides,
+});
+
+const current = row({
+  exerciseId: "row",
+  name: "Row under table",
+  isCurrent: true,
+  isAlternative: true,
+});
+
+const options: SwapRows = { main: [current], harder: [], needsEquipment: [] };
 
 /** The same list with the prescribed movement back on it (DN-110). */
-const withPrescribed: SwapOption[] = [
+const withPrescribed: SwapRows = {
   ...options,
-  {
-    exerciseId: "pull-up",
-    name: "Pull-up",
-    sortOrder: null,
-    isCurrent: false,
-    isAlternative: false,
-    isPrescribed: true,
-  },
-];
+  main: [current, row({ exerciseId: "pull-up", name: "Pull-up", isPrescribed: true })],
+};
 
 function panel(props: Partial<Parameters<typeof SwapPanel>[0]> = {}) {
   return render(
     <SwapPanel
       id="swap-panel"
-      options={options}
+      rows={options}
       isSwapped={false}
       prescribedName={null}
       prescribedReason={null}
@@ -85,7 +84,7 @@ describe("SwapPanel prescription note", () => {
     // and the sentence's flat statement of fact reads as final next to a
     // control that now offers a way out of it.
     panel({
-      options: withPrescribed,
+      rows: withPrescribed,
       prescribedName: "Pull-up",
       prescribedReason: "equipment",
     });
@@ -100,7 +99,7 @@ describe("SwapPanel prescription note", () => {
     // The shorter wording must not collapse the two readings the note exists
     // to keep apart: a standing choice is the athlete's own.
     panel({
-      options: withPrescribed,
+      rows: withPrescribed,
       prescribedName: "Pull-up",
       prescribedReason: "remembered_choice",
     });
@@ -114,7 +113,7 @@ describe("SwapPanel prescription note", () => {
   it("marks which row the workout asked for", () => {
     // Outside a group the two rows are near-identical movements, and which is
     // which decides the tap.
-    panel({ options: withPrescribed, prescribedName: "Pull-up", prescribedReason: "equipment" });
+    panel({ rows: withPrescribed, prescribedName: "Pull-up", prescribedReason: "equipment" });
     expect(screen.getByText("PRESCRIBED")).toBeInTheDocument();
   });
 
@@ -123,5 +122,73 @@ describe("SwapPanel prescription note", () => {
     // the equipment layer, so the remembered choice is the honest reading.
     panel({ prescribedName: "Pull-up", prescribedReason: null });
     expect(screen.getByText("Your pick. The workout says pull-up.")).toBeInTheDocument();
+  });
+});
+
+/**
+ * The three sections (DN-170): what the athlete can do, what is harder, and
+ * what needs kit they haven't listed. The headings describe the exercise,
+ * never the athlete (ADR-0004, ADR-0007).
+ */
+describe("SwapPanel sections", () => {
+  const sections: SwapRows = {
+    main: [current, row({ exerciseId: "negative", name: "Negative chin-up" })],
+    harder: [row({ exerciseId: "pull-up", name: "Pull-up" })],
+    needsEquipment: [row({ exerciseId: "ring-row", name: "Ring row" })],
+  };
+
+  it("lists the main section, then the harder ones under their own heading", () => {
+    panel({ rows: sections });
+    const names = screen.getAllByRole("button").map((b) => b.textContent);
+    expect(names.slice(0, 3)).toEqual([
+      "Row under tableNO KIT",
+      "Negative chin-up",
+      "Pull-up",
+    ]);
+    expect(screen.getByText("HARDER OPTIONS")).toBeInTheDocument();
+  });
+
+  it("keeps what needs unlisted equipment collapsed until asked", async () => {
+    panel({ rows: sections });
+    const toggle = screen.getByRole("button", { name: /needs equipment you haven't listed/i });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Ring row")).not.toBeInTheDocument();
+
+    await userEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const list = document.getElementById(toggle.getAttribute("aria-controls")!)!;
+    expect(within(list).getByRole("button", { name: "Ring row" })).toBeInTheDocument();
+  });
+
+  it("picks from the collapsed section like any other", async () => {
+    const onPick = vi.fn();
+    panel({ rows: sections, onPick });
+    await userEvent.click(
+      screen.getByRole("button", { name: /needs equipment you haven't listed/i }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Ring row" }));
+    expect(onPick).toHaveBeenCalledWith("ring-row");
+  });
+
+  it("leaves out a heading with nothing under it", () => {
+    panel({ rows: { ...sections, harder: [], needsEquipment: [] } });
+    expect(screen.queryByText("HARDER OPTIONS")).not.toBeInTheDocument();
+    expect(screen.queryByText(/needs equipment/i)).not.toBeInTheDocument();
+  });
+
+  it("says so when the library has nothing to move to", () => {
+    panel({ rows: options });
+    expect(screen.getByText("Nothing in the library matches this movement.")).toBeInTheDocument();
+  });
+
+  it("says it is looking while the options load", () => {
+    panel({ rows: null });
+    expect(screen.getByText("Finding matches…")).toBeInTheDocument();
+  });
+
+  it("says when they could not be loaded", () => {
+    panel({ rows: null, failed: true });
+    expect(screen.getByText("Couldn't load the options. Close and try again.")).toBeInTheDocument();
   });
 });

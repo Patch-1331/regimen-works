@@ -22,6 +22,8 @@ import type {
   SetSkillLevelRequest,
   ProposedMovementChange,
   SetSubstitutionRequest,
+  SwapOptionsQuery,
+  SwapOptionsResponse,
   Settings,
   UpdateRestPace,
   SetupOptions,
@@ -306,6 +308,18 @@ export const api = {
     request<ProposedMovementChange[]>(
       `/assignments/${assignmentId}/substitutions/movement-changes`,
     ),
+  /**
+   * The swap panel's options for one movement (DN-170), read when the panel
+   * opens. Exactly one of the two ids, the same either-or a swap names.
+   */
+  swapOptions: (assignmentId: string, key: SwapOptionsQuery) => {
+    const query = key.wodMovementId
+      ? `wodMovementId=${encodeURIComponent(key.wodMovementId)}`
+      : `planSlotMovementId=${encodeURIComponent(key.planSlotMovementId ?? "")}`;
+    return request<SwapOptionsResponse>(
+      `/assignments/${assignmentId}/substitutions/options?${query}`,
+    );
+  },
   setSubstitution: (assignmentId: string, body: SetSubstitutionRequest) =>
     postJson<void>(`/assignments/${assignmentId}/substitutions`, body),
   clearSubstitution: (assignmentId: string, wodMovementId: string) =>

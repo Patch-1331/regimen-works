@@ -82,6 +82,11 @@ export const handlers = [
   http.get(api(`/assignments/:assignmentId/log`), () => new HttpResponse(null, { status: 204 })),
   http.get(api(`/assignments/:assignmentId/session`), () => new HttpResponse(null, { status: 204 })),
   http.get(api(`/assignments/:assignmentId/substitutions/movement-changes`), () => HttpResponse.json([])),
+  // Nothing to swap to by default (DN-170): a test about the panel serves the
+  // sections it means to show.
+  http.get(api(`/assignments/:assignmentId/substitutions/options`), () =>
+    HttpResponse.json({ main: [], harder: [], needsEquipment: [] }),
+  ),
 
   http.post(api(`/assignments/:assignmentId/session`), () => HttpResponse.json(fixtures.session())),
   http.post(api(`/assignments/:assignmentId/session/interval`), () =>

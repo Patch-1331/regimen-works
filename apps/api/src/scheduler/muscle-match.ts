@@ -78,27 +78,43 @@ function performable(e: { equipment: string[] }, owned: ReadonlySet<string>) {
   return e.equipment.every((piece) => owned.has(piece));
 }
 
-/** Whether `candidate` may stand in at all, before anything is scored. */
+/**
+ * How `candidate` compares to `target` in difficulty, or null where it may
+ * not stand in at all -- whatever the athlete owns, and before anything is
+ * scored. The rules the automatic swap and the swap panel (DN-170) share.
+ */
+function comparable(
+  target: MatchableExercise,
+  candidate: MatchableExercise,
+): 'same_or_easier' | 'harder' | null {
+  const targetLevel = LEVELS.indexOf(target.level ?? '');
+  const level = LEVELS.indexOf(candidate.level ?? '');
+  const ok =
+    candidate.id !== target.id &&
+    candidate.archivedAt === null &&
+    candidate.primaryMuscles.length > 0 &&
+    candidate.unit === target.unit &&
+    categoryClass(candidate.category) !== null &&
+    categoryClass(candidate.category) === categoryClass(target.category) &&
+    // Unknown difficulty on either side proves nothing, so it does not pass.
+    level !== -1 &&
+    targetLevel !== -1;
+  if (!ok) return null;
+  return level <= targetLevel ? 'same_or_easier' : 'harder';
+}
+
+/**
+ * Whether `candidate` may be swapped in automatically: performable, and
+ * never harder (ADR-0007).
+ */
 function eligible(
   target: MatchableExercise,
   candidate: MatchableExercise,
   owned: ReadonlySet<string>,
 ): boolean {
-  const targetLevel = LEVELS.indexOf(target.level ?? '');
-  const level = LEVELS.indexOf(candidate.level ?? '');
   return (
-    candidate.id !== target.id &&
-    candidate.archivedAt === null &&
-    candidate.primaryMuscles.length > 0 &&
-    performable(candidate, owned) &&
-    candidate.unit === target.unit &&
-    categoryClass(candidate.category) !== null &&
-    categoryClass(candidate.category) === categoryClass(target.category) &&
-    // An automatic swap is never harder (ADR-0007). Unknown on either side
-    // proves nothing, so it does not pass.
-    level !== -1 &&
-    targetLevel !== -1 &&
-    level <= targetLevel
+    comparable(target, candidate) === 'same_or_easier' &&
+    performable(candidate, owned)
   );
 }
 
@@ -182,6 +198,96 @@ export function muscleMatch<E extends MatchableExercise>(
 }
 
 /**
+ * The swap panel's three sections for `target` (DN-170): what the athlete
+ * can do at the same level or easier, what they can do that is harder, and
+ * what matches but needs kit they have not listed. A harder move needing
+ * unlisted kit is in none of them.
+ *
+ * Two ways in. The movement's own group, whatever the score: the group is a
+ * hand-curated set of interchangeable movements, any member for any other
+ * (ADR-0004), and muscles alone would split it -- a glute bridge and a
+ * Romanian deadlift share a group and not a prime mover. Everything else
+ * passes the automatic swap's hard filters and clears `MATCH_THRESHOLD`.
+ *
+ * Uncapped and in display order: curated first, then by score, then the
+ * automatic swap's own tie-break. The cap is the caller's, because legality
+ * reads the whole of each section and the panel only its head.
+ *
+ * Only the athlete ever takes a harder option. The automatic swap reads
+ * `muscleMatch`, which never looks past the first section.
+ */
+export function swapSections<E extends MatchableExercise>(
+  target: MatchableExercise,
+  candidates: readonly E[],
+  owned: ReadonlySet<string>,
+): SwapSections<E> {
+  const sections: Record<
+    keyof SwapSections<E>,
+    { exercise: E; score: number }[]
+  > = { main: [], harder: [], needsEquipment: [] };
+
+  for (const candidate of candidates) {
+    const mate =
+      target.movementGroup !== null &&
+      candidate.movementGroup === target.movementGroup;
+    const difficulty = mate
+      ? groupMateDifficulty(target, candidate)
+      : comparable(target, candidate);
+    if (difficulty === null) continue;
+    const score = matchScore(target, candidate);
+    if (!mate && score < MATCH_THRESHOLD) continue;
+    const canDo = performable(candidate, owned);
+    if (canDo && difficulty === 'same_or_easier') {
+      sections.main.push({ exercise: candidate, score });
+    } else if (canDo) {
+      sections.harder.push({ exercise: candidate, score });
+    } else if (difficulty === 'same_or_easier') {
+      sections.needsEquipment.push({ exercise: candidate, score });
+    }
+  }
+
+  const order = (
+    a: { exercise: E; score: number },
+    b: { exercise: E; score: number },
+  ) =>
+    a.exercise.curated !== b.exercise.curated
+      ? a.exercise.curated
+        ? -1
+        : 1
+      : b.score - a.score || tieBreak(target, a.exercise, b.exercise);
+  const sorted = (rows: { exercise: E; score: number }[]) =>
+    rows.sort(order).map((r) => r.exercise);
+  return {
+    main: sorted(sections.main),
+    harder: sorted(sections.harder),
+    needsEquipment: sorted(sections.needsEquipment),
+  };
+}
+
+/**
+ * Where a member of the movement's own group sits: harder only where both
+ * levels are known and say so. An undescribed member is the athlete's own,
+ * or older content, and the group already vouches for it.
+ */
+function groupMateDifficulty(
+  target: MatchableExercise,
+  candidate: MatchableExercise,
+): 'same_or_easier' | 'harder' | null {
+  if (candidate.id === target.id || candidate.archivedAt !== null) return null;
+  const targetLevel = LEVELS.indexOf(target.level ?? '');
+  const level = LEVELS.indexOf(candidate.level ?? '');
+  return targetLevel !== -1 && level > targetLevel
+    ? 'harder'
+    : 'same_or_easier';
+}
+
+export type SwapSections<E> = {
+  main: E[];
+  harder: E[];
+  needsEquipment: E[];
+};
+
+/**
  * The movements the muscle match will be asked about: those the athlete
  * cannot perform, with no hand-written fallback, and with muscles to match
  * on. The common day returns none, and the service skips the query.
@@ -212,14 +318,37 @@ export function muscleMatchWhere(
   targets: readonly MatchableExercise[],
   owned: ReadonlySet<string>,
 ) {
-  const wanted = [...new Set(targets.flatMap((t) => [...muscles(t)]))];
   return {
-    unit: { in: [...new Set(targets.map((t) => t.unit))] },
+    ...sharesAMuscle(targets),
     NOT: {
       equipment: {
         hasSome: equipmentEnum.options.filter((piece) => !owned.has(piece)),
       },
     },
+  };
+}
+
+/**
+ * The candidates `swapSections` could offer for `target` (DN-170):
+ * `muscleMatchWhere` without the kit, because the panel offers what needs
+ * equipment the athlete has not listed too, under its own heading -- and
+ * the movement's own group, which it offers whatever the muscles say.
+ */
+export function swapCandidatesWhere(target: MatchableExercise) {
+  return {
+    OR: [
+      sharesAMuscle([target]),
+      ...(target.movementGroup === null
+        ? []
+        : [{ movementGroup: target.movementGroup }]),
+    ],
+  };
+}
+
+function sharesAMuscle(targets: readonly MatchableExercise[]) {
+  const wanted = [...new Set(targets.flatMap((t) => [...muscles(t)]))];
+  return {
+    unit: { in: [...new Set(targets.map((t) => t.unit))] },
     primaryMuscles: { isEmpty: false },
     OR: [
       { primaryMuscles: { hasSome: wanted } },
