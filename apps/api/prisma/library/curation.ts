@@ -1,14 +1,17 @@
-import type { Curation } from '../../src/seed/library';
+import type { Equipment } from '@regimen-works/shared';
+
+import type { Correction, Curation } from '../../src/seed/library';
 
 /**
  * The curation file (DN-167, ADR-0007 decision 3): what the scheduler needs
  * to know about each exercise, which no dataset says.
  *
  * Keyed by exercise key -- free-exercise-db's own `id`, or `rw-` for one of
- * the app's own in `own-exercises.json`. A dataset entry is in the library
- * when it has an entry here, and only then: this object is the allow-list.
- * Every own exercise has one too, because pattern and grouping are ours to
- * say either way.
+ * the app's own in `own-exercises.json`. An entry here makes an exercise
+ * curated: something the seeded WODs, groups and checklists can prescribe,
+ * held to the fallback guard (DN-83). Every own exercise has one, because
+ * pattern and grouping are ours to say either way. The rest of the dataset
+ * comes in uncurated (DN-168), fixed where needed by `corrections` below.
  *
  * Data only, so a spec can read it. Order is reading order, and the order
  * the import writes rows in.
@@ -365,6 +368,7 @@ const SLED = 'needs a sled or a prowler';
 const CHAINS = 'needs lifting chains';
 const SPECIALIST = (piece: string) =>
   `needs ${piece}, which Settings does not ask about`;
+const NO_STEPS = 'the dataset has no instructions for it';
 
 /**
  * Dataset entries kept out on purpose (ADR-0007 decision 9): the specialist
@@ -412,4 +416,165 @@ export const leftOut: Record<string, string> = {
   Wrist_Roller: SPECIALIST('a wrist roller'),
   Ab_Roller: SPECIALIST('an ab roller'),
   Balance_Board: SPECIALIST('a balance board'),
+  Bicycling: SPECIALIST('a bicycle'),
+  Skating: SPECIALIST('skates'),
+  Rope_Climb: SPECIALIST('a climbing rope'),
+  London_Bridges: SPECIALIST('a climbing rope'),
+  Weighted_Squat: SPECIALIST('a dip belt'),
+
+  // DN-168: nothing to read. The swap panel shows moves to people who have
+  // never done them, so an entry without steps cannot come in.
+  Iron_Cross: NO_STEPS,
+  'One-Arm_Kettlebell_Swings': NO_STEPS,
+  Push_Press: NO_STEPS,
+  Side_Bridge: NO_STEPS,
+  Side_Jackknife: NO_STEPS,
+
+  Childs_Pose: 'the same stretch as our own rw-childs-pose',
+};
+
+/** "With a chair", "with a partner": things anyone has, which Settings does not ask about. */
+const NONE: Equipment[] = [];
+
+/**
+ * Hand fixes to the dataset entries nobody has curated (DN-168): what the
+ * derived values get wrong. An entry with no line here comes in as derived
+ * -- sentence-case name, suggested pattern, unit from the force, equipment
+ * from the word plus the hidden-kit rules.
+ *
+ * Mostly equipment. "other" names nothing, so every entry with it is here;
+ * so is every entry a hidden-kit rule reads wrong -- a "bench" in the steps
+ * that is only somewhere to sit, a "box" that is a plyo box under a barbell.
+ * Kit Settings does not ask about and anyone has -- a chair, a partner, a
+ * towel or a belt for a stretch, cones -- counts as no equipment.
+ */
+export const corrections: Record<string, Correction> = {
+  // "other", said plainly
+  'Anterior_Tibialis-SMR': { equipment: ['foam_roller'] },
+  'Neck-SMR': { equipment: ['foam_roller'] },
+  'Foot-SMR': { equipment: ['foam_roller'] },
+  'Band_Assisted_Pull-Up': { equipment: ['bar', 'bands'] },
+  Bodyweight_Mid_Row: { equipment: ['bar'] },
+  Gironda_Sternum_Chins: { equipment: ['bar'] },
+  Mixed_Grip_Chin: { equipment: ['bar'] },
+  'Rocky_Pull-Ups_Pulldowns': { equipment: ['bar'] },
+  Side_To_Side_Chins: { equipment: ['bar'] },
+  'One_Arm_Chin-Up': { equipment: ['bar'] },
+  One_Handed_Hang: { equipment: ['bar'] },
+  Weighted_Pull_Ups: { equipment: ['bar', 'dumbbell'] },
+  Bench_Sprint: { equipment: ['box'] },
+  Box_Jump_Multiple_Response: { equipment: ['box'] },
+  Box_Skip: { equipment: ['box'] },
+  Depth_Jump_Leap: { equipment: ['box'] },
+  Drop_Push: { equipment: ['box'] },
+  'Incline_Push-Up_Depth_Jump': { equipment: ['box'] },
+  Linear_Depth_Jump: { equipment: ['box'] },
+  Lateral_Box_Jump: { equipment: ['box'] },
+  Quick_Leap: { equipment: ['box'] },
+  Side_to_Side_Box_Shuffle: { equipment: ['box'] },
+  'Single-Leg_Stride_Jump': { equipment: ['box'] },
+  'Single_Leg_Push-off': { equipment: ['box'] },
+  Stride_Jump_Crossover: { equipment: ['box'] },
+  'Single-Leg_High_Box_Squat': { equipment: ['box'] },
+  'Dips_-_Chest_Version': { equipment: ['dip_bars'] },
+  Parallel_Bar_Dip: { equipment: ['dip_bars'] },
+  Knee_Hip_Raise_On_Parallel_Bars: { equipment: ['dip_bars'] },
+  Donkey_Calf_Raises: { equipment: ['gym_machines'] },
+  Hyperextensions_Back_Extensions: { equipment: ['gym_machines'] },
+  // A plate is part of a barbell set.
+  Front_Plate_Raise: { equipment: ['barbell'] },
+  Plate_Pinch: { equipment: ['barbell'] },
+  Plate_Twist: { equipment: ['barbell'] },
+  Reverse_Plate_Curls: { equipment: ['barbell'] },
+  Standing_Olympic_Plate_Hand_Squeeze: { equipment: ['barbell'] },
+  Svend_Press: { equipment: ['barbell'] },
+  Lying_Face_Down_Plate_Neck_Resistance: { equipment: ['barbell', 'bench'] },
+  Lying_Face_Up_Plate_Neck_Resistance: { equipment: ['barbell', 'bench'] },
+  // Rings, and straps, are a suspension trainer.
+  Inverted_Row_with_Straps: { equipment: ['suspension_trainer'] },
+  Kipping_Muscle_Up: { equipment: ['suspension_trainer'] },
+  Muscle_Up: { equipment: ['suspension_trainer'] },
+  Ring_Dips: { equipment: ['suspension_trainer'] },
+  Suspended_Fallout: { equipment: ['suspension_trainer'] },
+  'Suspended_Push-Up': { equipment: ['suspension_trainer'] },
+  Suspended_Reverse_Crunch: { equipment: ['suspension_trainer'] },
+  Suspended_Row: { equipment: ['suspension_trainer'] },
+  Suspended_Split_Squat: { equipment: ['suspension_trainer'] },
+  'Otis-Up': { equipment: ['dumbbell'] },
+  Seated_Band_Hamstring_Curl: { equipment: ['bands', 'bench'] },
+  'Weighted_Sit-Ups_-_With_Bands': { equipment: ['bands', 'bench'] },
+  Weighted_Bench_Dip: { equipment: ['bench', 'dumbbell'] },
+  // With a partner
+  Behind_Head_Chest_Stretch: { equipment: NONE },
+  Lying_Bent_Leg_Groin: { equipment: NONE },
+  Lying_Hamstring: { equipment: NONE },
+  Overhead_Lat: { equipment: NONE },
+  // With a chair, a broomstick, cones, a towel or a belt
+  Chair_Leg_Extended_Stretch: { equipment: NONE },
+  Chair_Upper_Body_Stretch: { equipment: NONE },
+  Chest_And_Front_Of_Shoulder_Stretch: { equipment: NONE },
+  Round_The_World_Shoulder_Stretch: { equipment: NONE },
+  Front_Cone_Hops_or_hurdle_hops: { equipment: NONE },
+  Hurdle_Hops: { equipment: NONE },
+  Lateral_Cone_Hops: { equipment: NONE },
+  'Side_Hop-Sprint': { equipment: NONE },
+  'Single-Cone_Sprint_Drill': { equipment: NONE },
+  'Single-Leg_Hop_Progression': { equipment: NONE },
+  'Single-Leg_Lateral_Hop': { equipment: NONE },
+  IT_Band_and_Glute_Stretch: { equipment: NONE },
+  Intermediate_Groin_Stretch: { equipment: NONE },
+  Intermediate_Hip_Flexor_and_Quad_Stretch: { equipment: NONE },
+  Peroneals_Stretch: { equipment: NONE },
+  Posterior_Tibialis_Stretch: { equipment: NONE },
+  Quad_Stretch: { equipment: NONE },
+  Seated_Hamstring_and_Calf_Stretch: { equipment: NONE },
+  Standing_Hamstring_and_Calf_Stretch: { equipment: NONE },
+  'On-Your-Back_Quad_Stretch': { equipment: NONE },
+  Standing_Elevated_Quad_Stretch: { equipment: NONE },
+  Platform_Hamstring_Slides: { equipment: NONE },
+  Standing_Biceps_Stretch: { equipment: NONE },
+
+  // A hidden-kit rule read wrong: the bench or box is not the kit.
+  Crunches: { equipment: NONE },
+  'Flat_Bench_Leg_Pull-In': { equipment: NONE },
+  'Decline_Push-Up': { equipment: NONE },
+  'Push-Ups_With_Feet_Elevated': { equipment: NONE },
+  'Incline_Push-Up': { equipment: NONE },
+  Natural_Glute_Ham_Raise: { equipment: NONE },
+  Weighted_Crunches: { equipment: ['medicine_ball'] },
+  Barbell_Rear_Delt_Row: { equipment: ['barbell'] },
+  One_Arm_Floor_Press: { equipment: ['barbell'] },
+  Inverted_Row: { equipment: ['barbell'] },
+  Elevated_Back_Lunge: { equipment: ['barbell'] },
+  Lying_Leg_Curls: { equipment: ['gym_machines'] },
+  Machine_Bench_Press: { equipment: ['gym_machines'] },
+  Low_Cable_Triceps_Extension: { equipment: ['gym_machines'] },
+  Cable_Internal_Rotation: { equipment: ['gym_machines'] },
+  'Full_Range-Of-Motion_Lat_Pulldown': { equipment: ['gym_machines'] },
+  Speed_Band_Overhead_Triceps: { equipment: ['bands'] },
+  'One-Arm_Side_Laterals': { equipment: ['dumbbell'] },
+  'Standing_Palm-In_One-Arm_Dumbbell_Press': { equipment: ['dumbbell'] },
+  Bench_Jump: { equipment: ['box'] },
+  'Step-up_with_Knee_Raise': { equipment: ['box'] },
+  Barbell_Step_Ups: { equipment: ['barbell', 'box'] },
+  Dumbbell_Step_Ups: { equipment: ['box', 'dumbbell'] },
+  Barbell_Squat_To_A_Bench: { equipment: ['barbell', 'bench'] },
+  Hyperextensions_With_No_Hyperextension_Bench: { equipment: ['bench'] },
+  // The dip of a jerk, not dip bars.
+  Jerk_Dip_Squat: { equipment: ['barbell'] },
+
+  // Cardio is done for time.
+  Bicycling_Stationary: { unit: 'seconds', equipment: ['gym_machines'] },
+  Elliptical_Trainer: { unit: 'seconds', equipment: ['gym_machines'] },
+  Jogging_Treadmill: { unit: 'seconds', equipment: ['gym_machines'] },
+  Recumbent_Bike: { unit: 'seconds', equipment: ['gym_machines'] },
+  Rowing_Stationary: { unit: 'seconds', equipment: ['gym_machines'] },
+  Running_Treadmill: { unit: 'seconds', equipment: ['gym_machines'] },
+  Stairmaster: { unit: 'seconds', equipment: ['gym_machines'] },
+  Step_Mill: { unit: 'seconds', equipment: ['gym_machines'] },
+  Walking_Treadmill: { unit: 'seconds', equipment: ['gym_machines'] },
+  Trail_Running_Walking: { unit: 'seconds', equipment: NONE },
+
+  // "Squats - With Bands" is the bands-only one; this is under a barbell.
+  Squat_with_Bands: { name: 'Barbell squat with bands' },
 };

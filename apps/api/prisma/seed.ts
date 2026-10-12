@@ -72,7 +72,13 @@ async function main() {
   // passes a gap through rather than throwing, so the athlete just gets a
   // movement they cannot do. The guard reads names; here the key is the name
   // that cannot drift.
-  const guarded = exercises.map((e) => ({ ...e, name: e.key }));
+  //
+  // Only the curated: they are what the seeded WODs, groups and checklists
+  // prescribe. The rest of the library comes in for the swap panel and has
+  // no hand-written fallback; a muscle-matched one is DN-169's.
+  const guarded = exercises
+    .filter((e) => e.curated)
+    .map((e) => ({ ...e, name: e.key }));
   assertSubstitutesReachable(guarded);
   assertSubstituteUnitsMatch(guarded);
 
@@ -90,9 +96,17 @@ async function main() {
   for (const { name, reason } of library.leftOut) {
     console.log(`    ${name}: ${reason}`);
   }
+  // Kit the dataset's one equipment word left off, read from the steps
+  // (DN-168). Per piece rather than per row: the rows are in the PR that
+  // proposed them, and a correction in curation.ts overrides any of them.
+  const added = new Map<string, number>();
+  for (const { added: pieces } of library.hiddenKit) {
+    for (const piece of pieces) added.set(piece, (added.get(piece) ?? 0) + 1);
+  }
   console.log(
-    `  ${library.undecided} more dataset entries not in the library yet (DN-168)`,
+    `  ${library.hiddenKit.length} given kit their equipment word left off:`,
   );
+  for (const [piece, count] of added) console.log(`    ${piece}: ${count}`);
 
   console.log('Seeding warm-up and cool-down lists...');
   for (const c of checklistEntries) {

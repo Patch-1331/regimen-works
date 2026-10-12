@@ -5,7 +5,7 @@ import {
 } from '@regimen-works/shared';
 import { checklistEntries, entrySteps } from '../../prisma/checklist-seed';
 import { loadLibrary } from '../../prisma/library';
-import { curation } from '../../prisma/library/curation';
+import { corrections, curation } from '../../prisma/library/curation';
 import { nameKey, SCHEMA_WORDS } from './library';
 import {
   mismatchedSubstituteUnits,
@@ -24,6 +24,10 @@ import {
 const library = loadLibrary();
 const { exercises } = library;
 const byKey = new Map(exercises.map((e) => [e.key, e]));
+/** What the seeded WODs, groups and checklists can prescribe. */
+const curated = exercises.filter((e) => e.curated);
+/** The guard reads names; the key is the one that does not change. */
+const guarded = curated.map((e) => ({ ...e, name: e.key }));
 
 /** A group's members, in the order the panel lists them. */
 const members = (group: string) =>
@@ -32,13 +36,24 @@ const members = (group: string) =>
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
 describe('the exercise library', () => {
-  it('is today’s 64: 26 dataset twins and 38 of the app’s own', () => {
-    // DN-167 moves the library onto the import and adds nothing; the rest of
-    // the dataset is DN-168's. A count that moves here is a curation entry
-    // that let something in early.
-    expect(exercises).toHaveLength(64);
-    expect(exercises.filter((e) => e.source === 'dataset')).toHaveLength(26);
-    expect(exercises.filter((e) => e.source === 'own')).toHaveLength(38);
+  it('curates 64: 26 dataset twins and 38 of the app’s own', () => {
+    // DN-168 brings the rest of the dataset in uncurated. A count that moves
+    // here is a curation entry, which is a decision about what the seeded
+    // programs prescribe -- not something an import does in passing.
+    expect(curated).toHaveLength(64);
+    expect(curated.filter((e) => e.source === 'dataset')).toHaveLength(26);
+    expect(curated.filter((e) => e.source === 'own')).toHaveLength(38);
+    expect(exercises.filter((e) => e.source === 'own' && !e.curated)).toEqual(
+      [],
+    );
+  });
+
+  it('holds the whole dataset, bar what is left out on purpose', () => {
+    // 876 entries in the pinned file. Every one is in the library or on the
+    // left-out list with a reason; nothing is quietly missing.
+    const dataset = exercises.filter((e) => e.source === 'dataset');
+    expect(dataset.length + library.leftOut.length).toBe(876);
+    expect(exercises).toHaveLength(876 - library.leftOut.length + 38);
   });
 
   describe('what every exercise carries', () => {
@@ -97,27 +112,46 @@ describe('the exercise library', () => {
     });
   });
 
-  it('leaves the specialist kit out, by name and with a reason', () => {
-    // ADR-0007 decision 9. A dataset entry both curated in and left out
-    // does not build at all; this says the list is the one that was agreed.
-    expect(library.leftOut.length).toBeGreaterThanOrEqual(35);
+  it('leaves out the specialist kit, the steps-less and a duplicate, each with a reason', () => {
+    // ADR-0007 decision 9, and DN-168's additions. A dataset entry both
+    // curated in and left out does not build at all; this says the list is
+    // the one that was agreed.
     expect(library.leftOut.every((l) => l.reason.length > 0)).toBe(true);
-    expect(library.leftOut.map((l) => l.key)).toContain('Farmers_Walk');
+    expect(library.leftOut.map((l) => l.key).sort()).toEqual(
+      [
+        ...['Atlas_Stone_Trainer', 'Atlas_Stones', 'Axle_Deadlift'],
+        ...['Backward_Drag', 'Bear_Crawl_Sled_Drags', 'Car_Deadlift'],
+        ...['Circus_Bell', 'Conans_Wheel', 'Crucifix', 'Farmers_Walk'],
+        ...['Forward_Drag_with_Press', 'Keg_Load', 'Log_Lift', 'Power_Stairs'],
+        ...['Rickshaw_Carry', 'Rickshaw_Deadlift', 'Sandbag_Load'],
+        ...['Sled_Drag_-_Harness', 'Sled_Push', 'Tire_Flip', 'Yoke_Walk'],
+        ...['Prowler_Sprint', 'Sled_Overhead_Backward_Walk'],
+        ...['Sled_Overhead_Triceps_Extension', 'Sled_Reverse_Flye', 'Sled_Row'],
+        ...['Chain_Handle_Extension', 'Chain_Press'],
+        ...['Heavy_Bag_Thrust', 'Sledgehammer_Swings', 'Battling_Ropes'],
+        ...['Seated_Head_Harness_Neck_Resistance', 'Trap_Bar_Deadlift'],
+        ...['Wrist_Roller', 'Ab_Roller', 'Balance_Board'],
+        // DN-168
+        ...['Bicycling', 'Skating', 'Rope_Climb', 'London_Bridges'],
+        'Weighted_Squat',
+        ...['Iron_Cross', 'One-Arm_Kettlebell_Swings', 'Push_Press'],
+        ...['Side_Bridge', 'Side_Jackknife', 'Childs_Pose'],
+      ].sort(),
+    );
   });
 
-  it('gives every equipment movement a one-step fall to bodyweight', () => {
+  it('gives every curated equipment movement a one-step fall to bodyweight', () => {
     // Failure prints the offenders, so the message is the fix: which movement,
-    // what it needs, and where its fallback stops short. The guard reads
-    // names; the key is the one that does not change.
-    const guarded = exercises.map((e) => ({ ...e, name: e.key }));
+    // what it needs, and where its fallback stops short. Curated only: the
+    // rest of the dataset has no hand-written fallback, and is not what a
+    // seeded program prescribes. DN-169 gives it a muscle-matched one.
     expect(unreachableSubstitutes(guarded)).toEqual([]);
   });
 
-  it('gives every equipment movement a fall counted in its own unit', () => {
+  it('gives every curated equipment movement a fall counted in its own unit', () => {
     // The carries (DN-113) are the first timed movements that need equipment,
     // so this is the first library where the fallback could arrive meaning
     // something else: the prescribed count carries over unchanged.
-    const guarded = exercises.map((e) => ({ ...e, name: e.key }));
     expect(mismatchedSubstituteUnits(guarded)).toEqual([]);
   });
 
@@ -377,7 +411,7 @@ describe('the exercise library', () => {
     it('counts the carries in seconds', () => {
       // A carry is really measured in distance, which `Exercise.unit` has no
       // word for. Seconds is the honest half; reps would not be a carry.
-      const carries = exercises.filter((e) => e.name.endsWith('carry'));
+      const carries = curated.filter((e) => e.name.endsWith('carry'));
       expect(carries).toHaveLength(2);
       expect(carries.every((e) => e.unit === 'seconds')).toBe(true);
     });
@@ -461,6 +495,83 @@ describe('the exercise library', () => {
         );
         expect([kind, filler]).toEqual([kind, true]);
       }
+    });
+  });
+
+  describe('the rest of the dataset, uncurated (DN-168)', () => {
+    const rest = exercises.filter((e) => !e.curated);
+
+    it('is in no group and has no fallback, so nothing prescribes it', () => {
+      // In the library for the swap panel and the browser, not for a program
+      // slot: a group would make it a default candidate, a fallback a promise
+      // a person has not checked.
+      expect(
+        rest.filter(
+          (e) =>
+            e.movementGroup !== null ||
+            e.sortOrder !== null ||
+            e.isGroupDefault ||
+            e.fallback !== undefined,
+        ),
+      ).toEqual([]);
+    });
+
+    it('adds the kit the dataset’s one equipment word left off', () => {
+      // The hidden-kit rules, on entries no correction overrides.
+      expect(
+        [
+          'Dumbbell_Bench_Press',
+          'Dips_-_Triceps_Version',
+          'Box_Squat',
+          'Gorilla_Chin_Crunch',
+        ].map((key) => byKey.get(key)!.equipment),
+      ).toEqual([
+        ['dumbbell', 'bench'],
+        ['dip_bars'],
+        ['barbell', 'box'],
+        ['bar'],
+      ]);
+    });
+
+    it('takes a correction over a rule that read the steps wrong', () => {
+      // "Feet on a bench" is somewhere to put your feet, and the dip of a
+      // jerk is not dip bars.
+      expect(byKey.get('Push-Ups_With_Feet_Elevated')!.equipment).toEqual([]);
+      expect(byKey.get('Jerk_Dip_Squat')!.equipment).toEqual(['barbell']);
+    });
+
+    it('lists every tag a rule added, for a person to check', () => {
+      const tagged = new Set(library.hiddenKit.map((t) => t.key));
+      expect(tagged.has('Dumbbell_Bench_Press')).toBe(true);
+      // Never on a curated entry, nor on a corrected one.
+      expect(curated.filter((e) => tagged.has(e.key))).toEqual([]);
+      expect(Object.keys(corrections).filter((key) => tagged.has(key))).toEqual(
+        [],
+      );
+    });
+
+    it('counts cardio in seconds', () => {
+      expect(
+        rest
+          .filter((e) => e.category === 'cardio' && e.unit !== 'seconds')
+          .map((e) => e.key),
+      ).toEqual([]);
+    });
+
+    it('keeps the barbell squat with bands apart from the bands-only one', () => {
+      // Different movements whose dataset names are one under `nameKey`.
+      expect(byKey.get('Squat_with_Bands')!.name).toBe(
+        'Barbell squat with bands',
+      );
+      expect(byKey.get('Squats_-_With_Bands')!.equipment).toEqual(['bands']);
+    });
+
+    it('corrects nothing the dataset does not hold, or that is curated', () => {
+      expect(
+        Object.keys(corrections).filter(
+          (key) => !byKey.has(key) || byKey.get(key)!.curated,
+        ),
+      ).toEqual([]);
     });
   });
 
