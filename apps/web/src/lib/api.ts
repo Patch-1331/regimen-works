@@ -39,6 +39,8 @@ import type {
   WorkoutSession,
   WorkoutSetLog,
   CreateRoutine,
+  EditableRoutine,
+  RoutineSaveResult,
   RoutineSummary,
 } from "@regimen-works/shared";
 
@@ -133,6 +135,14 @@ function postJson<T>(path: string, body?: unknown) {
     headers:
       body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+function putJson<T>(path: string, body: unknown) {
+  return request<T>(path, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
 }
 
@@ -403,6 +413,15 @@ export const api = {
   /** Always the athlete's own tier: the route decides, never the body. */
   createRoutine: (body: CreateRoutine) =>
     postJson<RoutineSummary>("/routines", body),
+  /** One of the athlete's routines, as the editor loads it (DN-146). */
+  routine: (id: string) =>
+    request<EditableRoutine>(`/routines/${encodeURIComponent(id)}`),
+  /**
+   * Saves the whole routine. `forked` in the result means the edit became a
+   * new routine under a new id, because someone had already started this one.
+   */
+  updateRoutine: (id: string, body: CreateRoutine) =>
+    putJson<RoutineSaveResult>(`/routines/${encodeURIComponent(id)}`, body),
 
   /**
    * Every program the athlete has finished (DN-18), most recent first.

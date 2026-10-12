@@ -124,6 +124,45 @@ export function toCreateRoutine(draft: RoutineDraft): CreateRoutine {
   };
 }
 
+/**
+ * A saved routine back into a working copy, for editing it (DN-146). The
+ * inverse of `toCreateRoutine`: a summary the service wrote from the
+ * schedule arrives as null and opens blank, showing as the placeholder.
+ */
+export function fromRoutine(routine: CreateRoutine): RoutineDraft {
+  return {
+    name: routine.name,
+    summary: routine.summary ?? "",
+    scheduleMode: routine.scheduleMode,
+    days: Object.fromEntries(
+      routine.days.map((day) => [
+        day.dayOfWeek,
+        day.lines.map((line) => ({
+          id: lineId(),
+          exerciseId: line.exerciseId,
+          movementGroup: line.movementGroup,
+          sets: line.sets,
+          reps: line.reps,
+          repsMax: line.repsMax,
+          toFailure: line.toFailure,
+          restSeconds: line.restSeconds,
+        })),
+      ]),
+    ),
+  };
+}
+
+/**
+ * Whether the draft's week differs from `saved`'s -- the days, their lines,
+ * or when they are trained. Name and summary are wording, not the week
+ * (ADR 0006, decision 6), and never make a save a new version.
+ */
+export function changesWeek(draft: RoutineDraft, saved: CreateRoutine): boolean {
+  const week = (r: CreateRoutine) =>
+    JSON.stringify({ scheduleMode: r.scheduleMode, days: r.days });
+  return week(toCreateRoutine(draft)) !== week(saved);
+}
+
 /** Copies `from`'s lines onto each of `to`, replacing what they held. */
 export function copyDay(
   draft: RoutineDraft,

@@ -1,7 +1,18 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
+import { DEFAULT_PLAN_ID } from '@regimen-works/shared';
 import type { PrismaService } from '../prisma/prisma.service';
 import { testPrisma } from '../test-support/database';
-import { createExercise, createUser } from '../test-support/fixtures';
+import {
+  createEnrollment,
+  createExercise,
+  createUser,
+} from '../test-support/fixtures';
+import { loadActiveProgram } from './active-program';
 import { ROUTINE_WEEKS, RoutinesService } from './routines.service';
 
 /**
@@ -274,5 +285,354 @@ describe('RoutinesService.listOwn', () => {
       ['A old', true],
     ]);
     expect(listed[0].days).toEqual([1, 4]);
+  });
+});
+
+/**
+ * Editing a routine (DN-146, ADR 0006 decision 6). The switch under test is
+ * "has anyone ever started it": before, every save edits in place; after, a
+ * change to the week becomes a new routine and the old one is archived, so
+ * nobody's run changes under them.
+ */
+describe('RoutinesService.update', () => {
+  async function written(ownerId: string) {
+    return routines().create({ ownerId }, body());
+  }
+
+  /** The same week with one more line on Monday. */
+  const longerMonday = (overrides: Record<string, unknown> = {}) =>
+    body({
+      days: [
+        {
+          dayOfWeek: 1,
+          lines: [
+            line(),
+            line({ movementGroup: 'push_vertical' }),
+            line({ movementGroup: 'hinge' }),
+          ],
+        },
+        { dayOfWeek: 4, lines: [line({ movementGroup: 'squat' })] },
+      ],
+      ...overrides,
+    });
+
+  const mondayGroups = async (id: string) =>
+    (await stored(id)).weeks[0].slots
+      .find((s) => s.dayOfWeek === 1)!
+      .movements.map((m) => m.movementGroup);
+
+  it('changes the week in place while nobody has started it', async () => {
+    const alice = await createUser();
+    const routine = await written(alice.id);
+
+    const saved = await routines().update(
+      { ownerId: alice.id },
+      routine.id,
+      longerMonday(),
+    );
+
+    expect(saved).toMatchObject({ forked: false, routine: { id: routine.id } });
+    expect(await mondayGroups(routine.id)).toEqual([
+      'pull',
+      'push_vertical',
+      'hinge',
+    ]);
+    expect(
+      await testPrisma().plan.count({ where: { ownerId: alice.id } }),
+    ).toBe(1);
+  });
+
+  it('rewrites the schedule in place too, bounds included', async () => {
+    const alice = await createUser();
+    const routine = await written(alice.id);
+
+    await routines().update(
+      { ownerId: alice.id },
+      routine.id,
+      body({ scheduleMode: 'fixed' }),
+    );
+
+    expect(await stored(routine.id)).toMatchObject({
+      scheduleMode: 'fixed',
+      minDaysPerWeek: null,
+      maxDaysPerWeek: null,
+      defaultDays: [],
+    });
+  });
+
+  describe('once someone has started it', () => {
+    it('forks a change to the week, archiving the version being run', async () => {
+      const alice = await createUser();
+      const routine = await written(alice.id);
+      await createEnrollment(alice.id, { planId: routine.id });
+
+      const saved = await routines().update(
+        { ownerId: alice.id },
+        routine.id,
+        longerMonday(),
+      );
+
+      expect(saved.forked).toBe(true);
+      expect(saved.routine.id).not.toBe(routine.id);
+      expect(saved.routine).toMatchObject({
+        name: 'Upper / Lower',
+        archived: false,
+      });
+      expect(await mondayGroups(saved.routine.id)).toEqual([
+        'pull',
+        'push_vertical',
+        'hinge',
+      ]);
+
+      const old = await stored(routine.id);
+      expect(old.archivedAt).not.toBeNull();
+      expect(old.ownerId).toBe(alice.id);
+      expect(await mondayGroups(routine.id)).toEqual(['pull', 'push_vertical']);
+      expect((await stored(saved.routine.id)).ownerId).toBe(alice.id);
+    });
+
+    it('leaves the run under way on the version it started', async () => {
+      const alice = await createUser();
+      const routine = await written(alice.id);
+      await createEnrollment(alice.id, { planId: routine.id });
+      const before = await loadActiveProgram(testPrisma(), alice.id);
+
+      await routines().update(
+        { ownerId: alice.id },
+        routine.id,
+        longerMonday(),
+      );
+
+      const after = await loadActiveProgram(testPrisma(), alice.id);
+      expect(after?.planId).toBe(routine.id);
+      expect(after?.authoredWeeks).toEqual(before?.authoredWeeks);
+    });
+
+    it('counts a finished run as someone having started it', async () => {
+      const alice = await createUser();
+      const routine = await written(alice.id);
+      await createEnrollment(alice.id, {
+        planId: routine.id,
+        status: 'completed',
+      });
+
+      const saved = await routines().update(
+        { ownerId: alice.id },
+        routine.id,
+        longerMonday(),
+      );
+
+      expect(saved.forked).toBe(true);
+    });
+
+    it('renames in place, whoever is running it', async () => {
+      const alice = await createUser();
+      const routine = await written(alice.id);
+      await createEnrollment(alice.id, { planId: routine.id });
+
+      const saved = await routines().update(
+        { ownerId: alice.id },
+        routine.id,
+        body({ name: 'Upper / Lower v2', summary: 'Two days, heavy.' }),
+      );
+
+      expect(saved).toMatchObject({
+        forked: false,
+        routine: {
+          id: routine.id,
+          name: 'Upper / Lower v2',
+          summary: 'Two days, heavy.',
+        },
+      });
+      expect(
+        await testPrisma().plan.count({ where: { ownerId: alice.id } }),
+      ).toBe(1);
+    });
+
+    it('carries a rename and a new week in one fork, leaving the old name on the old version', async () => {
+      const alice = await createUser();
+      const routine = await written(alice.id);
+      await createEnrollment(alice.id, { planId: routine.id });
+
+      const saved = await routines().update(
+        { ownerId: alice.id },
+        routine.id,
+        longerMonday({ name: 'Upper / Lower v2' }),
+      );
+
+      expect(saved).toMatchObject({
+        forked: true,
+        routine: { name: 'Upper / Lower v2' },
+      });
+      expect((await stored(routine.id)).name).toBe('Upper / Lower');
+    });
+  });
+
+  it('treats a save that changes nothing as a wording edit', async () => {
+    const alice = await createUser();
+    const routine = await written(alice.id);
+    await createEnrollment(alice.id, { planId: routine.id });
+
+    const saved = await routines().update(
+      { ownerId: alice.id },
+      routine.id,
+      body(),
+    );
+
+    expect(saved).toMatchObject({ forked: false, routine: { id: routine.id } });
+  });
+
+  it('writes a new summary from a new schedule when the author left it blank', async () => {
+    const alice = await createUser();
+    const routine = await written(alice.id);
+
+    const saved = await routines().update(
+      { ownerId: alice.id },
+      routine.id,
+      body({ scheduleMode: 'fixed' }),
+    );
+
+    expect(saved.routine.summary).toBe('Your routine, Mon · Thu');
+  });
+
+  it('refuses a name another live routine of theirs holds', async () => {
+    const alice = await createUser();
+    const routine = await written(alice.id);
+    await routines().create({ ownerId: alice.id }, body({ name: 'Taken' }));
+
+    await expect(
+      routines().update(
+        { ownerId: alice.id },
+        routine.id,
+        body({ name: 'Taken' }),
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('holds an edit to the editor’s rules', async () => {
+    const alice = await createUser();
+    const routine = await written(alice.id);
+
+    await expect(
+      routines().update({ ownerId: alice.id }, routine.id, body({ days: [] })),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('refuses another athlete’s exercise in an edit', async () => {
+    const alice = await createUser();
+    const bob = await createUser();
+    const routine = await written(alice.id);
+    const bobs = await createExercise({ ownerId: bob.id });
+
+    await expect(
+      routines().update(
+        { ownerId: alice.id },
+        routine.id,
+        body({
+          days: [
+            {
+              dayOfWeek: 1,
+              lines: [line({ movementGroup: null, exerciseId: bobs.id })],
+            },
+          ],
+        }),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('is a 404 for another athlete’s routine', async () => {
+    const alice = await createUser();
+    const bob = await createUser();
+    const bobs = await written(bob.id);
+
+    await expect(
+      routines().update({ ownerId: alice.id }, bobs.id, longerMonday()),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(await mondayGroups(bobs.id)).toEqual(['pull', 'push_vertical']);
+  });
+
+  it('is a 404 for a global routine from the owner’s route', async () => {
+    const alice = await createUser();
+    const global = await routines().create({ ownerId: null }, body());
+
+    await expect(
+      routines().update({ ownerId: alice.id }, global.id, longerMonday()),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('refuses Just WODs, whoever asks', async () => {
+    const alice = await createUser();
+
+    for (const writer of [{ ownerId: alice.id }, { ownerId: null }]) {
+      await expect(
+        routines().update(writer, DEFAULT_PLAN_ID, body()),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    }
+  });
+
+  it('refuses an archived routine until it is brought back', async () => {
+    const alice = await createUser();
+    const routine = await written(alice.id);
+    await testPrisma().plan.update({
+      where: { id: routine.id },
+      data: { archivedAt: new Date() },
+    });
+
+    await expect(
+      routines().update({ ownerId: alice.id }, routine.id, body()),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+});
+
+describe('RoutinesService.getForEditing', () => {
+  it('reads the routine back as the body that wrote it', async () => {
+    const alice = await createUser();
+    const sent = body({ summary: 'Two days.' });
+    const routine = await routines().create({ ownerId: alice.id }, sent);
+
+    expect(
+      await routines().getForEditing({ ownerId: alice.id }, routine.id),
+    ).toEqual({
+      id: routine.id,
+      routine: sent,
+      hasRuns: false,
+      archived: false,
+    });
+  });
+
+  it('gives back no summary where the stored one was written from the schedule', async () => {
+    const alice = await createUser();
+    const routine = await routines().create({ ownerId: alice.id }, body());
+
+    const loaded = await routines().getForEditing(
+      { ownerId: alice.id },
+      routine.id,
+    );
+
+    expect(loaded.routine.summary).toBeNull();
+  });
+
+  it('says when someone has started it', async () => {
+    const alice = await createUser();
+    const routine = await routines().create({ ownerId: alice.id }, body());
+    await createEnrollment(alice.id, {
+      planId: routine.id,
+      status: 'completed',
+    });
+
+    expect(
+      (await routines().getForEditing({ ownerId: alice.id }, routine.id))
+        .hasRuns,
+    ).toBe(true);
+  });
+
+  it('is a 404 for another athlete’s routine', async () => {
+    const alice = await createUser();
+    const bob = await createUser();
+    const bobs = await routines().create({ ownerId: bob.id }, body());
+
+    await expect(
+      routines().getForEditing({ ownerId: alice.id }, bobs.id),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

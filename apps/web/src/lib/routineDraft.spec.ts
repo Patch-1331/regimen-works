@@ -4,9 +4,11 @@ import * as fixtures from "../test/fixtures";
 import {
   EMPTY_ROUTINE,
   blankLine,
+  changesWeek,
   copyDay,
   draftProblems,
   duplicateLine,
+  fromRoutine,
   lineProblems,
   searchExercises,
   toCreateRoutine,
@@ -87,6 +89,33 @@ describe("toCreateRoutine", () => {
 
   it("sends a blank summary as none, for the API to write", () => {
     expect(toCreateRoutine(draft({ summary: "  " })).summary).toBeNull();
+  });
+});
+
+describe("editing a saved routine (DN-146)", () => {
+  const saved = toCreateRoutine(
+    draft({ summary: "Mine, twice", days: { 1: [line()], 4: [line({ toFailure: true })] } }),
+  );
+
+  it("loads a saved routine into a draft that saves back the same", () => {
+    expect(toCreateRoutine(fromRoutine(saved))).toEqual(saved);
+  });
+
+  it("loads no summary as a blank box", () => {
+    expect(fromRoutine({ ...saved, summary: null }).summary).toBe("");
+  });
+
+  it("calls a rename or a new summary no change to the week", () => {
+    const renamed = { ...fromRoutine(saved), name: "Yours", summary: "" };
+    expect(changesWeek(renamed, saved)).toBe(false);
+  });
+
+  it("calls a new line, a new count, or a new mode a change to the week", () => {
+    const loaded = fromRoutine(saved);
+    const monday = (loaded.days[1] ?? []).map((l) => ({ ...l, sets: 5 }));
+    expect(changesWeek(copyDay(loaded, 1, [2]), saved)).toBe(true);
+    expect(changesWeek({ ...loaded, days: { ...loaded.days, 1: monday } }, saved)).toBe(true);
+    expect(changesWeek({ ...loaded, scheduleMode: "fixed" }, saved)).toBe(true);
   });
 });
 

@@ -123,6 +123,10 @@ function App() {
             path="/library/routines/new"
             element={<RoutineEditorPage />}
           />
+          <Route
+            path="/library/routines/:id/edit"
+            element={<RoutineEditorPage />}
+          />
         </Routes>
       </SetupGate>
     </AuthGate>
