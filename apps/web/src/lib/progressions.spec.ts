@@ -140,7 +140,7 @@ describe("buildMovementChoices", () => {
 });
 
 /**
- * The gap DN-115 found while adding two lines: `exercise-seed.spec.ts` catches
+ * The gap DN-115 found while adding two lines: `exercise-library.spec.ts` catches
  * a group the enum does not know, and nothing caught a group the *labels* do not
  * know. `lineLabel` falls through to the raw slug, so the omission ships as
  * "cardio_rope" printed at an athlete in the Stats panel rather than as a

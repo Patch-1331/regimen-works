@@ -15,6 +15,9 @@
  */
 
 export type WodMovementSeed = {
+  // The exercise's key in the library (DN-167): free-exercise-db's id, or
+  // `rw-` for one of the app's own. Not its name, which is a label the import
+  // is free to change.
   exercise: string;
   // Flat count, performed every round. Omitted when repScheme carries the
   // counts instead — exactly one of the two is given.
@@ -52,9 +55,9 @@ export const wods: WodSeed[] = [
     isNamed: true,
     dominantPattern: 'pull',
     movements: [
-      { exercise: 'Pull-up', reps: 5 },
-      { exercise: 'Push-up', reps: 10 },
-      { exercise: 'Air squat', reps: 15 },
+      { exercise: 'Pullups', reps: 5 },
+      { exercise: 'Pushups', reps: 10 },
+      { exercise: 'Bodyweight_Squat', reps: 15 },
     ],
   },
   {
@@ -67,10 +70,10 @@ export const wods: WodSeed[] = [
     description:
       'All 75 reps of one movement before starting the next, in the order listed. One pass, for time.',
     movements: [
-      { exercise: 'Pull-up', reps: 75 },
-      { exercise: 'Push-up', reps: 75 },
-      { exercise: 'Sit-up', reps: 75 },
-      { exercise: 'Air squat', reps: 75 },
+      { exercise: 'Pullups', reps: 75 },
+      { exercise: 'Pushups', reps: 75 },
+      { exercise: 'Sit-Up', reps: 75 },
+      { exercise: 'Bodyweight_Squat', reps: 75 },
     ],
   },
   {
@@ -83,9 +86,9 @@ export const wods: WodSeed[] = [
     description:
       'Half a Murph, no vest, no run. All 50 pull-ups, then all 100 push-ups, then all 150 air squats. Partition them however you like inside the cap.',
     movements: [
-      { exercise: 'Pull-up', reps: 50 },
-      { exercise: 'Push-up', reps: 100 },
-      { exercise: 'Air squat', reps: 150 },
+      { exercise: 'Pullups', reps: 50 },
+      { exercise: 'Pushups', reps: 100 },
+      { exercise: 'Bodyweight_Squat', reps: 150 },
     ],
   },
   {
@@ -98,8 +101,8 @@ export const wods: WodSeed[] = [
     description:
       'A descending ladder: 10 pull-ups and 10 burpees, then 9 and 9, all the way down to 1 and 1. One pass, for time.',
     movements: [
-      { exercise: 'Pull-up', repScheme: [10, 9, 8, 7, 6, 5, 4, 3, 2, 1] },
-      { exercise: 'Burpee', repScheme: [10, 9, 8, 7, 6, 5, 4, 3, 2, 1] },
+      { exercise: 'Pullups', repScheme: [10, 9, 8, 7, 6, 5, 4, 3, 2, 1] },
+      { exercise: 'rw-burpee', repScheme: [10, 9, 8, 7, 6, 5, 4, 3, 2, 1] },
     ],
   },
   {
@@ -112,8 +115,8 @@ export const wods: WodSeed[] = [
     description:
       '21-15-9: 21 push-ups and 21 jump squats, then 15 and 15, then 9 and 9. One pass through the ladder, for time — not as many rounds as possible.',
     movements: [
-      { exercise: 'Push-up', repScheme: [21, 15, 9] },
-      { exercise: 'Jump squat', repScheme: [21, 15, 9] },
+      { exercise: 'Pushups', repScheme: [21, 15, 9] },
+      { exercise: 'Freehand_Jump_Squat', repScheme: [21, 15, 9] },
     ],
   },
   {
@@ -124,9 +127,9 @@ export const wods: WodSeed[] = [
     isNamed: false,
     dominantPattern: 'pull',
     movements: [
-      { exercise: 'Pull-up', reps: 3 },
-      { exercise: 'Hanging knee raise', reps: 6 },
-      { exercise: 'Air squat', reps: 9 },
+      { exercise: 'Pullups', reps: 3 },
+      { exercise: 'rw-hanging-knee-raise', reps: 6 },
+      { exercise: 'Bodyweight_Squat', reps: 9 },
     ],
   },
   {
@@ -137,9 +140,9 @@ export const wods: WodSeed[] = [
     isNamed: false,
     dominantPattern: 'core',
     movements: [
-      { exercise: 'Sit-up', reps: 10 },
-      { exercise: 'Mountain climber', reps: 20 },
-      { exercise: 'Plank hold', reps: 30 },
+      { exercise: 'Sit-Up', reps: 10 },
+      { exercise: 'Mountain_Climbers', reps: 20 },
+      { exercise: 'Plank', reps: 30 },
     ],
   },
   {
@@ -150,9 +153,9 @@ export const wods: WodSeed[] = [
     isNamed: false,
     dominantPattern: 'cardio',
     movements: [
-      { exercise: 'Burpee', reps: 10 },
-      { exercise: 'Walking lunge', reps: 15 },
-      { exercise: 'Mountain climber', reps: 20 },
+      { exercise: 'rw-burpee', reps: 10 },
+      { exercise: 'Bodyweight_Walking_Lunge', reps: 15 },
+      { exercise: 'Mountain_Climbers', reps: 20 },
     ],
   },
   {
@@ -166,8 +169,8 @@ export const wods: WodSeed[] = [
     isNamed: false,
     dominantPattern: 'pull',
     movements: [
-      { exercise: 'Burpee', reps: 8 },
-      { exercise: 'Pull-up', reps: 1 }, // max effort per interval
+      { exercise: 'rw-burpee', reps: 8 },
+      { exercise: 'Pullups', reps: 1 }, // max effort per interval
     ],
   },
   {
@@ -183,8 +186,8 @@ export const wods: WodSeed[] = [
     // True to the name: even minutes push, odd minutes pull — exactly two
     // movements alternating, not a three-way rotation.
     movements: [
-      { exercise: 'Push-up', reps: 12 },
-      { exercise: 'Pull-up', reps: 8 },
+      { exercise: 'Pushups', reps: 12 },
+      { exercise: 'Pullups', reps: 8 },
     ],
   },
   {
@@ -200,9 +203,9 @@ export const wods: WodSeed[] = [
     isNamed: false,
     dominantPattern: 'cardio',
     movements: [
-      { exercise: 'Burpee', reps: 1 },
-      { exercise: 'Push-up', reps: 1 },
-      { exercise: 'Air squat', reps: 1 },
+      { exercise: 'rw-burpee', reps: 1 },
+      { exercise: 'Pushups', reps: 1 },
+      { exercise: 'Bodyweight_Squat', reps: 1 },
     ],
   },
   // ---------------------------------------------------------------------
@@ -228,9 +231,9 @@ export const wods: WodSeed[] = [
     description:
       'Three rounds: 20 air squats, 20 walking lunge steps, 20 mountain climbers. Legs the whole way through — pace the first round or the third one will pace you.',
     movements: [
-      { exercise: 'Air squat', reps: 20 },
-      { exercise: 'Walking lunge', reps: 20 },
-      { exercise: 'Mountain climber', reps: 20 },
+      { exercise: 'Bodyweight_Squat', reps: 20 },
+      { exercise: 'Bodyweight_Walking_Lunge', reps: 20 },
+      { exercise: 'Mountain_Climbers', reps: 20 },
     ],
   },
   {
@@ -243,8 +246,8 @@ export const wods: WodSeed[] = [
     description:
       '15-12-9: jump squats and push-ups, descending. One pass through the ladder, for time.',
     movements: [
-      { exercise: 'Jump squat', repScheme: [15, 12, 9] },
-      { exercise: 'Push-up', repScheme: [15, 12, 9] },
+      { exercise: 'Freehand_Jump_Squat', repScheme: [15, 12, 9] },
+      { exercise: 'Pushups', repScheme: [15, 12, 9] },
     ],
   },
   {
@@ -257,9 +260,9 @@ export const wods: WodSeed[] = [
     description:
       'As many rounds as possible in 12 minutes: 15 glute bridges, 10 supermans, 15 sit-ups. The posterior chain workout the library never had.',
     movements: [
-      { exercise: 'Glute bridge', reps: 15 },
+      { exercise: 'Butt_Lift_Bridge', reps: 15 },
       { exercise: 'Superman', reps: 10 },
-      { exercise: 'Sit-up', reps: 15 },
+      { exercise: 'Sit-Up', reps: 15 },
     ],
   },
 
@@ -284,8 +287,8 @@ export const wods: WodSeed[] = [
     description:
       'Every minute on the minute for ten: 30 double-unders, then 5 burpees with whatever is left of the minute. Rest is whatever you earn.',
     movements: [
-      { exercise: 'Double-unders', reps: 30 },
-      { exercise: 'Burpee', reps: 5 },
+      { exercise: 'rw-double-unders', reps: 30 },
+      { exercise: 'rw-burpee', reps: 5 },
     ],
   },
   {
@@ -298,9 +301,9 @@ export const wods: WodSeed[] = [
     description:
       'As many rounds as possible in 15 minutes: 20 box step-ups, 10 push-ups, 15 sit-ups. Step-ups alternate legs, so 20 is ten a side.',
     movements: [
-      { exercise: 'Box step-up', reps: 20 },
-      { exercise: 'Push-up', reps: 10 },
-      { exercise: 'Sit-up', reps: 15 },
+      { exercise: 'rw-box-step-up', reps: 20 },
+      { exercise: 'Pushups', reps: 10 },
+      { exercise: 'Sit-Up', reps: 15 },
     ],
   },
   {
@@ -313,8 +316,8 @@ export const wods: WodSeed[] = [
     description:
       '21-15-9: goblet squats and burpees, descending. One pass, for time. Pick a weight you could do all 21 of unbroken on a good day.',
     movements: [
-      { exercise: 'Goblet squat', repScheme: [21, 15, 9] },
-      { exercise: 'Burpee', repScheme: [21, 15, 9] },
+      { exercise: 'Goblet_Squat', repScheme: [21, 15, 9] },
+      { exercise: 'rw-burpee', repScheme: [21, 15, 9] },
     ],
   },
   {
@@ -327,9 +330,9 @@ export const wods: WodSeed[] = [
     description:
       'Five rounds: 15 kettlebell swings, 10 push-ups, 15 air squats. The swings are the workout; the rest is what you do while the hips recover.',
     movements: [
-      { exercise: 'Kettlebell swing', reps: 15 },
-      { exercise: 'Push-up', reps: 10 },
-      { exercise: 'Air squat', reps: 15 },
+      { exercise: 'rw-kettlebell-swing', reps: 15 },
+      { exercise: 'Pushups', reps: 10 },
+      { exercise: 'Bodyweight_Squat', reps: 15 },
     ],
   },
   // ---------------------------------------------------------------------
@@ -354,9 +357,9 @@ export const wods: WodSeed[] = [
     description:
       'As many rounds as possible in 12 minutes: 12 supermans with reverse snow angels, 10 push-ups, 15 sit-ups. Pulling work for a day with no bar — the arms stay off the floor for the whole set of twelve.',
     movements: [
-      { exercise: 'Supermans + reverse snow angels', reps: 12 },
-      { exercise: 'Push-up', reps: 10 },
-      { exercise: 'Sit-up', reps: 15 },
+      { exercise: 'rw-supermans-reverse-snow-angels', reps: 12 },
+      { exercise: 'Pushups', reps: 10 },
+      { exercise: 'Sit-Up', reps: 15 },
     ],
   },
   {
@@ -369,9 +372,9 @@ export const wods: WodSeed[] = [
     description:
       'As many rounds as possible in 10 minutes: 30 seconds of plank, 15 sit-ups, 20 seconds of hollow hold. Bracing work — the counts on the holds are seconds, and they are the whole point of the round.',
     movements: [
-      { exercise: 'Plank hold', reps: 30 },
-      { exercise: 'Sit-up', reps: 15 },
-      { exercise: 'Hollow hold', reps: 20 },
+      { exercise: 'Plank', reps: 30 },
+      { exercise: 'Sit-Up', reps: 15 },
+      { exercise: 'rw-hollow-hold', reps: 20 },
     ],
   },
 
@@ -392,9 +395,9 @@ export const wods: WodSeed[] = [
     description:
       'As many rounds as possible in 12 minutes: 10 dumbbell rows, 10 push-ups, 15 air squats. Rows alternate sides, so ten is five each. The horizontal pull the library had no loaded workout for.',
     movements: [
-      { exercise: 'Dumbbell row', reps: 10 },
-      { exercise: 'Push-up', reps: 10 },
-      { exercise: 'Air squat', reps: 15 },
+      { exercise: 'One-Arm_Dumbbell_Row', reps: 10 },
+      { exercise: 'Pushups', reps: 10 },
+      { exercise: 'Bodyweight_Squat', reps: 15 },
     ],
   },
   {
@@ -407,9 +410,9 @@ export const wods: WodSeed[] = [
     description:
       'Five rounds for time: 10 dumbbell floor presses, 15 sit-ups, 20 walking lunge steps. The floor stops the press at depth, so pick a weight you can keep honest for all five rounds.',
     movements: [
-      { exercise: 'Dumbbell floor press', reps: 10 },
-      { exercise: 'Sit-up', reps: 15 },
-      { exercise: 'Walking lunge', reps: 20 },
+      { exercise: 'Dumbbell_Floor_Press', reps: 10 },
+      { exercise: 'Sit-Up', reps: 15 },
+      { exercise: 'Bodyweight_Walking_Lunge', reps: 20 },
     ],
   },
   {
@@ -431,8 +434,8 @@ export const wods: WodSeed[] = [
     description:
       'Every minute on the minute for ten: 20 seconds of farmer carry, then 20 seconds of suitcase carry — 10 seconds a side. Whatever is left of the minute is your rest. Set the weights down between minutes, not during them.',
     movements: [
-      { exercise: 'Farmer carry', reps: 20 },
-      { exercise: 'Suitcase carry', reps: 20 },
+      { exercise: 'rw-farmer-carry', reps: 20 },
+      { exercise: 'rw-suitcase-carry', reps: 20 },
     ],
   },
 
@@ -467,9 +470,9 @@ export const wods: WodSeed[] = [
     description:
       'As many rounds as possible in 12 minutes: 10 burpees, 20 mountain climbers, 30 high knees. Nothing here is hard; the order they come in is.',
     movements: [
-      { exercise: 'Burpee', reps: 10 },
-      { exercise: 'Mountain climber', reps: 20 },
-      { exercise: 'High knees', reps: 30 },
+      { exercise: 'rw-burpee', reps: 10 },
+      { exercise: 'Mountain_Climbers', reps: 20 },
+      { exercise: 'rw-high-knees', reps: 30 },
     ],
   },
   {
@@ -482,9 +485,9 @@ export const wods: WodSeed[] = [
     description:
       'As many rounds as possible in 10 minutes: 40 single-unders, 10 squat thrusts, 10 sit-ups. Trip on the rope and pick it straight back up -- the clock does not care.',
     movements: [
-      { exercise: 'Single-unders', reps: 40 },
-      { exercise: 'Squat thrust', reps: 10 },
-      { exercise: 'Sit-up', reps: 10 },
+      { exercise: 'Rope_Jumping', reps: 40 },
+      { exercise: 'rw-squat-thrust', reps: 10 },
+      { exercise: 'Sit-Up', reps: 10 },
     ],
   },
 
@@ -498,9 +501,9 @@ export const wods: WodSeed[] = [
     description:
       'Five rounds: 20 sit-ups, 10 tuck-ups, 10 mountain climbers. The midline never gets a round off, which is the point.',
     movements: [
-      { exercise: 'Sit-up', reps: 20 },
-      { exercise: 'Tuck-up', reps: 10 },
-      { exercise: 'Mountain climber', reps: 10 },
+      { exercise: 'Sit-Up', reps: 20 },
+      { exercise: 'rw-tuck-up', reps: 10 },
+      { exercise: 'Mountain_Climbers', reps: 10 },
     ],
   },
   {
@@ -513,8 +516,8 @@ export const wods: WodSeed[] = [
     description:
       '21-15-9: toes-to-bar and air squats, descending. One pass, for time. If the toes-to-bar go, break them early rather than late.',
     movements: [
-      { exercise: 'Toes-to-bar', repScheme: [21, 15, 9] },
-      { exercise: 'Air squat', repScheme: [21, 15, 9] },
+      { exercise: 'rw-toes-to-bar', repScheme: [21, 15, 9] },
+      { exercise: 'Bodyweight_Squat', repScheme: [21, 15, 9] },
     ],
   },
 
@@ -531,9 +534,9 @@ export const wods: WodSeed[] = [
     description:
       'Eight rounds each of sit-ups, hollow hold and lying leg raises, 20 seconds on and 10 off. The hold is scored by staying in it, not by reps.',
     movements: [
-      { exercise: 'Sit-up', reps: 1 },
-      { exercise: 'Hollow hold', reps: 1 },
-      { exercise: 'Lying leg raise', reps: 1 },
+      { exercise: 'Sit-Up', reps: 1 },
+      { exercise: 'rw-hollow-hold', reps: 1 },
+      { exercise: 'rw-lying-leg-raise', reps: 1 },
     ],
   },
   {
@@ -549,8 +552,8 @@ export const wods: WodSeed[] = [
     description:
       'Eight rounds of hollow hold, then eight of V-ups, 20 seconds on and 10 off. Come out of the hold before the shape goes, not after.',
     movements: [
-      { exercise: 'Hollow hold', reps: 1 },
-      { exercise: 'V-up', reps: 1 },
+      { exercise: 'rw-hollow-hold', reps: 1 },
+      { exercise: 'Jackknife_Sit-Up', reps: 1 },
     ],
   },
 
@@ -567,7 +570,7 @@ export const wods: WodSeed[] = [
     description:
       'Every minute on the minute for twelve: 12 glute bridges, then 8 supermans. Whatever is left of the minute is your rest.',
     movements: [
-      { exercise: 'Glute bridge', reps: 12 },
+      { exercise: 'Butt_Lift_Bridge', reps: 12 },
       { exercise: 'Superman', reps: 8 },
     ],
   },
@@ -584,8 +587,8 @@ export const wods: WodSeed[] = [
     description:
       'Every minute on the minute for fourteen: 12 kettlebell swings, then 6 burpees. The hips do the swing -- if the arms start lifting the bell, the minute is too heavy.',
     movements: [
-      { exercise: 'Kettlebell swing', reps: 12 },
-      { exercise: 'Burpee', reps: 6 },
+      { exercise: 'rw-kettlebell-swing', reps: 12 },
+      { exercise: 'rw-burpee', reps: 6 },
     ],
   },
 
@@ -602,9 +605,9 @@ export const wods: WodSeed[] = [
     description:
       'Eight rounds each of glute bridges, supermans and mountain climbers, 20 seconds on and 10 off. Squeeze at the top of every bridge; the twenty seconds are short enough to earn it.',
     movements: [
-      { exercise: 'Glute bridge', reps: 1 },
+      { exercise: 'Butt_Lift_Bridge', reps: 1 },
       { exercise: 'Superman', reps: 1 },
-      { exercise: 'Mountain climber', reps: 1 },
+      { exercise: 'Mountain_Climbers', reps: 1 },
     ],
   },
   {
@@ -620,8 +623,8 @@ export const wods: WodSeed[] = [
     description:
       'Eight rounds of single-leg glute bridges, then eight of broad jumps, 20 seconds on and 10 off. Alternate legs on the bridges -- each interval is one side.',
     movements: [
-      { exercise: 'Single-leg glute bridge', reps: 1 },
-      { exercise: 'Broad jump', reps: 1 },
+      { exercise: 'Single_Leg_Glute_Bridge', reps: 1 },
+      { exercise: 'Standing_Long_Jump', reps: 1 },
     ],
   },
 
@@ -638,8 +641,8 @@ export const wods: WodSeed[] = [
     description:
       'Eight rounds of pull-ups, then eight of sit-ups, 20 seconds on and 10 off. One pull-up in an interval still counts as an interval.',
     movements: [
-      { exercise: 'Pull-up', reps: 1 },
-      { exercise: 'Sit-up', reps: 1 },
+      { exercise: 'Pullups', reps: 1 },
+      { exercise: 'Sit-Up', reps: 1 },
     ],
   },
   {
@@ -655,9 +658,9 @@ export const wods: WodSeed[] = [
     description:
       'Eight rounds each of supermans with reverse snow angels, tuck-ups and high knees, 20 seconds on and 10 off. A pulling workout that never leaves the floor.',
     movements: [
-      { exercise: 'Supermans + reverse snow angels', reps: 1 },
-      { exercise: 'Tuck-up', reps: 1 },
-      { exercise: 'High knees', reps: 1 },
+      { exercise: 'rw-supermans-reverse-snow-angels', reps: 1 },
+      { exercise: 'rw-tuck-up', reps: 1 },
+      { exercise: 'rw-high-knees', reps: 1 },
     ],
   },
 
@@ -671,9 +674,9 @@ export const wods: WodSeed[] = [
     description:
       'As many rounds as possible in 12 minutes: 10 push-ups, 15 sit-ups, 20 air squats. Break the push-ups before you have to, not after.',
     movements: [
-      { exercise: 'Push-up', reps: 10 },
-      { exercise: 'Sit-up', reps: 15 },
-      { exercise: 'Air squat', reps: 20 },
+      { exercise: 'Pushups', reps: 10 },
+      { exercise: 'Sit-Up', reps: 15 },
+      { exercise: 'Bodyweight_Squat', reps: 20 },
     ],
   },
   {
@@ -686,9 +689,9 @@ export const wods: WodSeed[] = [
     description:
       'As many rounds as possible in 15 minutes: 8 pike push-ups, 12 reverse lunges, 10 tuck-ups. The lunges are six a side.',
     movements: [
-      { exercise: 'Pike push-up', reps: 8 },
-      { exercise: 'Reverse lunge', reps: 12 },
-      { exercise: 'Tuck-up', reps: 10 },
+      { exercise: 'rw-pike-push-up', reps: 8 },
+      { exercise: 'rw-reverse-lunge', reps: 12 },
+      { exercise: 'rw-tuck-up', reps: 10 },
     ],
   },
 
@@ -705,8 +708,8 @@ export const wods: WodSeed[] = [
     description:
       'Eight rounds of push-ups, then eight of diamond push-ups, 20 seconds on and 10 off. Drop to the knees rather than drop the interval.',
     movements: [
-      { exercise: 'Push-up', reps: 1 },
-      { exercise: 'Diamond push-up', reps: 1 },
+      { exercise: 'Pushups', reps: 1 },
+      { exercise: 'Push-Ups_-_Close_Triceps_Position', reps: 1 },
     ],
   },
   {
@@ -722,9 +725,9 @@ export const wods: WodSeed[] = [
     description:
       'Eight rounds each of dumbbell floor press, push-ups and high knees, 20 seconds on and 10 off. Pick a weight you can still press on the eighth round.',
     movements: [
-      { exercise: 'Dumbbell floor press', reps: 1 },
-      { exercise: 'Push-up', reps: 1 },
-      { exercise: 'High knees', reps: 1 },
+      { exercise: 'Dumbbell_Floor_Press', reps: 1 },
+      { exercise: 'Pushups', reps: 1 },
+      { exercise: 'rw-high-knees', reps: 1 },
     ],
   },
 
@@ -741,8 +744,8 @@ export const wods: WodSeed[] = [
     description:
       'Every minute on the minute for twelve: 15 air squats, then 10 mountain climbers. The first four minutes will feel like too few reps. They are not.',
     movements: [
-      { exercise: 'Air squat', reps: 15 },
-      { exercise: 'Mountain climber', reps: 10 },
+      { exercise: 'Bodyweight_Squat', reps: 15 },
+      { exercise: 'Mountain_Climbers', reps: 10 },
     ],
   },
   {
@@ -758,8 +761,8 @@ export const wods: WodSeed[] = [
     description:
       'Every minute on the minute for sixteen: 10 walking lunge steps, then 8 push-ups. Ten steps is five a side.',
     movements: [
-      { exercise: 'Walking lunge', reps: 10 },
-      { exercise: 'Push-up', reps: 8 },
+      { exercise: 'Bodyweight_Walking_Lunge', reps: 10 },
+      { exercise: 'Pushups', reps: 8 },
     ],
   },
 
@@ -776,8 +779,8 @@ export const wods: WodSeed[] = [
     description:
       'Eight rounds of air squats, then eight of jump squats, 20 seconds on and 10 off. The second half is where the first half is decided.',
     movements: [
-      { exercise: 'Air squat', reps: 1 },
-      { exercise: 'Jump squat', reps: 1 },
+      { exercise: 'Bodyweight_Squat', reps: 1 },
+      { exercise: 'Freehand_Jump_Squat', reps: 1 },
     ],
   },
   {
@@ -793,9 +796,9 @@ export const wods: WodSeed[] = [
     description:
       'Eight rounds each of reverse lunges, jump squats and high knees, 20 seconds on and 10 off. Land the jumps quietly for as long as you can.',
     movements: [
-      { exercise: 'Reverse lunge', reps: 1 },
-      { exercise: 'Jump squat', reps: 1 },
-      { exercise: 'High knees', reps: 1 },
+      { exercise: 'rw-reverse-lunge', reps: 1 },
+      { exercise: 'Freehand_Jump_Squat', reps: 1 },
+      { exercise: 'rw-high-knees', reps: 1 },
     ],
   },
 
@@ -820,8 +823,8 @@ export const wods: WodSeed[] = [
     description:
       'Every minute on the minute for ten: 8 burpees, then 10 air squats. No equipment, nowhere to hide.',
     movements: [
-      { exercise: 'Burpee', reps: 8 },
-      { exercise: 'Air squat', reps: 10 },
+      { exercise: 'rw-burpee', reps: 8 },
+      { exercise: 'Bodyweight_Squat', reps: 10 },
     ],
   },
   {
@@ -837,8 +840,8 @@ export const wods: WodSeed[] = [
     description:
       'Every minute on the minute for ten: 12 sit-ups, then 8 tuck-ups. Lie back down in the rest; sitting up to wait is its own workout.',
     movements: [
-      { exercise: 'Sit-up', reps: 12 },
-      { exercise: 'Tuck-up', reps: 8 },
+      { exercise: 'Sit-Up', reps: 12 },
+      { exercise: 'rw-tuck-up', reps: 8 },
     ],
   },
   {
@@ -851,9 +854,9 @@ export const wods: WodSeed[] = [
     description:
       'Four rounds: 20 glute bridges, 15 supermans, 20 mountain climbers. The whole posterior chain, none of the equipment.',
     movements: [
-      { exercise: 'Glute bridge', reps: 20 },
+      { exercise: 'Butt_Lift_Bridge', reps: 20 },
       { exercise: 'Superman', reps: 15 },
-      { exercise: 'Mountain climber', reps: 20 },
+      { exercise: 'Mountain_Climbers', reps: 20 },
     ],
   },
   {
@@ -866,9 +869,9 @@ export const wods: WodSeed[] = [
     description:
       'As many rounds as possible in 14 minutes: 15 reverse lunges, 10 jump squats, 20 mountain climbers. The lunges are the recovery, which tells you about the jump squats.',
     movements: [
-      { exercise: 'Reverse lunge', reps: 15 },
-      { exercise: 'Jump squat', reps: 10 },
-      { exercise: 'Mountain climber', reps: 20 },
+      { exercise: 'rw-reverse-lunge', reps: 15 },
+      { exercise: 'Freehand_Jump_Squat', reps: 10 },
+      { exercise: 'Mountain_Climbers', reps: 20 },
     ],
   },
 
@@ -888,9 +891,9 @@ export const wods: WodSeed[] = [
     description:
       'Five rounds: 10 burpees, 20 high knees, 10 sit-ups. The burpees are the whole workout; the rest is bookkeeping.',
     movements: [
-      { exercise: 'Burpee', reps: 10 },
-      { exercise: 'High knees', reps: 20 },
-      { exercise: 'Sit-up', reps: 10 },
+      { exercise: 'rw-burpee', reps: 10 },
+      { exercise: 'rw-high-knees', reps: 20 },
+      { exercise: 'Sit-Up', reps: 10 },
     ],
   },
   {
@@ -906,8 +909,8 @@ export const wods: WodSeed[] = [
     description:
       'Eight rounds of burpees, then eight of mountain climbers, 20 seconds on and 10 off. Pick a pace you can hold for eight and hold it for eight.',
     movements: [
-      { exercise: 'Burpee', reps: 1 },
-      { exercise: 'Mountain climber', reps: 1 },
+      { exercise: 'rw-burpee', reps: 1 },
+      { exercise: 'Mountain_Climbers', reps: 1 },
     ],
   },
   {
@@ -920,9 +923,9 @@ export const wods: WodSeed[] = [
     description:
       'As many rounds as possible in 15 minutes: 12 Romanian deadlifts, 10 push-ups, 15 sit-ups. Hinge at the hips and keep the back flat -- if it rounds, the weight is wrong.',
     movements: [
-      { exercise: 'Romanian deadlift', reps: 12 },
-      { exercise: 'Push-up', reps: 10 },
-      { exercise: 'Sit-up', reps: 15 },
+      { exercise: 'Romanian_Deadlift', reps: 12 },
+      { exercise: 'Pushups', reps: 10 },
+      { exercise: 'Sit-Up', reps: 15 },
     ],
   },
   {
@@ -935,9 +938,9 @@ export const wods: WodSeed[] = [
     description:
       'Four rounds: 10 pull-ups, 15 sit-ups, 20 air squats. Come off the bar with one left in the tank in round one.',
     movements: [
-      { exercise: 'Pull-up', reps: 10 },
-      { exercise: 'Sit-up', reps: 15 },
-      { exercise: 'Air squat', reps: 20 },
+      { exercise: 'Pullups', reps: 10 },
+      { exercise: 'Sit-Up', reps: 15 },
+      { exercise: 'Bodyweight_Squat', reps: 20 },
     ],
   },
   {
@@ -953,8 +956,8 @@ export const wods: WodSeed[] = [
     description:
       'Every minute on the minute for twelve: 10 dumbbell rows, then 8 sit-ups. Ten rows is five a side.',
     movements: [
-      { exercise: 'Dumbbell row', reps: 10 },
-      { exercise: 'Sit-up', reps: 8 },
+      { exercise: 'One-Arm_Dumbbell_Row', reps: 10 },
+      { exercise: 'Sit-Up', reps: 8 },
     ],
   },
   {
@@ -970,8 +973,8 @@ export const wods: WodSeed[] = [
     description:
       'Every minute on the minute for twelve: 6 pike push-ups, then 10 air squats. Six is few enough to do them properly, which is the point of six.',
     movements: [
-      { exercise: 'Pike push-up', reps: 6 },
-      { exercise: 'Air squat', reps: 10 },
+      { exercise: 'rw-pike-push-up', reps: 6 },
+      { exercise: 'Bodyweight_Squat', reps: 10 },
     ],
   },
 ];

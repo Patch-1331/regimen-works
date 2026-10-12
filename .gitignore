@@ -15,7 +15,3 @@ test-results/
 playwright-report/
 .turbo/
 /.impeccable/
-
-# Review file written by `npm run exercises:draft` (DN-157) -- curated by hand
-# into exercise-seed.ts, never committed itself.
-apps/api/prisma/exercise-drafts.generated.ts

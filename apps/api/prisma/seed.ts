@@ -5,12 +5,13 @@ import { PrismaClient } from '@prisma/client';
 
 import { GLOBAL_LIBRARY } from '../src/library/visible-to';
 import { upsertJustWods } from '../src/plans/just-wods';
+import { importLibrary } from '../src/seed/import-library';
 import {
   assertSubstitutesReachable,
   assertSubstituteUnitsMatch,
 } from '../src/seed/substitute-guard';
 import { checklistEntries, entrySteps } from './checklist-seed';
-import { exercises, seedSteps } from './exercise-seed';
+import { loadLibrary } from './library';
 import { wods, type WodMovementSeed, type WodSeed } from './wod-seed';
 
 // Prisma 7 requires a driver adapter — a bare `new PrismaClient()` throws at
@@ -60,76 +61,42 @@ function assertUniformSchemes(w: WodSeed): void {
 }
 
 async function main() {
-  // Before anything is written: every movement needing equipment must have a
-  // one-step fall to a movement needing none (DN-83). Nothing at runtime can
-  // report this -- the resolver passes a gap through rather than throwing, so
-  // the athlete just gets a movement they cannot do -- and a half-written
-  // seed is worse than a refused one.
-  assertSubstitutesReachable(exercises);
-  assertSubstituteUnitsMatch(exercises);
+  // Built and checked before anything is written: the checksum, the
+  // curation against the files it names, and every value against the enums.
+  // A half-written library is worse than a refused one.
+  const library = loadLibrary();
+  const { exercises } = library;
 
-  console.log('Seeding exercises...');
-  const idByName = new Map<string, string>();
+  // Every movement needing equipment must have a one-step fall to a movement
+  // needing none (DN-83). Nothing at runtime can report this -- the resolver
+  // passes a gap through rather than throwing, so the athlete just gets a
+  // movement they cannot do. The guard reads names; here the key is the name
+  // that cannot drift.
+  const guarded = exercises.map((e) => ({ ...e, name: e.key }));
+  assertSubstitutesReachable(guarded);
+  assertSubstituteUnitsMatch(guarded);
 
-  for (const e of exercises) {
-    const fields = {
-      pattern: e.pattern,
-      equipment: e.equipment ?? [],
-      scalable: e.scalable ?? false,
-      unit: e.unit ?? 'reps',
-      movementGroup: e.movementGroup ?? null,
-      sortOrder: e.sortOrder ?? null,
-      isGroupDefault: e.isGroupDefault ?? false,
-      instructions: seedSteps(e),
-      // Re-seeding a retired movement brings it back (DN-25). The lookup
-      // below deliberately does not filter on `archivedAt`: archiving does
-      // not free the name, so skipping archived rows would make this try to
-      // create a name the unique index still holds and fail the deploy.
-      archivedAt: null,
-    };
-
-    // Not an upsert any more (DN-93). `name` is no longer unique on its own,
-    // and Prisma types the `ownerId_name` compound key's `ownerId` as a plain
-    // string -- there is no way to say "the row named X with no owner" in a
-    // unique `where` at all. So the global row is found by hand, and the
-    // uniqueness this relied on is enforced by the partial unique index in
-    // the migration instead of by this lookup.
-    //
-    // The `ownerId: null` here is load-bearing beyond the lookup: it is what
-    // stops the seed resolving a name to an athlete's own exercise and then
-    // wiring a global row's `fallbackExerciseId` to it, which would let one
-    // athlete's delete break everyone's scheduler.
-    const existing = await prisma.exercise.findFirst({
-      where: { ...GLOBAL_LIBRARY, name: e.name },
-      select: { id: true },
-    });
-
-    const row = existing
-      ? await prisma.exercise.update({
-          where: { id: existing.id },
-          data: fields,
-        })
-      : await prisma.exercise.create({ data: { name: e.name, ...fields } });
-
-    idByName.set(e.name, row.id);
+  console.log('Importing the exercise library...');
+  const { created, renamed, unchanged, idByKey } = await importLibrary(
+    prisma,
+    exercises,
+  );
+  console.log(`  ${created.length} new`);
+  for (const name of created) console.log(`    ${name}`);
+  console.log(`  ${renamed.length} renamed in place`);
+  for (const change of renamed) console.log(`    ${change}`);
+  console.log(`  ${unchanged} updated under the name they had`);
+  console.log(`  ${library.leftOut.length} left out of the dataset:`);
+  for (const { name, reason } of library.leftOut) {
+    console.log(`    ${name}: ${reason}`);
   }
-
-  for (const e of exercises) {
-    if (!e.fallback) continue;
-    const fallbackId = idByName.get(e.fallback);
-    if (!fallbackId)
-      throw new Error(
-        `Unknown fallback exercise "${e.fallback}" for "${e.name}"`,
-      );
-    await prisma.exercise.update({
-      where: { id: idByName.get(e.name)! },
-      data: { fallbackExerciseId: fallbackId },
-    });
-  }
+  console.log(
+    `  ${library.undecided} more dataset entries not in the library yet (DN-168)`,
+  );
 
   console.log('Seeding warm-up and cool-down lists...');
   for (const c of checklistEntries) {
-    const exerciseId = idByName.get(c.exercise);
+    const exerciseId = idByKey.get(c.exercise);
     if (!exerciseId)
       throw new Error(
         `Unknown exercise "${c.exercise}" on the ${c.kind} checklist`,
@@ -160,7 +127,7 @@ async function main() {
     const movements = w.movements.map((m, i) => ({
       ...movementCounts(m, w.name),
       order: i,
-      exercise: { connect: { id: idByName.get(m.exercise)! } },
+      exercise: { connect: { id: idByKey.get(m.exercise)! } },
     }));
 
     const fields = {
