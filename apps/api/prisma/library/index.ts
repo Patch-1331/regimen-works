@@ -9,7 +9,7 @@ import {
   sourceExercise,
   type Library,
 } from '../../src/seed/library';
-import { curation, leftOut } from './curation';
+import { corrections, curation, leftOut } from './curation';
 
 /**
  * The exercise library, read from the three files beside this one (DN-167,
@@ -20,8 +20,8 @@ import { curation, leftOut } from './curation';
  *   committed as-is and refused if its checksum moves. Unlicense, so names
  *   and prose are ours to copy. Its images are not, and nothing reads them.
  * - `own-exercises.json`: the app's own, in the dataset's shape.
- * - `curation.ts`: which dataset entries are in, and what the scheduler
- *   needs to know about each exercise.
+ * - `curation.ts`: what the scheduler needs to know about the exercises it
+ *   prescribes, hand fixes to the rest, and what is left out and why.
  *
  * Reads files and nothing else: no client, no writes. The seed and the specs
  * both build the library through this, so what is checked is what ships.
@@ -36,6 +36,7 @@ export function loadLibrary(): Library {
     dataset: read(raw.toString('utf8')),
     own: read(readFileSync(join(__dirname, 'own-exercises.json'), 'utf8')),
     curation,
+    corrections,
     leftOut,
   });
 }

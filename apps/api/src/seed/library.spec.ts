@@ -3,10 +3,13 @@ import { createHash } from 'node:crypto';
 import {
   assertPinned,
   buildLibrary,
+  hiddenKit,
   mapEquipment,
   nameKey,
   PINNED_SHA256,
   sentenceCase,
+  suggestPattern,
+  type Correction,
   type Curation,
   type SourceExercise,
 } from './library';
@@ -38,13 +41,26 @@ const build = ({
   dataset = [source()],
   owned = [],
   curation = { Pushups: { pattern: 'push' } },
+  corrections = {},
   leftOut = {},
 }: {
   dataset?: SourceExercise[];
   owned?: SourceExercise[];
   curation?: Record<string, Curation>;
+  corrections?: Record<string, Correction>;
   leftOut?: Record<string, string>;
-} = {}) => buildLibrary({ dataset, own: owned, curation, leftOut });
+} = {}) =>
+  buildLibrary({ dataset, own: owned, curation, corrections, leftOut });
+
+/** A dataset entry nobody has curated. */
+const chinUp = (overrides: Partial<SourceExercise> = {}) =>
+  source({
+    id: 'Chin-Up',
+    name: 'Chin-Up',
+    force: 'pull',
+    primaryMuscles: ['lats'],
+    ...overrides,
+  });
 
 describe('assertPinned', () => {
   it('refuses any file but the pinned one', () => {
@@ -114,6 +130,68 @@ describe('mapEquipment', () => {
   });
 });
 
+describe('hiddenKit', () => {
+  const kit = (name: string, steps: string[], word: string[] = []) =>
+    hiddenKit(source({ name, instructions: steps }), word as never);
+
+  it('finds the bench and the box the word left off, in the name or the steps', () => {
+    expect(kit('Dumbbell Bench Press', ['Lie back.'], ['dumbbell'])).toEqual([
+      'bench',
+    ]);
+    expect(kit('Box Squat', ['Set a box behind you.'], ['barbell'])).toEqual([
+      'box',
+    ]);
+    expect(kit('Crunch', ['Sit on a flat bench.'])).toEqual(['bench']);
+  });
+
+  it('finds dip bars in a dip, bar a dip on a bench, a machine or the rings', () => {
+    expect(kit('Dips - Triceps Version', ['Hold yourself up.'])).toEqual([
+      'dip_bars',
+    ]);
+    expect(kit('Knee Raise', ['Hold yourself on parallel bars.'])).toEqual([
+      'dip_bars',
+    ]);
+    expect(kit('Bench Dips', ['Hands on the bench.'])).toEqual(['bench']);
+    expect(kit('Ring Dips', ['Hold the rings.'])).toEqual([]);
+  });
+
+  it('hangs a bodyweight move from the bar its steps name', () => {
+    expect(kit('Wind Sprints', ['Hang from a pull-up bar.'])).toEqual(['bar']);
+    // A loaded move's word already says what it needs.
+    expect(kit('Curl', ['Stand by the chin-up bar.'], ['dumbbell'])).toEqual(
+      [],
+    );
+  });
+
+  it('adds nothing the word already gave', () => {
+    expect(kit('Bench Dips', ['On a bench.'], ['bench'])).toEqual([]);
+  });
+});
+
+describe('suggestPattern', () => {
+  const guess = (overrides: Partial<SourceExercise>) =>
+    suggestPattern(source(overrides));
+
+  it('reads cardio from the category, whatever the muscles', () => {
+    expect(guess({ category: 'cardio', primaryMuscles: ['quadriceps'] })).toBe(
+      'cardio',
+    );
+  });
+
+  it('reads the rest from the first primary muscle', () => {
+    expect(guess({ primaryMuscles: ['abdominals'] })).toBe('core');
+    expect(guess({ primaryMuscles: ['quadriceps', 'chest'] })).toBe('squat');
+    expect(guess({ primaryMuscles: ['hamstrings'] })).toBe('hinge');
+    expect(guess({ primaryMuscles: ['triceps'], force: 'pull' })).toBe('push');
+    expect(guess({ primaryMuscles: ['lats'] })).toBe('pull');
+  });
+
+  it('falls back to the force, then to no pattern at all', () => {
+    expect(guess({ primaryMuscles: ['forearms'], force: 'pull' })).toBe('pull');
+    expect(guess({ primaryMuscles: ['neck'], force: 'static' })).toBeNull();
+  });
+});
+
 describe('nameKey', () => {
   it('ignores case, spacing, hyphens and a plural', () => {
     expect(nameKey('Push-up')).toBe(nameKey('Pushups'));
@@ -130,9 +208,8 @@ describe('sentenceCase', () => {
 });
 
 describe('buildLibrary', () => {
-  it('lets in only what the curation names, under a sentence-case name', () => {
+  it('curates what the curation names, under a sentence-case name', () => {
     const library = build({
-      dataset: [source(), source({ id: 'Chin-Up', name: 'Chin-Up' })],
       curation: {
         Pushups: { pattern: 'push', formerly: 'Push-up' },
       },
@@ -152,9 +229,96 @@ describe('buildLibrary', () => {
         movementGroup: null,
         sortOrder: null,
         isGroupDefault: false,
+        curated: true,
       }),
     ]);
-    expect(library.undecided).toBe(1);
+  });
+
+  it('brings the rest of the dataset in uncurated, with derived values', () => {
+    const library = build({
+      dataset: [
+        source(),
+        chinUp(),
+        source({
+          id: 'Plank',
+          name: 'Plank',
+          force: 'static',
+          primaryMuscles: ['abdominals'],
+        }),
+      ],
+    });
+    expect(library.exercises.map((e) => [e.key, e.curated])).toEqual([
+      ['Pushups', true],
+      ['Chin-Up', false],
+      ['Plank', false],
+    ]);
+    expect(library.exercises[1]).toMatchObject({
+      name: 'Chin-up',
+      pattern: 'pull',
+      unit: 'reps',
+      equipment: ['bar'],
+      movementGroup: null,
+      sortOrder: null,
+      isGroupDefault: false,
+      scalable: false,
+    });
+    expect(library.exercises[1].fallback).toBeUndefined();
+    // A static hold is timed.
+    expect(library.exercises[2]).toMatchObject({
+      pattern: 'core',
+      unit: 'seconds',
+    });
+  });
+
+  it('adds hidden kit to the uncurated, and lists it', () => {
+    const library = build({
+      dataset: [
+        source(),
+        source({
+          id: 'Dumbbell_Bench_Press',
+          name: 'Dumbbell Bench Press',
+          equipment: 'dumbbell',
+        }),
+      ],
+    });
+    expect(library.exercises[1].equipment).toEqual(['dumbbell', 'bench']);
+    expect(library.hiddenKit).toEqual([
+      { key: 'Dumbbell_Bench_Press', added: ['bench'] },
+    ]);
+  });
+
+  it('never adds hidden kit to a curated entry', () => {
+    const library = build({
+      dataset: [source({ instructions: ['Feet up on a bench.'] })],
+    });
+    expect(library.exercises[0].equipment).toEqual([]);
+    expect(library.hiddenKit).toEqual([]);
+  });
+
+  it('lets a correction say what the derived values get wrong', () => {
+    const library = build({
+      dataset: [
+        source(),
+        chinUp({ equipment: 'other', instructions: ['Feet on a bench.'] }),
+      ],
+      corrections: {
+        'Chin-Up': {
+          name: 'Chin-up on rings',
+          pattern: null,
+          unit: 'seconds',
+          equipment: ['suspension_trainer'],
+        },
+      },
+    });
+    expect(library.exercises[1]).toMatchObject({
+      name: 'Chin-up on rings',
+      pattern: null,
+      unit: 'seconds',
+      equipment: ['suspension_trainer'],
+      curated: false,
+    });
+    // The correction's equipment replaces the rules, so nothing is proposed.
+    expect(library.hiddenKit).toEqual([]);
   });
 
   it('keeps an own exercise’s name and reads its muscles in our words', () => {
@@ -198,7 +362,7 @@ describe('buildLibrary', () => {
     expect(library.leftOut).toEqual([
       { key: 'Yoke_Walk', name: 'Yoke Walk', reason: 'strongman' },
     ]);
-    expect(library.undecided).toBe(0);
+    expect(library.exercises.map((e) => e.key)).toEqual(['Pushups']);
   });
 
   describe('refusing a library that is wrong', () => {
@@ -246,10 +410,50 @@ describe('buildLibrary', () => {
       refuses({ leftOut: { Pushups: 'x' } }, /both curated in and left out/);
     });
 
-    it('refuses equipment it cannot read and the curation does not settle', () => {
+    it('refuses equipment it cannot read and nothing settles', () => {
       refuses(
         { dataset: [source({ equipment: 'other' })] },
         /equipment "other" needs a curation entry/,
+      );
+      refuses(
+        { dataset: [source(), chinUp({ equipment: 'other' })] },
+        /equipment "other" needs a correction/,
+      );
+    });
+
+    it('refuses a correction to an entry that is missing, curated or left out', () => {
+      refuses(
+        { corrections: { Nope: { pattern: null } } },
+        /correction "Nope" is not in the dataset/,
+      );
+      refuses(
+        { corrections: { Pushups: { pattern: null } } },
+        /"Pushups" is curated/,
+      );
+      refuses(
+        {
+          dataset: [source(), chinUp()],
+          corrections: { 'Chin-Up': { pattern: null } },
+          leftOut: { 'Chin-Up': 'x' },
+        },
+        /"Chin-Up" is both corrected and left out/,
+      );
+    });
+
+    it('refuses words our enums do not have in a correction', () => {
+      refuses(
+        {
+          dataset: [source(), chinUp()],
+          corrections: { 'Chin-Up': { pattern: 'twirl' } },
+        },
+        /unknown pattern "twirl"/,
+      );
+      refuses(
+        {
+          dataset: [source(), chinUp()],
+          corrections: { 'Chin-Up': { equipment: ['sled' as never] } },
+        },
+        /unknown equipment "sled"/,
       );
     });
 
