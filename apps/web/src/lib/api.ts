@@ -6,6 +6,7 @@ import type {
   ExerciseMechanic,
   Muscle,
   CreateExercise,
+  ExerciseSearchPage,
   EditSetLogs,
   UpdateExercise,
   LogResultRequest,
@@ -222,13 +223,29 @@ export const api = {
   exercises: () => request<ApiExercise[]>("/exercises"),
 
   /**
-   * The same list with retired movements in it, for the library page (DN-28).
+   * The same list with retired movements in it, for the WOD editor's
+   * movement picker (DN-28).
    *
    * A separate method rather than an argument on `exercises()`, so a pool
    * cannot acquire retired movements by someone passing a flag through.
    */
   libraryExercises: () =>
     request<ApiExercise[]>("/exercises?includeArchived=true"),
+  /**
+   * One page of the library page's search (DN-171). `query` is built by
+   * `searchQuery` in lib/libraryFilters.ts.
+   */
+  searchExercises: (query: string) =>
+    request<ExerciseSearchPage<ApiExercise>>(`/exercises/search?${query}`),
+  /**
+   * The retired movements, for the library page to offer back (DN-28,
+   * DN-171). Its own endpoint rather than a flag on the search, so no pool
+   * can acquire retired movements by someone passing a flag through.
+   */
+  retiredExercises: () => request<ApiExercise[]>("/exercises/retired"),
+  /** One movement, for the library's detail view (DN-171). */
+  exercise: (id: string) =>
+    request<ApiExercise>(`/exercises/${encodeURIComponent(id)}`),
   createExercise: (tier: LibraryTier, body: CreateExercise) =>
     postJson<ApiExercise>(exercisesBase(tier), body),
   updateExercise: (tier: LibraryTier, id: string, body: UpdateExercise) =>

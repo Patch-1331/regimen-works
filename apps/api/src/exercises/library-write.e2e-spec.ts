@@ -433,3 +433,82 @@ describe('listing retired movements over HTTP', () => {
     expect(await names('?includeArchived=true')).toEqual([]);
   });
 });
+
+/**
+ * The library page's reads (DN-171). What the service specs can't show is the
+ * routing: `search` and `retired` are literal paths beside `:id`, and declared
+ * after it they would be read as the id of a movement and answered with a 404.
+ */
+describe('searching and reading the library over HTTP', () => {
+  it('answers /exercises/search with a page, not as a movement id', async () => {
+    await http()
+      .post('/exercises')
+      .set(...asUser(ALICE))
+      .send(body({ name: 'Ring row' }))
+      .expect(201);
+
+    const res = await http()
+      .get('/exercises/search?q=ring&owned=false')
+      .set(...asUser(ALICE))
+      .expect(200);
+    const page = z
+      .object({
+        items: z.array(exerciseSchema),
+        total: z.number(),
+        page: z.number(),
+      })
+      .parse(res.body);
+    expect(page).toMatchObject({ total: 1, page: 1 });
+    expect(page.items.map((e) => e.name)).toEqual(['Ring row']);
+  });
+
+  it.each(['?muscle=elbows', '?page=0', '?level=godlike'])(
+    'refuses a search it cannot run: %s',
+    async (query) => {
+      await http()
+        .get(`/exercises/search${query}`)
+        .set(...asUser(ALICE))
+        .expect(400);
+    },
+  );
+
+  it('answers /exercises/retired with the retired list', async () => {
+    const made = await http()
+      .post('/exercises')
+      .set(...asUser(ALICE))
+      .send(body({ name: 'Burpee' }))
+      .expect(201);
+    await http()
+      .post(`/exercises/${idOf(made)}/archive`)
+      .set(...asUser(ALICE))
+      .expect(201);
+
+    const res = await http()
+      .get('/exercises/retired')
+      .set(...asUser(ALICE))
+      .expect(200);
+    expect(
+      z
+        .array(exerciseSchema)
+        .parse(res.body)
+        .map((e) => e.name),
+    ).toEqual(['Burpee']);
+  });
+
+  it('reads one movement by id, and 404s another athlete’s', async () => {
+    const his = await http()
+      .post('/exercises')
+      .set(...asUser(BOB))
+      .send(body())
+      .expect(201);
+
+    await http()
+      .get(`/exercises/${idOf(his)}`)
+      .set(...asUser(BOB))
+      .expect(200);
+    await http()
+      .get(`/exercises/${idOf(his)}`)
+      .set(...asUser(ALICE))
+      .expect(404);
+  });
+});

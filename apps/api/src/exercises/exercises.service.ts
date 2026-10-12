@@ -5,8 +5,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { CreateExercise, UpdateExercise } from '@regimen-works/shared';
-import type { Exercise } from '@prisma/client';
+import {
+  DEFAULT_EQUIPMENT,
+  LIBRARY_PAGE_SIZE,
+  equipment as equipmentEnum,
+  type CreateExercise,
+  type ExerciseSearchPage,
+  type ExerciseSearchQuery,
+  type UpdateExercise,
+} from '@regimen-works/shared';
+import type { Exercise, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   libraryOwnedBy,
@@ -60,6 +68,101 @@ export class ExercisesService {
       include: { fallbackExercise: true },
       orderBy: { name: 'asc' },
     });
+  }
+
+  /**
+   * One page of the library page's search (DN-171): the global library plus
+   * this athlete's own movements, narrowed by every filter the query names.
+   *
+   * Filtered and paged here rather than in the browser, so the page never
+   * holds the whole library: ~800 rows is what the search exists to spare it.
+   * Ordered by name, then id, so a page boundary never falls between two rows
+   * whose order is a coin toss.
+   *
+   * The filters go under `AND` beside `libraryVisibleTo` rather than being
+   * spread over it: the muscle filter carries an `OR` of its own, and a
+   * spread would replace the ownership one (the DN-93 failure).
+   */
+  async search(
+    userId: string,
+    query: ExerciseSearchQuery,
+  ): Promise<
+    ExerciseSearchPage<Exercise & { fallbackExercise: Exercise | null }>
+  > {
+    const filters: Prisma.ExerciseWhereInput[] = [libraryVisibleTo(userId)];
+    if (query.q) {
+      filters.push({ name: { contains: query.q, mode: 'insensitive' } });
+    }
+    if (query.muscle) {
+      filters.push({
+        OR: [
+          { primaryMuscles: { has: query.muscle } },
+          { secondaryMuscles: { has: query.muscle } },
+        ],
+      });
+    }
+    if (query.equipment) filters.push({ equipment: { has: query.equipment } });
+    if (query.category) filters.push({ category: query.category });
+    if (query.level) filters.push({ level: query.level });
+    if (query.pattern) filters.push({ pattern: query.pattern });
+    if (query.owned) {
+      const rule = await this.prisma.scheduleRule.findUnique({
+        where: { userId },
+        select: { equipment: true },
+      });
+      // No rule is the baseline, not owning nothing -- the scheduler's reading.
+      const owned = new Set<string>(rule?.equipment ?? DEFAULT_EQUIPMENT);
+      filters.push({
+        NOT: {
+          equipment: {
+            hasSome: equipmentEnum.options.filter((piece) => !owned.has(piece)),
+          },
+        },
+      });
+    }
+
+    const where = { AND: filters };
+    const [total, items] = await Promise.all([
+      this.prisma.exercise.count({ where }),
+      this.prisma.exercise.findMany({
+        where,
+        include: { fallbackExercise: true },
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        skip: (query.page - 1) * LIBRARY_PAGE_SIZE,
+        take: LIBRARY_PAGE_SIZE,
+      }),
+    ]);
+    return { items, total, page: query.page, pageSize: LIBRARY_PAGE_SIZE };
+  }
+
+  /**
+   * The retired movements the library page lists below the search (DN-171),
+   * so one can be brought back. The search hides them like every pool does;
+   * this is the management screen asking on purpose, as `findAll`'s
+   * `includeArchived` did (DN-28).
+   */
+  retired(userId: string) {
+    return this.prisma.exercise.findMany({
+      where: { ...libraryOwnedBy(userId), archivedAt: { not: null } },
+      include: { fallbackExercise: true },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  /**
+   * One movement, for the library's detail view (DN-171). A retired one
+   * still loads -- a link to it should say it is retired, not that it never
+   * existed -- but another athlete's never does, and reads as a 404 rather
+   * than a 403: unlike `loadWritable`, the caller has no other way to learn
+   * the row exists.
+   */
+  async findOne(userId: string, id: string) {
+    const exercise = await this.prisma.exercise.findFirst({
+      where: { ...libraryOwnedBy(userId), id },
+      include: { fallbackExercise: true },
+    });
+    if (!exercise) throw new NotFoundException('No such movement');
+    return exercise;
   }
 
   async create(writer: LibraryWriter, body: CreateExercise) {
