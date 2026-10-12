@@ -1,5 +1,8 @@
-import type { SubstitutionReason } from "@regimen-works/shared";
-import type { SwapOption } from "../lib/swapOptions";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import type { SubstitutionReason, SwapOptionsQuery } from "@regimen-works/shared";
+import { api } from "../lib/api";
+import { buildSwapRows, offersAChoice, type SwapRow, type SwapRows } from "../lib/swapOptions";
 
 /**
  * The swap control and its panel (WOD-5).
@@ -9,10 +12,11 @@ import type { SwapOption } from "../lib/swapOptions";
  * athlete was already looking at.
  *
  * It is also the only encouragement the app offers towards a harder movement
- * (DN-87). The panel lists the whole group in list order with the current choice
- * marked, so the next movement is visible and one tap away — which is what the
- * deleted advancement rule was reduced to suggesting, without the app having
- * to form a view about who is ready for it.
+ * (DN-87). The panel lists what is harder under its own heading, so the next
+ * movement is visible and one tap away — which is what the deleted
+ * advancement rule was reduced to suggesting, without the app having to form
+ * a view about who is ready for it. The heading describes the exercise, never
+ * the athlete (ADR-0004, ADR-0007).
  *
  * It covers what a fixed progression never could, too — a tweaked shoulder, no bar in
  * the hotel room, dead legs. So it sits on the plate rather than in Settings,
@@ -75,9 +79,41 @@ function SwapIcon({ lit }: { lit: boolean }) {
 }
 
 /**
- * The group, expanded in place under the row. The current choice is marked
- * rather than the list being filtered — seeing where you are on the group is
- * half of what makes the choice meaningful.
+ * The panel for one movement, read from the API when it opens (DN-170): the
+ * whole library's matches for it, not a list carried on every plate.
+ */
+export function LiveSwapPanel({
+  assignmentId,
+  swapKey,
+  current,
+  prescribedId,
+  ...panel
+}: Omit<Parameters<typeof SwapPanel>[0], "rows" | "failed"> & {
+  assignmentId: string;
+  swapKey: SwapOptionsQuery;
+  current: { id: string; name: string };
+  prescribedId: string | null;
+}) {
+  const { data, isError } = useQuery({
+    queryKey: ["swap-options", assignmentId, swapKey],
+    queryFn: () => api.swapOptions(assignmentId, swapKey),
+  });
+  const prescribed =
+    prescribedId && panel.prescribedName ? { id: prescribedId, name: panel.prescribedName } : null;
+  const rows = data ? buildSwapRows(data, current, prescribed) : null;
+  return <SwapPanel {...panel} rows={rows} failed={isError} />;
+}
+
+/**
+ * The options, expanded in place under the row. The current choice is marked
+ * rather than the list being filtered — seeing where you are is half of what
+ * makes the choice meaningful.
+ *
+ * Three sections (DN-170): what the athlete can do at the same level or
+ * easier, then "Harder options" under their own heading, then what needs kit
+ * they haven't listed, collapsed. A pick from any of them is the same swap,
+ * for today only — the third never touches Settings, it is "take it anyway
+ * if you have one today" for a whole list.
  *
  * No confirmation step and no "today or forever?" question. The swap is one
  * tap because the athlete is about to train; the permanent change is offered
@@ -85,7 +121,8 @@ function SwapIcon({ lit }: { lit: boolean }) {
  */
 export function SwapPanel({
   id,
-  options,
+  rows,
+  failed = false,
   isSwapped,
   prescribedName,
   prescribedReason,
@@ -93,7 +130,9 @@ export function SwapPanel({
   onRevert,
 }: {
   id: string;
-  options: SwapOption[];
+  /** Null while the options are still being read. */
+  rows: SwapRows | null;
+  failed?: boolean;
   isSwapped: boolean;
   /** What the library prescribed, where something other than today's tap replaced it. */
   prescribedName: string | null;
@@ -102,9 +141,12 @@ export function SwapPanel({
   onPick: (exerciseId: string) => void;
   onRevert: () => void;
 }) {
+  const [kitOpen, setKitOpen] = useState(false);
+  const all = rows ? [...rows.main, ...rows.harder, ...rows.needsEquipment] : [];
   // Derived from the list rather than passed in, so the sentence and the rows
   // can never disagree about whether the prescription is on offer.
-  const offersPrescribed = options.some((o) => o.isPrescribed);
+  const offersPrescribed = all.some((o) => o.isPrescribed);
+  const kitPanelId = `${id}-needs-equipment`;
 
   return (
     <div id={id} className="px-4 pb-3.5 pt-1" style={{ background: "var(--panel-2)" }}>
@@ -114,57 +156,47 @@ export function SwapPanel({
       >
         TODAY ONLY
       </p>
-      <ul className="flex flex-col">
-        {options.map((option) => (
-          <li key={option.exerciseId}>
-            <button
-              type="button"
-              onClick={() => onPick(option.exerciseId)}
-              aria-current={option.isCurrent}
-              className="flex w-full items-center gap-2.5 py-2 text-left"
-            >
-              <span
-                className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
-                style={{
-                  background: option.isCurrent ? "var(--glow)" : "var(--border)",
-                  boxShadow: option.isCurrent ? "0 0 5px var(--glow)" : "none",
-                }}
-              />
-              <span
-                className="min-w-0 flex-1 truncate text-[13px]"
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  color: option.isCurrent ? "var(--ink)" : "var(--ink-soft)",
-                  fontWeight: option.isCurrent ? 700 : 400,
-                }}
+      {failed ? (
+        <Note>Couldn't load the options. Close and try again.</Note>
+      ) : !rows ? (
+        <Note>Finding matches…</Note>
+      ) : (
+        <>
+          <OptionList rows={rows.main} onPick={onPick} />
+          {/* The empty state: nothing in the library to move to. Said
+              rather than shown as a lone marked row, which reads as an
+              instruction, not a choice. */}
+          {!offersAChoice(rows) && (
+            <Note>Nothing in the library matches this movement.</Note>
+          )}
+          {rows.harder.length > 0 && (
+            <>
+              <Heading>HARDER OPTIONS</Heading>
+              <OptionList rows={rows.harder} onPick={onPick} />
+            </>
+          )}
+          {rows.needsEquipment.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setKitOpen(!kitOpen)}
+                aria-expanded={kitOpen}
+                aria-controls={kitPanelId}
+                className="flex w-full items-center gap-1.5 pb-1 pt-2.5 text-left text-[10px] font-semibold tracking-[0.14em] text-[var(--ink-faint)]"
+                style={{ fontFamily: "var(--font-mono)" }}
               >
-                {option.name}
-              </span>
-              {option.isAlternative && (
-                <span
-                  className="shrink-0 text-[10px] tracking-[0.1em] text-[var(--ink-faint)]"
-                  style={{ fontFamily: "var(--font-mono)" }}
-                >
-                  NO KIT
-                </span>
+                <span aria-hidden="true">{kitOpen ? "▾" : "▸"}</span>
+                NEEDS EQUIPMENT YOU HAVEN'T LISTED
+              </button>
+              {kitOpen && (
+                <div id={kitPanelId}>
+                  <OptionList rows={rows.needsEquipment} onPick={onPick} />
+                </div>
               )}
-              {/* The movement the workout named, back on the list where an
-                  automatic layer took it off (DN-110). Marked rather than
-                  left to the sentence below, because in the off-group case
-                  it is one of two near-identical rows and which is which
-                  decides the tap. */}
-              {option.isPrescribed && (
-                <span
-                  className="shrink-0 text-[10px] tracking-[0.1em] text-[var(--ink-faint)]"
-                  style={{ fontFamily: "var(--font-mono)" }}
-                >
-                  PRESCRIBED
-                </span>
-              )}
-            </button>
-          </li>
-        ))}
-      </ul>
+            </>
+          )}
+        </>
+      )}
       {/* Says what was replaced, and by which of the two automatic layers
           (DN-88, DN-79). Never for a swap made today: that needs no
           explanation, and naming what it overrode would argue with a decision
@@ -206,5 +238,82 @@ export function SwapPanel({
         </button>
       )}
     </div>
+  );
+}
+
+function Heading({ children }: { children: string }) {
+  return (
+    <p
+      className="pb-1 pt-2.5 text-[10px] font-semibold tracking-[0.14em] text-[var(--ink-faint)]"
+      style={{ fontFamily: "var(--font-mono)" }}
+    >
+      {children}
+    </p>
+  );
+}
+
+function Note({ children }: { children: string }) {
+  return (
+    <p
+      className="py-2 text-[11px] text-[var(--ink-faint)]"
+      style={{ fontFamily: "var(--font-mono)" }}
+    >
+      {children}
+    </p>
+  );
+}
+
+function OptionList({ rows, onPick }: { rows: SwapRow[]; onPick: (exerciseId: string) => void }) {
+  return (
+    <ul className="flex flex-col">
+      {rows.map((option) => (
+        <li key={option.exerciseId}>
+          <button
+            type="button"
+            onClick={() => onPick(option.exerciseId)}
+            aria-current={option.isCurrent}
+            className="flex w-full items-center gap-2.5 py-2 text-left"
+          >
+            <span
+              className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{
+                background: option.isCurrent ? "var(--glow)" : "var(--border)",
+                boxShadow: option.isCurrent ? "0 0 5px var(--glow)" : "none",
+              }}
+            />
+            <span
+              className="min-w-0 flex-1 truncate text-[13px]"
+              style={{
+                fontFamily: "var(--font-mono)",
+                color: option.isCurrent ? "var(--ink)" : "var(--ink-soft)",
+                fontWeight: option.isCurrent ? 700 : 400,
+              }}
+            >
+              {option.name}
+            </span>
+            {option.isAlternative && (
+              <span
+                className="shrink-0 text-[10px] tracking-[0.1em] text-[var(--ink-faint)]"
+                style={{ fontFamily: "var(--font-mono)" }}
+              >
+                NO KIT
+              </span>
+            )}
+            {/* The movement the workout named, back on the list where an
+                automatic layer took it off (DN-110). Marked rather than left
+                to the sentence below, because it can sit beside near-identical
+                rows and which is which decides the tap. */}
+            {option.isPrescribed && (
+              <span
+                className="shrink-0 text-[10px] tracking-[0.1em] text-[var(--ink-faint)]"
+                style={{ fontFamily: "var(--font-mono)" }}
+              >
+                PRESCRIBED
+              </span>
+            )}
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }

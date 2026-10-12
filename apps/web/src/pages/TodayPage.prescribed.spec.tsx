@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { PrescribedMovement } from "@regimen-works/shared";
+import type { PrescribedMovement, SwapOptionsResponse } from "@regimen-works/shared";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderRoute } from "../test/renderRoute";
@@ -38,13 +38,23 @@ const ringRow = fixtures.apiExercise({
   sortOrder: 0,
 });
 
+/** What the swap panel is served: the rest of the pull group (DN-170). */
+const pullOptions: SwapOptionsResponse = {
+  main: [fixtures.swapOption({ exerciseId: ringRow.id, name: ringRow.name })],
+  harder: [],
+  needsEquipment: [],
+};
+
 /** Today, prescribing the given movements and nothing else. */
 function prescribing(
   movements: PrescribedMovement[],
   status: "scheduled" | "in_progress" | "completed" = "scheduled",
+  options: SwapOptionsResponse = pullOptions,
 ) {
   server.use(
-    http.get("/api/exercises", () => HttpResponse.json([ringRow, chinUp])),
+    http.get("/api/assignments/:assignmentId/substitutions/options", () =>
+      HttpResponse.json(options),
+    ),
     http.get("/api/today", () =>
       HttpResponse.json(
         fixtures.today({
@@ -144,7 +154,11 @@ describe("the prescribed plate", () => {
         prescribedId: chinUp.id,
         prescribedReason: "equipment",
       }),
-    ]);
+    ], "scheduled", {
+      main: [fixtures.swapOption({ exerciseId: ringRow.id, name: "Row under table", isFallback: true })],
+      harder: [],
+      needsEquipment: [],
+    });
     renderRoute("/");
 
     expect(await screen.findByText("ROW UNDER TABLE")).toBeInTheDocument();
@@ -156,7 +170,7 @@ describe("the prescribed plate", () => {
     await userEvent.click(
       screen.getByRole("button", { name: /swap row under table/i }),
     );
-    expect(screen.getByText("Chin-up")).toBeInTheDocument();
+    expect(await screen.findByText("Chin-up")).toBeInTheDocument();
   });
 
   it("swaps a prescribed movement by its own id", async () => {
@@ -173,7 +187,7 @@ describe("the prescribed plate", () => {
     await userEvent.click(
       await screen.findByRole("button", { name: /swap chin-up/i }),
     );
-    await userEvent.click(screen.getByRole("button", { name: /^ring row$/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /^ring row$/i }));
 
     // Keyed off the PlanSlotMovement, because a prescribed day has no
     // WodMovement anywhere in it.
@@ -201,7 +215,7 @@ describe("the prescribed plate", () => {
       await screen.findByRole("button", { name: /swap chin-up/i }),
     );
     await userEvent.click(
-      screen.getByRole("button", { name: /use what's prescribed/i }),
+      await screen.findByRole("button", { name: /use what's prescribed/i }),
     );
 
     expect(urls).toEqual([

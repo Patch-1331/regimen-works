@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Equipment } from "@regimen-works/shared";
+import type { Equipment, SwapOptionsResponse } from "@regimen-works/shared";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderRoute } from "../test/renderRoute";
@@ -14,9 +14,10 @@ import * as fixtures from "../test/fixtures";
  * A jump rope breaks that equivalence: cardio carries `line: null`, so the row
  * most likely to need a way out was the one row that had none.
  *
- * Driven through the real page rather than `buildSwapOptions` directly,
- * because what changed is which rows get a control at all — a fact about the
- * plate, not about the option list.
+ * Driven through the real page rather than `canSwap` directly, because what
+ * changed is which rows get a control at all — a fact about the plate, not
+ * about the option list. What the list holds is the API's to decide (DN-170);
+ * these serve it the answer and check the plate shows it.
  */
 
 vi.mock("@clerk/clerk-react", async () => {
@@ -45,6 +46,23 @@ const highKnees = fixtures.apiExercise({
   fallbackExercise: null,
 });
 
+const NOTHING: SwapOptionsResponse = { main: [], harder: [], needsEquipment: [] };
+
+/** What the API offers for double-unders: the written way off the rope. */
+const ropeOptions: SwapOptionsResponse = {
+  ...NOTHING,
+  main: [fixtures.swapOption({ exerciseId: "high-knees", name: "High knees", isFallback: true })],
+};
+
+/** Serves the swap panel `options`, whichever row asks. */
+function offering(options: SwapOptionsResponse) {
+  server.use(
+    http.get("/api/assignments/:assignmentId/substitutions/options", () =>
+      HttpResponse.json(options),
+    ),
+  );
+}
+
 /** A plate whose single movement is the given cardio exercise. */
 function plateShowing(
   exercise: typeof doubleUnders,
@@ -53,12 +71,11 @@ function plateShowing(
     prescribedName?: string | null;
     prescribedId?: string | null;
     prescribedReason?: "equipment" | "remembered_choice" | null;
+    primaryMuscles?: ("quadriceps" | "calves")[];
   } = {},
 ) {
+  const { primaryMuscles = [], ...movement } = movementOverrides;
   server.use(
-    http.get("/api/exercises", () =>
-      HttpResponse.json([doubleUnders, highKnees]),
-    ),
     http.get("/api/today", () =>
       HttpResponse.json(
         fixtures.today({
@@ -68,7 +85,7 @@ function plateShowing(
               dominantPattern: "cardio",
               movements: [
                 fixtures.movement({
-                  ...movementOverrides,
+                  ...movement,
                   exercise: {
                     id: exercise.id,
                     name: exercise.name,
@@ -79,6 +96,7 @@ function plateShowing(
                     movementGroup: null,
                     sortOrder: null,
                     fallbackExerciseId: exercise.fallbackExercise?.id ?? null,
+                    primaryMuscles,
                   },
                 }),
               ],
@@ -93,6 +111,7 @@ function plateShowing(
 describe("the swap control on an off-group movement", () => {
   it("is offered on a movement that has a no-equipment alternative", async () => {
     plateShowing(doubleUnders);
+    offering(ropeOptions);
     renderRoute("/");
 
     const swap = await screen.findByRole("button", { name: /swap double-unders/i });
@@ -100,20 +119,38 @@ describe("the swap control on an off-group movement", () => {
 
     // Both halves of the choice, with the current one marked — not the
     // alternative alone, which would read as an instruction.
-    expect(screen.getByRole("button", { name: /^double-unders$/i })).toHaveAttribute(
-      "aria-current",
-      "true",
-    );
+    expect(
+      await screen.findByRole("button", { name: /^double-unders$/i }),
+    ).toHaveAttribute("aria-current", "true");
     expect(screen.getByText("High knees")).toBeInTheDocument();
     expect(screen.getByText("NO KIT")).toBeInTheDocument();
   });
 
-  it("is withheld from a movement with no group and no fallback", async () => {
+  it("is offered on a movement with only its muscles to match on", async () => {
+    // DN-170: the whole library is a place to go now, not just a group or a
+    // written alternative. High knees name their muscles, and that is enough.
+    plateShowing(highKnees, { primaryMuscles: ["quadriceps"] });
+    offering({
+      ...NOTHING,
+      main: [fixtures.swapOption({ exerciseId: "butt-kicks", name: "Butt kicks" })],
+    });
+    renderRoute("/");
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /swap high knees/i }),
+    );
+    expect(
+      await screen.findByRole("button", { name: /^butt kicks$/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("is withheld from a movement with no muscles, no group and no fallback", async () => {
     plateShowing(highKnees);
     renderRoute("/");
 
     await screen.findByText("HIGH KNEES");
-    // The row this gate was written for: nothing to climb, nothing to fall to.
+    // The row this gate was written for: nothing to match on, nothing to
+    // climb, nothing to fall to.
     expect(
       screen.queryByRole("button", { name: /swap high knees/i }),
     ).not.toBeInTheDocument();
@@ -130,99 +167,62 @@ describe("the swap control on an off-group movement", () => {
       await screen.findByRole("button", { name: /swap high knees/i }),
     );
     expect(
-      screen.getByRole("button", { name: /use what's prescribed/i }),
+      await screen.findByRole("button", { name: /use what's prescribed/i }),
     ).toBeInTheDocument();
   });
 });
 
 /**
- * The rope pair, once it is a movement groups (DN-115).
+ * A pick from the panel's last section (DN-170).
  *
- * Both movements need the rope, so before the group the panel could only offer
- * the way *off* it: an athlete who owned a rope and could not yet turn doubles
- * was shown high knees, which is the app taking away gear they have.
+ * "Needs equipment you haven't listed" is "take it anyway if you have one
+ * today" for a whole list. Taking one is the same swap as any other: it does
+ * not add the kit to the athlete's equipment, which would quietly change every
+ * plate after today's.
  */
-describe("a movementGroup where every member needs the same equipment", () => {
-  const singleUnders = fixtures.apiExercise({
-    id: "single-unders",
-    name: "Single-unders",
-    pattern: "cardio",
-    equipment: ROPE,
-    movementGroup: "cardio_rope",
-    sortOrder: 0,
-    fallbackExercise: { id: "high-knees", name: "High knees" },
-  });
-  const linedDoubleUnders = fixtures.apiExercise({
-    ...doubleUnders,
-    movementGroup: "cardio_rope",
-    sortOrder: 1,
-  });
-
-  /** Rope Trick as an athlete who owns a rope is served it. */
-  function ropeDay() {
+describe("a pick from the movements that need unlisted equipment", () => {
+  it("swaps today and touches nothing else", async () => {
+    const writes: string[] = [];
+    const swaps: unknown[] = [];
+    plateShowing(highKnees, { primaryMuscles: ["quadriceps"] });
+    offering({
+      ...NOTHING,
+      needsEquipment: [
+        fixtures.swapOption({ exerciseId: "box-step-up", name: "Box step-up", equipment: ["box"] }),
+      ],
+    });
     server.use(
-      http.get("/api/exercises", () =>
-        HttpResponse.json([singleUnders, linedDoubleUnders, highKnees]),
-      ),
-      http.get("/api/today", () =>
-        HttpResponse.json(
-          fixtures.today({
-            assignment: {
-              ...fixtures.today().assignment!,
-              wod: fixtures.wod({
-                dominantPattern: "cardio",
-                movements: [
-                  fixtures.movement({
-                    exercise: {
-                      id: "double-unders",
-                      name: "Double-unders",
-                      pattern: "cardio",
-                      equipment: ROPE,
-                      unit: "reps",
-                      instructions: [],
-                      movementGroup: "cardio_rope",
-                      sortOrder: 1,
-                      fallbackExerciseId: "high-knees",
-                    },
-                  }),
-                ],
-              }),
-            },
-          }),
-        ),
-      ),
+      http.post("/api/assignments/:assignmentId/substitutions", async ({ request }) => {
+        swaps.push(await request.json());
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.all("/api/settings", ({ request }) => {
+        if (request.method !== "GET") writes.push("settings");
+        return HttpResponse.json(fixtures.settings());
+      }),
+      http.all("/api/schedule-rule", ({ request }) => {
+        if (request.method !== "GET") writes.push("schedule-rule");
+        return HttpResponse.json({ maxDaysPerWeek: 5 });
+      }),
     );
-  }
-
-  it("offers the easier movement instead of only the way off the rope", async () => {
-    ropeDay();
     renderRoute("/");
 
     await userEvent.click(
-      await screen.findByRole("button", { name: /swap double-unders/i }),
+      await screen.findByRole("button", { name: /swap high knees/i }),
     );
-
-    // The whole group in order with the current movement marked, then the
-    // bodyweight alternative last — the shape every other line already has.
-    expect(screen.getByRole("button", { name: /^single-unders/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^double-unders/i })).toHaveAttribute(
-      "aria-current",
-      "true",
-    );
-  });
-
-  it("still offers the way off the rope entirely", async () => {
-    // The line is a movement they own the kit for; high knees is for the day
-    // the rope is in the other bag. Adding the first must not cost the second.
-    ropeDay();
-    renderRoute("/");
-
     await userEvent.click(
-      await screen.findByRole("button", { name: /swap double-unders/i }),
+      await screen.findByRole("button", { name: /needs equipment you haven't listed/i }),
     );
+    await userEvent.click(screen.getByRole("button", { name: /^box step-up$/i }));
 
-    expect(screen.getByRole("button", { name: /^high knees/i })).toBeInTheDocument();
-    expect(screen.getByText("NO KIT")).toBeInTheDocument();
+    expect(swaps).toEqual([
+      {
+        wodMovementId: "wod-movement-1",
+        planSlotMovementId: null,
+        exerciseId: "box-step-up",
+      },
+    ]);
+    expect(writes).toEqual([]);
   });
 });
 
@@ -244,13 +244,16 @@ describe("the prescribed movement after an equipment fallback", () => {
       prescribedId: "double-unders",
       prescribedReason: "equipment",
     });
+    // Matched against the double-unders the workout wrote (DN-170), which
+    // the high knees already showing are the alternative to.
+    offering(ropeOptions);
   }
 
   it("gives the row a control it would otherwise not have", async () => {
     equipmentResolvedPlate();
     renderRoute("/");
 
-    // High knees have no group and no fallback of their own: without the
+    // High knees have no muscles, group or fallback of their own: without the
     // prescription there is nothing to offer, which is the case above.
     expect(
       await screen.findByRole("button", { name: /swap high knees/i }),
@@ -265,7 +268,7 @@ describe("the prescribed movement after an equipment fallback", () => {
       await screen.findByRole("button", { name: /swap high knees/i }),
     );
 
-    const prescribed = screen.getByRole("button", { name: /^double-unders/i });
+    const prescribed = await screen.findByRole("button", { name: /^double-unders/i });
     expect(prescribed).toBeInTheDocument();
     expect(prescribed).toHaveAttribute("aria-current", "false");
     expect(screen.getByText("PRESCRIBED")).toBeInTheDocument();
@@ -285,7 +288,7 @@ describe("the prescribed movement after an equipment fallback", () => {
     await userEvent.click(
       await screen.findByRole("button", { name: /swap high knees/i }),
     );
-    await userEvent.click(screen.getByRole("button", { name: /^double-unders/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /^double-unders/i }));
 
     expect(swaps).toEqual([
       {
@@ -307,10 +310,10 @@ describe("the prescribed movement after an equipment fallback", () => {
     // The sentence explained a movement they could not have. Above a row that
     // reads DOUBLE-UNDERS it is the app talking to itself, and its wording is
     // final where the control no longer is.
-    expect(screen.queryByText(/the workout says/i)).not.toBeInTheDocument();
     expect(
-      screen.getByText("Not in your equipment — take it anyway if you have one today."),
+      await screen.findByText("Not in your equipment — take it anyway if you have one today."),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/the workout says/i)).not.toBeInTheDocument();
   });
 
   it("offers nothing on a row the athlete swapped themselves", async () => {
@@ -318,11 +321,13 @@ describe("the prescribed movement after an equipment fallback", () => {
     // prescription, and putting it back is what revert is for. Two controls
     // for one intention would be one too many.
     plateShowing(highKnees, { isSwapped: true });
+    offering(ropeOptions);
     renderRoute("/");
 
     await userEvent.click(
       await screen.findByRole("button", { name: /swap high knees/i }),
     );
+    await screen.findByText("High knees");
     expect(
       screen.queryByRole("button", { name: /^double-unders/i }),
     ).not.toBeInTheDocument();

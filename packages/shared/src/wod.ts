@@ -4,6 +4,7 @@ import {
   exerciseUnit,
   movementPattern,
   movementGroup,
+  muscle,
   substitutionReason,
   wodType,
 } from "./enums.js";
@@ -45,6 +46,10 @@ export const movementExerciseSchema = z.object({
   // without a second request. Both null outside a group.
   sortOrder: z.number().int().nonnegative().nullable(),
   fallbackExerciseId: z.string().nullable(),
+  // What the movement works, prime mover first: the swap control is offered
+  // on a row the muscle match has something to go on for (DN-170), before
+  // its options are read. Empty where nobody has described the exercise.
+  primaryMuscles: z.array(muscle),
 });
 export type MovementExercise = z.infer<typeof movementExerciseSchema>;
 

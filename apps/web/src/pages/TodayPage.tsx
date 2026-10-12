@@ -13,8 +13,8 @@ import { api } from "../lib/api";
 import { DigitReadout } from "../components/DigitReadout";
 import { InstructionsCaret, InstructionsPanel } from "../components/MovementInstructions";
 import { hasInstructions } from "../lib/instructions";
-import { SwapButton, SwapPanel } from "../components/MovementSwap";
-import { buildSwapOptions } from "../lib/swapOptions";
+import { LiveSwapPanel, SwapButton } from "../components/MovementSwap";
+import { canSwap as swappable } from "../lib/swapOptions";
 
 export function TodayPage() {
   const navigate = useNavigate();
@@ -29,14 +29,6 @@ export function TodayPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["today"],
     queryFn: api.today,
-  });
-  // The group's members. Library content, the same for everyone and unchanged
-  // between visits, so it's fetched once and shared with the Stats page's
-  // cache rather than being carried on every today response.
-  const { data: exercises } = useQuery({
-    queryKey: ["exercises"],
-    queryFn: api.exercises,
-    staleTime: Infinity,
   });
 
   if (isLoading)
@@ -216,16 +208,10 @@ export function TodayPage() {
               const panelId = `movement-instructions-${m.id}`;
               const swapPanelId = `movement-swap-${m.id}`;
               const isSwapOpen = swapMovementId === m.id;
-              // Built off the exercise the athlete is actually holding, the
-              // same as the WOD plate: where equipment dropped them off the
-              // program's line, `prescribedId` is what puts it back on offer.
-              const swapOptions = buildSwapOptions(
-                exercises ?? [],
-                m.exercise.movementGroup,
-                m.exercise.id,
-                m.prescribedId,
-              );
-              const canSwap = swapOptions.length > 0 || m.isSwapped;
+              // The options are read when the panel opens (DN-170); whether
+              // the row has a control at all is decided here, the same as on
+              // the WOD plate.
+              const canSwap = swappable(m.exercise, m);
 
               return (
                 <div key={m.id} style={{ borderColor: "var(--border)" }}>
@@ -261,9 +247,12 @@ export function TodayPage() {
                     <InstructionsPanel id={panelId} steps={instructions} />
                   )}
                   {isSwapOpen && (
-                    <SwapPanel
+                    <LiveSwapPanel
                       id={swapPanelId}
-                      options={swapOptions}
+                      assignmentId={assignmentId}
+                      swapKey={{ wodMovementId: null, planSlotMovementId: m.id }}
+                      current={m.exercise}
+                      prescribedId={m.prescribedId}
                       isSwapped={m.isSwapped}
                       prescribedName={m.prescribedName}
                       prescribedReason={m.prescribedReason}
@@ -423,23 +412,12 @@ export function TodayPage() {
             const panelId = `movement-instructions-${m.id}`;
             const swapPanelId = `movement-swap-${m.id}`;
             const isSwapOpen = swapMovementId === m.id;
-            // Empty only where there is nothing to offer: no group and no
-            // no-equipment alternative either (DN-80).
-            const swapOptions = buildSwapOptions(
-              exercises ?? [],
-              m.exercise.movementGroup,
-              m.exercise.id,
-              // What the library asked for, where an automatic layer replaced
-              // it — the one movement the athlete could read but not pick
-              // until now (DN-110).
-              m.prescribedId,
-            );
-            // A swapped row keeps its control even when the movement it now
-            // holds offers nothing further — the alternative sits off every
-            // line, so the group that led here is gone from under it and
-            // revert is the only way back. Without this the swap is a
-            // one-way door.
-            const canSwap = swapOptions.length > 0 || m.isSwapped;
+            // Only where there is something to match on, or a way back: a
+            // swapped or substituted row keeps its control whatever it now
+            // holds, because revert is the only way back and without it the
+            // swap is a one-way door. The options themselves are read when
+            // the panel opens (DN-170).
+            const canSwap = swappable(m.exercise, m);
 
             const name = (
               <>
@@ -545,9 +523,12 @@ export function TodayPage() {
                   <InstructionsPanel id={panelId} steps={instructions} />
                 )}
                 {isSwapOpen && (
-                  <SwapPanel
+                  <LiveSwapPanel
                     id={swapPanelId}
-                    options={swapOptions}
+                    assignmentId={assignmentId}
+                    swapKey={{ wodMovementId: m.id, planSlotMovementId: null }}
+                    current={m.exercise}
+                    prescribedId={m.prescribedId}
                     isSwapped={m.isSwapped}
                     prescribedName={m.prescribedName}
                     prescribedReason={m.prescribedReason}

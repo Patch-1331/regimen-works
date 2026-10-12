@@ -5,6 +5,8 @@ import {
   muscleMatch,
   muscleMatchTargets,
   muscleMatchWhere,
+  swapCandidatesWhere,
+  swapSections,
   type MatchableExercise,
 } from './muscle-match';
 
@@ -243,6 +245,120 @@ describe('muscleMatch', () => {
   });
 });
 
+describe('swapSections', () => {
+  // Around a barbell bench press: a curated push-up that loads differently, a
+  // perfect bodyweight twin, a harder push-up, a harder press needing kit.
+  const kneePushUp = ex('rw-knee-push-up', {
+    curated: true,
+    mechanic: 'isolation',
+  });
+  const declinePushUp = ex('Decline_Push_Up');
+  const archerPushUp = ex('Archer_Push_Up', { level: 'expert' });
+  const ringFly = ex('Ring_Fly', {
+    equipment: ['suspension_trainer'],
+    level: 'expert',
+  });
+  const pool = [...library, kneePushUp, declinePushUp, archerPushUp, ringFly];
+  const keys = (rows: MatchableExercise[]) => rows.map((e) => e.key);
+
+  it('splits the matches into what can be done, what is harder, and what needs kit', () => {
+    const sections = swapSections(barbellBench, pool, nothing);
+    expect(keys(sections.main)).toEqual([
+      'Pushups',
+      'rw-knee-push-up',
+      'Decline_Push_Up',
+    ]);
+    expect(keys(sections.harder)).toEqual(['Archer_Push_Up']);
+    expect(keys(sections.needsEquipment)).toEqual(['Dumbbell_Bench_Press']);
+  });
+
+  it('puts curated moves first, ahead of a better score', () => {
+    expect(matchScore(barbellBench, declinePushUp)).toBeGreaterThan(
+      matchScore(barbellBench, kneePushUp),
+    );
+    const { main } = swapSections(barbellBench, pool, nothing);
+    expect(main.indexOf(kneePushUp)).toBeLessThan(main.indexOf(declinePushUp));
+  });
+
+  it('moves a match into the main list once its kit is listed', () => {
+    const sections = swapSections(
+      barbellBench,
+      pool,
+      new Set(['dumbbell', 'bench']),
+    );
+    expect(keys(sections.main)).toContain('Dumbbell_Bench_Press');
+    expect(sections.needsEquipment).toEqual([]);
+  });
+
+  it('offers a harder move needing unlisted kit nowhere', () => {
+    const all = Object.values(swapSections(barbellBench, pool, nothing)).flat();
+    expect(all).not.toContain(ringFly);
+    expect(
+      keys(
+        swapSections(barbellBench, pool, new Set(['suspension_trainer']))
+          .harder,
+      ),
+    ).toContain('Ring_Fly');
+  });
+
+  it('agrees with the automatic swap on the main list', () => {
+    // Different orders -- the panel puts curated first, the automatic swap
+    // the best score -- over the same rows.
+    const { main } = swapSections(barbellBench, pool, nothing);
+    expect(main).toContain(muscleMatch(barbellBench, pool, nothing));
+  });
+
+  it("offers the movement's own group whatever the score, sorted by level and kit", () => {
+    // The hinge group: a bridge and a Romanian deadlift share no prime mover.
+    const bridge = ex('Butt_Lift_Bridge', {
+      movementGroup: 'hinge',
+      primaryMuscles: ['glutes'],
+      secondaryMuscles: ['hamstrings'],
+      mechanic: 'isolation',
+    });
+    const rdl = ex('Romanian_Deadlift', {
+      movementGroup: 'hinge',
+      equipment: ['barbell'],
+      level: 'intermediate',
+      primaryMuscles: ['hamstrings'],
+      secondaryMuscles: ['calves', 'glutes', 'lower_back'],
+      force: 'pull',
+    });
+    const superman = ex('Superman', {
+      movementGroup: 'hinge',
+      unit: 'seconds',
+      primaryMuscles: ['lower_back'],
+      secondaryMuscles: ['glutes', 'hamstrings'],
+      force: 'static',
+    });
+    expect(matchScore(bridge, rdl)).toBeLessThan(MATCH_THRESHOLD);
+
+    const pool = [bridge, rdl, superman];
+    expect(keys(swapSections(bridge, pool, nothing).main)).toEqual([
+      'Superman',
+    ]);
+    expect(
+      keys(swapSections(bridge, pool, new Set(['barbell'])).harder),
+    ).toEqual(['Romanian_Deadlift']);
+    // By score within the group: the superman shares more with the deadlift.
+    expect(keys(swapSections(rdl, pool, nothing).main)).toEqual([
+      'Superman',
+      'Butt_Lift_Bridge',
+    ]);
+    // The automatic swap keeps to the muscle rules.
+    expect(muscleMatch(rdl, pool, nothing)).toBeNull();
+  });
+
+  it('offers nothing for a movement with no muscles', () => {
+    const sections = swapSections(
+      ex('My_Bench', { equipment: ['barbell'], primaryMuscles: [] }),
+      pool,
+      nothing,
+    );
+    expect(Object.values(sections).flat()).toEqual([]);
+  });
+});
+
 describe('the threshold', () => {
   it('cannot be cleared by a candidate sharing no muscle', () => {
     // What makes `muscleMatchWhere` safe to load by shared muscle.
@@ -300,5 +416,20 @@ describe('muscleMatchWhere', () => {
       'shoulders',
       'triceps',
     ]);
+  });
+});
+
+describe('swapCandidatesWhere', () => {
+  it('loads candidates whatever kit they need', () => {
+    expect(JSON.stringify(swapCandidatesWhere(barbellBench))).not.toContain(
+      'NOT',
+    );
+  });
+
+  it("loads the movement's own group, whatever the muscles say", () => {
+    expect(swapCandidatesWhere(pushUps).OR).toContainEqual({
+      movementGroup: 'push_horizontal',
+    });
+    expect(swapCandidatesWhere(barbellBench).OR).toHaveLength(1);
   });
 });

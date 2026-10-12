@@ -1,233 +1,107 @@
 import { describe, expect, it } from "vitest";
-import type { ApiExercise } from "./api";
-import { buildSwapOptions } from "./swapOptions";
+import type { SwapOptionsResponse } from "@regimen-works/shared";
+import * as fixtures from "../test/fixtures";
+import { buildSwapRows, canSwap, offersAChoice } from "./swapOptions";
 
 /**
- * The group the athlete is shown. It has to be the whole group in list order —
- * marking where they are rather than filtering to what's "allowed" — because
- * the app no longer holds an opinion about their level, and seeing the group
- * is half of what makes the choice meaningful.
+ * The rows the athlete is shown. What is on offer is the API's (DN-170); what
+ * these pin is the part only the plate knows — where the athlete is, and what
+ * the workout named — and that it is marked rather than filtered.
  */
 
-function exercise(partial: Partial<ApiExercise> & { id: string }): ApiExercise {
-  return {
-    name: partial.id,
-    pattern: "pull",
-    equipment: [],
-    scalable: true,
-    unit: "reps",
-    movementGroup: "pull",
-    sortOrder: 0,
-    instructions: [],
-    fallbackExerciseId: null,
-    key: null,
-    primaryMuscles: [],
-    secondaryMuscles: [],
-    force: null,
-    mechanic: null,
-    level: null,
-    category: null,
-    ownerId: null,
-    archivedAt: null,
-    fallbackExercise: null,
-    ...partial,
-  };
-}
+const option = (exerciseId: string, name: string, isFallback = false) =>
+  fixtures.swapOption({ exerciseId, name, isFallback });
 
-const negative = exercise({ id: "negative", name: "Negative chin-up", sortOrder: 0 });
-const chinUp = exercise({
-  id: "chin-up",
-  name: "Chin-up",
-  sortOrder: 1,
-  fallbackExercise: { id: "row", name: "Row under table" },
-});
-const pullUp = exercise({ id: "pull-up", name: "Pull-up", sortOrder: 2 });
-const row = exercise({ id: "row", name: "Row under table", movementGroup: null, sortOrder: null });
-const burpee = exercise({ id: "burpee", name: "Burpee", movementGroup: null, sortOrder: null, pattern: "cardio" });
-const highKnees = exercise({
-  id: "high-knees",
-  name: "High knees",
-  movementGroup: null,
-  sortOrder: null,
-  pattern: "cardio",
-});
-// The rope movement and what it falls to: off every group, and the pair the
-// equipment work made swappable (DN-80).
-const doubleUnders = exercise({
-  id: "double-unders",
-  name: "Double-unders",
-  movementGroup: null,
-  sortOrder: null,
-  pattern: "cardio",
-  equipment: ["jump_rope"],
-  fallbackExercise: { id: "high-knees", name: "High knees" },
-});
+const sections: SwapOptionsResponse = {
+  main: [option("negative", "Negative chin-up"), option("row", "Row under table", true)],
+  harder: [option("pull-up", "Pull-up")],
+  needsEquipment: [option("ring-row", "Ring row")],
+};
 
-const library = [pullUp, negative, chinUp, row, burpee, doubleUnders, highKnees];
+const chinUp = { id: "chin-up", name: "Chin-up" };
 
-describe("buildSwapOptions", () => {
-  it("lists the movementGroup's members in order, whatever order the library came in", () => {
-    const options = buildSwapOptions(library, "pull", "negative");
-    expect(options.map((o) => o.name)).toEqual([
+describe("buildSwapRows", () => {
+  it("keeps the API's sections and their order", () => {
+    const rows = buildSwapRows(sections, chinUp, null);
+    expect(rows.harder.map((r) => r.name)).toEqual(["Pull-up"]);
+    expect(rows.needsEquipment.map((r) => r.name)).toEqual(["Ring row"]);
+  });
+
+  it("puts the movement the athlete is on at the head of the list, marked", () => {
+    // The API never offers a movement for itself, so it is not in any
+    // section. Seeing where you are is half of what makes the choice.
+    const rows = buildSwapRows(sections, chinUp, null);
+    expect(rows.main.map((r) => r.name)).toEqual([
+      "Chin-up",
       "Negative chin-up",
+      "Row under table",
+    ]);
+    expect(rows.main.filter((r) => r.isCurrent).map((r) => r.name)).toEqual(["Chin-up"]);
+  });
+
+  it("marks the current movement in place where a section holds it", () => {
+    // After a swap the athlete holds a row the API offers for the anchor.
+    const rows = buildSwapRows(sections, { id: "pull-up", name: "Pull-up" }, null);
+    expect(rows.harder).toEqual([expect.objectContaining({ name: "Pull-up", isCurrent: true })]);
+    expect(rows.main.map((r) => r.name)).not.toContain("Pull-up");
+  });
+
+  it("labels the written alternative", () => {
+    const rows = buildSwapRows(sections, chinUp, null);
+    expect(rows.main.filter((r) => r.isAlternative).map((r) => r.name)).toEqual([
+      "Row under table",
+    ]);
+  });
+
+  it("offers the prescribed movement back after the current one (DN-110)", () => {
+    const rows = buildSwapRows(sections, { id: "row", name: "Row under table" }, chinUp);
+    expect(rows.main.map((r) => r.name)).toEqual([
       "Chin-up",
-      "Pull-up",
+      "Negative chin-up",
+      "Row under table",
+    ]);
+    expect(rows.main[0]).toMatchObject({ isPrescribed: true, isCurrent: false });
+  });
+
+  it("marks the prescribed movement where a section already lists it, once", () => {
+    const rows = buildSwapRows(sections, chinUp, { id: "pull-up", name: "Pull-up" });
+    const all = [...rows.main, ...rows.harder, ...rows.needsEquipment];
+    expect(all.filter((r) => r.exerciseId === "pull-up")).toEqual([
+      expect.objectContaining({ isPrescribed: true }),
     ]);
   });
+});
 
-  it("marks the movement the athlete is on rather than filtering the rest away", () => {
-    const options = buildSwapOptions(library, "pull", "chin-up");
-    expect(options.filter((o) => o.isCurrent).map((o) => o.name)).toEqual([
-      "Chin-up",
-    ]);
-    // Every member stays on the list — plus chin-up's alternative, which is
-    // what makes this four rather than three.
-    expect(options.filter((o) => !o.isAlternative)).toHaveLength(3);
+describe("offersAChoice", () => {
+  it("reads a lone marked row as nothing to choose", () => {
+    const empty = { main: [], harder: [], needsEquipment: [] };
+    expect(offersAChoice(buildSwapRows(empty, chinUp, null))).toBe(false);
   });
 
-  it("offers the current exercise's no-equipment alternative, last and labelled", () => {
-    const options = buildSwapOptions(library, "pull", "chin-up");
-    // Not appended here — `row` is outside the group, so it only appears via the
-    // current exercise's fallbackExercise.
-    expect(options.at(-1)).toMatchObject({
-      exerciseId: "row",
-      name: "Row under table",
-      sortOrder: null,
-      isAlternative: true,
-    });
+  it("counts a row in any section", () => {
+    const kitOnly = { main: [], harder: [], needsEquipment: [option("ring-row", "Ring row")] };
+    expect(offersAChoice(buildSwapRows(kitOnly, chinUp, null))).toBe(true);
+  });
+});
+
+describe("canSwap", () => {
+  const bare = { primaryMuscles: [], movementGroup: null, fallbackExerciseId: null };
+  const asPrescribed = { isSwapped: false, prescribedId: null };
+
+  it("withholds the control from a movement with nothing to match on", () => {
+    expect(canSwap(bare, asPrescribed)).toBe(false);
   });
 
-  it("omits the alternative when the current movement has none", () => {
-    const options = buildSwapOptions(library, "pull", "pull-up");
-    expect(options.some((o) => o.isAlternative)).toBe(false);
+  it.each([
+    ["muscles", { ...bare, primaryMuscles: ["lats"] }],
+    ["a group", { ...bare, movementGroup: "pull" }],
+    ["a written alternative", { ...bare, fallbackExerciseId: "row" }],
+  ])("offers it on a movement with %s", (_, exercise) => {
+    expect(canSwap(exercise, asPrescribed)).toBe(true);
   });
 
-  it("never repeats an alternative that is already a member of the movementGroup", () => {
-    const withRowAsMember = [
-      exercise({ id: "row", name: "Row under table", sortOrder: 0 }),
-      exercise({
-        id: "chin-up",
-        name: "Chin-up",
-        sortOrder: 1,
-        fallbackExercise: { id: "row", name: "Row under table" },
-      }),
-    ];
-    const options = buildSwapOptions(withRowAsMember, "pull", "chin-up");
-    expect(options.map((o) => o.exerciseId)).toEqual(["row", "chin-up"]);
-  });
-
-  it("returns nothing for an off-group movement with no alternative", () => {
-    // A burpee needs nothing and stands in for nothing — this is the row the
-    // control really would open onto nothing for.
-    expect(buildSwapOptions(library, null, "burpee")).toEqual([]);
-  });
-
-  /**
-   * Movements in no group used to be refused a control outright, which was
-   * right while equipment meant the bar. Once a WOD can name a jump rope, the
-   * row with no group is the row most likely to need a way out (DN-80).
-   */
-  it("offers an off-group movement its alternative, labelled and last", () => {
-    const options = buildSwapOptions(library, null, "double-unders");
-    expect(options).toEqual([
-      {
-        exerciseId: "double-unders",
-        name: "Double-unders",
-        sortOrder: null,
-        isCurrent: true,
-        isAlternative: false,
-        isPrescribed: false,
-      },
-      {
-        exerciseId: "high-knees",
-        name: "High knees",
-        sortOrder: null,
-        isCurrent: false,
-        isAlternative: true,
-        isPrescribed: false,
-      },
-    ]);
-  });
-
-  it("marks where the athlete is, rather than offering the alternative alone", () => {
-    // One unmarked row reads as an instruction. The pair reads as a choice —
-    // the same reasin the group lists every member instead of the next one.
-    const options = buildSwapOptions(library, null, "double-unders");
-    expect(options.filter((o) => o.isCurrent).map((o) => o.name)).toEqual([
-      "Double-unders",
-    ]);
-  });
-
-  it("offers nothing further once the athlete swapped to the alternative themselves", () => {
-    // High knees stand in for the rope and need nothing themselves, so there
-    // is no third movement to go to. On a row the athlete swapped, getting
-    // back is revert's job — which is why no prescribed id is passed here.
-    expect(buildSwapOptions(library, null, "high-knees")).toEqual([]);
-  });
-
-  /**
-   * The equipment layer moves a row silently, with no substitution behind it,
-   * so revert does not apply (DN-110). Without this the one movement the
-   * athlete has actually acquired the gear for is the one they cannot pick.
-   */
-  it("offers the prescribed movement back on a row an automatic layer moved", () => {
-    const options = buildSwapOptions(
-      library,
-      null,
-      "high-knees",
-      "double-unders",
-    );
-    expect(options).toEqual([
-      {
-        exerciseId: "high-knees",
-        name: "High knees",
-        sortOrder: null,
-        isCurrent: true,
-        isAlternative: false,
-        isPrescribed: false,
-      },
-      {
-        exerciseId: "double-unders",
-        name: "Double-unders",
-        sortOrder: null,
-        isCurrent: false,
-        isAlternative: false,
-        isPrescribed: true,
-      },
-    ]);
-  });
-
-  it("marks the prescribed movement in the group rather than listing it twice", () => {
-    // The remembered choice moved this row, and the movement it moved from is
-    // a member the group already carries. Appending it would offer the same
-    // exercise on two lines of the same list.
-    const options = buildSwapOptions(library, "pull", "negative", "pull-up");
-    expect(options.map((o) => o.exerciseId)).toEqual([
-      "negative",
-      "chin-up",
-      "pull-up",
-    ]);
-    expect(options.filter((o) => o.isPrescribed).map((o) => o.name)).toEqual([
-      "Pull-up",
-    ]);
-  });
-
-  it("passes over a prescribed movement the library does not hold", () => {
-    // Degrades to the list as it was rather than offering a swap the API
-    // would reject — the discipline every resolution layer keeps.
-    expect(
-      buildSwapOptions(library, null, "double-unders", "retired-exercise"),
-    ).toEqual(buildSwapOptions(library, null, "double-unders"));
-  });
-
-  it("still offers nothing when the prescribed movement is the one showing", () => {
-    // A control that opens onto a single row reads as an instruction, not a
-    // choice. Burpees have no alternative, so there is nothing to pair it
-    // with even if something upstream named one.
-    expect(buildSwapOptions(library, null, "burpee", "burpee")).toEqual([]);
-  });
-
-  it("returns nothing when the movementGroup has no seeded members", () => {
-    expect(buildSwapOptions(library, "hinge", "deadlift")).toEqual([]);
+  it("keeps it on a row something moved, so there is a way back", () => {
+    expect(canSwap(bare, { isSwapped: true, prescribedId: null })).toBe(true);
+    expect(canSwap(bare, { isSwapped: false, prescribedId: "chin-up" })).toBe(true);
   });
 });

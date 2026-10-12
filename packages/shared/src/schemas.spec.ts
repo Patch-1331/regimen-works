@@ -27,7 +27,10 @@ import {
   updateSettingsSchema,
 } from "./settings.js";
 import { skillLevelSchema } from "./skill-level.js";
-import { setSubstitutionRequestSchema } from "./substitution.js";
+import {
+  setSubstitutionRequestSchema,
+  swapOptionsQuerySchema,
+} from "./substitution.js";
 import { createWodSchema, updateWodSchema } from "./wod.js";
 import { planDetailSchema, planSchema, planSlotSchema } from "./plan.js";
 import {
@@ -58,6 +61,7 @@ function exercise(overrides: Record<string, unknown> = {}) {
     movementGroup: "push_horizontal",
     sortOrder: 2,
     fallbackExerciseId: null,
+    primaryMuscles: ["chest"],
     ...overrides,
   };
 }
@@ -2249,6 +2253,21 @@ describe("completedProgramSchema", () => {
   it("refuses a run that has not finished", () => {
     expect(
       completedProgramSchema.safeParse(program({ completedAt: null })).success,
+    ).toBe(false);
+  });
+});
+
+describe("swapOptionsQuerySchema", () => {
+  it("asks about one movement, of either kind", () => {
+    expect(swapOptionsQuerySchema.safeParse({ wodMovementId: "wm-1" }).success).toBe(true);
+    expect(swapOptionsQuerySchema.safeParse({ planSlotMovementId: "pm-1" }).success).toBe(true);
+  });
+
+  it("refuses both and neither", () => {
+    expect(swapOptionsQuerySchema.safeParse({}).success).toBe(false);
+    expect(
+      swapOptionsQuerySchema.safeParse({ wodMovementId: "wm-1", planSlotMovementId: "pm-1" })
+        .success,
     ).toBe(false);
   });
 });

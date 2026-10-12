@@ -10,7 +10,7 @@ import {
   createUser,
   createWod,
 } from '../test-support/fixtures';
-import { SubstitutionsService } from './substitutions.service';
+import { SECTION_CAP, SubstitutionsService } from './substitutions.service';
 
 /**
  * The swap is the athlete's write path onto their own level, so the service
@@ -993,3 +993,338 @@ async function stampUpdatedAt(
     WHERE "assignmentId" = ${assignmentId} AND "wodMovementId" = ${wodMovementId}
   `;
 }
+
+/**
+ * A WOD naming a barbell bench press, for an athlete who lists `equipment`,
+ * and the library the swap panel draws from around it (DN-170): a curated
+ * push-up and a curated variation that loads differently, an uncurated
+ * twin, a harder push-up, a dumbbell press and a harder ring fly. Every
+ * row described the way the library import writes them.
+ */
+async function benchDay(
+  options: { equipment?: string[]; fallbackId?: string } = {},
+) {
+  const user = await createUser();
+  await testPrisma().scheduleRule.create({
+    data: { userId: user.id, equipment: options.equipment ?? [] },
+  });
+  const described = {
+    pattern: 'push',
+    movementGroup: null,
+    sortOrder: null,
+    category: 'strength',
+    level: 'beginner',
+    primaryMuscles: ['chest'],
+    secondaryMuscles: ['shoulders', 'triceps'],
+    force: 'push',
+    mechanic: 'compound',
+  };
+  const bench = await createExercise({
+    ...described,
+    name: 'Barbell bench press',
+    equipment: ['barbell', 'bench'],
+    fallbackExerciseId: options.fallbackId ?? null,
+  });
+  await createExercise({ ...described, name: 'Pushups', curated: true });
+  await createExercise({
+    ...described,
+    name: 'Knee push-up',
+    curated: true,
+    mechanic: 'isolation',
+  });
+  await createExercise({ ...described, name: 'Decline push-up' });
+  await createExercise({
+    ...described,
+    name: 'Archer push-up',
+    level: 'expert',
+  });
+  await createExercise({
+    ...described,
+    name: 'Dumbbell bench press',
+    equipment: ['dumbbell', 'bench'],
+  });
+  await createExercise({
+    ...described,
+    name: 'Ring fly',
+    level: 'expert',
+    equipment: ['suspension_trainer'],
+  });
+  const wod = await createWod({
+    dominantPattern: 'push',
+    movements: [{ exerciseId: bench.id, reps: 30, order: 0 }],
+  });
+  const assignment = await createAssignment(user.id, { wodId: wod.id });
+  return { user, bench, described, assignment, movement: wod.movements[0] };
+}
+
+const names = (rows: { name: string }[]) => rows.map((r) => r.name);
+
+async function exerciseNamed(name: string) {
+  return testPrisma().exercise.findFirstOrThrow({ where: { name } });
+}
+
+describe('SubstitutionsService.options (DN-170)', () => {
+  it('splits the library into what can be done, what is harder, and what needs kit', async () => {
+    const { user, assignment, movement } = await benchDay();
+
+    const options = await service().options(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+    );
+
+    // Curated first, then by score. Matched against the bench press as the
+    // WOD wrote it, though equipment serves push-ups in its place.
+    expect(names(options.main)).toEqual([
+      'Pushups',
+      'Knee push-up',
+      'Decline push-up',
+    ]);
+    expect(names(options.harder)).toEqual(['Archer push-up']);
+    expect(names(options.needsEquipment)).toEqual(['Dumbbell bench press']);
+    expect(options.needsEquipment[0]).toMatchObject({
+      level: 'beginner',
+      equipment: ['dumbbell', 'bench'],
+      isFallback: false,
+    });
+  });
+
+  it('lists a match in the main list once its kit is listed', async () => {
+    const { user, assignment, movement } = await benchDay({
+      equipment: ['dumbbell', 'bench'],
+    });
+
+    const options = await service().options(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+    );
+
+    expect(names(options.main)).toContain('Dumbbell bench press');
+    expect(options.needsEquipment).toEqual([]);
+  });
+
+  it('offers a harder move needing unlisted kit nowhere', async () => {
+    const { user, assignment, movement } = await benchDay();
+
+    const options = await service().options(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+    );
+
+    const all = [...options.main, ...options.harder, ...options.needsEquipment];
+    expect(names(all)).not.toContain('Ring fly');
+  });
+
+  it('heads the main list with the hand-written fallback', async () => {
+    const fallback = await createExercise({ name: 'Band press' });
+    const { user, assignment, movement } = await benchDay({
+      fallbackId: fallback.id,
+    });
+
+    const options = await service().options(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+    );
+
+    expect(options.main[0]).toMatchObject({
+      name: 'Band press',
+      isFallback: true,
+    });
+  });
+
+  it('lists no more than eight of a section', async () => {
+    const { user, described, assignment, movement } = await benchDay();
+    for (let i = 0; i < 10; i++) {
+      await createExercise({ ...described, name: `Push-up ${i}` });
+    }
+
+    const options = await service().options(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+    );
+
+    expect(options.main).toHaveLength(SECTION_CAP);
+  });
+
+  it("offers the athlete's own exercises and never another athlete's", async () => {
+    const { user, described, assignment, movement } = await benchDay();
+    const stranger = await createUser();
+    await createExercise({
+      ...described,
+      name: 'Their push-up',
+      ownerId: stranger.id,
+    });
+    await createExercise({
+      ...described,
+      name: 'My push-up',
+      ownerId: user.id,
+    });
+
+    const options = await service().options(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+    );
+
+    expect(names(options.main)).toContain('My push-up');
+    expect(names(options.main)).not.toContain('Their push-up');
+  });
+
+  it("matches against the athlete's remembered choice in the group", async () => {
+    const user = await createUser();
+    const described = {
+      pattern: 'push',
+      movementGroup: 'push_horizontal',
+      category: 'strength',
+      primaryMuscles: ['chest'],
+      secondaryMuscles: ['shoulders', 'triceps'],
+      force: 'push',
+      mechanic: 'compound',
+    };
+    const written = await createExercise({
+      ...described,
+      name: 'Incline push-up',
+      level: 'beginner',
+      sortOrder: 0,
+    });
+    const chosen = await createExercise({
+      ...described,
+      name: 'Archer push-up',
+      level: 'expert',
+      sortOrder: 1,
+    });
+    await createSkillLevel(user.id, 'push_horizontal', chosen.id);
+    const wod = await createWod({
+      dominantPattern: 'push',
+      movements: [{ exerciseId: written.id, reps: 30, order: 0 }],
+    });
+    const assignment = await createAssignment(user.id, { wodId: wod.id });
+
+    const options = await service().options(
+      user.id,
+      assignment.id,
+      wodKey(wod.movements[0].id),
+    );
+
+    // Against the archer push-up the athlete trains, the written one is
+    // easier, and nothing is harder.
+    expect(names(options.main)).toEqual(['Incline push-up']);
+    expect(options.harder).toEqual([]);
+  });
+
+  it('offers a group-prescribed slot its group, though nothing in it is described', async () => {
+    // The group vouches for its members (ADR-0004); the muscle match has
+    // nothing to go on here, so this is the group alone.
+    const { user, members, assignment, movement } = await prescribedDay();
+
+    const options = await service().options(
+      user.id,
+      assignment.id,
+      prescribedKey(movement.id),
+    );
+
+    // Matched against the group's default, the first member.
+    expect(names(options.main).sort()).toEqual(
+      [members[1].name, members[2].name].sort(),
+    );
+    expect(options.harder).toEqual([]);
+    expect(options.needsEquipment).toEqual([]);
+  });
+
+  it('offers nothing where the library has nothing to match on', async () => {
+    const user = await createUser();
+    const ungrouped = { movementGroup: null, sortOrder: null };
+    const undescribed = await createExercise({
+      ...ungrouped,
+      name: 'Mystery move',
+    });
+    await createExercise({ ...ungrouped, name: 'Another mystery' });
+    const wod = await createWod({
+      dominantPattern: 'push',
+      movements: [{ exerciseId: undescribed.id, reps: 30, order: 0 }],
+    });
+    const assignment = await createAssignment(user.id, { wodId: wod.id });
+
+    const options = await service().options(
+      user.id,
+      assignment.id,
+      wodKey(wod.movements[0].id),
+    );
+
+    expect(options).toEqual({ main: [], harder: [], needsEquipment: [] });
+  });
+
+  it("refuses another athlete's assignment", async () => {
+    const { assignment, movement } = await benchDay();
+    const stranger = await createUser();
+
+    await expect(
+      service().options(stranger.id, assignment.id, wodKey(movement.id)),
+    ).rejects.toThrow(NotFoundException);
+  });
+});
+
+describe('SubstitutionsService.set, against the swap panel (DN-170)', () => {
+  it.each([
+    ['the main list', 'Decline push-up'],
+    ['the harder options', 'Archer push-up'],
+    ['what needs equipment', 'Dumbbell bench press'],
+  ])('accepts a move from %s', async (_, name) => {
+    const { user, assignment, movement } = await benchDay();
+    const target = await exerciseNamed(name);
+
+    await service().set(user.id, assignment.id, wodKey(movement.id), target.id);
+
+    expect((await storedSwaps(assignment.id))[0].exerciseId).toBe(target.id);
+  });
+
+  it('accepts a match past the cap, which is only not listed', async () => {
+    const { user, described, assignment, movement } = await benchDay();
+    for (let i = 0; i < 10; i++) {
+      await createExercise({ ...described, name: `Push-up ${i}` });
+    }
+    const last = await exerciseNamed('Push-up 9');
+
+    await service().set(user.id, assignment.id, wodKey(movement.id), last.id);
+
+    expect((await storedSwaps(assignment.id))[0].exerciseId).toBe(last.id);
+  });
+
+  it('still refuses what the panel never offers', async () => {
+    const { user, assignment, movement } = await benchDay();
+    const ringFly = await exerciseNamed('Ring fly');
+    const unrelated = await createExercise({
+      name: 'Calf raise',
+      category: 'strength',
+      level: 'beginner',
+      primaryMuscles: ['calves'],
+    });
+
+    for (const target of [ringFly, unrelated]) {
+      await expect(
+        service().set(user.id, assignment.id, wodKey(movement.id), target.id),
+      ).rejects.toThrow(BadRequestException);
+    }
+  });
+
+  it('never writes the equipment a pick needs into Settings', async () => {
+    const { user, assignment, movement } = await benchDay();
+    const dumbbellBench = await exerciseNamed('Dumbbell bench press');
+
+    await service().set(
+      user.id,
+      assignment.id,
+      wodKey(movement.id),
+      dumbbellBench.id,
+    );
+
+    const rule = await testPrisma().scheduleRule.findUniqueOrThrow({
+      where: { userId: user.id },
+    });
+    expect(rule.equipment).toEqual([]);
+  });
+});
