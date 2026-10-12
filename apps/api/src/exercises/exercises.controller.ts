@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import {
   createExerciseSchema,
+  exerciseSearchQuerySchema,
   updateExerciseSchema,
 } from '@regimen-works/shared';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -40,6 +41,28 @@ export class ExercisesController {
     @Query('includeArchived') includeArchived?: string,
   ) {
     return this.exercisesService.findAll(userId, includeArchived === 'true');
+  }
+
+  /**
+   * The library page's search (DN-171). Declared before `:id` so the router
+   * never reads "search" as a movement's id.
+   */
+  @Get('search')
+  search(@CurrentUser() userId: string, @Query() query: unknown) {
+    return this.exercisesService.search(
+      userId,
+      validateBody(exerciseSearchQuerySchema, query),
+    );
+  }
+
+  @Get('retired')
+  retired(@CurrentUser() userId: string) {
+    return this.exercisesService.retired(userId);
+  }
+
+  @Get(':id')
+  findOne(@CurrentUser() userId: string, @Param('id') id: string) {
+    return this.exercisesService.findOne(userId, id);
   }
 
   @Post()

@@ -7,6 +7,7 @@ import { TodayPage } from "./pages/TodayPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { StatsPage } from "./pages/StatsPage";
 import { LibraryPage } from "./pages/LibraryPage";
+import { ExerciseDetailPage } from "./pages/ExerciseDetailPage";
 import { WodLibraryPage } from "./pages/WodLibraryPage";
 import { ActiveWorkoutPage } from "./pages/ActiveWorkoutPage";
 import { LogResultPage } from "./pages/LogResultPage";
@@ -97,6 +98,7 @@ function App() {
             {/* `/library` rather than `/exercises`: DN-29 brings WODs to the
               same home, and they belong under one word, not two tabs. */}
             <Route path="/library" element={<LibraryPage />} />
+            <Route path="/library/movements/:id" element={<ExerciseDetailPage />} />
             <Route path="/library/wods" element={<WodLibraryPage />} />
             <Route path="/library/routines" element={<RoutinesPage />} />
             <Route path="/settings" element={<SettingsPage />} />

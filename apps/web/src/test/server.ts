@@ -44,6 +44,14 @@ export const handlers = [
         : [fixtures.apiExercise()],
     );
   }),
+  // The library page's search (DN-171): one page holding the one fixture
+  // movement. Registered before `/exercises/:id`, which would otherwise read
+  // "search" and "retired" as ids.
+  http.get(api("/exercises/search"), () =>
+    HttpResponse.json({ items: [fixtures.apiExercise()], total: 1, page: 1, pageSize: 25 }),
+  ),
+  http.get(api("/exercises/retired"), () => HttpResponse.json([])),
+  http.get(api("/exercises/:id"), () => HttpResponse.json(fixtures.apiExercise())),
   http.get(api("/skill-levels"), () => HttpResponse.json([fixtures.skillLevel()])),
   // The WOD library, empty by default (DN-29): most route tests are about a
   // day rather than about the pool it was planned from.

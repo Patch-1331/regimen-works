@@ -23,6 +23,7 @@ const PATTERN_LABELS: Record<string, string> = {
   push: "Push",
   pull: "Pull",
   core: "Core",
+  cardio: "Cardio",
   carry: "Carry",
   monostructural: "Monostructural",
 };

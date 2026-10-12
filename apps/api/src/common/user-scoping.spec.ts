@@ -80,6 +80,10 @@ function recordingPrisma() {
         return Promise.resolve([]);
       }),
       findFirst: record('exercise.findFirst'),
+      count: jest.fn((args: unknown) => {
+        (calls['exercise.count'] ??= []).push(args);
+        return Promise.resolve(0);
+      }),
     },
     wod: {
       findMany: jest.fn((args: unknown) => {
@@ -255,6 +259,42 @@ describe('library ownership scoping', () => {
     await new ExercisesService(prisma).findAll(ALICE);
     for (const where of whereOf(prisma, 'exercise.findMany')) {
       expectLibraryScope(where);
+    }
+  });
+
+  it('scopes the library search, its count and the kit it reads (DN-171)', async () => {
+    const prisma = recordingPrisma();
+    await new ExercisesService(prisma).search(ALICE, {
+      q: 'push',
+      muscle: 'chest',
+      owned: true,
+      page: 1,
+    });
+    // The muscle filter carries an OR of its own: spread rather than nested,
+    // it would replace the ownership one and this would fail.
+    for (const where of [
+      ...whereOf(prisma, 'exercise.findMany'),
+      ...whereOf(prisma, 'exercise.count'),
+    ]) {
+      expectLibraryScope(where);
+    }
+    for (const where of whereOf(prisma, 'scheduleRule.findUnique')) {
+      expect(where).toContain(ALICE);
+    }
+  });
+
+  it('scopes the retired list and the detail view to both tiers', async () => {
+    // Retired rows are the point of both, so only the ownership half applies.
+    const prisma = recordingPrisma();
+    const service = new ExercisesService(prisma);
+    await service.retired(ALICE);
+    await service.findOne(ALICE, 'ex-1').catch(() => undefined);
+    for (const where of [
+      ...whereOf(prisma, 'exercise.findMany'),
+      ...whereOf(prisma, 'exercise.findFirst'),
+    ]) {
+      expect(where).toContain('"ownerId":null');
+      expect(where).toContain(ALICE);
     }
   });
 

@@ -117,3 +117,49 @@ export type CreateExercise = z.infer<typeof createExerciseSchema>;
  */
 export const updateExerciseSchema = createExerciseSchema.partial();
 export type UpdateExercise = z.infer<typeof updateExerciseSchema>;
+
+/**
+ * How many rows one page of the library search holds (DN-171). Fixed rather
+ * than a parameter, so the response stays small whoever asks: the library is
+ * ~800 movements, and a browser filtering all of them is what the search
+ * exists to replace.
+ */
+export const LIBRARY_PAGE_SIZE = 25;
+
+/**
+ * The library page's search and filters (DN-171), read from the query string.
+ * Every filter is optional and they combine with AND; an absent one does not
+ * narrow anything.
+ *
+ * `owned` is the string "true" or "false", as a query string carries it, and
+ * reads as a boolean: only exercises whose kit is all in the athlete's
+ * equipment. The page turns it on by default; the API does not, so a caller
+ * that never mentions kit gets the whole library.
+ */
+export const exerciseSearchQuerySchema = z.object({
+  /** Part of the name, any case. */
+  q: z.string().trim().max(100).optional(),
+  /** Works this muscle, as a prime mover or otherwise. */
+  muscle: muscle.optional(),
+  /** Needs this piece of equipment. */
+  equipment: equipment.optional(),
+  category: exerciseCategory.optional(),
+  /** How demanding the exercise is — a filter on exercises, never on athletes. */
+  level: exerciseLevel.optional(),
+  pattern: movementPattern.optional(),
+  owned: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => v === "true"),
+  /** 1-based. A page past the end is empty, not an error. */
+  page: z.coerce.number().int().min(1).default(1),
+});
+export type ExerciseSearchQuery = z.infer<typeof exerciseSearchQuerySchema>;
+
+/** One page of the library search. `total` counts every match, not the page. */
+export type ExerciseSearchPage<E> = {
+  items: E[];
+  total: number;
+  page: number;
+  pageSize: number;
+};

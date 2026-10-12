@@ -10,7 +10,11 @@ import {
   scheduleMode,
   wodType,
 } from "./enums.js";
-import { exerciseSchema, createExerciseSchema } from "./exercise.js";
+import {
+  exerciseSchema,
+  createExerciseSchema,
+  exerciseSearchQuerySchema,
+} from "./exercise.js";
 import { movementHistorySchema } from "./history.js";
 import { logResultRequestSchema, workoutLogListItemSchema } from "./log.js";
 import { proposedMovementChangeSchema } from "./movement-change.js";
@@ -2269,5 +2273,34 @@ describe("swapOptionsQuerySchema", () => {
       swapOptionsQuerySchema.safeParse({ wodMovementId: "wm-1", planSlotMovementId: "pm-1" })
         .success,
     ).toBe(false);
+  });
+});
+
+describe("exerciseSearchQuerySchema", () => {
+  it("reads an empty query as the whole library, first page", () => {
+    expect(exerciseSearchQuerySchema.parse({})).toEqual({ owned: false, page: 1 });
+  });
+
+  it("reads the page and the kit switch the way a query string carries them", () => {
+    expect(exerciseSearchQuerySchema.parse({ page: "3", owned: "true" })).toMatchObject({
+      page: 3,
+      owned: true,
+    });
+    expect(exerciseSearchQuerySchema.parse({ owned: "false" }).owned).toBe(false);
+  });
+
+  it("trims the search text", () => {
+    expect(exerciseSearchQuerySchema.parse({ q: "  push " }).q).toBe("push");
+  });
+
+  it.each([
+    ["a muscle outside the dataset's", { muscle: "pecs" }],
+    ["equipment outside the catalog", { equipment: "sandbag" }],
+    ["an unknown level", { level: "elite" }],
+    ["page zero", { page: "0" }],
+    ["a page that isn't a number", { page: "two" }],
+    ["a kit switch that isn't true or false", { owned: "1" }],
+  ])("refuses %s", (_, query) => {
+    expect(exerciseSearchQuerySchema.safeParse(query).success).toBe(false);
   });
 });
