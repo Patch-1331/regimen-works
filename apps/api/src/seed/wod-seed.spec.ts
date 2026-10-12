@@ -3,7 +3,7 @@ import {
   movementPattern,
   wodType,
 } from '@regimen-works/shared';
-import { exercises } from '../../prisma/exercise-seed';
+import { loadLibrary } from '../../prisma/library';
 import { wods } from '../../prisma/wod-seed';
 import { narrowToSlot } from '../plans/program-day';
 
@@ -16,23 +16,24 @@ import { narrowToSlot } from '../plans/program-day';
  * exactly what the equipment work puts at risk.
  */
 
-const exerciseByName = new Map(exercises.map((e) => [e.name, e]));
+// By key: what a WOD names a movement by since the import (DN-167).
+const exerciseByKey = new Map(loadLibrary().exercises.map((e) => [e.key, e]));
 
 /** What the WOD is identified by: its first movement in the dominant pattern. */
 function dominantMovement(wod: (typeof wods)[number]) {
   return wod.movements
-    .map((m) => exerciseByName.get(m.exercise))
+    .map((m) => exerciseByKey.get(m.exercise))
     .find((e) => e?.pattern === wod.dominantPattern);
 }
 
 describe('the seeded WOD library', () => {
   it('names only exercises that exist', () => {
-    // The seed resolves movements by name through `idByName.get(m.exercise)!`
+    // The seed resolves movements by key through `idByKey.get(m.exercise)!`
     // — a typo is not a seeding error, it is `undefined` handed to Prisma as
     // a foreign key.
     const unknown = wods.flatMap((w) =>
       w.movements
-        .filter((m) => !exerciseByName.has(m.exercise))
+        .filter((m) => !exerciseByKey.has(m.exercise))
         .map((m) => `"${w.name}" names "${m.exercise}"`),
     );
     expect(unknown).toEqual([]);
@@ -89,11 +90,11 @@ describe('the seeded WOD library', () => {
       wods.flatMap((w) => w.movements.map((m) => m.exercise)),
     );
     const unused = [
-      'Dumbbell row',
-      'Dumbbell floor press',
-      'Farmer carry',
-      'Suitcase carry',
-    ].filter((name) => !prescribed.has(name));
+      'One-Arm_Dumbbell_Row',
+      'Dumbbell_Floor_Press',
+      'rw-farmer-carry',
+      'rw-suitcase-carry',
+    ].filter((key) => !prescribed.has(key));
     expect(unused).toEqual([]);
   });
 
@@ -126,7 +127,7 @@ describe('the seeded WOD library', () => {
       .filter((w) => w.type === 'for_time')
       .flatMap((w) =>
         w.movements
-          .filter((m) => exerciseByName.get(m.exercise)?.unit === 'seconds')
+          .filter((m) => exerciseByKey.get(m.exercise)?.unit === 'seconds')
           .map((m) => `"${w.name}" prescribes ${m.exercise}`),
       );
     expect(timedInForTime).toEqual([]);
