@@ -12,6 +12,7 @@ import {
   createExercise,
   createUser,
 } from '../test-support/fixtures';
+import { SetupService } from '../setup/setup.service';
 import { loadActiveProgram } from './active-program';
 import { ROUTINE_WEEKS, RoutinesService } from './routines.service';
 
@@ -634,5 +635,127 @@ describe('RoutinesService.getForEditing', () => {
     await expect(
       routines().getForEditing({ ownerId: alice.id }, bobs.id),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('RoutinesService.archive and restore', () => {
+  const TODAY = '2026-10-12';
+
+  async function offered(userId: string) {
+    const setup = new SetupService(testPrisma() as unknown as PrismaService);
+    return (await setup.options(userId, TODAY)).programs.map((p) => p.id);
+  }
+
+  it('takes a routine out of setup, and restore puts it back', async () => {
+    const alice = await createUser();
+    const routine = await routines().create({ ownerId: alice.id }, body());
+    expect(await offered(alice.id)).toContain(routine.id);
+
+    const removed = await routines().archive({ ownerId: alice.id }, routine.id);
+    expect(removed).toEqual({
+      routine: { ...routine, archived: true },
+      running: false,
+    });
+    expect(await offered(alice.id)).not.toContain(routine.id);
+
+    const restored = await routines().restore(
+      { ownerId: alice.id },
+      routine.id,
+    );
+    expect(restored).toEqual({ ...routine, archived: false });
+    expect(await offered(alice.id)).toContain(routine.id);
+  });
+
+  it('leaves the run under way on it resolving, and says it is running', async () => {
+    const alice = await createUser();
+    const routine = await routines().create({ ownerId: alice.id }, body());
+    await createEnrollment(alice.id, { planId: routine.id });
+    const before = await loadActiveProgram(testPrisma(), alice.id);
+
+    const removed = await routines().archive({ ownerId: alice.id }, routine.id);
+
+    expect(removed.running).toBe(true);
+    const after = await loadActiveProgram(testPrisma(), alice.id);
+    expect(after?.planId).toBe(routine.id);
+    expect(after?.authoredWeeks).toEqual(before?.authoredWeeks);
+  });
+
+  it('does not count a finished run as running', async () => {
+    const alice = await createUser();
+    const routine = await routines().create({ ownerId: alice.id }, body());
+    await createEnrollment(alice.id, {
+      planId: routine.id,
+      status: 'completed',
+    });
+
+    const removed = await routines().archive({ ownerId: alice.id }, routine.id);
+    expect(removed.running).toBe(false);
+  });
+
+  it('never deletes, even a routine nobody ran', async () => {
+    const alice = await createUser();
+    const routine = await routines().create({ ownerId: alice.id }, body());
+
+    await routines().archive({ ownerId: alice.id }, routine.id);
+
+    const plan = await stored(routine.id);
+    expect(plan.archivedAt).not.toBeNull();
+    expect(plan.weeks[0].slots).toHaveLength(2);
+  });
+
+  it('is idempotent both ways', async () => {
+    const alice = await createUser();
+    const routine = await routines().create({ ownerId: alice.id }, body());
+
+    await routines().archive({ ownerId: alice.id }, routine.id);
+    const archivedAt = (await stored(routine.id)).archivedAt;
+    await routines().archive({ ownerId: alice.id }, routine.id);
+    expect((await stored(routine.id)).archivedAt).toEqual(archivedAt);
+
+    await routines().restore({ ownerId: alice.id }, routine.id);
+    const again = await routines().restore({ ownerId: alice.id }, routine.id);
+    expect(again.archived).toBe(false);
+  });
+
+  it('refuses a restore into a name a live routine now holds', async () => {
+    const alice = await createUser();
+    const routine = await routines().create({ ownerId: alice.id }, body());
+    await routines().archive({ ownerId: alice.id }, routine.id);
+    await routines().create({ ownerId: alice.id }, body());
+
+    await expect(
+      routines().restore({ ownerId: alice.id }, routine.id),
+    ).rejects.toThrow(
+      new ConflictException(
+        'You already have a routine called "Upper / Lower"',
+      ),
+    );
+    expect((await stored(routine.id)).archivedAt).not.toBeNull();
+  });
+
+  it("gives 404 for another athlete's routine, either way", async () => {
+    const alice = await createUser();
+    const bob = await createUser();
+    const routine = await routines().create({ ownerId: alice.id }, body());
+
+    await expect(
+      routines().archive({ ownerId: bob.id }, routine.id),
+    ).rejects.toThrow(NotFoundException);
+    await routines().archive({ ownerId: alice.id }, routine.id);
+    await expect(
+      routines().restore({ ownerId: bob.id }, routine.id),
+    ).rejects.toThrow(NotFoundException);
+    expect((await stored(routine.id)).archivedAt).not.toBeNull();
+  });
+
+  it('will not archive Just WODs', async () => {
+    const alice = await createUser();
+
+    await expect(
+      routines().archive({ ownerId: alice.id }, DEFAULT_PLAN_ID),
+    ).rejects.toThrow(ForbiddenException);
+    await expect(
+      routines().archive({ ownerId: null }, DEFAULT_PLAN_ID),
+    ).rejects.toThrow(ForbiddenException);
   });
 });

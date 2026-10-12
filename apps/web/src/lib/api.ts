@@ -40,6 +40,7 @@ import type {
   WorkoutSetLog,
   CreateRoutine,
   EditableRoutine,
+  RoutineArchiveResult,
   RoutineSaveResult,
   RoutineSummary,
 } from "@regimen-works/shared";
@@ -422,6 +423,17 @@ export const api = {
    */
   updateRoutine: (id: string, body: CreateRoutine) =>
     putJson<RoutineSaveResult>(`/routines/${encodeURIComponent(id)}`, body),
+  /**
+   * "Remove" (DN-147): archives, never deletes. `running` in the result means
+   * the athlete's own run is on it and carries on to its end.
+   */
+  archiveRoutine: (id: string) =>
+    postJson<RoutineArchiveResult>(
+      `/routines/${encodeURIComponent(id)}/archive`,
+    ),
+  /** Refused with the editor's "name taken" if a live routine holds the name. */
+  restoreRoutine: (id: string) =>
+    postJson<RoutineSummary>(`/routines/${encodeURIComponent(id)}/unarchive`),
 
   /**
    * Every program the athlete has finished (DN-18), most recent first.

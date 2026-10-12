@@ -457,6 +457,18 @@ describe('library ownership scoping', () => {
     }
   });
 
+  it('scopes removing and restoring a routine to the caller’s own (DN-147)', async () => {
+    const prisma = recordingPrisma();
+    const service = new RoutinesService(prisma);
+    await service.archive({ ownerId: ALICE }, 'plan-1').catch(() => undefined);
+    await service.restore({ ownerId: ALICE }, 'plan-1').catch(() => undefined);
+    const wheres = whereOf(prisma, 'plan.findFirst');
+    expect(wheres).toHaveLength(2);
+    for (const where of wheres) {
+      expect(where).toBe(JSON.stringify({ id: 'plan-1', ownerId: ALICE }));
+    }
+  });
+
   it('scopes the exercises a routine may name, and the name it may not reuse', async () => {
     const prisma = recordingPrisma();
     await new RoutinesService(prisma)

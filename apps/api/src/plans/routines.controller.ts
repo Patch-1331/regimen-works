@@ -46,4 +46,15 @@ export class RoutinesController {
   ) {
     return this.routinesService.update({ ownerId: userId }, id, body);
   }
+
+  /** "Remove" on My routines (DN-147). Archives; nothing is ever deleted. */
+  @Post(':id/archive')
+  archive(@CurrentUser() userId: string, @Param('id') id: string) {
+    return this.routinesService.archive({ ownerId: userId }, id);
+  }
+
+  @Post(':id/unarchive')
+  unarchive(@CurrentUser() userId: string, @Param('id') id: string) {
+    return this.routinesService.restore({ ownerId: userId }, id);
+  }
 }
