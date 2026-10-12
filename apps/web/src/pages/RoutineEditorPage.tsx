@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { defaultRoutineSummary } from "@regimen-works/shared";
 import { ApiError, api, type ApiExercise } from "../lib/api";
 import { lineLabel } from "../lib/progressions";
@@ -8,11 +8,13 @@ import { WEEKDAYS } from "../lib/weekdays";
 import {
   EMPTY_ROUTINE,
   blankLine,
+  changesWeek,
   copyDay,
   draftProblems,
   duplicateLine,
   formatRest,
   formatScheme,
+  fromRoutine,
   groupMates,
   lineMovementName,
   lineProblems,
@@ -33,6 +35,10 @@ import {
  * Reached from the Library and from the setup wizard's "Build your own".
  * `?from=setup` is the second, and saving goes back to the picker with the
  * new routine chosen rather than to the list.
+ *
+ * With an `:id` it edits a saved routine instead (DN-146). Once anyone has
+ * started that routine, a change to its week is saved as a new version and
+ * the old one is archived -- and the sheet says so before the save, not after.
  */
 
 const mono = { fontFamily: "var(--font-mono)" } as const;
@@ -42,8 +48,15 @@ export function RoutineEditorPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [params] = useSearchParams();
+  const { id } = useParams();
   const fromSetup = params.get("from") === "setup";
   const back = fromSetup ? "/setup" : "/library/routines";
+
+  const saved = useQuery({
+    queryKey: ["routine", id],
+    queryFn: () => api.routine(id!),
+    enabled: id !== undefined,
+  });
 
   const { data: library = [] } = useQuery({
     queryKey: ["exercises"],
@@ -51,6 +64,13 @@ export function RoutineEditorPage() {
   });
 
   const [draft, setDraft] = useState<RoutineDraft>(EMPTY_ROUTINE);
+  // Filled once from the saved routine, then the athlete's: a refetch must
+  // not overwrite what they have typed since.
+  const [loadedId, setLoadedId] = useState<string | null>(null);
+  if (saved.data && loadedId !== saved.data.id) {
+    setDraft(fromRoutine(saved.data.routine));
+    setLoadedId(saved.data.id);
+  }
   const [open, setOpen] = useState<string | null>(null);
   const [picking, setPicking] = useState<string | null>(null);
   const [copying, setCopying] = useState<number | null>(null);
@@ -58,11 +78,20 @@ export function RoutineEditorPage() {
   const days = trainingDays(draft);
   const problems = draftProblems(draft);
 
+  const editing = saved.data;
+  const willFork =
+    editing !== undefined && editing.hasRuns && changesWeek(draft, editing.routine);
+
   const save = useMutation({
-    mutationFn: () => api.createRoutine(toCreateRoutine(draft)),
+    mutationFn: async () => {
+      const body = toCreateRoutine(draft);
+      if (!id) return api.createRoutine(body);
+      return (await api.updateRoutine(id, body)).routine;
+    },
     onSuccess: async (created) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["routines"] }),
+        queryClient.invalidateQueries({ queryKey: ["routine"] }),
         // Refetched now, not on the wizard's next mount: the wizard seeds its
         // answers from the first options it renders, and those have to
         // include the routine it is being handed back.
@@ -78,6 +107,25 @@ export function RoutineEditorPage() {
       }
     },
   });
+
+  if (id !== undefined && !editing) {
+    return (
+      <div className="mx-auto max-w-md p-6">
+        <Link to={back} className="text-xs text-[var(--ink-faint)]" style={mono}>
+          ← BACK
+        </Link>
+        <p
+          className={`mt-4 text-sm ${saved.error ? "text-[var(--danger)]" : "text-[var(--ink-faint)]"}`}
+        >
+          {saved.error instanceof ApiError && saved.error.status === 404
+            ? "There's no routine of yours here."
+            : saved.error
+              ? "Couldn't load the routine."
+              : "Loading routine…"}
+        </p>
+      </div>
+    );
+  }
 
   const putLines = (day: number, lines: DraftLine[]) =>
     setDraft((d) => ({ ...d, days: { ...d.days, [day]: lines } }));
@@ -279,6 +327,18 @@ export function RoutineEditorPage() {
                 : "Couldn't save the routine."}
             </p>
           )}
+          {editing?.archived && (
+            <p className="mb-2 text-sm text-[var(--ink-soft)]">
+              This routine is archived. Restore it before changing it.
+            </p>
+          )}
+          {editing?.hasRuns && !editing.archived && (
+            <p className="mb-2 text-sm text-[var(--ink-soft)]" role="status">
+              {willFork
+                ? "Someone has started this routine, so changing its week saves a new version. Runs already under way finish on this one."
+                : "Someone has started this routine. Renaming it changes it for them too; changing its week will save a new version."}
+            </p>
+          )}
           {problems.length > 0 && (
             <p className="mb-2 text-xs text-[var(--danger)]" style={mono}>
               {problems.length} {problems.length === 1 ? "thing" : "things"} to
@@ -288,12 +348,16 @@ export function RoutineEditorPage() {
           )}
           <button
             type="button"
-            disabled={problems.length > 0 || save.isPending}
+            disabled={problems.length > 0 || save.isPending || editing?.archived}
             onClick={() => save.mutate()}
             className="w-full py-3 text-sm font-semibold uppercase tracking-[0.1em] disabled:opacity-40"
             style={{ ...mono, background: "var(--glow)", color: "var(--bg)" }}
           >
-            {save.isPending ? "Saving…" : "Save routine"}
+            {save.isPending
+              ? "Saving…"
+              : willFork
+                ? "Save as new version"
+                : "Save routine"}
           </button>
         </div>
       </footer>

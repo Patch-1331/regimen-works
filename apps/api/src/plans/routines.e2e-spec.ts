@@ -2,6 +2,9 @@ import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import {
+  DEFAULT_PLAN_ID,
+  editableRoutineSchema,
+  routineSaveResultSchema,
   routineSummarySchema,
   setupOptionsSchema,
 } from '@regimen-works/shared';
@@ -148,4 +151,85 @@ it('refuses a half-written routine with the rule it broke', async () => {
   expect(JSON.stringify(res.body)).toContain(
     'a training day needs at least one line',
   );
+});
+
+/**
+ * Editing (DN-146). What only this layer shows is the hand-off a fork makes:
+ * the picker offers the new version and stops offering the old, while the
+ * athlete who started the old one keeps it.
+ */
+describe('editing a routine', () => {
+  const heavier = {
+    ...routine,
+    days: routine.days.map((d) => ({
+      ...d,
+      lines: d.lines.map((l) => ({ ...l, sets: 5 })),
+    })),
+  };
+
+  function save(user: string, id: string, body: object) {
+    return http()
+      .put(`/routines/${id}`)
+      .set(...asUser(user))
+      .send(body);
+  }
+
+  it('loads the routine as the body that wrote it', async () => {
+    const created = await author(ALICE);
+
+    const res = await http()
+      .get(`/routines/${created.id}`)
+      .set(...asUser(ALICE))
+      .expect(200);
+
+    expect(editableRoutineSchema.parse(res.body)).toEqual({
+      id: created.id,
+      routine,
+      hasRuns: false,
+      archived: false,
+    });
+  });
+
+  it('edits in place before anyone starts it', async () => {
+    const created = await author(ALICE);
+
+    const res = await save(ALICE, created.id, heavier).expect(200);
+
+    expect(routineSaveResultSchema.parse(res.body)).toMatchObject({
+      forked: false,
+      routine: { id: created.id },
+    });
+  });
+
+  it('forks once it has been started, and the picker offers the new version', async () => {
+    const created = await author(ALICE);
+    await start(ALICE, created.id).expect(201);
+
+    const saved = routineSaveResultSchema.parse(
+      (await save(ALICE, created.id, heavier).expect(200)).body,
+    );
+
+    expect(saved.forked).toBe(true);
+    const programs = await picker(ALICE);
+    expect(programs).toContain(saved.routine.id);
+    expect(programs).not.toContain(created.id);
+    expect((await listed(ALICE)).map((r) => [r.id, r.archived])).toEqual([
+      [saved.routine.id, false],
+      [created.id, true],
+    ]);
+  });
+
+  it('is a 404 to another athlete, to read or to save', async () => {
+    const created = await author(ALICE);
+
+    await http()
+      .get(`/routines/${created.id}`)
+      .set(...asUser(BOB))
+      .expect(404);
+    await save(BOB, created.id, heavier).expect(404);
+  });
+
+  it('refuses Just WODs', async () => {
+    await save(ALICE, DEFAULT_PLAN_ID, routine).expect(403);
+  });
 });

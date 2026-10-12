@@ -95,6 +95,16 @@ function RoutineRow({ routine }: { routine: RoutineSummary }) {
       <span className="mt-1 block text-sm text-[var(--ink-soft)]">
         {routine.summary}
       </span>
+      {!routine.archived && (
+        <Link
+          to={`/library/routines/${routine.id}/edit`}
+          aria-label={`Edit ${routine.name}`}
+          className="float-right text-[11px] uppercase tracking-[0.14em] text-[var(--ink-faint)]"
+          style={{ fontFamily: "var(--font-mono)" }}
+        >
+          Edit
+        </Link>
+      )}
       <span
         className="mt-1 block text-[11px] text-[var(--ink-faint)]"
         style={{ fontFamily: "var(--font-mono)" }}

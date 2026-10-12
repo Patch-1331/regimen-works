@@ -118,6 +118,37 @@ export const routineSummarySchema = z.object({
 export type RoutineSummary = z.infer<typeof routineSummarySchema>;
 
 /**
+ * A routine read back into the editor (DN-146): the body the editor would
+ * post, so loading and saving are the same shape, plus what the editor needs
+ * to say before a save.
+ *
+ * `routine.summary` is null where the stored line is the one the service
+ * wrote from the schedule, so a routine whose days change gets a new line
+ * rather than keeping one that describes the old week.
+ */
+export const editableRoutineSchema = z.object({
+  id: z.string(),
+  routine: createRoutineSchema,
+  /**
+   * Whether anyone has ever started it, finished runs included (ADR 0006,
+   * decision 6). True means a structural save becomes a new version.
+   */
+  hasRuns: z.boolean(),
+  archived: z.boolean(),
+});
+export type EditableRoutine = z.infer<typeof editableRoutineSchema>;
+
+/**
+ * What a save did. `forked` means the routine now lives under a new id and
+ * the old one is archived, so the editor and the list follow `routine.id`.
+ */
+export const routineSaveResultSchema = z.object({
+  routine: routineSummarySchema,
+  forked: z.boolean(),
+});
+export type RoutineSaveResult = z.infer<typeof routineSaveResultSchema>;
+
+/**
  * The line under a routine's name when its author left it blank.
  *
  * Here rather than in the service so the editor can show, as a placeholder,

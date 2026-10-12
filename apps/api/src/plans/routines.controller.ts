@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { RoutinesService } from './routines.service';
 
@@ -25,5 +25,25 @@ export class RoutinesController {
   @Post()
   create(@CurrentUser() userId: string, @Body() body: unknown) {
     return this.routinesService.create({ ownerId: userId }, body);
+  }
+
+  /** One of the caller's routines, as the editor loads it (DN-146). */
+  @Get(':id')
+  get(@CurrentUser() userId: string, @Param('id') id: string) {
+    return this.routinesService.getForEditing({ ownerId: userId }, id);
+  }
+
+  /**
+   * Saves the whole routine as the editor holds it. PUT rather than PATCH:
+   * the body is the complete routine, and the service decides from it
+   * whether the save edits in place or forks (DN-146).
+   */
+  @Put(':id')
+  update(
+    @CurrentUser() userId: string,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    return this.routinesService.update({ ownerId: userId }, id, body);
   }
 }

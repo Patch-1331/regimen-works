@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { CreateRoutine, RoutineSummary } from "@regimen-works/shared";
+import type {
+  CreateRoutine,
+  EditableRoutine,
+  RoutineSummary,
+} from "@regimen-works/shared";
 import { renderRoute } from "../test/renderRoute";
 import { server, http, HttpResponse } from "../test/server";
 import * as fixtures from "../test/fixtures";
@@ -184,6 +188,120 @@ describe("the week sheet", () => {
   });
 });
 
+const PULL_DAYS: CreateRoutine = {
+  name: "Pull days",
+  summary: null,
+  scheduleMode: "flexible",
+  days: [
+    {
+      dayOfWeek: 1,
+      lines: [
+        {
+          movementGroup: "pull",
+          exerciseId: null,
+          sets: 3,
+          reps: 10,
+          repsMax: null,
+          toFailure: false,
+          restSeconds: null,
+        },
+      ],
+    },
+  ],
+};
+
+/** The saved routine the editor loads, and every body it saves back. */
+function editing(overrides: Partial<EditableRoutine> = {}) {
+  const sent: CreateRoutine[] = [];
+  api({ routines: [SAVED] });
+  server.use(
+    http.get("/api/routines/:id", ({ params }) =>
+      params.id === SAVED.id
+        ? HttpResponse.json({
+            id: SAVED.id,
+            routine: PULL_DAYS,
+            hasRuns: false,
+            archived: false,
+            ...overrides,
+          } satisfies EditableRoutine)
+        : HttpResponse.json({ message: "No such routine." }, { status: 404 }),
+    ),
+    http.put("/api/routines/:id", async ({ request }) => {
+      const body = (await request.json()) as CreateRoutine;
+      sent.push(body);
+      return HttpResponse.json({
+        routine: { ...SAVED, name: body.name },
+        forked: overrides.hasRuns === true,
+      });
+    }),
+  );
+  return sent;
+}
+
+describe("editing a routine (DN-146)", () => {
+  it("loads the saved routine into the sheet and saves it back", async () => {
+    const sent = editing();
+    renderRoute(`/library/routines/${SAVED.id}/edit`);
+
+    const name = await screen.findByLabelText("Routine name");
+    expect(name).toHaveValue("Pull days");
+    expect(
+      within(screen.getByRole("region", { name: "Mon" })).getByText("Any pull"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    await userEvent.clear(name);
+    await userEvent.type(name, "Pull mornings");
+    await userEvent.click(screen.getByRole("button", { name: "Save routine" }));
+
+    await screen.findByRole("link", { name: "+ New routine" });
+    expect(sent).toEqual([{ ...PULL_DAYS, name: "Pull mornings" }]);
+  });
+
+  it("says a rename reaches the people running it", async () => {
+    editing({ hasRuns: true });
+    renderRoute(`/library/routines/${SAVED.id}/edit`);
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      /Renaming it changes it for them too/,
+    );
+    expect(screen.getByRole("button", { name: "Save routine" })).toBeEnabled();
+  });
+
+  it("warns before a change to the week saves a new version", async () => {
+    const sent = editing({ hasRuns: true });
+    renderRoute(`/library/routines/${SAVED.id}/edit`);
+
+    await writeMondayPull();
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /saves a new version\. Runs already under way finish on this one/,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save as new version" }));
+
+    await screen.findByRole("link", { name: "+ New routine" });
+    expect(sent[0].days[0].lines).toHaveLength(2);
+  });
+
+  it("will not save an archived routine", async () => {
+    editing({ archived: true });
+    renderRoute(`/library/routines/${SAVED.id}/edit`);
+
+    expect(
+      await screen.findByText("This routine is archived. Restore it before changing it."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save routine" })).toBeDisabled();
+  });
+
+  it("says so when the routine is not the athlete's", async () => {
+    editing();
+    renderRoute("/library/routines/someone-elses/edit");
+
+    expect(await screen.findByText("There's no routine of yours here.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Routine name")).not.toBeInTheDocument();
+  });
+});
+
 describe("My routines", () => {
   it("lists what the athlete wrote, archived marked", async () => {
     api({
@@ -197,6 +315,19 @@ describe("My routines", () => {
       "href",
       "/library/routines/new",
     );
+  });
+
+  it("offers to edit a live routine, not an archived one", async () => {
+    api({
+      routines: [SAVED, { ...SAVED, id: "old", name: "Old days", archived: true }],
+    });
+    renderRoute("/library/routines");
+
+    expect(await screen.findByRole("link", { name: "Edit Pull days" })).toHaveAttribute(
+      "href",
+      "/library/routines/routine-1/edit",
+    );
+    expect(screen.queryByRole("link", { name: "Edit Old days" })).not.toBeInTheDocument();
   });
 });
 

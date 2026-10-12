@@ -419,6 +419,44 @@ describe('library ownership scoping', () => {
     }
   });
 
+  it('scopes the routine the editor loads and saves to the caller’s own (DN-146)', async () => {
+    // The owner's tier alone, as with "My routines": a global routine is not
+    // the caller's to edit from this route, and another athlete's is a 404.
+    const prisma = recordingPrisma();
+    const service = new RoutinesService(prisma);
+    await service
+      .getForEditing({ ownerId: ALICE }, 'plan-1')
+      .catch(() => undefined);
+    await service
+      .update({ ownerId: ALICE }, 'plan-1', {
+        name: 'Mine',
+        summary: null,
+        scheduleMode: 'fixed',
+        days: [
+          {
+            dayOfWeek: 1,
+            lines: [
+              {
+                movementGroup: 'pull',
+                exerciseId: null,
+                sets: 3,
+                reps: 5,
+                repsMax: null,
+                toFailure: false,
+                restSeconds: null,
+              },
+            ],
+          },
+        ],
+      })
+      .catch(() => undefined);
+    const wheres = whereOf(prisma, 'plan.findFirst');
+    expect(wheres).toHaveLength(2);
+    for (const where of wheres) {
+      expect(where).toBe(JSON.stringify({ id: 'plan-1', ownerId: ALICE }));
+    }
+  });
+
   it('scopes the exercises a routine may name, and the name it may not reuse', async () => {
     const prisma = recordingPrisma();
     await new RoutinesService(prisma)
