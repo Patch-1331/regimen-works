@@ -40,6 +40,7 @@ import type {
   WorkoutSetLog,
   CreateRoutine,
   EditableRoutine,
+  GlobalRoutineSummary,
   RoutineArchiveResult,
   RoutineSaveResult,
   RoutineSummary,
@@ -214,6 +215,12 @@ const exercisesBase = (tier: LibraryTier) =>
 
 const wodsBase = (tier: LibraryTier) =>
   tier === "global" ? "/admin/wods" : "/wods";
+
+const routinesBase = (tier: LibraryTier) =>
+  tier === "global" ? "/admin/routines" : "/routines";
+
+const routinePath = (tier: LibraryTier, id: string) =>
+  `${routinesBase(tier)}/${encodeURIComponent(id)}`;
 
 /**
  * A WOD as `GET /wods` returns it (DN-29).
@@ -411,29 +418,38 @@ export const api = {
 
   /** The routines this athlete wrote (DN-145), live first, archived marked. */
   routines: () => request<RoutineSummary[]>("/routines"),
-  /** Always the athlete's own tier: the route decides, never the body. */
-  createRoutine: (body: CreateRoutine) =>
-    postJson<RoutineSummary>("/routines", body),
-  /** One of the athlete's routines, as the editor loads it (DN-146). */
-  routine: (id: string) =>
-    request<EditableRoutine>(`/routines/${encodeURIComponent(id)}`),
+  /**
+   * The global library as an admin manages it (DN-148): live and archived,
+   * Just WODs first and marked built in. Refused to anyone else.
+   */
+  globalRoutines: () => request<GlobalRoutineSummary[]>("/admin/routines"),
+  /** The tier is the route's, never the body's: `global` is admin-only. */
+  createRoutine: (tier: LibraryTier, body: CreateRoutine) =>
+    postJson<RoutineSummary>(routinesBase(tier), body),
+  /** A routine as the editor loads it (DN-146). */
+  routine: (tier: LibraryTier, id: string) =>
+    request<EditableRoutine>(routinePath(tier, id)),
   /**
    * Saves the whole routine. `forked` in the result means the edit became a
    * new routine under a new id, because someone had already started this one.
    */
-  updateRoutine: (id: string, body: CreateRoutine) =>
-    putJson<RoutineSaveResult>(`/routines/${encodeURIComponent(id)}`, body),
+  updateRoutine: (tier: LibraryTier, id: string, body: CreateRoutine) =>
+    putJson<RoutineSaveResult>(routinePath(tier, id), body),
   /**
    * "Remove" (DN-147): archives, never deletes. `running` in the result means
-   * the athlete's own run is on it and carries on to its end.
+   * the caller's own run is on it and carries on to its end.
    */
-  archiveRoutine: (id: string) =>
-    postJson<RoutineArchiveResult>(
-      `/routines/${encodeURIComponent(id)}/archive`,
-    ),
+  archiveRoutine: (tier: LibraryTier, id: string) =>
+    postJson<RoutineArchiveResult>(`${routinePath(tier, id)}/archive`),
   /** Refused with the editor's "name taken" if a live routine holds the name. */
-  restoreRoutine: (id: string) =>
-    postJson<RoutineSummary>(`/routines/${encodeURIComponent(id)}/unarchive`),
+  restoreRoutine: (tier: LibraryTier, id: string) =>
+    postJson<RoutineSummary>(`${routinePath(tier, id)}/unarchive`),
+  /**
+   * Publishes one of the admin's own routines to everyone (DN-148), in place
+   * and for good: there is no way back to personal.
+   */
+  promoteRoutine: (id: string) =>
+    postJson<RoutineSummary>(`${routinePath("global", id)}/promote`),
 
   /**
    * Every program the athlete has finished (DN-18), most recent first.

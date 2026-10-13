@@ -14,6 +14,7 @@ import {
 } from '../test-support/fixtures';
 import { SetupService } from '../setup/setup.service';
 import { loadActiveProgram } from './active-program';
+import { upsertJustWods } from './just-wods';
 import { ROUTINE_WEEKS, RoutinesService } from './routines.service';
 
 /**
@@ -757,5 +758,193 @@ describe('RoutinesService.archive and restore', () => {
     await expect(
       routines().archive({ ownerId: null }, DEFAULT_PLAN_ID),
     ).rejects.toThrow(ForbiddenException);
+  });
+});
+
+describe('the global tier (DN-148)', () => {
+  const TODAY = '2026-10-13';
+  const GLOBAL = { ownerId: null };
+
+  async function offered(userId: string) {
+    const setup = new SetupService(testPrisma() as unknown as PrismaService);
+    return (await setup.options(userId, TODAY)).programs.map((p) => p.id);
+  }
+
+  it('creates a global routine that every athlete is offered', async () => {
+    const bob = await createUser();
+
+    const created = await routines().create(GLOBAL, body());
+
+    expect((await stored(created.id)).ownerId).toBeNull();
+    expect(await offered(bob.id)).toContain(created.id);
+    expect(await routines().listOwn(bob.id)).toEqual([]);
+  });
+
+  describe('promote', () => {
+    it("publishes the admin's own routine in place, their run carrying on", async () => {
+      const admin = await createUser();
+      const bob = await createUser();
+      const routine = await routines().create({ ownerId: admin.id }, body());
+      await createEnrollment(admin.id, { planId: routine.id });
+      const before = await loadActiveProgram(testPrisma(), admin.id);
+
+      const published = await routines().promote(admin.id, routine.id);
+
+      expect(published).toEqual(routine);
+      expect((await stored(routine.id)).ownerId).toBeNull();
+      const after = await loadActiveProgram(testPrisma(), admin.id);
+      expect(after?.planId).toBe(routine.id);
+      expect(after?.authoredWeeks).toEqual(before?.authoredWeeks);
+      expect(await offered(bob.id)).toContain(routine.id);
+      expect(await routines().listOwn(admin.id)).toEqual([]);
+    });
+
+    it('is refused when a live global routine has the name', async () => {
+      const admin = await createUser();
+      await routines().create(GLOBAL, body());
+      const routine = await routines().create({ ownerId: admin.id }, body());
+
+      await expect(routines().promote(admin.id, routine.id)).rejects.toThrow(
+        new ConflictException(
+          'There is already a global routine called "Upper / Lower"',
+        ),
+      );
+      expect((await stored(routine.id)).ownerId).toBe(admin.id);
+    });
+
+    it('is refused while it names a movement only the admin has', async () => {
+      const admin = await createUser();
+      const chin = await createExercise({ name: 'Chin-up' });
+      const towel = await createExercise({
+        name: 'Towel row',
+        ownerId: admin.id,
+      });
+      const named = (exerciseId: string) =>
+        body({
+          days: [
+            {
+              dayOfWeek: 1,
+              lines: [line({ movementGroup: null, exerciseId })],
+            },
+          ],
+        });
+      const mine = await routines().create(
+        { ownerId: admin.id },
+        named(towel.id),
+      );
+
+      await expect(routines().promote(admin.id, mine.id)).rejects.toThrow(
+        new BadRequestException(
+          'It names movements only you have: Towel row. Swap them for library ones before publishing it.',
+        ),
+      );
+      expect((await stored(mine.id)).ownerId).toBe(admin.id);
+
+      const library = await routines().create(
+        { ownerId: admin.id },
+        { ...named(chin.id), name: 'Chins' },
+      );
+      await expect(
+        routines().promote(admin.id, library.id),
+      ).resolves.toMatchObject({ id: library.id });
+    });
+
+    it('is refused while archived', async () => {
+      const admin = await createUser();
+      const routine = await routines().create({ ownerId: admin.id }, body());
+      await routines().archive({ ownerId: admin.id }, routine.id);
+
+      await expect(routines().promote(admin.id, routine.id)).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it("cannot publish another athlete's routine, or one already global", async () => {
+      const admin = await createUser();
+      const bob = await createUser();
+      const bobs = await routines().create({ ownerId: bob.id }, body());
+      const global = await routines().create(GLOBAL, body({ name: 'Ours' }));
+
+      await expect(routines().promote(admin.id, bobs.id)).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(routines().promote(admin.id, global.id)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect((await stored(bobs.id)).ownerId).toBe(bob.id);
+    });
+  });
+
+  it("takes an archived global routine off every picker but leaves an athlete's run on it", async () => {
+    const admin = await createUser();
+    const bob = await createUser();
+    const routine = await routines().create(GLOBAL, body());
+    await createEnrollment(bob.id, { planId: routine.id });
+
+    const removed = await routines().archive(GLOBAL, routine.id, admin.id);
+
+    expect(removed.running).toBe(false);
+    expect(await offered(admin.id)).not.toContain(routine.id);
+    expect(await offered(bob.id)).not.toContain(routine.id);
+    expect((await loadActiveProgram(testPrisma(), bob.id))?.planId).toBe(
+      routine.id,
+    );
+
+    await routines().restore(GLOBAL, routine.id);
+    expect(await offered(bob.id)).toContain(routine.id);
+  });
+
+  it("says the admin's own run carries on when they archive what they run", async () => {
+    const admin = await createUser();
+    const routine = await routines().create(GLOBAL, body());
+    await createEnrollment(admin.id, { planId: routine.id });
+
+    const removed = await routines().archive(GLOBAL, routine.id, admin.id);
+
+    expect(removed.running).toBe(true);
+  });
+
+  it('forks a global routine once any athlete has started it, still global', async () => {
+    const bob = await createUser();
+    const routine = await routines().create(GLOBAL, body());
+    await createEnrollment(bob.id, { planId: routine.id });
+
+    const saved = await routines().update(
+      GLOBAL,
+      routine.id,
+      body({ scheduleMode: 'fixed' }),
+    );
+
+    expect(saved.forked).toBe(true);
+    expect((await stored(saved.routine.id)).ownerId).toBeNull();
+    expect((await stored(routine.id)).archivedAt).not.toBeNull();
+  });
+
+  it("lists the global library, Just WODs first and built in, nobody's own", async () => {
+    await upsertJustWods(testPrisma());
+    const alice = await createUser();
+    await routines().create({ ownerId: alice.id }, body({ name: 'Mine' }));
+    const live = await routines().create(GLOBAL, body({ name: 'Zed' }));
+    const old = await routines().create(GLOBAL, body({ name: 'Alpha' }));
+    await routines().archive(GLOBAL, old.id);
+
+    const listed = await routines().listGlobal();
+
+    expect(listed.map((r) => [r.id, r.builtIn, r.archived])).toEqual([
+      [DEFAULT_PLAN_ID, true, false],
+      [live.id, false, false],
+      [old.id, false, true],
+    ]);
+  });
+
+  it('refuses Just WODs to the global writer as well', async () => {
+    await upsertJustWods(testPrisma());
+
+    await expect(
+      routines().getForEditing(GLOBAL, DEFAULT_PLAN_ID),
+    ).rejects.toThrow(NotFoundException);
+    await expect(routines().restore(GLOBAL, DEFAULT_PLAN_ID)).rejects.toThrow(
+      NotFoundException,
+    );
   });
 });

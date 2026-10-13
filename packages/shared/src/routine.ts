@@ -118,6 +118,15 @@ export const routineSummarySchema = z.object({
 export type RoutineSummary = z.infer<typeof routineSummarySchema>;
 
 /**
+ * A row of the admin's global list (DN-148). `builtIn` marks Just WODs, which
+ * is listed so the library reads whole but offers no edit, archive or export.
+ */
+export const globalRoutineSummarySchema = routineSummarySchema.extend({
+  builtIn: z.boolean(),
+});
+export type GlobalRoutineSummary = z.infer<typeof globalRoutineSummarySchema>;
+
+/**
  * A routine read back into the editor (DN-146): the body the editor would
  * post, so loading and saving are the same shape, plus what the editor needs
  * to say before a save.

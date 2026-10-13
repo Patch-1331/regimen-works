@@ -7,8 +7,7 @@ import { RoutinesService } from './routines.service';
  *
  * Everything written here lands with `ownerId` set to the caller -- an admin
  * included. The tier is a property of the route, as on exercises and WODs,
- * and there is no global-tier route yet: promoting a routine to global is a
- * later, one-way admin act.
+ * and the global tier has its own admin controller (DN-148).
  *
  * The body is validated by the service rather than here, because the service
  * method is the one every future path (copy, import) goes through.

@@ -11,6 +11,7 @@ import {
   defaultRoutineSummary,
   type CreateRoutine,
   type EditableRoutine,
+  type GlobalRoutineSummary,
   type RoutineArchiveResult,
   type RoutineDay,
   type RoutineSaveResult,
@@ -19,7 +20,11 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { validateBody } from '../common/validate';
-import { referenceableBy, type LibraryWriter } from '../library/visible-to';
+import {
+  GLOBAL_LIBRARY,
+  referenceableBy,
+  type LibraryWriter,
+} from '../library/visible-to';
 
 /**
  * How long an authored routine may run (DN-145). Its length is the athlete's
@@ -89,7 +94,7 @@ export class RoutinesService {
    * The routine as the editor loads it to change it (DN-146). Only the
    * writer's own tier: another athlete's routine is a 404 rather than a 403,
    * as in setup, because whether it exists is none of the caller's business.
-   * Just WODs is global and never reaches here from the owner's route.
+   * Just WODs is a 404 from either route: it is not an authored routine.
    */
   async getForEditing(
     writer: LibraryWriter,
@@ -107,8 +112,7 @@ export class RoutinesService {
 
   /**
    * Saves an edit (ADR 0006, decision 6). The one edit path: the owner's
-   * route calls it today, and the admin route for global routines will call
-   * it with a global writer.
+   * route calls it, and the admin route calls it with a global writer.
    *
    * - **Wording** (name, summary) changes in place, always.
    * - **Structure** (schedule mode, days, lines) changes in place until anyone
@@ -161,7 +165,7 @@ export class RoutinesService {
         await tx.planWeek.deleteMany({ where: { planId: plan.id } });
       }
       const fields = planFields(routine);
-      const row = await this.withNameGuard(routine.name, () =>
+      const row = await this.withNameGuard(writer, routine.name, () =>
         tx.plan.update({
           where: { id: plan.id },
           data: structural
@@ -181,11 +185,14 @@ export class RoutinesService {
    * `restore` the way back. Idempotent.
    *
    * `running` is whether the caller's own active run is on it, so the screen
-   * can say that run carries on; nothing about the run changes.
+   * can say that run carries on; nothing about the run changes. `runnerId`
+   * is that caller: the owner on their own route, the admin on the global
+   * one, where the writer has no user id of its own.
    */
   async archive(
     writer: LibraryWriter,
     id: string,
+    runnerId: string | null = writer.ownerId,
   ): Promise<RoutineArchiveResult> {
     if (id === DEFAULT_PLAN_ID) {
       throw new ForbiddenException(
@@ -202,9 +209,9 @@ export class RoutinesService {
             ...ROUTINE_ROW,
           });
     const running =
-      writer.ownerId !== null &&
+      runnerId !== null &&
       (await this.prisma.planEnrollment.count({
-        where: { userId: writer.ownerId, planId: plan.id, status: 'active' },
+        where: { userId: runnerId, planId: plan.id, status: 'active' },
       })) > 0;
     return { routine: toSummary(row), running };
   }
@@ -219,7 +226,7 @@ export class RoutinesService {
     if (plan.archivedAt === null) return toSummary(plan);
 
     await this.assertNameFree(this.prisma, writer, plan.name, plan.id);
-    const row = await this.withNameGuard(plan.name, () =>
+    const row = await this.withNameGuard(writer, plan.name, () =>
       this.prisma.plan.update({
         where: { id: plan.id },
         data: { archivedAt: null },
@@ -227,6 +234,82 @@ export class RoutinesService {
       }),
     );
     return toSummary(row);
+  }
+
+  /**
+   * Publishes an admin's own routine to everyone (ADR 0006, decision 4): the
+   * same row, its owner cleared. Every enrollment on it -- the admin's own
+   * run included -- names the plan, not the owner, so all of them carry on.
+   *
+   * One-way. There is no demote: once other athletes have started it, taking
+   * it back would pull a routine out from under their runs.
+   *
+   * Refused while archived (restore it first), when a live global routine has
+   * the name, and when it names a movement from the admin's own library -- a
+   * global row pointing at a personal one is the reference the library never
+   * allows (DN-93), since one athlete's archive would break everyone's run.
+   */
+  async promote(adminId: string, id: string): Promise<RoutineSummary> {
+    const plan = await this.findOwned({ ownerId: adminId }, id);
+    if (plan.archivedAt !== null) {
+      throw new ConflictException(
+        'This routine is archived. Restore it before publishing it.',
+      );
+    }
+    const personal = await this.prisma.exercise.findMany({
+      where: {
+        id: {
+          in: plan.weeks.flatMap((w) =>
+            w.slots.flatMap((s) =>
+              s.movements.flatMap((m) => (m.exerciseId ? [m.exerciseId] : [])),
+            ),
+          ),
+        },
+        ownerId: { not: null },
+      },
+      select: { name: true },
+      orderBy: { name: 'asc' },
+    });
+    if (personal.length > 0) {
+      throw new BadRequestException(
+        `It names movements only you have: ${personal
+          .map((e) => e.name)
+          .join(', ')}. Swap them for library ones before publishing it.`,
+      );
+    }
+
+    await this.assertNameFree(this.prisma, GLOBAL_LIBRARY, plan.name);
+    const row = await this.withNameGuard(GLOBAL_LIBRARY, plan.name, () =>
+      this.prisma.plan.update({
+        where: { id: plan.id },
+        data: { ownerId: null },
+        ...ROUTINE_ROW,
+      }),
+    );
+    return toSummary(row);
+  }
+
+  /**
+   * The global library as an admin manages it, live and archived, Just WODs
+   * first and marked built in so the screen offers it no actions.
+   */
+  async listGlobal(): Promise<GlobalRoutineSummary[]> {
+    const rows = await this.prisma.plan.findMany({
+      where: GLOBAL_LIBRARY,
+      orderBy: [
+        { archivedAt: { sort: 'asc', nulls: 'first' } },
+        { name: 'asc' },
+      ],
+      ...ROUTINE_ROW,
+    });
+    const summaries = rows.map((row) => ({
+      ...toSummary(row),
+      builtIn: row.id === DEFAULT_PLAN_ID,
+    }));
+    return [
+      ...summaries.filter((r) => r.builtIn),
+      ...summaries.filter((r) => !r.builtIn),
+    ];
   }
 
   /** The create both `create` and a fork go through, on whichever client. */
@@ -237,7 +320,7 @@ export class RoutinesService {
   ): Promise<RoutineSummary> {
     await this.assertNameFree(db, writer, routine.name);
     await this.assertExercisesReferenceable(db, writer, routine);
-    const row = await this.withNameGuard(routine.name, () =>
+    const row = await this.withNameGuard(writer, routine.name, () =>
       db.plan.create({ data: planData(writer, routine), ...ROUTINE_ROW }),
     );
     return toSummary(row);
@@ -247,7 +330,11 @@ export class RoutinesService {
    * The name checks are one statement and the write another; the live-name
    * partial index is what actually holds, and P2002 is it saying so.
    */
-  private async withNameGuard<T>(name: string, write: () => Promise<T>) {
+  private async withNameGuard<T>(
+    writer: LibraryWriter,
+    name: string,
+    write: () => Promise<T>,
+  ) {
     try {
       return await write();
     } catch (error) {
@@ -255,7 +342,7 @@ export class RoutinesService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        throw nameTaken(name);
+        throw nameTaken(writer, name);
       }
       throw error;
     }
@@ -334,7 +421,7 @@ export class RoutinesService {
       },
       select: { id: true },
     });
-    if (clash) throw nameTaken(name);
+    if (clash) throw nameTaken(writer, name);
   }
 
   /**
@@ -515,6 +602,10 @@ function toSummary(row: RoutineRow): RoutineSummary {
   };
 }
 
-function nameTaken(name: string) {
-  return new ConflictException(`You already have a routine called "${name}"`);
+function nameTaken(writer: LibraryWriter, name: string) {
+  return new ConflictException(
+    writer.ownerId === null
+      ? `There is already a global routine called "${name}"`
+      : `You already have a routine called "${name}"`,
+  );
 }

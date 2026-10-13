@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import type { RoutineSummary } from "@regimen-works/shared";
-import { ApiError, api } from "../lib/api";
+import type { GlobalRoutineSummary, RoutineSummary } from "@regimen-works/shared";
+import { ApiError, api, type LibraryTier } from "../lib/api";
 import { LibraryNav } from "../components/LibraryNav";
 import { SectionLabel } from "../components/Panel";
 import { WEEKDAYS } from "../lib/weekdays";
@@ -14,30 +14,50 @@ import { WEEKDAYS } from "../lib/weekdays";
  *
  * "Remove" archives and "Restore" brings back (DN-147). Nothing is deleted:
  * a removed routine keeps every run on it, including one under way.
+ *
+ * An admin also sees the global library below their own, with the same
+ * actions, and can publish one of their own routines into it (DN-148).
+ * `isAdmin` decides only what is rendered; every admin route refuses
+ * anyone else on its own.
  */
 export function RoutinesPage() {
   const queryClient = useQueryClient();
+  const { data: me } = useQuery({ queryKey: ["me"], queryFn: api.me });
+  const isAdmin = me?.isAdmin === true;
   const { data: routines, isLoading, error } = useQuery({
     queryKey: ["routines"],
     queryFn: api.routines,
   });
-  // What the last remove or restore did, said once beneath the button.
+  const { data: global, error: globalError } = useQuery({
+    queryKey: ["globalRoutines"],
+    queryFn: api.globalRoutines,
+    enabled: isAdmin,
+  });
+  // What the last action did, said once beneath the button.
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  // Publishing is one-way, so it asks first, on the row itself.
+  const [confirming, setConfirming] = useState<string | null>(null);
 
+  const starting = () => {
+    setNotice(null);
+    setFailure(null);
+  };
   const settled = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["routines"] }),
+      queryClient.invalidateQueries({ queryKey: ["globalRoutines"] }),
       queryClient.invalidateQueries({ queryKey: ["routine"] }),
       queryClient.invalidateQueries({ queryKey: ["setup"] }),
     ]);
   };
+  const nameOf = (id: string) =>
+    [...(routines ?? []), ...(global ?? [])].find((r) => r.id === id)?.name;
+
   const remove = useMutation({
-    mutationFn: api.archiveRoutine,
-    onMutate: () => {
-      setNotice(null);
-      setFailure(null);
-    },
+    mutationFn: ({ tier, id }: { tier: LibraryTier; id: string }) =>
+      api.archiveRoutine(tier, id),
+    onMutate: starting,
     onSuccess: async ({ routine, running }) => {
       setNotice(
         running
@@ -49,25 +69,38 @@ export function RoutinesPage() {
     onError: (e) => setFailure(messageOf(e, "Couldn't remove the routine.")),
   });
   const restore = useMutation({
-    mutationFn: api.restoreRoutine,
-    onMutate: () => {
-      setNotice(null);
-      setFailure(null);
-    },
+    mutationFn: ({ tier, id }: { tier: LibraryTier; id: string }) =>
+      api.restoreRoutine(tier, id),
+    onMutate: starting,
     onSuccess: async (routine) => {
       setNotice(`Restored ${routine.name}.`);
       await settled();
     },
-    onError: (e, id) => {
-      const name = routines?.find((r) => r.id === id)?.name;
+    onError: (e, { tier, id }) => {
+      const name = nameOf(id);
       setFailure(
         e instanceof ApiError && e.status === 409 && name
-          ? `Another of your routines is called ${name} now. Rename that one first, then restore this.`
+          ? tier === "global"
+            ? `Another global routine is called ${name} now. Rename that one first, then restore this.`
+            : `Another of your routines is called ${name} now. Rename that one first, then restore this.`
           : messageOf(e, "Couldn't restore the routine."),
       );
     },
   });
-  const busy = remove.isPending || restore.isPending;
+  const promote = useMutation({
+    mutationFn: api.promoteRoutine,
+    onMutate: starting,
+    onSuccess: async (routine) => {
+      setConfirming(null);
+      setNotice(`Published ${routine.name}. Every athlete is offered it now.`);
+      await settled();
+    },
+    onError: (e) => {
+      setConfirming(null);
+      setFailure(messageOf(e, "Couldn't publish the routine."));
+    },
+  });
+  const busy = remove.isPending || restore.isPending || promote.isPending;
 
   const live = routines?.filter((r) => !r.archived) ?? [];
   const archived = routines?.filter((r) => r.archived) ?? [];
@@ -119,21 +152,55 @@ export function RoutinesPage() {
         <RoutineList>
           {live.map((routine) => (
             <RoutineRow key={routine.id} routine={routine}>
-              <Link
-                to={`/library/routines/${routine.id}/edit`}
-                aria-label={`Edit ${routine.name}`}
-              >
-                Edit
-              </Link>
-              <button
-                type="button"
-                aria-label={`Remove ${routine.name}`}
-                disabled={busy}
-                className="uppercase disabled:opacity-50"
-                onClick={() => remove.mutate(routine.id)}
-              >
-                Remove
-              </button>
+              {confirming === routine.id ? (
+                <>
+                  <span className="normal-case tracking-normal text-[var(--ink-soft)]">
+                    Publish for every athlete? There's no taking it back.
+                  </span>
+                  <Action
+                    label={`Confirm publishing ${routine.name}`}
+                    disabled={busy}
+                    onClick={() => promote.mutate(routine.id)}
+                  >
+                    Publish
+                  </Action>
+                  <Action
+                    label="Keep it mine"
+                    disabled={busy}
+                    onClick={() => setConfirming(null)}
+                  >
+                    Cancel
+                  </Action>
+                </>
+              ) : (
+                <>
+                  <Link
+                    to={`/library/routines/${routine.id}/edit`}
+                    aria-label={`Edit ${routine.name}`}
+                  >
+                    Edit
+                  </Link>
+                  {isAdmin && (
+                    <Action
+                      label={`Publish ${routine.name}`}
+                      disabled={busy}
+                      onClick={() => {
+                        starting();
+                        setConfirming(routine.id);
+                      }}
+                    >
+                      Publish
+                    </Action>
+                  )}
+                  <Action
+                    label={`Remove ${routine.name}`}
+                    disabled={busy}
+                    onClick={() => remove.mutate({ tier: "own", id: routine.id })}
+                  >
+                    Remove
+                  </Action>
+                </>
+              )}
             </RoutineRow>
           ))}
         </RoutineList>
@@ -145,26 +212,127 @@ export function RoutinesPage() {
           <RoutineList>
             {archived.map((routine) => (
               <RoutineRow key={routine.id} routine={routine}>
-                <button
-                  type="button"
-                  aria-label={`Restore ${routine.name}`}
+                <Action
+                  label={`Restore ${routine.name}`}
                   disabled={busy}
-                  className="uppercase disabled:opacity-50"
-                  onClick={() => restore.mutate(routine.id)}
+                  onClick={() => restore.mutate({ tier: "own", id: routine.id })}
                 >
                   Restore
-                </button>
+                </Action>
               </RoutineRow>
             ))}
           </RoutineList>
         </>
       )}
+
+      {isAdmin && (
+        <GlobalLibrary
+          routines={global}
+          failed={globalError !== null}
+          busy={busy}
+          onRemove={(id) => remove.mutate({ tier: "global", id })}
+          onRestore={(id) => restore.mutate({ tier: "global", id })}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * The admin's half (DN-148): every global routine, live then archived. Just
+ * WODs is listed so the library reads whole, marked built in and offered
+ * nothing -- every route refuses it anyway.
+ */
+function GlobalLibrary({
+  routines,
+  failed,
+  busy,
+  onRemove,
+  onRestore,
+}: {
+  routines: GlobalRoutineSummary[] | undefined;
+  failed: boolean;
+  busy: boolean;
+  onRemove: (id: string) => void;
+  onRestore: (id: string) => void;
+}) {
+  return (
+    <section aria-label="Global library">
+      <SectionLabel>GLOBAL LIBRARY</SectionLabel>
+      <p className="mt-1 text-[12px] text-[var(--ink-faint)]">
+        Offered to every athlete. Write one with “publish” ticked, or publish
+        one of yours above.
+      </p>
+      {failed && (
+        <p className="mt-3 text-sm text-[var(--danger)]">
+          Couldn't load the global library.
+        </p>
+      )}
+      {routines && (
+        <RoutineList>
+          {routines.map((routine) => (
+            <RoutineRow key={routine.id} routine={routine}>
+              {routine.builtIn ? (
+                <span>Built in</span>
+              ) : routine.archived ? (
+                <Action
+                  label={`Restore ${routine.name}`}
+                  disabled={busy}
+                  onClick={() => onRestore(routine.id)}
+                >
+                  Restore
+                </Action>
+              ) : (
+                <>
+                  <Link
+                    to={`/library/routines/global/${routine.id}/edit`}
+                    aria-label={`Edit ${routine.name}`}
+                  >
+                    Edit
+                  </Link>
+                  <Action
+                    label={`Remove ${routine.name}`}
+                    disabled={busy}
+                    onClick={() => onRemove(routine.id)}
+                  >
+                    Remove
+                  </Action>
+                </>
+              )}
+            </RoutineRow>
+          ))}
+        </RoutineList>
+      )}
+    </section>
   );
 }
 
 function messageOf(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.message : fallback;
+}
+
+function Action({
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      className="uppercase disabled:opacity-50"
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
 }
 
 function RoutineList({ children }: { children: ReactNode }) {
@@ -208,7 +376,7 @@ function RoutineRow({
       <span className="mt-1 block text-sm text-[var(--ink-soft)]">
         {routine.summary}
       </span>
-      <div className="mt-1 flex items-baseline justify-between gap-3">
+      <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <span
           className="text-[11px] text-[var(--ink-faint)]"
           style={{ fontFamily: "var(--font-mono)" }}
@@ -216,7 +384,7 @@ function RoutineRow({
           {days}
         </span>
         <span
-          className="flex shrink-0 gap-4 text-[11px] uppercase tracking-[0.14em] text-[var(--ink-faint)]"
+          className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[11px] uppercase tracking-[0.14em] text-[var(--ink-faint)]"
           style={{ fontFamily: "var(--font-mono)" }}
         >
           {children}

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { defaultRoutineSummary } from "@regimen-works/shared";
-import { ApiError, api, type ApiExercise } from "../lib/api";
+import { ApiError, api, type ApiExercise, type LibraryTier } from "../lib/api";
 import { lineLabel } from "../lib/progressions";
 import { WEEKDAYS } from "../lib/weekdays";
 import {
@@ -39,12 +39,18 @@ import {
  * With an `:id` it edits a saved routine instead (DN-146). Once anyone has
  * started that routine, a change to its week is saved as a new version and
  * the old one is archived -- and the sheet says so before the save, not after.
+ *
+ * `tier="global"` is the admin's route to a global routine (DN-148). A new
+ * routine is the athlete's own unless an admin ticks "publish to everyone",
+ * which sends it to the admin route instead -- the tier is always which route
+ * is called, never a field of the body. A global routine may only name
+ * global movements, so the picker offers only those.
  */
 
 const mono = { fontFamily: "var(--font-mono)" } as const;
 const display = { fontFamily: "var(--font-display)" } as const;
 
-export function RoutineEditorPage() {
+export function RoutineEditorPage({ tier: routeTier = "own" }: { tier?: LibraryTier }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [params] = useSearchParams();
@@ -53,15 +59,25 @@ export function RoutineEditorPage() {
   const back = fromSetup ? "/setup" : "/library/routines";
 
   const saved = useQuery({
-    queryKey: ["routine", id],
-    queryFn: () => api.routine(id!),
+    queryKey: ["routine", routeTier, id],
+    queryFn: () => api.routine(routeTier, id!),
     enabled: id !== undefined,
   });
 
-  const { data: library = [] } = useQuery({
+  const { data: me } = useQuery({ queryKey: ["me"], queryFn: api.me });
+  // Offered only when writing something new outside the setup wizard: the
+  // wizard is choosing the athlete's own program, not curating the library.
+  const canPublish = me?.isAdmin === true && id === undefined && !fromSetup;
+  const [publish, setPublish] = useState(false);
+  const tier: LibraryTier =
+    id !== undefined ? routeTier : canPublish && publish ? "global" : "own";
+
+  const { data: everything = [] } = useQuery({
     queryKey: ["exercises"],
     queryFn: api.exercises,
   });
+  const library =
+    tier === "global" ? everything.filter((e) => e.ownerId === null) : everything;
 
   const [draft, setDraft] = useState<RoutineDraft>(EMPTY_ROUTINE);
   // Filled once from the saved routine, then the athlete's: a refetch must
@@ -76,7 +92,29 @@ export function RoutineEditorPage() {
   const [copying, setCopying] = useState<number | null>(null);
 
   const days = trainingDays(draft);
-  const problems = draftProblems(draft);
+  // A movement picked from the athlete's own library before "publish" was
+  // ticked: a global routine cannot name it, so it is one more thing to fix.
+  const personal =
+    tier === "global"
+      ? [
+          ...new Set(
+            Object.values(draft.days)
+              .flatMap((lines) => lines ?? [])
+              .flatMap((l) =>
+                l.exerciseId &&
+                everything.some((e) => e.id === l.exerciseId && e.ownerId !== null)
+                  ? [lineMovementName(l, everything)]
+                  : [],
+              ),
+          ),
+        ]
+      : [];
+  const problems = [
+    ...draftProblems(draft),
+    ...(personal.length > 0
+      ? [`Only you have ${personal.join(", ")}; pick a library movement.`]
+      : []),
+  ];
 
   const editing = saved.data;
   const willFork =
@@ -85,12 +123,13 @@ export function RoutineEditorPage() {
   const save = useMutation({
     mutationFn: async () => {
       const body = toCreateRoutine(draft);
-      if (!id) return api.createRoutine(body);
-      return (await api.updateRoutine(id, body)).routine;
+      if (!id) return api.createRoutine(tier, body);
+      return (await api.updateRoutine(tier, id, body)).routine;
     },
     onSuccess: async (created) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["routines"] }),
+        queryClient.invalidateQueries({ queryKey: ["globalRoutines"] }),
         queryClient.invalidateQueries({ queryKey: ["routine"] }),
         // Refetched now, not on the wizard's next mount: the wizard seeds its
         // answers from the first options it renders, and those have to
@@ -118,7 +157,9 @@ export function RoutineEditorPage() {
           className={`mt-4 text-sm ${saved.error ? "text-[var(--danger)]" : "text-[var(--ink-faint)]"}`}
         >
           {saved.error instanceof ApiError && saved.error.status === 404
-            ? "There's no routine of yours here."
+            ? routeTier === "global"
+              ? "There's no global routine here."
+              : "There's no routine of yours here."
             : saved.error
               ? "Couldn't load the routine."
               : "Loading routine…"}
@@ -161,6 +202,29 @@ export function RoutineEditorPage() {
         maxLength={140}
         className="mt-3 w-full border-b border-[var(--border)] bg-transparent pb-1 text-sm text-[var(--ink-soft)] outline-none"
       />
+
+      {routeTier === "global" && (
+        <p className="mt-3 text-[11px] tracking-[0.14em] text-[var(--glow)]" style={mono}>
+          GLOBAL — EVERY ATHLETE IS OFFERED THIS
+        </p>
+      )}
+      {canPublish && (
+        <label className="mt-4 flex items-start gap-2 text-sm text-[var(--ink-soft)]">
+          <input
+            type="checkbox"
+            checked={publish}
+            onChange={(e) => setPublish(e.target.checked)}
+            className="mt-1"
+          />
+          <span>
+            Publish to the global library
+            <span className="block text-[11px] text-[var(--ink-faint)]">
+              Every athlete is offered it, and only library movements can go in
+              it. It won't be in your own routines.
+            </span>
+          </span>
+        </label>
+      )}
 
       {/* Fixed vs flexible, without the words (DN-137). */}
       <fieldset className="mt-5 border border-[var(--border)] bg-[var(--panel)] p-3">
@@ -274,7 +338,8 @@ export function RoutineEditorPage() {
                   <LineRow
                     key={line.id}
                     line={line}
-                    library={library}
+                    library={everything}
+                    pickable={library}
                     open={open === line.id}
                     picking={picking === line.id}
                     onToggle={() => setOpen(open === line.id ? null : line.id)}
@@ -368,6 +433,7 @@ export function RoutineEditorPage() {
 function LineRow({
   line,
   library,
+  pickable,
   open,
   picking,
   onToggle,
@@ -377,7 +443,10 @@ function LineRow({
   onRemove,
 }: {
   line: DraftLine;
+  /** Every movement the athlete can see, for naming what a line holds. */
   library: ApiExercise[];
+  /** What this routine's tier may name, for choosing a new one. */
+  pickable: ApiExercise[];
   open: boolean;
   picking: boolean;
   onToggle: () => void;
@@ -430,7 +499,7 @@ function LineRow({
           </button>
           {picking && (
             <MovementPicker
-              library={library}
+              library={pickable}
               onClose={() => onPick(false)}
               onPick={(choice) => {
                 onChange({ ...line, ...choice });

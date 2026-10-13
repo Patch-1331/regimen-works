@@ -127,6 +127,11 @@ function App() {
             path="/library/routines/:id/edit"
             element={<RoutineEditorPage />}
           />
+          {/* An admin's edit of a global routine (DN-148); the API refuses anyone else. */}
+          <Route
+            path="/library/routines/global/:id/edit"
+            element={<RoutineEditorPage tier="global" />}
+          />
         </Routes>
       </SetupGate>
     </AuthGate>

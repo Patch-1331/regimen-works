@@ -4,6 +4,7 @@ import type { App } from 'supertest/types';
 import {
   DEFAULT_PLAN_ID,
   editableRoutineSchema,
+  globalRoutineSummarySchema,
   routineArchiveResultSchema,
   routineSaveResultSchema,
   routineSummarySchema,
@@ -276,5 +277,100 @@ describe('removing and restoring a routine', () => {
     await act(BOB, created.id, 'archive').expect(404);
     await act(BOB, created.id, 'unarchive').expect(404);
     await act(ALICE, DEFAULT_PLAN_ID, 'archive').expect(403);
+  });
+});
+
+describe('the global library (DN-148)', () => {
+  function admin(method: 'get' | 'post' | 'put', path: string, user: string) {
+    return http()
+      [method](`/admin/routines${path}`)
+      .set(...asUser(user));
+  }
+
+  it('is closed to an athlete, on every admin route', async () => {
+    const created = await author(ALICE);
+    const routes: ['get' | 'post' | 'put', string][] = [
+      ['get', ''],
+      ['post', ''],
+      ['get', `/${created.id}`],
+      ['put', `/${created.id}`],
+      ['post', `/${created.id}/archive`],
+      ['post', `/${created.id}/unarchive`],
+      ['post', `/${created.id}/promote`],
+    ];
+    for (const [method, path] of routes) {
+      await admin(method, path, ALICE).send(routine).expect(403);
+    }
+    expect(
+      (await testPrisma().plan.findUniqueOrThrow({ where: { id: created.id } }))
+        .ownerId,
+    ).toBe(ALICE);
+  });
+
+  it('gives an athlete no way to write a global row through their own route', async () => {
+    await http()
+      .post('/routines')
+      .set(...asUser(ALICE))
+      .send({ ...routine, ownerId: null })
+      .expect(400);
+    await http()
+      .post('/routines')
+      .set(...asUser(ADMIN))
+      .send({ ...routine, global: true })
+      .expect(400);
+    expect(
+      await testPrisma().plan.count({ where: { name: routine.name } }),
+    ).toBe(0);
+  });
+
+  it('publishes a routine an admin writes to every athlete', async () => {
+    const res = await admin('post', '', ADMIN).send(routine).expect(201);
+    const created = routineSummarySchema.parse(res.body);
+
+    expect(await picker(BOB)).toContain(created.id);
+    expect(await listed(ADMIN)).toEqual([]);
+    const global = z
+      .array(globalRoutineSummarySchema)
+      .parse((await admin('get', '', ADMIN).expect(200)).body);
+    expect(global.map((r) => [r.id, r.builtIn])).toEqual([
+      [DEFAULT_PLAN_ID, true],
+      [created.id, false],
+    ]);
+  });
+
+  it("promotes the admin's own routine, and a second athlete is offered it", async () => {
+    const created = await author(ADMIN);
+    await start(ADMIN, created.id).expect(201);
+
+    await admin('post', `/${created.id}/promote`, ADMIN).expect(201);
+
+    expect(await picker(BOB)).toContain(created.id);
+    expect(await picker(ADMIN)).toContain(created.id);
+    expect(await listed(ADMIN)).toEqual([]);
+  });
+
+  it('manages a global routine: edit, archive, restore', async () => {
+    const created = routineSummarySchema.parse(
+      (await admin('post', '', ADMIN).send(routine).expect(201)).body,
+    );
+
+    const loaded = editableRoutineSchema.parse(
+      (await admin('get', `/${created.id}`, ADMIN).expect(200)).body,
+    );
+    expect(loaded.routine).toEqual(routine);
+    await admin('put', `/${created.id}`, ADMIN)
+      .send({ ...routine, name: 'Two-day pull, heavy' })
+      .expect(200);
+    await admin('post', `/${created.id}/archive`, ADMIN).expect(201);
+    expect(await picker(BOB)).not.toContain(created.id);
+    await admin('post', `/${created.id}/unarchive`, ADMIN).expect(201);
+    expect(await picker(BOB)).toContain(created.id);
+  });
+
+  it('refuses every change to Just WODs', async () => {
+    await admin('get', `/${DEFAULT_PLAN_ID}`, ADMIN).expect(404);
+    await admin('put', `/${DEFAULT_PLAN_ID}`, ADMIN).send(routine).expect(403);
+    await admin('post', `/${DEFAULT_PLAN_ID}/archive`, ADMIN).expect(403);
+    await admin('post', `/${DEFAULT_PLAN_ID}/promote`, ADMIN).expect(404);
   });
 });
