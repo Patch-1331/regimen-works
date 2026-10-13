@@ -149,6 +149,16 @@ export const routineSaveResultSchema = z.object({
 export type RoutineSaveResult = z.infer<typeof routineSaveResultSchema>;
 
 /**
+ * What removing a routine did (DN-147). `running` means the athlete's own
+ * active run is on it: the run carries on to its end, and the list says so.
+ */
+export const routineArchiveResultSchema = z.object({
+  routine: routineSummarySchema,
+  running: z.boolean(),
+});
+export type RoutineArchiveResult = z.infer<typeof routineArchiveResultSchema>;
+
+/**
  * The line under a routine's name when its author left it blank.
  *
  * Here rather than in the service so the editor can show, as a placeholder,

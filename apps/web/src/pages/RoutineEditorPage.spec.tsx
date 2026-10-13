@@ -331,6 +331,90 @@ describe("My routines", () => {
   });
 });
 
+describe("removing and restoring (DN-147)", () => {
+  const OLD: RoutineSummary = { ...SAVED, id: "old", name: "Old days", archived: true };
+
+  /** The list as the server holds it, moved by each archive and restore. */
+  function shelf(options: { running?: boolean; restoreRefused?: boolean } = {}) {
+    let rows = [SAVED, OLD];
+    api();
+    server.use(
+      http.get("/api/routines", () => HttpResponse.json(rows)),
+      http.post("/api/routines/:id/archive", ({ params }) => {
+        rows = rows.map((r) => (r.id === params.id ? { ...r, archived: true } : r));
+        return HttpResponse.json({
+          routine: rows.find((r) => r.id === params.id),
+          running: options.running === true,
+        });
+      }),
+      http.post("/api/routines/:id/unarchive", ({ params }) => {
+        if (options.restoreRefused)
+          return HttpResponse.json(
+            { message: 'You already have a routine called "Old days"' },
+            { status: 409 },
+          );
+        rows = rows.map((r) => (r.id === params.id ? { ...r, archived: false } : r));
+        return HttpResponse.json(rows.find((r) => r.id === params.id));
+      }),
+    );
+  }
+
+  it("offers Remove on live routines and Restore on archived ones", async () => {
+    shelf();
+    renderRoute("/library/routines");
+
+    expect(await screen.findByRole("button", { name: "Remove Pull days" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Restore Old days" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Remove Old days" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Edit Old days" })).not.toBeInTheDocument();
+  });
+
+  it("moves a removed routine to the archived section", async () => {
+    shelf();
+    renderRoute("/library/routines");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Remove Pull days" }));
+
+    expect(await screen.findByRole("button", { name: "Restore Pull days" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Removed Pull days. Restore it below if you want it back.",
+    );
+  });
+
+  it("says a run under way on it carries on", async () => {
+    shelf({ running: true });
+    renderRoute("/library/routines");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Remove Pull days" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      /Your run of it carries on to its end/,
+    );
+  });
+
+  it("restores an archived routine", async () => {
+    shelf();
+    renderRoute("/library/routines");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Restore Old days" }));
+
+    expect(await screen.findByRole("link", { name: "Edit Old days" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Restored Old days.");
+  });
+
+  it("says why a restore into a taken name is refused", async () => {
+    shelf({ restoreRefused: true });
+    renderRoute("/library/routines");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Restore Old days" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Another of your routines is called Old days now. Rename that one first, then restore this.",
+    );
+    expect(screen.getByRole("button", { name: "Restore Old days" })).toBeInTheDocument();
+  });
+});
+
 describe("from the setup wizard", () => {
   it("opens the editor from Build your own and comes back with the routine chosen", async () => {
     api({ onboarded: false });

@@ -4,6 +4,7 @@ import type { App } from 'supertest/types';
 import {
   DEFAULT_PLAN_ID,
   editableRoutineSchema,
+  routineArchiveResultSchema,
   routineSaveResultSchema,
   routineSummarySchema,
   setupOptionsSchema,
@@ -231,5 +232,49 @@ describe('editing a routine', () => {
 
   it('refuses Just WODs', async () => {
     await save(ALICE, DEFAULT_PLAN_ID, routine).expect(403);
+  });
+});
+
+describe('removing and restoring a routine', () => {
+  function act(user: string, id: string, verb: 'archive' | 'unarchive') {
+    return http()
+      .post(`/routines/${id}/${verb}`)
+      .set(...asUser(user));
+  }
+
+  it('takes it off the picker, says the run continues, and brings it back', async () => {
+    const created = await author(ALICE);
+    await start(ALICE, created.id).expect(201);
+
+    const removed = routineArchiveResultSchema.parse(
+      (await act(ALICE, created.id, 'archive').expect(201)).body,
+    );
+    expect(removed).toMatchObject({
+      running: true,
+      routine: { id: created.id, archived: true },
+    });
+    expect(await picker(ALICE)).not.toContain(created.id);
+
+    const restored = routineSummarySchema.parse(
+      (await act(ALICE, created.id, 'unarchive').expect(201)).body,
+    );
+    expect(restored.archived).toBe(false);
+    expect(await picker(ALICE)).toContain(created.id);
+  });
+
+  it('refuses a restore into a name taken meanwhile', async () => {
+    const created = await author(ALICE);
+    await act(ALICE, created.id, 'archive').expect(201);
+    await author(ALICE);
+
+    await act(ALICE, created.id, 'unarchive').expect(409);
+  });
+
+  it('is a 404 to another athlete, and Just WODs cannot be removed', async () => {
+    const created = await author(ALICE);
+
+    await act(BOB, created.id, 'archive').expect(404);
+    await act(BOB, created.id, 'unarchive').expect(404);
+    await act(ALICE, DEFAULT_PLAN_ID, 'archive').expect(403);
   });
 });

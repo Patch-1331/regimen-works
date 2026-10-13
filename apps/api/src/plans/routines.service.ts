@@ -11,6 +11,7 @@ import {
   defaultRoutineSummary,
   type CreateRoutine,
   type EditableRoutine,
+  type RoutineArchiveResult,
   type RoutineDay,
   type RoutineSaveResult,
   type RoutineSummary,
@@ -173,6 +174,61 @@ export class RoutinesService {
     });
   }
 
+  /**
+   * Takes a routine off the shelf (ADR 0006, decision 5): out of the setup
+   * picker and the editor, kept for every run on it. There is no hard delete,
+   * even for a routine nobody ran -- archiving is the only way out, and
+   * `restore` the way back. Idempotent.
+   *
+   * `running` is whether the caller's own active run is on it, so the screen
+   * can say that run carries on; nothing about the run changes.
+   */
+  async archive(
+    writer: LibraryWriter,
+    id: string,
+  ): Promise<RoutineArchiveResult> {
+    if (id === DEFAULT_PLAN_ID) {
+      throw new ForbiddenException(
+        'Just WODs is built in. It cannot be removed.',
+      );
+    }
+    const plan = await this.findOwnedRow(writer, id);
+    const row =
+      plan.archivedAt !== null
+        ? plan
+        : await this.prisma.plan.update({
+            where: { id: plan.id },
+            data: { archivedAt: new Date() },
+            ...ROUTINE_ROW,
+          });
+    const running =
+      writer.ownerId !== null &&
+      (await this.prisma.planEnrollment.count({
+        where: { userId: writer.ownerId, planId: plan.id, status: 'active' },
+      })) > 0;
+    return { routine: toSummary(row), running };
+  }
+
+  /**
+   * Puts an archived routine back. Archiving let its name go, so another
+   * live routine may hold it by now; that is the editor's "name taken", and
+   * the athlete renames one of them first. Idempotent.
+   */
+  async restore(writer: LibraryWriter, id: string): Promise<RoutineSummary> {
+    const plan = await this.findOwnedRow(writer, id);
+    if (plan.archivedAt === null) return toSummary(plan);
+
+    await this.assertNameFree(this.prisma, writer, plan.name, plan.id);
+    const row = await this.withNameGuard(plan.name, () =>
+      this.prisma.plan.update({
+        where: { id: plan.id },
+        data: { archivedAt: null },
+        ...ROUTINE_ROW,
+      }),
+    );
+    return toSummary(row);
+  }
+
   /** The create both `create` and a fork go through, on whichever client. */
   private async insert(
     db: Db,
@@ -212,6 +268,21 @@ export class RoutinesService {
     const plan = await this.prisma.plan.findFirst({
       where: { id, ownerId: writer.ownerId },
       ...ROUTINE_CONTENT,
+    });
+    if (!plan || plan.id === DEFAULT_PLAN_ID) {
+      throw new NotFoundException('No such routine.');
+    }
+    return plan;
+  }
+
+  /** `findOwned` without the week, for acts that only touch the row. */
+  private async findOwnedRow(
+    writer: LibraryWriter,
+    id: string,
+  ): Promise<RoutineRow> {
+    const plan = await this.prisma.plan.findFirst({
+      where: { id, ownerId: writer.ownerId },
+      ...ROUTINE_ROW,
     });
     if (!plan || plan.id === DEFAULT_PLAN_ID) {
       throw new NotFoundException('No such routine.');
