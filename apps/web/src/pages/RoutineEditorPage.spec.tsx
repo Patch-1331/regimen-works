@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import type {
   CreateRoutine,
   EditableRoutine,
+  GlobalRoutineSummary,
   RoutineSummary,
 } from "@regimen-works/shared";
 import { renderRoute } from "../test/renderRoute";
@@ -40,14 +41,16 @@ const SAVED: RoutineSummary = {
   archived: false,
 };
 
-function api(options: { onboarded?: boolean; routines?: RoutineSummary[] } = {}) {
+function api(
+  options: { onboarded?: boolean; admin?: boolean; routines?: RoutineSummary[] } = {},
+) {
   const sent: CreateRoutine[] = [];
   let saved = false;
   server.use(
     http.get("/api/me", () =>
       HttpResponse.json({
         id: "user_alice",
-        isAdmin: false,
+        isAdmin: options.admin === true,
         onboardedAt: options.onboarded === false ? null : "2026-09-01T00:00:00.000Z",
       }),
     ),
@@ -412,6 +415,190 @@ describe("removing and restoring (DN-147)", () => {
       "Another of your routines is called Old days now. Rename that one first, then restore this.",
     );
     expect(screen.getByRole("button", { name: "Restore Old days" })).toBeInTheDocument();
+  });
+});
+
+describe("the global library (DN-148)", () => {
+  const JUST_WODS: GlobalRoutineSummary = {
+    id: "plan_just_wods",
+    name: "Just WODs",
+    summary: "A workout a day, chosen for you from the whole library.",
+    scheduleMode: "flexible",
+    days: [0, 1, 2, 3, 4, 5, 6],
+    archived: false,
+    builtIn: true,
+  };
+  const SHARED: GlobalRoutineSummary = {
+    ...SAVED,
+    id: "global-1",
+    name: "Starter strength",
+    builtIn: false,
+  };
+  const RETIRED: GlobalRoutineSummary = {
+    ...SHARED,
+    id: "global-old",
+    name: "Old strength",
+    archived: true,
+  };
+  const TOWEL_ROW = fixtures.apiExercise({
+    id: "towel",
+    name: "Towel row",
+    movementGroup: "pull",
+    ownerId: "user_alice",
+  });
+
+  /** An admin's view: their own routines, the global list, and every write. */
+  function admin() {
+    const calls: { method: string; path: string; body: unknown }[] = [];
+    const record = async (request: Request) => {
+      calls.push({
+        method: request.method,
+        path: new URL(request.url).pathname,
+        body: request.method === "GET" ? null : await request.json().catch(() => null),
+      });
+    };
+    api({ admin: true, routines: [SAVED] });
+    server.use(
+      http.get("/api/exercises", () => HttpResponse.json([CHIN_UP, RING_ROW, TOWEL_ROW])),
+      http.get("/api/admin/routines", () => HttpResponse.json([JUST_WODS, SHARED, RETIRED])),
+      http.post("/api/admin/routines", async ({ request }) => {
+        await record(request);
+        return HttpResponse.json({ ...SHARED, id: "global-new" }, { status: 201 });
+      }),
+      http.get("/api/admin/routines/:id", () =>
+        HttpResponse.json({
+          id: SHARED.id,
+          routine: PULL_DAYS,
+          hasRuns: false,
+          archived: false,
+        } satisfies EditableRoutine),
+      ),
+      http.put("/api/admin/routines/:id", async ({ request }) => {
+        await record(request);
+        return HttpResponse.json({ routine: SHARED, forked: false });
+      }),
+      http.post("/api/admin/routines/:id/promote", async ({ request }) => {
+        await record(request);
+        return HttpResponse.json(SAVED);
+      }),
+    );
+    return calls;
+  }
+
+  it("shows an athlete neither the global library nor a way to publish", async () => {
+    api({ routines: [SAVED] });
+    renderRoute("/library/routines");
+
+    await screen.findByText("Pull days");
+    expect(screen.queryByRole("region", { name: "Global library" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Publish Pull days" })).not.toBeInTheDocument();
+  });
+
+  it("lists the global library for an admin, Just WODs built in and untouchable", async () => {
+    admin();
+    renderRoute("/library/routines");
+
+    const library = await screen.findByRole("region", { name: "Global library" });
+    const rows = await within(library).findAllByRole("listitem");
+    expect(rows.map((r) => within(r).getByText(/WODs|strength/).textContent)).toEqual([
+      "Just WODs",
+      "Starter strength",
+      "Old strength",
+    ]);
+    expect(within(rows[0]).getByText("Built in")).toBeInTheDocument();
+    expect(within(rows[0]).queryByRole("button")).not.toBeInTheDocument();
+    expect(within(rows[0]).queryByRole("link")).not.toBeInTheDocument();
+    expect(within(rows[1]).getByRole("link", { name: "Edit Starter strength" })).toHaveAttribute(
+      "href",
+      "/library/routines/global/global-1/edit",
+    );
+    expect(within(rows[1]).getByRole("button", { name: "Remove Starter strength" })).toBeEnabled();
+    expect(within(rows[2]).getByRole("button", { name: "Restore Old strength" })).toBeEnabled();
+  });
+
+  it("publishes one of the admin's own routines only once they confirm", async () => {
+    const calls = admin();
+    renderRoute("/library/routines");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Publish Pull days" }));
+    expect(screen.getByText(/There's no taking it back/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Keep it mine" }));
+    expect(calls).toEqual([]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Publish Pull days" }));
+    await userEvent.click(screen.getByRole("button", { name: "Confirm publishing Pull days" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Published Pull days. Every athlete is offered it now.",
+    );
+    expect(calls).toEqual([
+      { method: "POST", path: "/api/admin/routines/routine-1/promote", body: null },
+    ]);
+  });
+
+  it("writes a new routine to the global library when the admin ticks publish", async () => {
+    const calls = admin();
+    renderRoute("/library/routines/new");
+
+    await userEvent.type(await screen.findByLabelText("Routine name"), "Starter strength");
+    await userEvent.click(screen.getByRole("checkbox", { name: /Publish to the global library/ }));
+    await writeMondayPull();
+    await userEvent.click(screen.getByRole("button", { name: "Save routine" }));
+
+    await screen.findByRole("link", { name: "+ New routine" });
+    expect(calls).toMatchObject([{ method: "POST", path: "/api/admin/routines" }]);
+  });
+
+  it("offers a global routine only library movements, and flags one picked before", async () => {
+    admin();
+    renderRoute("/library/routines/new");
+
+    await userEvent.type(await screen.findByLabelText("Routine name"), "Rows");
+    const monday = await screen.findByRole("region", { name: "Mon" });
+    await userEvent.click(within(monday).getByRole("button", { name: "+ ADD MOVEMENT" }));
+    await userEvent.type(within(monday).getByLabelText("Search movements"), "towel");
+    await userEvent.click(within(monday).getByRole("button", { name: /^Towel row/ }));
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /Publish to the global library/ }));
+
+    expect(within(monday).getByText("Towel row")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save routine" })).toBeDisabled();
+    expect(screen.getByText(/1 thing to fix before saving/)).toBeInTheDocument();
+
+    // The line already holding it stays a button; the picker adds none.
+    const holding = within(monday).getAllByRole("button", { name: /^Towel row/ }).length;
+    await userEvent.click(within(monday).getByRole("button", { name: "+ ADD MOVEMENT" }));
+    await userEvent.type(within(monday).getByLabelText("Search movements"), "towel");
+    expect(within(monday).getByText(/Nothing in the library is/)).toBeInTheDocument();
+    expect(within(monday).getAllByRole("button", { name: /^Towel row/ })).toHaveLength(holding);
+  });
+
+  it("does not offer publishing to an athlete", async () => {
+    api();
+    renderRoute("/library/routines/new");
+    await screen.findByLabelText("Routine name");
+    expect(screen.queryByRole("checkbox", { name: /Publish/ })).not.toBeInTheDocument();
+  });
+
+  it("edits a global routine through the admin route", async () => {
+    const calls = admin();
+    renderRoute("/library/routines/global/global-1/edit");
+
+    const name = await screen.findByLabelText("Routine name");
+    expect(screen.getByText(/EVERY ATHLETE IS OFFERED THIS/)).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /Publish/ })).not.toBeInTheDocument();
+    await userEvent.clear(name);
+    await userEvent.type(name, "Pull for all");
+    await userEvent.click(screen.getByRole("button", { name: "Save routine" }));
+
+    await screen.findByRole("link", { name: "+ New routine" });
+    expect(calls).toEqual([
+      {
+        method: "PUT",
+        path: "/api/admin/routines/global-1",
+        body: { ...PULL_DAYS, name: "Pull for all" },
+      },
+    ]);
   });
 });
 

@@ -469,6 +469,18 @@ describe('library ownership scoping', () => {
     }
   });
 
+  it('publishes only a routine the admin owns (DN-148)', async () => {
+    // Promote takes a personal row and makes it global; found by id alone it
+    // would let an admin publish another athlete's routine out from under them.
+    const prisma = recordingPrisma();
+    await new RoutinesService(prisma)
+      .promote(ALICE, 'plan-1')
+      .catch(() => undefined);
+    expect(whereOf(prisma, 'plan.findFirst')).toEqual([
+      JSON.stringify({ id: 'plan-1', ownerId: ALICE }),
+    ]);
+  });
+
   it('scopes the exercises a routine may name, and the name it may not reuse', async () => {
     const prisma = recordingPrisma();
     await new RoutinesService(prisma)
