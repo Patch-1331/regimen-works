@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import {
+  createRoutineSchema,
   DEFAULT_PLAN_ID,
   editableRoutineSchema,
   globalRoutineSummarySchema,
@@ -372,5 +373,60 @@ describe('the global library (DN-148)', () => {
     await admin('put', `/${DEFAULT_PLAN_ID}`, ADMIN).send(routine).expect(403);
     await admin('post', `/${DEFAULT_PLAN_ID}/archive`, ADMIN).expect(403);
     await admin('post', `/${DEFAULT_PLAN_ID}/promote`, ADMIN).expect(404);
+  });
+});
+
+describe('copying a global routine (DN-149)', () => {
+  function library(user: string, path = '') {
+    return http()
+      .get(`/routines/library${path}`)
+      .set(...asUser(user));
+  }
+
+  async function publish() {
+    const res = await http()
+      .post('/admin/routines')
+      .set(...asUser(ADMIN))
+      .send(routine)
+      .expect(201);
+    return routineSummarySchema.parse(res.body);
+  }
+
+  it('lets an athlete copy a global routine into their own, and leaves it be', async () => {
+    const source = await publish();
+
+    const offered = z
+      .array(routineSummarySchema)
+      .parse((await library(ALICE).expect(200)).body);
+    expect(offered.map((r) => r.id)).toEqual([source.id]);
+
+    const prefill = createRoutineSchema.parse(
+      (await library(ALICE, `/${source.id}`).expect(200)).body,
+    );
+    expect(prefill).toEqual(routine);
+
+    const res = await http()
+      .post('/routines')
+      .set(...asUser(ALICE))
+      .send({ ...prefill, name: `${prefill.name} (copy)` })
+      .expect(201);
+    const copy = routineSummarySchema.parse(res.body);
+
+    expect(copy.id).not.toBe(source.id);
+    expect(await listed(ALICE)).toEqual([copy]);
+    const stored = await testPrisma().plan.findUniqueOrThrow({
+      where: { id: source.id },
+    });
+    expect([stored.ownerId, stored.name]).toEqual([null, routine.name]);
+  });
+
+  it("never reads anyone's own routine, nor Just WODs", async () => {
+    const bobs = await author(BOB);
+    const alices = await author(ALICE);
+
+    for (const id of [bobs.id, alices.id, DEFAULT_PLAN_ID]) {
+      await library(ALICE, `/${id}`).expect(404);
+    }
+    expect((await library(ALICE).expect(200)).body).toEqual([]);
   });
 });

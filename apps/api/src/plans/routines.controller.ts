@@ -26,6 +26,22 @@ export class RoutinesController {
     return this.routinesService.create({ ownerId: userId }, body);
   }
 
+  /**
+   * The global routines an athlete may copy into their own (DN-149). Read
+   * routes on the athlete's controller rather than the admin one: copying is
+   * for everyone, and these only ever return global rows.
+   */
+  @Get('library')
+  library() {
+    return this.routinesService.listCopyable();
+  }
+
+  /** A global routine as the editor prefills a copy from it. */
+  @Get('library/:id')
+  libraryRoutine(@Param('id') id: string) {
+    return this.routinesService.getForCopy(id);
+  }
+
   /** One of the caller's routines, as the editor loads it (DN-146). */
   @Get(':id')
   get(@CurrentUser() userId: string, @Param('id') id: string) {

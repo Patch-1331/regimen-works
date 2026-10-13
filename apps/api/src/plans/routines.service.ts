@@ -64,6 +64,13 @@ const ROUTINE_CONTENT = {
 
 type RoutineContent = Prisma.PlanGetPayload<typeof ROUTINE_CONTENT>;
 
+/** What "copy to my routines" offers: the live global library, Just WODs aside. */
+const COPYABLE = {
+  ...GLOBAL_LIBRARY,
+  archivedAt: null,
+  id: { not: DEFAULT_PLAN_ID },
+} satisfies Prisma.PlanWhereInput;
+
 /** The client a write runs on: the service's own, or a transaction's. */
 type Db = Pick<PrismaService, 'plan' | 'exercise'>;
 
@@ -287,6 +294,36 @@ export class RoutinesService {
       }),
     );
     return toSummary(row);
+  }
+
+  /**
+   * The global routines an athlete may copy (DN-149, ADR 0006 decision 7):
+   * live ones only, and not Just WODs, which has no week to copy.
+   */
+  async listCopyable(): Promise<RoutineSummary[]> {
+    const rows = await this.prisma.plan.findMany({
+      where: COPYABLE,
+      orderBy: { name: 'asc' },
+      ...ROUTINE_ROW,
+    });
+    return rows.map(toSummary);
+  }
+
+  /**
+   * A global routine as the body that would create it, for the editor to
+   * prefill a copy from. The copy is saved through `create` like any other
+   * routine, so it is the caller's, and nothing ties it back to this one.
+   *
+   * Global rows only: an athlete's own routine -- anyone's -- is a 404 here,
+   * so this cannot be used to read another athlete's work.
+   */
+  async getForCopy(id: string): Promise<CreateRoutine> {
+    const plan = await this.prisma.plan.findFirst({
+      where: { AND: [COPYABLE, { id }] },
+      ...ROUTINE_CONTENT,
+    });
+    if (!plan) throw new NotFoundException('No such routine.');
+    return toCreateRoutine(plan);
   }
 
   /**

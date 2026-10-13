@@ -423,6 +423,14 @@ export const api = {
    * Just WODs first and marked built in. Refused to anyone else.
    */
   globalRoutines: () => request<GlobalRoutineSummary[]>("/admin/routines"),
+  /**
+   * The global routines any athlete may copy into their own (DN-149): live
+   * ones only, Just WODs aside.
+   */
+  copyableRoutines: () => request<RoutineSummary[]>("/routines/library"),
+  /** One of those, as the editor prefills a copy from it. */
+  copyableRoutine: (id: string) =>
+    request<CreateRoutine>(`/routines/library/${encodeURIComponent(id)}`),
   /** The tier is the route's, never the body's: `global` is admin-only. */
   createRoutine: (tier: LibraryTier, body: CreateRoutine) =>
     postJson<RoutineSummary>(routinesBase(tier), body),
