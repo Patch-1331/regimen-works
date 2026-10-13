@@ -3,13 +3,17 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type {
   CreateRoutine,
+  RoutineExport,
   EditableRoutine,
   GlobalRoutineSummary,
   RoutineSummary,
 } from "@regimen-works/shared";
 import { renderRoute } from "../test/renderRoute";
+import { saveJson } from "../lib/download";
 import { server, http, HttpResponse } from "../test/server";
 import * as fixtures from "../test/fixtures";
+
+vi.mock("../lib/download", () => ({ saveJson: vi.fn() }));
 
 vi.mock("@clerk/clerk-react", async () => {
   const { clerkTestDouble } = await import("../test/clerk");
@@ -618,6 +622,85 @@ describe("the global library (DN-148)", () => {
         body: { ...PULL_DAYS, name: "Pull for all" },
       },
     ]);
+  });
+
+  describe("exporting (DN-150)", () => {
+    const FILE: RoutineExport = {
+      format: "regimen-works/routines",
+      version: 1,
+      routines: [{ ...PULL_DAYS, name: "Old strength" }],
+    };
+
+    function exporting() {
+      const calls = admin();
+      server.use(
+        http.post("/api/admin/routines/export", async ({ request }) => {
+          calls.push({
+            method: "POST",
+            path: "/api/admin/routines/export",
+            body: await request.json(),
+          });
+          return HttpResponse.json(FILE);
+        }),
+      );
+      return calls;
+    }
+
+    it("offers a tick on every global routine but Just WODs", async () => {
+      exporting();
+      renderRoute("/library/routines");
+
+      const library = await screen.findByRole("region", { name: "Global library" });
+      expect(
+        await within(library).findByRole("checkbox", {
+          name: "Include Starter strength in the export",
+        }),
+      ).toBeInTheDocument();
+      expect(
+        within(library).getByRole("checkbox", { name: "Include Old strength in the export" }),
+      ).toBeInTheDocument();
+      expect(within(library).queryByRole("checkbox", { name: /Just WODs/ })).toBeNull();
+      expect(
+        within(library).getByRole("button", { name: "Tick routines to export" }),
+      ).toBeDisabled();
+    });
+
+    it("exports the ticked routines, archived included, as one saved file", async () => {
+      const calls = exporting();
+      vi.mocked(saveJson).mockClear();
+      renderRoute("/library/routines");
+
+      const library = await screen.findByRole("region", { name: "Global library" });
+      await userEvent.click(
+        await within(library).findByRole("checkbox", {
+          name: "Include Old strength in the export",
+        }),
+      );
+      await userEvent.click(within(library).getByRole("button", { name: "Export 1 routine" }));
+
+      await vi.waitFor(() => expect(saveJson).toHaveBeenCalledOnce());
+      expect(vi.mocked(saveJson).mock.calls[0]).toEqual([
+        expect.stringMatching(/^regimen-works-routines-\d{4}-\d{2}-\d{2}\.json$/),
+        FILE,
+      ]);
+      expect(calls).toContainEqual({
+        method: "POST",
+        path: "/api/admin/routines/export",
+        body: { ids: ["global-old"] },
+      });
+      expect(
+        within(library).getByRole("checkbox", { name: "Include Old strength in the export" }),
+      ).not.toBeChecked();
+    });
+
+    it("shows no export to an athlete", async () => {
+      api({ routines: [SAVED] });
+      renderRoute("/library/routines");
+
+      await screen.findByText("Pull days");
+      expect(screen.queryByRole("checkbox")).toBeNull();
+      expect(screen.queryByRole("button", { name: /export/i })).toBeNull();
+    });
   });
 });
 

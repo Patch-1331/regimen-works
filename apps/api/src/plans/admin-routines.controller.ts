@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Put,
+} from '@nestjs/common';
 import { AdminOnly } from '../common/admin-only.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { RoutinesService } from './routines.service';
@@ -29,6 +37,17 @@ export class AdminRoutinesController {
   @Post()
   create(@Body() body: unknown) {
     return this.routinesService.create({ ownerId: null }, body);
+  }
+
+  /**
+   * The ticked global routines as one file, live or archived (DN-150). A
+   * POST because the ticks are a body; it changes nothing. Personal routines
+   * cannot be exported by this route or any other.
+   */
+  @Post('export')
+  @HttpCode(200)
+  export(@Body() body: unknown) {
+    return this.routinesService.exportGlobal(body);
   }
 
   @Get(':id')

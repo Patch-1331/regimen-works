@@ -2,18 +2,24 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import {
   DEFAULT_PLAN_ID,
+  ROUTINE_EXPORT_FORMAT,
+  ROUTINE_EXPORT_VERSION,
   createRoutineSchema,
   defaultRoutineSummary,
+  exportRoutinesSchema,
+  routineExportEnvelopeSchema,
   type CreateRoutine,
   type EditableRoutine,
   type GlobalRoutineSummary,
   type RoutineArchiveResult,
   type RoutineDay,
+  type RoutineExport,
   type RoutineSaveResult,
   type RoutineSummary,
 } from '@regimen-works/shared';
@@ -327,6 +333,81 @@ export class RoutinesService {
   }
 
   /**
+   * The ticked global routines as one file (DN-150, ADR 0006 decision 8),
+   * each entry the body that would create it. Live or archived; never Just
+   * WODs, which has no week to write down, and never a personal routine --
+   * this is the only export there is, and it reads the global tier alone.
+   *
+   * Every id must be one of those, or nothing is exported: a file quietly
+   * missing a routine is worse than no file.
+   */
+  async exportGlobal(body: unknown): Promise<RoutineExport> {
+    const { ids } = validateBody(exportRoutinesSchema, body);
+    const wanted = [...new Set(ids)];
+    const plans = await this.prisma.plan.findMany({
+      where: {
+        AND: [
+          GLOBAL_LIBRARY,
+          { id: { in: wanted } },
+          { id: { not: DEFAULT_PLAN_ID } },
+        ],
+      },
+      orderBy: { name: 'asc' },
+      ...ROUTINE_CONTENT,
+    });
+    if (plans.length !== wanted.length) {
+      throw new NotFoundException(
+        'Only global routines can be exported, and not Just WODs.',
+      );
+    }
+    return {
+      format: ROUTINE_EXPORT_FORMAT,
+      version: ROUTINE_EXPORT_VERSION,
+      routines: plans.map(toCreateRoutine),
+    };
+  }
+
+  /**
+   * Loads an export into the global library, live (DN-150). Each entry goes
+   * through what `create` does -- the editor's schema, then `insert` as a
+   * global writer -- so a file can hold nothing the editor would refuse, and
+   * a name already live in the library is a clash, never an overwrite.
+   *
+   * All or nothing: one transaction, so a failure leaves the library as it
+   * was. Every message names the entry it is about.
+   */
+  async importGlobal(file: unknown): Promise<RoutineSummary[]> {
+    const { routines: entries } = validateBody(
+      routineExportEnvelopeSchema,
+      file,
+    );
+    const routines: CreateRoutine[] = [];
+    for (const [index, entry] of entries.entries()) {
+      routines.push(
+        await inEntry(index, entry, () =>
+          validateBody(createRoutineSchema, entry),
+        ),
+      );
+    }
+    return this.prisma.$transaction(
+      async (tx) => {
+        const created: RoutineSummary[] = [];
+        for (const [index, routine] of routines.entries()) {
+          created.push(
+            await inEntry(index, routine, () =>
+              this.insert(tx, GLOBAL_LIBRARY, routine),
+            ),
+          );
+        }
+        return created;
+      },
+      // A library's worth of routines, each a handful of statements; the
+      // default five seconds is sized for one request's work.
+      { timeout: 60_000 },
+    );
+  }
+
+  /**
    * The global library as an admin manages it, live and archived, Just WODs
    * first and marked built in so the screen offers it no actions.
    */
@@ -637,6 +718,45 @@ function toSummary(row: RoutineRow): RoutineSummary {
     days,
     archived: row.archivedAt !== null,
   };
+}
+
+/**
+ * Runs one entry of an import, prefixing whatever it refuses with which
+ * entry that was -- "Routine 2 (Push days): ..." -- and keeping the status.
+ */
+async function inEntry<T>(
+  index: number,
+  entry: unknown,
+  run: () => T | Promise<T>,
+): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (!(error instanceof HttpException)) throw error;
+    const name =
+      typeof entry === 'object' &&
+      entry !== null &&
+      'name' in entry &&
+      typeof entry.name === 'string'
+        ? ` (${entry.name})`
+        : '';
+    const label = `Routine ${index + 1}${name}`;
+    const response = error.getResponse();
+    const message =
+      typeof response === 'string'
+        ? response
+        : (response as { message?: string | string[] }).message;
+    const status = error.getStatus();
+    throw new HttpException(
+      {
+        statusCode: status,
+        message: Array.isArray(message)
+          ? message.map((m) => `${label}: ${m}`)
+          : `${label}: ${message ?? error.message}`,
+      },
+      status,
+    );
+  }
 }
 
 function nameTaken(writer: LibraryWriter, name: string) {

@@ -494,6 +494,19 @@ describe('library ownership scoping', () => {
     });
   });
 
+  it('exports from the global tier only (DN-150)', async () => {
+    // The only export there is; reading by id alone would let an admin ship
+    // an athlete's personal routine out in a file.
+    const prisma = recordingPrisma();
+    await new RoutinesService(prisma)
+      .exportGlobal({ ids: ['plan-1'] })
+      .catch(() => undefined);
+    const [where] = whereOf(prisma, 'plan.findMany');
+    const { AND } = JSON.parse(where) as { AND: unknown[] };
+    expect(AND).toContainEqual({ ownerId: null });
+    expect(AND).toContainEqual({ id: { in: ['plan-1'] } });
+  });
+
   it('scopes the exercises a routine may name, and the name it may not reuse', async () => {
     const prisma = recordingPrisma();
     await new RoutinesService(prisma)
