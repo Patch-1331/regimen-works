@@ -19,6 +19,10 @@ import { WEEKDAYS } from "../lib/weekdays";
  * actions, and can publish one of their own routines into it (DN-148).
  * `isAdmin` decides only what is rendered; every admin route refuses
  * anyone else on its own.
+ *
+ * Everyone else sees the live global routines as "From the library", each
+ * with "Copy" -- a new routine of their own, filled from it (DN-149). An
+ * admin copies from their global list instead of a second one.
  */
 export function RoutinesPage() {
   const queryClient = useQueryClient();
@@ -32,6 +36,11 @@ export function RoutinesPage() {
     queryKey: ["globalRoutines"],
     queryFn: api.globalRoutines,
     enabled: isAdmin,
+  });
+  const { data: copyable, error: copyableError } = useQuery({
+    queryKey: ["copyableRoutines"],
+    queryFn: api.copyableRoutines,
+    enabled: me !== undefined && !isAdmin,
   });
   // What the last action did, said once beneath the button.
   const [notice, setNotice] = useState<string | null>(null);
@@ -225,6 +234,30 @@ export function RoutinesPage() {
         </>
       )}
 
+      {!isAdmin && (copyableError || (copyable?.length ?? 0) > 0) && (
+        <section aria-label="From the library">
+          <SectionLabel>FROM THE LIBRARY</SectionLabel>
+          <p className="mt-1 text-[12px] text-[var(--ink-faint)]">
+            Copy one to make it yours — change anything, and the library's
+            stays as it is.
+          </p>
+          {copyableError && (
+            <p className="mt-3 text-sm text-[var(--danger)]">
+              Couldn't load the library.
+            </p>
+          )}
+          {copyable && (
+            <RoutineList>
+              {copyable.map((routine) => (
+                <RoutineRow key={routine.id} routine={routine}>
+                  <CopyLink routine={routine} />
+                </RoutineRow>
+              ))}
+            </RoutineList>
+          )}
+        </section>
+      )}
+
       {isAdmin && (
         <GlobalLibrary
           routines={global}
@@ -284,6 +317,7 @@ function GlobalLibrary({
                 </Action>
               ) : (
                 <>
+                  <CopyLink routine={routine} />
                   <Link
                     to={`/library/routines/global/${routine.id}/edit`}
                     aria-label={`Edit ${routine.name}`}
@@ -304,6 +338,17 @@ function GlobalLibrary({
         </RoutineList>
       )}
     </section>
+  );
+}
+
+function CopyLink({ routine }: { routine: RoutineSummary }) {
+  return (
+    <Link
+      to={`/library/routines/new?copy=${encodeURIComponent(routine.id)}`}
+      aria-label={`Copy ${routine.name} to my routines`}
+    >
+      Copy
+    </Link>
   );
 }
 

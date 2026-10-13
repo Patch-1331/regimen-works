@@ -42,7 +42,12 @@ const SAVED: RoutineSummary = {
 };
 
 function api(
-  options: { onboarded?: boolean; admin?: boolean; routines?: RoutineSummary[] } = {},
+  options: {
+    onboarded?: boolean;
+    admin?: boolean;
+    routines?: RoutineSummary[];
+    library?: RoutineSummary[];
+  } = {},
 ) {
   const sent: CreateRoutine[] = [];
   let saved = false;
@@ -55,6 +60,7 @@ function api(
       }),
     ),
     http.get("/api/exercises", () => HttpResponse.json([CHIN_UP, RING_ROW])),
+    http.get("/api/routines/library", () => HttpResponse.json(options.library ?? [])),
     http.get("/api/routines", () =>
       HttpResponse.json(options.routines ?? (saved ? [SAVED] : [])),
     ),
@@ -494,6 +500,19 @@ describe("the global library (DN-148)", () => {
     expect(screen.queryByRole("button", { name: "Publish Pull days" })).not.toBeInTheDocument();
   });
 
+  it("lets an admin copy a live global routine from the global list", async () => {
+    admin();
+    renderRoute("/library/routines");
+
+    const library = await screen.findByRole("region", { name: "Global library" });
+    expect(
+      await within(library).findByRole("link", { name: "Copy Starter strength to my routines" }),
+    ).toHaveAttribute("href", "/library/routines/new?copy=global-1");
+    expect(within(library).queryByRole("link", { name: /Copy Just WODs/ })).toBeNull();
+    expect(within(library).queryByRole("link", { name: /Copy Old strength/ })).toBeNull();
+    expect(screen.queryByRole("region", { name: "From the library" })).toBeNull();
+  });
+
   it("lists the global library for an admin, Just WODs built in and untouchable", async () => {
     admin();
     renderRoute("/library/routines");
@@ -599,6 +618,85 @@ describe("the global library (DN-148)", () => {
         body: { ...PULL_DAYS, name: "Pull for all" },
       },
     ]);
+  });
+});
+
+describe("copying a global routine (DN-149)", () => {
+  const STARTER: RoutineSummary = {
+    ...SAVED,
+    id: "global-1",
+    name: "Starter strength",
+  };
+  const STARTER_ROUTINE: CreateRoutine = { ...PULL_DAYS, name: STARTER.name };
+
+  function library() {
+    const sent = api({ library: [STARTER] });
+    server.use(
+      http.get("/api/routines/library/:id", ({ params }) =>
+        params.id === STARTER.id
+          ? HttpResponse.json(STARTER_ROUTINE)
+          : HttpResponse.json({ message: "No such routine." }, { status: 404 }),
+      ),
+    );
+    return sent;
+  }
+
+  it("offers an athlete the library's routines to copy", async () => {
+    library();
+    renderRoute("/library/routines");
+
+    const offered = await screen.findByRole("region", { name: "From the library" });
+    expect(within(offered).getByText("Starter strength")).toBeInTheDocument();
+    expect(
+      within(offered).getByRole("link", { name: "Copy Starter strength to my routines" }),
+    ).toHaveAttribute("href", "/library/routines/new?copy=global-1");
+  });
+
+  it("fills the sheet from the original and saves it as the athlete's own", async () => {
+    const sent = library();
+    renderRoute("/library/routines/new?copy=global-1");
+
+    expect(await screen.findByLabelText("Routine name")).toHaveValue(
+      "Starter strength (copy)",
+    );
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "Copied from Starter strength in the library",
+    );
+    const monday = screen.getByRole("region", { name: "Mon" });
+    expect(within(monday).getByText("Any pull")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Save routine" }));
+
+    await screen.findByRole("link", { name: "+ New routine" });
+    expect(sent).toEqual([{ ...PULL_DAYS, name: "Starter strength (copy)" }]);
+  });
+
+  it("keeps an admin's copy their own, with no way to publish it from the sheet", async () => {
+    library();
+    server.use(
+      http.get("/api/me", () =>
+        HttpResponse.json({
+          id: "admin_root",
+          isAdmin: true,
+          onboardedAt: "2026-09-01T00:00:00.000Z",
+        }),
+      ),
+    );
+    renderRoute("/library/routines/new?copy=global-1");
+
+    await screen.findByLabelText("Routine name");
+    expect(
+      screen.queryByRole("checkbox", { name: /Publish to the global library/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("says so when the routine is no longer in the library", async () => {
+    library();
+    renderRoute("/library/routines/new?copy=gone");
+
+    expect(
+      await screen.findByText("That routine isn't in the library any more."),
+    ).toBeInTheDocument();
   });
 });
 

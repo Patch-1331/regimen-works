@@ -45,6 +45,11 @@ import {
  * which sends it to the admin route instead -- the tier is always which route
  * is called, never a field of the body. A global routine may only name
  * global movements, so the picker offers only those.
+ *
+ * `?copy=<id>` starts a new routine from a global one (DN-149): the sheet is
+ * filled from it and saved as the athlete's own through the ordinary create
+ * route, with no link back. It is always the athlete's own -- an admin
+ * publishes the copy afterwards, like any routine of theirs.
  */
 
 const mono = { fontFamily: "var(--font-mono)" } as const;
@@ -57,17 +62,24 @@ export function RoutineEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
   const { id } = useParams();
   const fromSetup = params.get("from") === "setup";
   const back = fromSetup ? "/setup" : "/library/routines";
+  const copyId = id === undefined ? params.get("copy") : null;
 
   const saved = useQuery({
     queryKey: ["routine", routeTier, id],
     queryFn: () => api.routine(routeTier, id!),
     enabled: id !== undefined,
   });
+  const source = useQuery({
+    queryKey: ["copyableRoutine", copyId],
+    queryFn: () => api.copyableRoutine(copyId!),
+    enabled: copyId !== null,
+  });
 
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: api.me });
   // Offered only when writing something new outside the setup wizard: the
   // wizard is choosing the athlete's own program, not curating the library.
-  const canPublish = me?.isAdmin === true && id === undefined && !fromSetup;
+  const canPublish =
+    me?.isAdmin === true && id === undefined && copyId === null && !fromSetup;
   const [publish, setPublish] = useState(false);
   const tier: LibraryTier =
     id !== undefined ? routeTier : canPublish && publish ? "global" : "own";
@@ -86,6 +98,13 @@ export function RoutineEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
   if (saved.data && loadedId !== saved.data.id) {
     setDraft(fromRoutine(saved.data.routine));
     setLoadedId(saved.data.id);
+  }
+  // A copy shares the source's name until the athlete changes it; the
+  // suggestion keeps the two apart in the picker, and lets an admin publish
+  // the copy without clashing with the original.
+  if (source.data && copyId !== null && loadedId !== copyId) {
+    setDraft({ ...fromRoutine(source.data), name: `${source.data.name} (copy)` });
+    setLoadedId(copyId);
   }
   const [open, setOpen] = useState<string | null>(null);
   const [picking, setPicking] = useState<string | null>(null);
@@ -147,6 +166,25 @@ export function RoutineEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
     },
   });
 
+  if (copyId !== null && !source.data) {
+    return (
+      <div className="mx-auto max-w-md p-6">
+        <Link to={back} className="text-xs text-[var(--ink-faint)]" style={mono}>
+          ← BACK
+        </Link>
+        <p
+          className={`mt-4 text-sm ${source.error ? "text-[var(--danger)]" : "text-[var(--ink-faint)]"}`}
+        >
+          {source.error instanceof ApiError && source.error.status === 404
+            ? "That routine isn't in the library any more."
+            : source.error
+              ? "Couldn't load the routine."
+              : "Loading routine…"}
+        </p>
+      </div>
+    );
+  }
+
   if (id !== undefined && !editing) {
     return (
       <div className="mx-auto max-w-md p-6">
@@ -203,6 +241,12 @@ export function RoutineEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
         className="mt-3 w-full border-b border-[var(--border)] bg-transparent pb-1 text-sm text-[var(--ink-soft)] outline-none"
       />
 
+      {source.data && (
+        <p className="mt-3 text-[12px] text-[var(--ink-faint)]" role="note">
+          Copied from {source.data.name} in the library. This copy is yours to
+          change; the original stays as it is.
+        </p>
+      )}
       {routeTier === "global" && (
         <p className="mt-3 text-[11px] tracking-[0.14em] text-[var(--glow)]" style={mono}>
           GLOBAL — EVERY ATHLETE IS OFFERED THIS

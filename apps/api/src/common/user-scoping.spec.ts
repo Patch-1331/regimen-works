@@ -481,6 +481,19 @@ describe('library ownership scoping', () => {
     ]);
   });
 
+  it('prefills a copy from a global routine only (DN-149)', async () => {
+    // The copy route is open to every athlete; found by id alone it would hand
+    // one athlete another's personal routine.
+    const prisma = recordingPrisma();
+    await new RoutinesService(prisma)
+      .getForCopy('plan-1')
+      .catch(() => undefined);
+    const [where] = whereOf(prisma, 'plan.findFirst');
+    expect(JSON.parse(where)).toMatchObject({
+      AND: [{ ownerId: null }, { id: 'plan-1' }],
+    });
+  });
+
   it('scopes the exercises a routine may name, and the name it may not reuse', async () => {
     const prisma = recordingPrisma();
     await new RoutinesService(prisma)

@@ -948,3 +948,135 @@ describe('the global tier (DN-148)', () => {
     );
   });
 });
+
+describe('copying a global routine (DN-149)', () => {
+  const GLOBAL = { ownerId: null };
+
+  /** Everything a routine is stored as, minus the ids that make it a row. */
+  async function shape(id: string) {
+    const plan = await stored(id);
+    return plan.weeks.map((week) => ({
+      order: week.order,
+      phase: week.phase,
+      slots: [...week.slots]
+        .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
+        .map((slot) => ({
+          dayOfWeek: slot.dayOfWeek,
+          kind: slot.kind,
+          priority: slot.priority,
+          movements: slot.movements.map((movement) => ({
+            ...movement,
+            id: undefined,
+            planSlotId: undefined,
+          })),
+        })),
+    }));
+  }
+
+  async function copy(ownerId: string, sourceId: string) {
+    const prefill = await routines().getForCopy(sourceId);
+    return routines().create({ ownerId }, prefill);
+  }
+
+  it("saves a copy the caller owns, stored as the source's week", async () => {
+    const alice = await createUser();
+    const chin = await createExercise({ name: 'Chin-up' });
+    const source = await routines().create(
+      GLOBAL,
+      body({
+        summary: 'Two days, heavy',
+        days: [
+          {
+            dayOfWeek: 1,
+            lines: [line({ movementGroup: null, exerciseId: chin.id }), line()],
+          },
+          {
+            dayOfWeek: 4,
+            lines: [line({ toFailure: true, reps: null, repsMax: null })],
+          },
+        ],
+      }),
+    );
+
+    const mine = await copy(alice.id, source.id);
+
+    expect(mine.id).not.toBe(source.id);
+    expect(mine).toMatchObject({
+      name: source.name,
+      summary: 'Two days, heavy',
+    });
+    expect((await stored(mine.id)).ownerId).toBe(alice.id);
+    expect(await shape(mine.id)).toEqual(await shape(source.id));
+    expect(await routines().listOwn(alice.id)).toEqual([mine]);
+  });
+
+  it('keeps the copy and the source apart, editing either way', async () => {
+    const alice = await createUser();
+    const source = await routines().create(GLOBAL, body());
+    const mine = await copy(alice.id, source.id);
+    const original = await shape(source.id);
+
+    await routines().update(
+      { ownerId: alice.id },
+      mine.id,
+      body({ name: 'Mine now', scheduleMode: 'fixed' }),
+    );
+    expect(await shape(source.id)).toEqual(original);
+    expect((await stored(source.id)).name).toBe('Upper / Lower');
+
+    const copied = await shape(mine.id);
+    await routines().update(
+      GLOBAL,
+      source.id,
+      body({ days: [{ dayOfWeek: 2, lines: [line()] }] }),
+    );
+    expect(await shape(mine.id)).toEqual(copied);
+  });
+
+  it("offers only live global routines, never Just WODs or anyone's own", async () => {
+    await upsertJustWods(testPrisma());
+    const alice = await createUser();
+    const bob = await createUser();
+    const live = await routines().create(GLOBAL, body({ name: 'Live' }));
+    const retired = await routines().create(GLOBAL, body({ name: 'Retired' }));
+    await routines().archive(GLOBAL, retired.id);
+    const alices = await routines().create(
+      { ownerId: alice.id },
+      body({ name: 'Alices' }),
+    );
+    const bobs = await routines().create(
+      { ownerId: bob.id },
+      body({ name: 'Bobs' }),
+    );
+
+    expect((await routines().listCopyable()).map((r) => r.id)).toEqual([
+      live.id,
+    ]);
+
+    for (const id of [retired.id, alices.id, bobs.id, DEFAULT_PLAN_ID]) {
+      await expect(routines().getForCopy(id)).rejects.toThrow(
+        NotFoundException,
+      );
+    }
+  });
+
+  it("makes an admin's copy personal, and publishable once renamed", async () => {
+    const admin = await createUser();
+    const source = await routines().create(GLOBAL, body());
+
+    const mine = await copy(admin.id, source.id);
+    expect((await stored(mine.id)).ownerId).toBe(admin.id);
+
+    await expect(routines().promote(admin.id, mine.id)).rejects.toThrow(
+      ConflictException,
+    );
+    await routines().update(
+      { ownerId: admin.id },
+      mine.id,
+      body({ name: 'Upper / Lower II' }),
+    );
+    await expect(routines().promote(admin.id, mine.id)).resolves.toMatchObject({
+      id: mine.id,
+    });
+  });
+});
