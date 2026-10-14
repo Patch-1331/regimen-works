@@ -92,6 +92,18 @@ describe("parsePastedRoutine", () => {
     expect(routine.days[1].lines.map((l) => l.name)).toEqual(["Barbell Row"]);
   });
 
+  it("names a day from what its heading says after the day (DN-155)", () => {
+    const routine = parsePastedRoutine(
+      "Monday — Chest and Triceps\nDips 3x8\nTue: Legs\nLeg Press 3x10\nWednesday\nPlank 3x60s\nDay 2 - Back\nBarbell Row 5x5",
+    );
+    expect(routine.days.map((d) => d.name)).toEqual([
+      "Chest and Triceps",
+      "Legs",
+      null,
+      "Back",
+    ]);
+  });
+
   it("reads Day N headings as any days, in order", () => {
     const routine = parsePastedRoutine("Day 1\nDips 3x8\nDay 2 - Legs\nLeg Press 3x10");
     expect(routine.scheduleMode).toBe("flexible");
@@ -109,6 +121,7 @@ describe("parsePastedRoutine", () => {
     const routine = parsePastedRoutine("Dips 3x8\nLeg Press 3x10");
     expect(routine.scheduleMode).toBe("flexible");
     expect(routine.days).toHaveLength(1);
+    expect(routine.days[0]).toMatchObject({ heading: null, name: null });
     expect(routine.days[0].lines).toHaveLength(2);
   });
 

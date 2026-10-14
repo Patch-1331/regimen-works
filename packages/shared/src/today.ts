@@ -62,6 +62,8 @@ export const todayPlanSchema = z.object({
   totalWeeks: z.number().int().positive().nullable(),
   /** This week's label, e.g. "Deload". Null where the week has nothing to say beyond its number. */
   weekLabel: z.string().nullable(),
+  /** Today's day's own name, e.g. "Chest and Triceps" (DN-155). Null where it has none. */
+  dayLabel: z.string().nullable(),
   /**
    * What the program makes of today. Null when the program is running but
    * authors nothing for this weekday — `resolveSlotForDate`'s `unscheduled`,

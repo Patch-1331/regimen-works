@@ -312,6 +312,7 @@ export function todayPlan(overrides: Partial<TodayPlan> = {}): TodayPlan {
     week: 2,
     totalWeeks: 6,
     weekLabel: null,
+    dayLabel: null,
     slotKind: "wod_generated",
     ...overrides,
   };

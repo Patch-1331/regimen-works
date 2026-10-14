@@ -73,6 +73,18 @@ describe("the program strip", () => {
     expect(await screen.findByText(/· DELOAD/)).toBeInTheDocument();
   });
 
+  it("adds the day's own name, when the routine gave it one (DN-155)", async () => {
+    todayIs({
+      plan: fixtures.todayPlan({ weekLabel: "Deload", dayLabel: "Chest and Triceps" }),
+    });
+
+    renderRoute("/");
+
+    expect(
+      await screen.findByText(/· DELOAD · CHEST AND TRICEPS$/),
+    ).toBeInTheDocument();
+  });
+
   it("says nothing for an athlete on Just WODs", async () => {
     // A real enrollment, and deliberately not a program: it is the absence of
     // programming, so a strip naming it would be describing a choice the

@@ -11,6 +11,7 @@ function slot(rests: (number | null)[]): ProgramSlot {
     dayOfWeek: 1,
     priority: 0,
     kind: rests.length > 0 ? 'movements' : 'wod_generated',
+    label: null,
     wodId: null,
     pattern: null,
     wodType: null,

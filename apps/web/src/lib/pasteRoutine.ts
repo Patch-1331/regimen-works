@@ -92,6 +92,10 @@ export function toPastedDraft(
   lines: ReadBackLine[],
 ): RoutineDraft {
   const days: RoutineDraft["days"] = {};
+  const labels: RoutineDraft["labels"] = {};
+  routine.days.forEach((d, i) => {
+    if (d.name) labels[d.dayOfWeek ?? IN_ORDER[i]] = d.name.slice(0, 40);
+  });
   for (const l of lines) {
     const choice = choiceOf(l);
     if (l.leftOut || !choice) continue;
@@ -119,5 +123,11 @@ export function toPastedDraft(
           }));
     days[weekday] = [...(days[weekday] ?? []), ...out];
   }
-  return { name: "", summary: "", scheduleMode: routine.scheduleMode, days };
+  return {
+    name: "",
+    summary: "",
+    scheduleMode: routine.scheduleMode,
+    days,
+    labels,
+  };
 }

@@ -22,6 +22,7 @@ function slot(overrides: Partial<ProgramSlot> = {}): ProgramSlot {
     dayOfWeek: 1,
     priority: 0,
     kind: 'wod_generated',
+    label: null,
     wodId: null,
     pattern: null,
     wodType: null,
@@ -519,6 +520,28 @@ describe('resolveProgramDay', () => {
       expect(day).toMatchObject({
         day: { weekLabel: 'Deload', totalWeeks: 2 },
       });
+    });
+
+    it('carries the day’s own name, and none on a day off (DN-155)', () => {
+      const named = program({
+        scheduleMode: 'fixed',
+        weeks: 1,
+        authoredWeeks: [
+          {
+            order: 0,
+            phase: 'core',
+            label: null,
+            slots: [slot({ dayOfWeek: 1, label: 'Chest and Triceps' })],
+          },
+        ],
+      });
+
+      expect(resolveProgramDay(named, EVERY_DAY, MONDAY, [])).toMatchObject({
+        day: { dayLabel: 'Chest and Triceps' },
+      });
+      expect(
+        resolveProgramDay(named, EVERY_DAY, '2026-09-15', []),
+      ).toMatchObject({ day: { dayLabel: null } });
     });
 
     it('cycles the authored weeks of an open-ended run rather than running out', () => {

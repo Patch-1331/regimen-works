@@ -50,6 +50,8 @@ export type ProgramSlot = {
    */
   priority: number;
   kind: string;
+  /** The day's own name, from a routine (DN-155). Null on most days. */
+  label: string | null;
   wodId: string | null;
   pattern: string | null;
   wodType: string | null;
@@ -104,6 +106,12 @@ export type ProgramDayContext = {
   week: number;
   totalWeeks: number | null;
   weekLabel: string | null;
+  /**
+   * The name of the day the program makes of today, e.g. "Chest and
+   * Triceps" (DN-155). Null where the day has none, and wherever there is
+   * no authored day to name: a day off, or a day beside the program.
+   */
+  dayLabel: string | null;
   /**
    * What the program makes of today, or null when it makes nothing of it:
    * either the week authors no slot for this weekday, or the program is
@@ -230,7 +238,7 @@ export function resolveProgramDay(
       // have authored here is being trained on another day, and recording it
       // against a rest day would have it counted twice.
       kind: 'rest',
-      day: { ...base, slotKind: null, planSlotId: null },
+      day: { ...base, slotKind: null, planSlotId: null, dayLabel: null },
     };
   }
 
@@ -243,12 +251,17 @@ export function resolveProgramDay(
     // program rather than a day of it.
     return {
       kind: 'generated',
-      day: { ...base, slotKind: null, planSlotId: null },
+      day: { ...base, slotKind: null, planSlotId: null, dayLabel: null },
       constraints: UNCONSTRAINED,
     };
   }
 
-  const day = { ...base, slotKind: slot.kind, planSlotId: slot.id };
+  const day = {
+    ...base,
+    slotKind: slot.kind,
+    planSlotId: slot.id,
+    dayLabel: slot.label,
+  };
 
   if (slot.kind === 'rest') return { kind: 'rest', day };
 

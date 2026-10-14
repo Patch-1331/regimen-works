@@ -854,6 +854,8 @@ function ProgramStrip({ plan, date }: { plan: TodayPlan; date: string }) {
     // The authored week's own name, when it has one to add — "Deload" is the
     // part of today an athlete most wants to know before they start.
     ...(plan.weekLabel ? [plan.weekLabel.toUpperCase()] : []),
+    // And the day's, from a routine that names its days (DN-155).
+    ...(plan.dayLabel ? [plan.dayLabel.toUpperCase()] : []),
   ];
   return (
     <p

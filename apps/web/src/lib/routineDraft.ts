@@ -30,6 +30,11 @@ export type RoutineDraft = {
   scheduleMode: CreateRoutine["scheduleMode"];
   /** Weekday → its lines. A weekday with no lines is a rest day. */
   days: Partial<Record<number, DraftLine[]>>;
+  /**
+   * Weekday → the day's own name, e.g. "Chest and Triceps" (DN-155). Kept
+   * apart from the lines: a name is wording, and a rest day's is not saved.
+   */
+  labels: Partial<Record<number, string>>;
 };
 
 let seq = 0;
@@ -40,6 +45,7 @@ export const EMPTY_ROUTINE: RoutineDraft = {
   summary: "",
   scheduleMode: "flexible",
   days: {},
+  labels: {},
 };
 
 export function blankLine(): DraftLine {
@@ -111,6 +117,7 @@ export function toCreateRoutine(draft: RoutineDraft): CreateRoutine {
     scheduleMode: draft.scheduleMode,
     days: trainingDays(draft).map((dayOfWeek) => ({
       dayOfWeek,
+      ...dayLabel(draft, dayOfWeek),
       lines: (draft.days[dayOfWeek] ?? []).map((line) => ({
         movementGroup: line.exerciseId ? null : line.movementGroup,
         exerciseId: line.exerciseId,
@@ -122,6 +129,12 @@ export function toCreateRoutine(draft: RoutineDraft): CreateRoutine {
       })),
     })),
   };
+}
+
+/** A day's name for the body, left out where it has none. */
+function dayLabel(draft: RoutineDraft, day: number): { label?: string } {
+  const label = draft.labels[day]?.trim();
+  return label ? { label } : {};
 }
 
 /**
@@ -149,21 +162,31 @@ export function fromRoutine(routine: CreateRoutine): RoutineDraft {
         })),
       ]),
     ),
+    labels: Object.fromEntries(
+      routine.days.flatMap((day) => (day.label ? [[day.dayOfWeek, day.label]] : [])),
+    ),
   };
 }
 
 /**
  * Whether the draft's week differs from `saved`'s -- the days, their lines,
- * or when they are trained. Name and summary are wording, not the week
- * (ADR 0006, decision 6), and never make a save a new version.
+ * or when they are trained. Name, summary and the days' names are wording,
+ * not the week (ADR 0006, decision 6; DN-155), and never make a save a new
+ * version.
  */
 export function changesWeek(draft: RoutineDraft, saved: CreateRoutine): boolean {
   const week = (r: CreateRoutine) =>
-    JSON.stringify({ scheduleMode: r.scheduleMode, days: r.days });
+    JSON.stringify({
+      scheduleMode: r.scheduleMode,
+      days: r.days.map(({ dayOfWeek, lines }) => ({ dayOfWeek, lines })),
+    });
   return week(toCreateRoutine(draft)) !== week(saved);
 }
 
-/** Copies `from`'s lines onto each of `to`, replacing what they held. */
+/**
+ * Copies `from`'s lines onto each of `to`, replacing what they held. Not the
+ * name: Monday's "Push" copied to Thursday is still Thursday.
+ */
 export function copyDay(
   draft: RoutineDraft,
   from: number,

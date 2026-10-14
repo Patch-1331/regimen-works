@@ -39,6 +39,12 @@ export type PastedLine = {
 export type PastedDay = {
   /** The heading as pasted, or null for lines that came before any heading. */
   heading: string | null;
+  /**
+   * What the heading calls the day once the day itself is cut away (DN-155):
+   * "Monday — Chest and Triceps" is "Chest and Triceps". Null for a bare
+   * "Monday" or "Day 2", and for lines that came before any heading.
+   */
+  name: string | null;
   /** 0 = Sunday. Null when the routine is an order rather than a schedule. */
   dayOfWeek: number | null;
   lines: PastedLine[];
@@ -80,7 +86,13 @@ const WEEKDAY_HEADING = new RegExp(
   `^(${WEEKDAY_NAMES.flat().join("|")})\\b(?!\\s*\\d+\\s*[x×])`,
   "i",
 );
-const ORDER_HEADING = /^day\s*\d+\b/i;
+const ORDER_HEADING = /^day\s{0,3}\d{1,2}\b/i;
+
+/** The heading after its day: separators and spaces off the front. */
+function dayName(heading: string, day: string): string | null {
+  const name = heading.slice(day.length).replace(/^[\s—–:\-.,|]+/, "").trim();
+  return name === "" ? null : name;
+}
 
 /** "Barbell Squat 5x5 @ 225 rest 90s" → its movement, schemes, rest and load. */
 export function parsePastedLine(text: string): PastedLine {
@@ -130,19 +142,26 @@ export function parsePastedRoutine(text: string): PastedRoutine {
       const word = weekday[1].toLowerCase();
       days.push({
         heading: line,
+        name: dayName(line, weekday[0]),
         dayOfWeek: WEEKDAY_NAMES.findIndex((names) => names.includes(word)),
         lines: [],
       });
       continue;
     }
-    if (ORDER_HEADING.test(line)) {
+    const order = line.match(ORDER_HEADING);
+    if (order) {
       pinned = false;
-      days.push({ heading: line, dayOfWeek: null, lines: [] });
+      days.push({
+        heading: line,
+        name: dayName(line, order[0]),
+        dayOfWeek: null,
+        lines: [],
+      });
       continue;
     }
     if (days.length === 0) {
       pinned = false;
-      days.push({ heading: null, dayOfWeek: null, lines: [] });
+      days.push({ heading: null, name: null, dayOfWeek: null, lines: [] });
     }
     days[days.length - 1].lines.push(parsePastedLine(line));
   }
