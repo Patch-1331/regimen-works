@@ -67,6 +67,12 @@ describe("parsePastedLine", () => {
     expect(parsePastedLine("Plank")).toMatchObject({ name: "Plank", schemes: [] });
   });
 
+  it("reads a long run of digits quickly, as no scheme", () => {
+    const started = performance.now();
+    expect(parsePastedLine("0".repeat(50_000)).schemes).toEqual([]);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
   it("ignores a list marker in front of the movement", () => {
     expect(parsePastedLine("- Plank 3x60s").name).toBe("Plank");
     expect(parsePastedLine("2. Plank 3x60s").name).toBe("Plank");
@@ -134,6 +140,14 @@ describe("matchPastedMovement", () => {
     });
   });
 
+  it("matches a plural made with -es", () => {
+    const press = ex("Barbell press", ["barbell"]);
+    expect(matchPastedMovement("Barbell Presses", [press])).toMatchObject({
+      exercise: press,
+      guessed: true,
+    });
+  });
+
   it("lets the text drop the grip or posture the library names", () => {
     const shrug = ex("Dumbbell shrug", ["dumbbell"]);
     expect(matchPastedMovement("Seated Dumbbell Shrug", [shrug])).toMatchObject({
@@ -149,6 +163,9 @@ describe("matchPastedMovement", () => {
     const medium = ex("Barbell bench press - medium grip", ["barbell"]);
     const close = ex("Close-grip barbell bench press", ["barbell"]);
     expect(matchPastedMovement("Barbell Bench Press", [close, medium])).toMatchObject({
+      exercise: medium,
+    });
+    expect(matchPastedMovement("Barbell Bench Press", [medium, close])).toMatchObject({
       exercise: medium,
     });
   });

@@ -57,9 +57,14 @@ export type PastedRoutine = {
 // The parser
 // ---------------------------------------------------------------------------
 
-const SCHEME = /(\d+)\s*[x×]\s*(failure|\d+\s*s(?:ec(?:ond)?s?)?\b|\d+(?:\s*[-–]\s*\d+)?)/gi;
-const LOAD = /@\s*(\d[\d.]*\s*(?:kg|lbs?)?)/i;
-const REST = /\brest\s*(\d+)\s*s?/i;
+// Counts are bounded to four digits, and a scheme starts where a number does
+// (not partway into one): an unbounded \d+ tried at every position of a long
+// run of digits is quadratic, and pasted text is anyone's.
+const SCHEME_START = /(?<!\d)\d{1,4}\s{0,3}[x×]\s{0,3}(?:failure|\d)/i;
+const SCHEME =
+  /(?<!\d)(\d{1,4})\s{0,3}[x×]\s{0,3}(failure|\d{1,4}\s{0,3}s(?:ec(?:ond)?s?)?\b|\d{1,4}(?:\s{0,3}[-–]\s{0,3}\d{1,4})?)/gi;
+const LOAD = /@\s{0,3}(\d{1,5}(?:\.\d{1,2})?\s{0,3}(?:kg|lbs?)?)/i;
+const REST = /\brest\s{0,3}(\d{1,4})\s?s?/i;
 const LIST_MARKER = /^(?:[-*•]|\d+[.)])\s+/;
 
 const WEEKDAY_NAMES = [
@@ -86,7 +91,7 @@ export function parsePastedLine(text: string): PastedLine {
 
   // The name ends where the prescription starts: the first scheme, load or
   // rest, whichever comes first.
-  const ends = [/\d+\s*[x×]\s*(?:failure|\d)/i, /@/, REST]
+  const ends = [SCHEME_START, /@/, REST]
     .map((re) => body.search(re))
     .filter((i) => i >= 0);
   const name = body.slice(0, ends.length ? Math.min(...ends) : undefined).trim();
