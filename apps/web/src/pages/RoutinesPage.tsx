@@ -136,6 +136,12 @@ export function RoutinesPage() {
       >
         + New routine
       </Link>
+      <Link
+        to="/library/routines/paste"
+        className="mt-2 block text-center text-xs text-[var(--ink-soft)] underline"
+      >
+        Or paste one in from elsewhere
+      </Link>
 
       {error && (
         <p className="mt-4 text-sm text-[var(--danger)]">
