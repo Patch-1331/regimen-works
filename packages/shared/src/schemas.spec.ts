@@ -1145,6 +1145,7 @@ describe("todayResponseSchema", () => {
     planId: "plan-1",
     planName: "Pull-Up Builder",
     completedAt: "2026-09-15T09:00:00.000Z",
+    canRunAgain: true,
     summary: {
       weeks: 6,
       sessions: 24,
@@ -2146,6 +2147,7 @@ describe("completedProgramSchema", () => {
     planId: "plan-1",
     planName: "Pull-Up Builder",
     completedAt: "2026-09-15T09:00:00.000Z",
+    canRunAgain: true,
     summary: {
       weeks: 6,
       sessions: 24,
@@ -2160,6 +2162,11 @@ describe("completedProgramSchema", () => {
       ],
     },
     ...overrides,
+  });
+
+  it("refuses a program that does not say whether it can run again (DN-153)", () => {
+    const { canRunAgain: _omitted, ...rest } = program();
+    expect(completedProgramSchema.safeParse(rest).success).toBe(false);
   });
 
   it("parses a finished program", () => {

@@ -206,6 +206,29 @@ describe("the completion card", () => {
     );
   });
 
+  it("does not offer to run again a routine that has been archived", async () => {
+    // The API refuses it (DN-144), so the button would only be a failing tap
+    // (DN-153). The wizard and dismiss stay, so there is still a way forward.
+    todayIs({
+      completedProgram: fixtures.completedProgram({ canRunAgain: false }),
+    });
+
+    renderRoute("/");
+
+    expect(
+      await screen.findByText("This routine has been retired."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /run it again/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /see what.s next/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /dismiss/i }),
+    ).toBeInTheDocument();
+  });
+
   it("sends the athlete to the wizard to choose something else", async () => {
     const writes = recordingWrites();
     todayIs({ completedProgram: fixtures.completedProgram() });
