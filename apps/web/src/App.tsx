@@ -16,6 +16,7 @@ import { WarmupPage } from "./pages/WarmupPage";
 import { CooldownPage } from "./pages/CooldownPage";
 import { SetupPage } from "./pages/SetupPage";
 import { RoutinesPage } from "./pages/RoutinesPage";
+import { PasteRoutinePage } from "./pages/PasteRoutinePage";
 import { RoutineEditorPage } from "./pages/RoutineEditorPage";
 
 function TabbedLayout() {
@@ -122,6 +123,11 @@ function App() {
           <Route
             path="/library/routines/new"
             element={<RoutineEditorPage />}
+          />
+          {/* Pasting one in (DN-152) hands its draft to the sheet above. */}
+          <Route
+            path="/library/routines/paste"
+            element={<PasteRoutinePage />}
           />
           <Route
             path="/library/routines/:id/edit"
