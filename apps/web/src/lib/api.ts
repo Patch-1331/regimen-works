@@ -43,6 +43,7 @@ import type {
   GlobalRoutineSummary,
   RoutineArchiveResult,
   RoutineSaveResult,
+  RoutineExport,
   RoutineSummary,
 } from "@regimen-works/shared";
 
@@ -456,6 +457,12 @@ export const api = {
    * Publishes one of the admin's own routines to everyone (DN-148), in place
    * and for good: there is no way back to personal.
    */
+  /**
+   * The ticked global routines as one export file (DN-150). Admin-only; a
+   * POST because the ticks are its body, though it changes nothing.
+   */
+  exportRoutines: (ids: string[]) =>
+    postJson<RoutineExport>("/admin/routines/export", { ids }),
   promoteRoutine: (id: string) =>
     postJson<RoutineSummary>(`${routinePath("global", id)}/promote`),
 

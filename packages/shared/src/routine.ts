@@ -187,3 +187,37 @@ export function defaultRoutineSummary(
   );
   return `Your routine, ${mondayFirst.map((d) => names[d]).join(" · ")}`;
 }
+
+/**
+ * A file of global routines (DN-150, ADR 0006 decision 8): how the global
+ * library is rebuilt on a fresh database or after a mistake. Each entry is
+ * the create body itself, never database rows, so an export loads through
+ * exactly the rules the editor saves by.
+ *
+ * `routines` is checked entry by entry when the file is loaded, so a bad
+ * one can be named; the envelope only says what the file is.
+ */
+export const ROUTINE_EXPORT_FORMAT = "regimen-works/routines";
+export const ROUTINE_EXPORT_VERSION = 1;
+
+export const routineExportEnvelopeSchema = z.object({
+  format: z.literal(ROUTINE_EXPORT_FORMAT, {
+    error: "this is not a Regimen Works routine export",
+  }),
+  version: z.literal(ROUTINE_EXPORT_VERSION, {
+    error: `this app reads routine exports of version ${ROUTINE_EXPORT_VERSION}`,
+  }),
+  routines: z.array(z.unknown()).min(1, "the file holds no routines"),
+});
+
+export type RoutineExport = {
+  format: typeof ROUTINE_EXPORT_FORMAT;
+  version: typeof ROUTINE_EXPORT_VERSION;
+  routines: CreateRoutine[];
+};
+
+/** Which global routines to export: an admin's ticks on their list. */
+export const exportRoutinesSchema = z.strictObject({
+  ids: z.array(z.string().min(1)).min(1, "tick at least one routine"),
+});
+export type ExportRoutines = z.infer<typeof exportRoutinesSchema>;

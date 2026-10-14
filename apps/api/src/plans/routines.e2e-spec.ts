@@ -6,6 +6,7 @@ import {
   DEFAULT_PLAN_ID,
   editableRoutineSchema,
   globalRoutineSummarySchema,
+  ROUTINE_EXPORT_FORMAT,
   routineArchiveResultSchema,
   routineSaveResultSchema,
   routineSummarySchema,
@@ -298,6 +299,7 @@ describe('the global library (DN-148)', () => {
       ['post', `/${created.id}/archive`],
       ['post', `/${created.id}/unarchive`],
       ['post', `/${created.id}/promote`],
+      ['post', '/export'],
     ];
     for (const [method, path] of routes) {
       await admin(method, path, ALICE).send(routine).expect(403);
@@ -428,5 +430,52 @@ describe('copying a global routine (DN-149)', () => {
       await library(ALICE, `/${id}`).expect(404);
     }
     expect((await library(ALICE).expect(200)).body).toEqual([]);
+  });
+});
+
+describe('exporting global routines (DN-150)', () => {
+  function exporting(user: string, ids: string[]) {
+    return http()
+      .post('/admin/routines/export')
+      .set(...asUser(user))
+      .send({ ids });
+  }
+
+  async function publish(name: string) {
+    const res = await http()
+      .post('/admin/routines')
+      .set(...asUser(ADMIN))
+      .send({ ...routine, name })
+      .expect(201);
+    return routineSummarySchema.parse(res.body);
+  }
+
+  it('gives an admin the ticked routines as create bodies in one file', async () => {
+    const a = await publish('Alpha');
+    const b = await publish('Beta');
+
+    const res = await exporting(ADMIN, [b.id, a.id]).expect(200);
+
+    expect(res.body).toEqual({
+      format: ROUTINE_EXPORT_FORMAT,
+      version: 1,
+      routines: [
+        { ...routine, name: 'Alpha' },
+        { ...routine, name: 'Beta' },
+      ],
+    });
+  });
+
+  it('is closed to an athlete', async () => {
+    const a = await publish('Alpha');
+    await exporting(ALICE, [a.id]).expect(403);
+  });
+
+  it("will not export a personal routine, anyone's, or Just WODs", async () => {
+    const alices = await author(ALICE);
+    const admins = await author(ADMIN);
+    for (const id of [alices.id, admins.id, DEFAULT_PLAN_ID]) {
+      await exporting(ADMIN, [id]).expect(404);
+    }
   });
 });

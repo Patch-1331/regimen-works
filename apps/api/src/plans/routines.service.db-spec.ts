@@ -4,7 +4,14 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { DEFAULT_PLAN_ID } from '@regimen-works/shared';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  DEFAULT_PLAN_ID,
+  ROUTINE_EXPORT_FORMAT,
+  ROUTINE_EXPORT_VERSION,
+} from '@regimen-works/shared';
 import type { PrismaService } from '../prisma/prisma.service';
 import { testPrisma } from '../test-support/database';
 import {
@@ -15,6 +22,7 @@ import {
 import { SetupService } from '../setup/setup.service';
 import { loadActiveProgram } from './active-program';
 import { upsertJustWods } from './just-wods';
+import { failureLines, importRoutinesFile } from './import-routines';
 import { ROUTINE_WEEKS, RoutinesService } from './routines.service';
 
 /**
@@ -949,29 +957,29 @@ describe('the global tier (DN-148)', () => {
   });
 });
 
+/** Everything a routine is stored as, minus the ids that make it a row. */
+async function shape(id: string) {
+  const plan = await stored(id);
+  return plan.weeks.map((week) => ({
+    order: week.order,
+    phase: week.phase,
+    slots: [...week.slots]
+      .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
+      .map((slot) => ({
+        dayOfWeek: slot.dayOfWeek,
+        kind: slot.kind,
+        priority: slot.priority,
+        movements: slot.movements.map((movement) => ({
+          ...movement,
+          id: undefined,
+          planSlotId: undefined,
+        })),
+      })),
+  }));
+}
+
 describe('copying a global routine (DN-149)', () => {
   const GLOBAL = { ownerId: null };
-
-  /** Everything a routine is stored as, minus the ids that make it a row. */
-  async function shape(id: string) {
-    const plan = await stored(id);
-    return plan.weeks.map((week) => ({
-      order: week.order,
-      phase: week.phase,
-      slots: [...week.slots]
-        .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
-        .map((slot) => ({
-          dayOfWeek: slot.dayOfWeek,
-          kind: slot.kind,
-          priority: slot.priority,
-          movements: slot.movements.map((movement) => ({
-            ...movement,
-            id: undefined,
-            planSlotId: undefined,
-          })),
-        })),
-    }));
-  }
 
   async function copy(ownerId: string, sourceId: string) {
     const prefill = await routines().getForCopy(sourceId);
@@ -1078,5 +1086,191 @@ describe('copying a global routine (DN-149)', () => {
     await expect(routines().promote(admin.id, mine.id)).resolves.toMatchObject({
       id: mine.id,
     });
+  });
+});
+
+describe('exporting and importing global routines (DN-150)', () => {
+  const GLOBAL = { ownerId: null };
+
+  const envelope = (entries: unknown[]) => ({
+    format: ROUTINE_EXPORT_FORMAT,
+    version: ROUTINE_EXPORT_VERSION,
+    routines: entries,
+  });
+
+  /** What an import refused, as the command would print it. */
+  async function refusal(file: unknown) {
+    const error: unknown = await routines()
+      .importGlobal(file)
+      .then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+    expect(error).toBeDefined();
+    return failureLines(error);
+  }
+
+  async function globalCount() {
+    return testPrisma().plan.count({ where: { ownerId: null } });
+  }
+
+  it('round-trips: exported routines import into an empty library as they were', async () => {
+    const chin = await createExercise({ name: 'Chin-up' });
+    const pull = await routines().create(
+      GLOBAL,
+      body({
+        name: 'Pull focus',
+        summary: 'Hang, pull, repeat',
+        scheduleMode: 'fixed',
+        days: [
+          {
+            dayOfWeek: 2,
+            lines: [line({ movementGroup: null, exerciseId: chin.id }), line()],
+          },
+        ],
+      }),
+    );
+    const legs = await routines().create(GLOBAL, body({ name: 'Legs' }));
+    await routines().archive(GLOBAL, legs.id);
+    const before = [await shape(legs.id), await shape(pull.id)];
+
+    const file = await routines().exportGlobal({ ids: [pull.id, legs.id] });
+    expect(file).toMatchObject({
+      format: ROUTINE_EXPORT_FORMAT,
+      version: ROUTINE_EXPORT_VERSION,
+    });
+    expect(file.routines.map((r) => r.name)).toEqual(['Legs', 'Pull focus']);
+
+    await testPrisma().plan.deleteMany({ where: { ownerId: null } });
+    // Through JSON, as the file travels.
+    const created = await routines().importGlobal(
+      JSON.parse(JSON.stringify(file)),
+    );
+
+    expect(created.map((r) => [r.name, r.archived])).toEqual([
+      ['Legs', false],
+      ['Pull focus', false],
+    ]);
+    expect(await Promise.all(created.map((r) => shape(r.id)))).toEqual(before);
+    for (const r of created) {
+      expect((await stored(r.id)).ownerId).toBeNull();
+    }
+    expect((await stored(created[1].id)).summary).toBe('Hang, pull, repeat');
+  });
+
+  it('exports only global routines, and never Just WODs', async () => {
+    await upsertJustWods(testPrisma());
+    const alice = await createUser();
+    const live = await routines().create(GLOBAL, body({ name: 'Live' }));
+    const mine = await routines().create({ ownerId: alice.id }, body());
+
+    for (const ids of [[live.id, mine.id], [DEFAULT_PLAN_ID], ['nope']]) {
+      await expect(routines().exportGlobal({ ids })).rejects.toThrow(
+        NotFoundException,
+      );
+    }
+    await expect(routines().exportGlobal({ ids: [] })).rejects.toThrow(
+      BadRequestException,
+    );
+  });
+
+  it("refuses an entry that breaks the editor's rules, names it, and loads nothing", async () => {
+    const chin = await createExercise({ name: 'Chin-up' });
+    const lines = await refusal(
+      envelope([
+        body({ name: 'Fine' }),
+        body({
+          name: 'Both',
+          days: [{ dayOfWeek: 1, lines: [line({ exerciseId: chin.id })] }],
+        }),
+      ]),
+    );
+
+    expect(lines.length).toBeGreaterThan(0);
+    for (const l of lines) expect(l).toMatch(/^Routine 2 \(Both\): /);
+    expect(await globalCount()).toBe(0);
+  });
+
+  it('refuses a live name clash without overwriting, and rolls back what came before it', async () => {
+    const existing = await routines().create(GLOBAL, body({ name: 'Taken' }));
+    const original = await shape(existing.id);
+
+    const lines = await refusal(
+      envelope([
+        body({ name: 'New one' }),
+        body({ name: 'Taken', days: [{ dayOfWeek: 6, lines: [line()] }] }),
+      ]),
+    );
+
+    expect(lines).toEqual([
+      'Routine 2 (Taken): There is already a global routine called "Taken"',
+    ]);
+    expect(await globalCount()).toBe(1);
+    expect(await shape(existing.id)).toEqual(original);
+  });
+
+  it('refuses two entries with one name, the second named', async () => {
+    const lines = await refusal(
+      envelope([body({ name: 'Twice' }), body({ name: 'Twice' })]),
+    );
+    expect(lines).toEqual([
+      'Routine 2 (Twice): There is already a global routine called "Twice"',
+    ]);
+    expect(await globalCount()).toBe(0);
+  });
+
+  it('refuses a routine naming a movement only one athlete has', async () => {
+    const alice = await createUser();
+    const towel = await createExercise({
+      name: 'Towel row',
+      ownerId: alice.id,
+    });
+    const lines = await refusal(
+      envelope([
+        body({
+          days: [
+            {
+              dayOfWeek: 1,
+              lines: [line({ movementGroup: null, exerciseId: towel.id })],
+            },
+          ],
+        }),
+      ]),
+    );
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^Routine 1 \(Upper \/ Lower\): /);
+    expect(await globalCount()).toBe(0);
+  });
+
+  it('refuses a file that is not an export, or from another version', async () => {
+    expect(await refusal([body()])).not.toEqual([]);
+    expect(await refusal({ ...envelope([body()]), version: 2 })).toEqual([
+      `version: this app reads routine exports of version ${ROUTINE_EXPORT_VERSION}`,
+    ]);
+    expect(await refusal(envelope([]))).toEqual([
+      'routines: the file holds no routines',
+    ]);
+    expect(await globalCount()).toBe(0);
+  });
+
+  it('reads the file the command is given, and says when it is not JSON', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'routines-'));
+    const good = join(dir, 'good.json');
+    const bad = join(dir, 'bad.json');
+    await writeFile(
+      good,
+      JSON.stringify(envelope([body({ name: 'From disk' })])),
+    );
+    await writeFile(bad, 'not json');
+
+    const created = await importRoutinesFile(routines(), good);
+    expect(created.map((r) => r.name)).toEqual(['From disk']);
+
+    await expect(importRoutinesFile(routines(), bad)).rejects.toThrow(
+      `${bad} is not JSON. Is it a routine export?`,
+    );
+    await expect(
+      importRoutinesFile(routines(), join(dir, 'missing.json')),
+    ).rejects.toThrow(/^Can't read /);
   });
 });

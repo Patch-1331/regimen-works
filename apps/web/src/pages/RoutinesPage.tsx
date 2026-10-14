@@ -6,6 +6,7 @@ import { ApiError, api, type LibraryTier } from "../lib/api";
 import { LibraryNav } from "../components/LibraryNav";
 import { SectionLabel } from "../components/Panel";
 import { WEEKDAYS } from "../lib/weekdays";
+import { saveJson } from "../lib/download";
 
 /**
  * "My routines" (DN-145): what this athlete has written, live first and
@@ -275,6 +276,9 @@ export function RoutinesPage() {
  * The admin's half (DN-148): every global routine, live then archived. Just
  * WODs is listed so the library reads whole, marked built in and offered
  * nothing -- every route refuses it anyway.
+ *
+ * Ticking routines and exporting them saves one file (DN-150), which
+ * `npm run routines:import` in the API loads back into an empty library.
  */
 function GlobalLibrary({
   routines,
@@ -289,6 +293,28 @@ function GlobalLibrary({
   onRemove: (id: string) => void;
   onRestore: (id: string) => void;
 }) {
+  const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
+  const exportable = routines?.filter((r) => !r.builtIn) ?? [];
+  // A routine that has left the list since it was ticked is not exported.
+  const chosen = exportable.filter((r) => ticked.has(r.id)).map((r) => r.id);
+  const exporting = useMutation({
+    mutationFn: () => api.exportRoutines(chosen),
+    onSuccess: (file) => {
+      saveJson(
+        `regimen-works-routines-${new Date().toISOString().slice(0, 10)}.json`,
+        file,
+      );
+      setTicked(new Set());
+    },
+  });
+  const tick = (id: string, on: boolean) =>
+    setTicked((current) => {
+      const next = new Set(current);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+
   return (
     <section aria-label="Global library">
       <SectionLabel>GLOBAL LIBRARY</SectionLabel>
@@ -301,10 +327,38 @@ function GlobalLibrary({
           Couldn't load the global library.
         </p>
       )}
+      {exportable.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <button
+            type="button"
+            disabled={chosen.length === 0 || exporting.isPending}
+            onClick={() => exporting.mutate()}
+            className="text-[11px] uppercase tracking-[0.14em] text-[var(--glow)] disabled:opacity-50"
+            style={{ fontFamily: "var(--font-mono)" }}
+          >
+            {chosen.length === 0
+              ? "Tick routines to export"
+              : `Export ${chosen.length} routine${chosen.length === 1 ? "" : "s"}`}
+          </button>
+          {exporting.error && (
+            <span className="text-sm text-[var(--danger)]" role="alert">
+              {messageOf(exporting.error, "Couldn't export the routines.")}
+            </span>
+          )}
+        </div>
+      )}
       {routines && (
         <RoutineList>
           {routines.map((routine) => (
             <RoutineRow key={routine.id} routine={routine}>
+              {!routine.builtIn && (
+                <input
+                  type="checkbox"
+                  aria-label={`Include ${routine.name} in the export`}
+                  checked={ticked.has(routine.id)}
+                  onChange={(e) => tick(routine.id, e.target.checked)}
+                />
+              )}
               {routine.builtIn ? (
                 <span>Built in</span>
               ) : routine.archived ? (
