@@ -206,6 +206,26 @@ describe('EnrollmentsService.cardFor', () => {
     });
   });
 
+  it('says a run on a live plan can be run again', async () => {
+    const user = await createUser();
+    await completedRun(user.id, { planId: (await createPlan()).id });
+
+    await expect(service().cardFor(user.id)).resolves.toMatchObject({
+      canRunAgain: true,
+    });
+  });
+
+  it('says a run on an archived plan cannot be run again', async () => {
+    // runAgain refuses it (DN-144), so the card must not offer it (DN-153).
+    const user = await createUser();
+    const plan = await createPlan({ archivedAt: new Date() });
+    await completedRun(user.id, { planId: plan.id });
+
+    await expect(service().cardFor(user.id)).resolves.toMatchObject({
+      canRunAgain: false,
+    });
+  });
+
   it('offers nothing while the program is still running', async () => {
     const user = await createUser();
     await createEnrollment(user.id);

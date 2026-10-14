@@ -30,7 +30,7 @@ const COMPLETED_FOR_CARD = {
     planId: true,
     completedAt: true,
     summary: true,
-    plan: { select: { name: true } },
+    plan: { select: { name: true, archivedAt: true } },
   },
 } satisfies Prisma.PlanEnrollmentDefaultArgs;
 
@@ -324,6 +324,8 @@ function toCompletedProgram(row: CompletedRow): CompletedProgram | null {
     planId: row.planId,
     planName: row.plan.name,
     completedAt: row.completedAt.toISOString(),
+    // runAgain refuses an archived plan (DN-144); the card asks first (DN-153).
+    canRunAgain: row.plan.archivedAt === null,
     summary: summary.data,
   };
 }

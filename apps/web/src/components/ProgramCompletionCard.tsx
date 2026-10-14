@@ -13,7 +13,9 @@
  *
  * Two offers and no default. "Run it again" is the same program at the same
  * length from today, which needs no questions because none of them have new
- * answers. "See what's next" is the wizard, which is the program picker. And
+ * answers -- and is left out once the routine has been archived, which the
+ * API will not start again (DN-153). "See what's next" is the wizard, which is
+ * the program picker. And
  * dismissing is a third real answer: an athlete who wants neither should be
  * able to say so once and have the screen stay said.
  */
@@ -80,19 +82,27 @@ export function ProgramCompletionCard({ program }: { program: CompletedProgram }
         {summaryText(program)}
       </p>
 
+      {!program.canRunAgain && (
+        <p className="mt-2 text-sm text-[var(--ink-faint)]">
+          This routine has been retired.
+        </p>
+      )}
+
       <div className="mt-4 flex gap-2.5">
-        <button
-          onClick={() => runAgain.mutate()}
-          disabled={busy}
-          className="flex-1 rounded-sm py-2.5 text-center text-xs font-semibold tracking-[0.14em]"
-          style={{
-            fontFamily: "var(--font-mono)",
-            background: "var(--glow)",
-            color: "var(--panel)",
-          }}
-        >
-          RUN IT AGAIN
-        </button>
+        {program.canRunAgain && (
+          <button
+            onClick={() => runAgain.mutate()}
+            disabled={busy}
+            className="flex-1 rounded-sm py-2.5 text-center text-xs font-semibold tracking-[0.14em]"
+            style={{
+              fontFamily: "var(--font-mono)",
+              background: "var(--glow)",
+              color: "var(--panel)",
+            }}
+          >
+            RUN IT AGAIN
+          </button>
+        )}
         <button
           onClick={() => navigate("/setup")}
           disabled={busy}

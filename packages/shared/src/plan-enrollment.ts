@@ -146,6 +146,10 @@ export const completedProgramSchema = z.object({
   planId: z.string(),
   planName: z.string(),
   completedAt: z.string().datetime(),
+  // False once the plan has been archived: the API refuses to run it again
+  // (DN-144), so the card does not offer to (DN-153). A flag rather than the
+  // archive timestamp, which stays server-side.
+  canRunAgain: z.boolean(),
   summary: enrollmentSummarySchema,
 });
 export type CompletedProgram = z.infer<typeof completedProgramSchema>;

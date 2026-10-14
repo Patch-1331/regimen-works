@@ -264,6 +264,7 @@ export function completedProgram(
     planId: "plan-1",
     planName: "Pull-Up Builder",
     completedAt: "2026-09-15T09:00:00.000Z",
+    canRunAgain: true,
     ...overrides,
     summary: {
       weeks: 6,
