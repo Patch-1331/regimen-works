@@ -2,6 +2,10 @@
 
 **Status:** Accepted
 
+> **Vocabulary, since ADR 0009:** this record says *routine* and `Plan` for what the
+> app now calls a **program**. ADR 0009 retired both names. The decisions here stand
+> as written.
+
 ## Context
 
 `Plan.ownerId` has modelled two tiers since DN-15 — null is global, set is the
