@@ -276,7 +276,7 @@ describe("editing a routine (DN-146)", () => {
     renderRoute(`/library/routines/${SAVED.id}/edit`);
 
     expect(await screen.findByRole("status")).toHaveTextContent(
-      /Renaming it changes it for them too/,
+      /Renaming it or its days changes it for them too/,
     );
     expect(screen.getByRole("button", { name: "Save routine" })).toBeEnabled();
   });
@@ -294,6 +294,32 @@ describe("editing a routine (DN-146)", () => {
 
     await screen.findByRole("link", { name: "+ New routine" });
     expect(sent[0].days[0].lines).toHaveLength(2);
+  });
+
+  it("names a day in place, without a new version, once someone runs it (DN-155)", async () => {
+    const sent = editing({
+      hasRuns: true,
+      routine: {
+        ...PULL_DAYS,
+        days: [{ ...PULL_DAYS.days[0], label: "Pull" }],
+      },
+    });
+    renderRoute(`/library/routines/${SAVED.id}/edit`);
+
+    const name = await screen.findByLabelText("Name for Mon");
+    expect(name).toHaveValue("Pull");
+    expect(screen.queryByLabelText("Name for Tue")).not.toBeInTheDocument();
+
+    await userEvent.clear(name);
+    await userEvent.type(name, "Back and Biceps");
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /Renaming it or its days changes it for them too/,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save routine" }));
+
+    await screen.findByRole("link", { name: "+ New routine" });
+    expect(sent[0].days[0]).toMatchObject({ dayOfWeek: 1, label: "Back and Biceps" });
   });
 
   it("will not save an archived routine", async () => {

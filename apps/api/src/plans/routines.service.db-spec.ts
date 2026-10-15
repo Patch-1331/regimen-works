@@ -594,6 +594,150 @@ describe('RoutinesService.update', () => {
   });
 });
 
+/**
+ * A day's own name (DN-155). Wording, like the routine's name: it saves in
+ * place even once someone has started the routine, and never forks it.
+ */
+describe('naming the days of a routine', () => {
+  const named = (labels: Record<number, string | null>) =>
+    body({
+      days: [
+        {
+          dayOfWeek: 1,
+          label: labels[1],
+          lines: [line(), line({ movementGroup: 'push_vertical' })],
+        },
+        {
+          dayOfWeek: 4,
+          label: labels[4],
+          lines: [line({ movementGroup: 'squat' })],
+        },
+      ],
+    });
+
+  const labels = async (id: string) =>
+    Object.fromEntries(
+      (await stored(id)).weeks[0].slots.map((s) => [s.dayOfWeek, s.label]),
+    );
+
+  it('stores each day’s name on its slot, and reads it back', async () => {
+    const alice = await createUser();
+    const sent = named({ 1: 'Upper', 4: null });
+    const routine = await routines().create({ ownerId: alice.id }, sent);
+
+    expect(await labels(routine.id)).toEqual({ 1: 'Upper', 4: null });
+    const { routine: back } = await routines().getForEditing(
+      { ownerId: alice.id },
+      routine.id,
+    );
+    expect(back.days.map((d) => d.label)).toEqual(['Upper', undefined]);
+  });
+
+  it('renames a day in place once someone has started it, never forking', async () => {
+    const alice = await createUser();
+    const routine = await routines().create(
+      { ownerId: alice.id },
+      named({ 1: 'Upper', 4: null }),
+    );
+    await createEnrollment(alice.id, { planId: routine.id });
+    const slotIds = (await stored(routine.id)).weeks[0].slots.map((s) => s.id);
+
+    const saved = await routines().update(
+      { ownerId: alice.id },
+      routine.id,
+      named({ 1: 'Push', 4: 'Legs' }),
+    );
+
+    expect(saved).toMatchObject({ forked: false, routine: { id: routine.id } });
+    expect(await labels(routine.id)).toEqual({ 1: 'Push', 4: 'Legs' });
+    expect((await stored(routine.id)).weeks[0].slots.map((s) => s.id)).toEqual(
+      slotIds,
+    );
+    expect(
+      await testPrisma().plan.count({ where: { ownerId: alice.id } }),
+    ).toBe(1);
+  });
+
+  it('clears a name in place, too', async () => {
+    const alice = await createUser();
+    const routine = await routines().create(
+      { ownerId: alice.id },
+      named({ 1: 'Upper', 4: 'Lower' }),
+    );
+    await createEnrollment(alice.id, { planId: routine.id });
+
+    await routines().update(
+      { ownerId: alice.id },
+      routine.id,
+      named({ 1: null }),
+    );
+
+    expect(await labels(routine.id)).toEqual({ 1: null, 4: null });
+  });
+
+  it('carries the names into a fork of a changed week', async () => {
+    const alice = await createUser();
+    const routine = await routines().create(
+      { ownerId: alice.id },
+      named({ 1: 'Upper', 4: 'Lower' }),
+    );
+    await createEnrollment(alice.id, { planId: routine.id });
+
+    const saved = await routines().update(
+      { ownerId: alice.id },
+      routine.id,
+      body({
+        days: [
+          { dayOfWeek: 1, label: 'Push', lines: [line()] },
+          {
+            dayOfWeek: 4,
+            label: 'Lower',
+            lines: [line({ movementGroup: 'squat' })],
+          },
+        ],
+      }),
+    );
+
+    expect(saved.forked).toBe(true);
+    expect(await labels(saved.routine.id)).toEqual({ 1: 'Push', 4: 'Lower' });
+    expect(await labels(routine.id)).toEqual({ 1: 'Upper', 4: 'Lower' });
+  });
+
+  it('carries the names into a copy', async () => {
+    const alice = await createUser();
+    const source = await routines().create(
+      { ownerId: null },
+      named({ 1: 'Upper', 4: 'Lower' }),
+    );
+
+    const mine = await routines().create(
+      { ownerId: alice.id },
+      await routines().getForCopy(source.id),
+    );
+
+    expect(await labels(mine.id)).toEqual({ 1: 'Upper', 4: 'Lower' });
+  });
+
+  it('shows Today the day’s name', async () => {
+    const alice = await createUser();
+    const routine = await routines().create(
+      { ownerId: alice.id },
+      named({ 1: 'Upper', 4: null }),
+    );
+    await createEnrollment(alice.id, { planId: routine.id });
+
+    const program = await loadActiveProgram(testPrisma(), alice.id);
+    expect(
+      program?.authoredWeeks[0].slots.map((s) => [s.dayOfWeek, s.label]),
+    ).toEqual(
+      expect.arrayContaining([
+        [1, 'Upper'],
+        [4, null],
+      ]),
+    );
+  });
+});
+
 describe('RoutinesService.getForEditing', () => {
   it('reads the routine back as the body that wrote it', async () => {
     const alice = await createUser();

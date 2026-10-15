@@ -119,6 +119,42 @@ describe("editing a saved routine (DN-146)", () => {
   });
 });
 
+describe("a day's name (DN-155)", () => {
+  it("sends a day's name trimmed, and none where it is blank or the day rests", () => {
+    const body = toCreateRoutine(
+      draft({ labels: { 1: "  Push  ", 4: " ", 6: "Rest day name" } }),
+    );
+
+    expect(body.days).toEqual([
+      expect.objectContaining({ dayOfWeek: 1, label: "Push" }),
+      expect.not.objectContaining({ label: expect.anything() }),
+    ]);
+    expect(createRoutineSchema.safeParse(body).success).toBe(true);
+  });
+
+  it("loads the names back, and saves them back the same", () => {
+    const saved = toCreateRoutine(draft({ labels: { 4: "Legs" } }));
+    const loaded = fromRoutine(saved);
+
+    expect(loaded.labels).toEqual({ 4: "Legs" });
+    expect(toCreateRoutine(loaded)).toEqual(saved);
+  });
+
+  it("calls naming a day no change to the week", () => {
+    const saved = toCreateRoutine(draft({ labels: { 1: "Push" } }));
+    const loaded = fromRoutine(saved);
+
+    expect(changesWeek({ ...loaded, labels: { 1: "Pull", 4: "Legs" } }, saved)).toBe(false);
+    expect(changesWeek({ ...loaded, labels: {} }, saved)).toBe(false);
+  });
+
+  it("copies a day's lines, not its name", () => {
+    const next = copyDay(draft({ labels: { 1: "Push" } }), 1, [2]);
+
+    expect(next.labels).toEqual({ 1: "Push" });
+  });
+});
+
 describe("repetition", () => {
   it("copies a day onto other weekdays as new lines", () => {
     const d = draft();

@@ -118,6 +118,21 @@ describe("toPastedDraft", () => {
     expect(draft.days[2]?.[0].exerciseId).toBe("squat");
   });
 
+  it("carries a heading's name onto its day (DN-155)", () => {
+    const fixed = readBack("Monday — Chest and Triceps\nPlank 3x60s\nWednesday\nPlank 3x60s", LIBRARY);
+    expect(toPastedDraft(fixed.routine, fixed.lines).labels).toEqual({
+      1: "Chest and Triceps",
+    });
+
+    const ordered = readBack("Day 1\nPlank 3x60s\nDay 2 - Legs\nBarbell Squat 5x5", LIBRARY);
+    expect(toPastedDraft(ordered.routine, ordered.lines).labels).toEqual({ 2: "Legs" });
+  });
+
+  it("cuts a heading's name to what a day's name may hold", () => {
+    const { routine, lines } = readBack(`Monday: ${"x".repeat(50)}\nPlank 3x60s`, LIBRARY);
+    expect(toPastedDraft(routine, lines).labels[1]).toHaveLength(40);
+  });
+
   it("uses what was picked, and leaves out what was left out", () => {
     const { routine, lines } = readBack(
       "Monday\nLow Cable Fly 4x8\nDips 3x8\nPlank 3x60s",

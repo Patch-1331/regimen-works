@@ -148,6 +148,30 @@ describe("createRoutineSchema", () => {
       expect(parsed.summary).toBeNull();
     });
   });
+
+  describe("a day may be named (DN-155)", () => {
+    const named = (label: unknown) =>
+      routine({ days: [{ dayOfWeek: 1, label, lines: [line()] }] });
+
+    it("keeps a name, trimmed", () => {
+      const parsed = createRoutineSchema.parse(named("  Chest and Triceps "));
+      expect(parsed.days[0].label).toBe("Chest and Triceps");
+    });
+
+    it("reads a blank name as no name", () => {
+      expect(createRoutineSchema.parse(named("   ")).days[0].label).toBeNull();
+    });
+
+    it("still reads a day with no name at all, as older files have", () => {
+      const parsed = createRoutineSchema.parse(routine());
+      expect(parsed.days[0].label ?? null).toBeNull();
+    });
+
+    it("refuses a name over 40 characters", () => {
+      expect(createRoutineSchema.safeParse(named("x".repeat(41))).success).toBe(false);
+      expect(createRoutineSchema.safeParse(named("x".repeat(40))).success).toBe(true);
+    });
+  });
 });
 
 describe("defaultRoutineSummary", () => {

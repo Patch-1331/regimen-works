@@ -819,6 +819,11 @@ model PlanSlot {
   // because resolveSlotForDate (DN-11) looks the day up by its weekday.
   dayOfWeek  Int
   kind       String
+  // The day's own name in a routine, e.g. "Chest and Triceps" (DN-155).
+  // Shown on Today beside the week's label. Wording, not structure: renaming
+  // a day of a routine someone has run saves in place (ADR 0006, decision 6).
+  // Null where the day is known by its weekday alone.
+  label      String?
 
   // Which days survive when a flexible program runs at fewer days per week
   // than it was authored for: lower is kept first, so the program's main

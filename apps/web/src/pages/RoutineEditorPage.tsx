@@ -371,6 +371,22 @@ export function RoutineEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
                 )}
               </header>
 
+              {!rest && (
+                <input
+                  value={draft.labels[day] ?? ""}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      labels: { ...draft.labels, [day]: e.target.value },
+                    })
+                  }
+                  placeholder="Name this day (optional)"
+                  aria-label={`Name for ${short}`}
+                  maxLength={40}
+                  className="mt-1 w-full border-b border-[var(--border)] bg-transparent pb-0.5 text-sm text-[var(--ink)] outline-none"
+                />
+              )}
+
               {copying === day && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {WEEKDAYS.filter((d) => d.value !== day).map((target) => (
@@ -460,7 +476,7 @@ export function RoutineEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
             <p className="mb-2 text-sm text-[var(--ink-soft)]" role="status">
               {willFork
                 ? "Someone has started this routine, so changing its week saves a new version. Runs already under way finish on this one."
-                : "Someone has started this routine. Renaming it changes it for them too; changing its week will save a new version."}
+                : "Someone has started this routine. Renaming it or its days changes it for them too; changing its week will save a new version."}
             </p>
           )}
           {problems.length > 0 && (

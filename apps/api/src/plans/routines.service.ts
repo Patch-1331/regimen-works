@@ -178,6 +178,17 @@ export class RoutinesService {
         await tx.planWeek.deleteMany({ where: { planId: plan.id } });
       }
       const fields = planFields(routine);
+      if (!structural) {
+        // The week stands, so its days keep their rows -- and the rows a
+        // run's assignments point at. A day's name is wording (DN-155), so
+        // it is written onto the slot where it is.
+        for (const day of routine.days) {
+          await tx.planSlot.updateMany({
+            where: { planWeek: { planId: plan.id }, dayOfWeek: day.dayOfWeek },
+            data: { label: day.label ?? null },
+          });
+        }
+      }
       const row = await this.withNameGuard(writer, routine.name, () =>
         tx.plan.update({
           where: { id: plan.id },
@@ -624,6 +635,7 @@ function weeksData(routine: CreateRoutine) {
         slots: {
           create: routine.days.map((day) => ({
             dayOfWeek: day.dayOfWeek,
+            label: day.label ?? null,
             kind: 'movements',
             priority: 0,
             movements: {
@@ -658,6 +670,9 @@ function toCreateRoutine(plan: RoutineContent): CreateRoutine {
     .flatMap((w) => w.slots)
     .map((slot) => ({
       dayOfWeek: slot.dayOfWeek,
+      // Only where the day has a name, so an unnamed routine reads back --
+      // and exports -- exactly as it did before days could be named.
+      ...(slot.label ? { label: slot.label } : {}),
       lines: slot.movements.map((m) => ({
         movementGroup:
           m.movementGroup as RoutineDay['lines'][number]['movementGroup'],

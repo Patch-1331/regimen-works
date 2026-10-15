@@ -839,6 +839,7 @@ function planBlock(day: ProgramDay) {
     week: day.day.week,
     totalWeeks: day.day.totalWeeks,
     weekLabel: day.day.weekLabel,
+    dayLabel: day.day.dayLabel,
     slotKind: day.day.slotKind,
   };
 }

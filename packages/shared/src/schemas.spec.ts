@@ -1170,6 +1170,7 @@ describe("todayResponseSchema", () => {
     week: 2,
     totalWeeks: 6,
     weekLabel: "Deload",
+    dayLabel: "Chest and Triceps",
     slotKind: "wod_generated",
     ...overrides,
   });
@@ -1185,6 +1186,15 @@ describe("todayResponseSchema", () => {
   it("refuses the card field being absent, so a client cannot forget it", () => {
     const { completedProgram: _omitted, ...rest } = todayPayload();
     expect(todayResponseSchema.safeParse(rest).success).toBe(false);
+  });
+
+  it("refuses a plan block without its day's name, null or not (DN-155)", () => {
+    const { dayLabel: _omitted, ...plan } = planBlock();
+    expect(todayResponseSchema.safeParse(todayPayload({ plan })).success).toBe(false);
+    expect(
+      todayResponseSchema.safeParse(todayPayload({ plan: planBlock({ dayLabel: null }) }))
+        .success,
+    ).toBe(true);
   });
 
   it("parses a day with an assignment", () => {

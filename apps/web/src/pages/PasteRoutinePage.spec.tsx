@@ -170,6 +170,8 @@ describe("pasting a routine", () => {
     expect(
       await screen.findByText("Pasted in. Nothing is saved until you save it."),
     ).toBeInTheDocument();
+    expect(screen.getByLabelText("Name for Mon")).toHaveValue("Legs");
+    expect(screen.getByLabelText("Name for Wed")).toHaveValue("");
     await userEvent.type(screen.getByLabelText("Routine name"), "Pasted");
     await userEvent.click(screen.getByRole("button", { name: "Save routine" }));
 
@@ -180,6 +182,7 @@ describe("pasting a routine", () => {
       days: [
         {
           dayOfWeek: 1,
+          label: "Legs",
           lines: [
             { exerciseId: "squat", sets: 5, reps: 5 },
             { exerciseId: "crossover", sets: 4, reps: 8, repsMax: 10 },

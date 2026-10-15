@@ -20,6 +20,7 @@ function slot(overrides: Partial<ProgramSlot> = {}): ProgramSlot {
     dayOfWeek: 1,
     priority: 0,
     kind: 'wod_generated',
+    label: null,
     wodId: null,
     pattern: null,
     wodType: null,

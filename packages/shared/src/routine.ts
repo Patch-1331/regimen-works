@@ -72,6 +72,18 @@ export type RoutineLine = z.infer<typeof routineLineSchema>;
 export const routineDaySchema = z.strictObject({
   // 0 = Sunday … 6 = Saturday, as everywhere in the app.
   dayOfWeek: z.number().int().min(SUNDAY).max(SATURDAY),
+  /**
+   * The day's own name, e.g. "Chest and Triceps" (DN-155). Optional as well
+   * as nullable: this body is the export format (ADR 0006, decision 8), and
+   * a file written before days had names must still load. A blank reads as
+   * no name. Wording, not structure -- renaming a day never forks a routine.
+   */
+  label: z
+    .string()
+    .trim()
+    .max(40)
+    .transform((s) => (s === "" ? null : s))
+    .nullish(),
   lines: z
     .array(routineLineSchema)
     .min(1, "a training day needs at least one line"),
