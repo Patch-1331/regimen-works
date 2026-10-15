@@ -3,11 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ProgramCompletionCard } from "../components/ProgramCompletionCard";
 import {
-  DEFAULT_PLAN_ID,
+  DEFAULT_PROGRAM_ID,
   effectiveRounds,
   type MakeupOffer as MakeupOfferBlock,
   type PrescribedMovement,
-  type TodayPlan,
+  type TodayProgram,
 } from "@regimen-works/shared";
 import { api } from "../lib/api";
 import { DigitReadout } from "../components/DigitReadout";
@@ -57,7 +57,7 @@ export function TodayPage() {
     setSwapMovementId(null);
     await api.setSubstitution(assignmentId, {
       wodMovementId,
-      planSlotMovementId: null,
+      programSlotMovementId: null,
       exerciseId,
     });
     await queryClient.invalidateQueries({ queryKey: ["today"] });
@@ -73,28 +73,28 @@ export function TodayPage() {
   // functions rather than one with a flag, because the two ids come from
   // different tables and the endpoints say so.
   async function handlePrescribedSwap(
-    planSlotMovementId: string,
+    programSlotMovementId: string,
     exerciseId: string,
   ) {
     setSwapMovementId(null);
     await api.setSubstitution(assignmentId, {
       wodMovementId: null,
-      planSlotMovementId,
+      programSlotMovementId,
       exerciseId,
     });
     await queryClient.invalidateQueries({ queryKey: ["today"] });
   }
 
-  async function handlePrescribedRevert(planSlotMovementId: string) {
+  async function handlePrescribedRevert(programSlotMovementId: string) {
     setSwapMovementId(null);
-    await api.clearPrescribedSubstitution(assignmentId, planSlotMovementId);
+    await api.clearPrescribedSubstitution(assignmentId, programSlotMovementId);
     await queryClient.invalidateQueries({ queryKey: ["today"] });
   }
 
   // Just WODs is the absence of programming (DN-13), so naming it would be
   // telling the athlete about a program they never chose. Everything below
-  // reads `program` rather than `data.plan` for that reason.
-  const program = namedProgram(data.plan);
+  // reads `program` rather than `data.program` for that reason.
+  const program = namedProgram(data.program);
 
   if (data.isRestDay || !data.assignment) {
     return (
@@ -150,7 +150,7 @@ export function TodayPage() {
         {data.completedProgram && (
         <ProgramCompletionCard program={data.completedProgram} />
       )}
-      {program && <ProgramStrip plan={program} date={data.date} />}
+      {program && <ProgramStrip program={program} date={data.date} />}
         <h1
           className="text-5xl font-extrabold uppercase leading-none"
           style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}
@@ -250,7 +250,7 @@ export function TodayPage() {
                     <LiveSwapPanel
                       id={swapPanelId}
                       assignmentId={assignmentId}
-                      swapKey={{ wodMovementId: null, planSlotMovementId: m.id }}
+                      swapKey={{ wodMovementId: null, programSlotMovementId: m.id }}
                       current={m.exercise}
                       prescribedId={m.prescribedId}
                       isSwapped={m.isSwapped}
@@ -341,7 +341,7 @@ export function TodayPage() {
       {data.completedProgram && (
         <ProgramCompletionCard program={data.completedProgram} />
       )}
-      {program && <ProgramStrip plan={program} date={data.date} />}
+      {program && <ProgramStrip program={program} date={data.date} />}
       <h1
         className="text-5xl font-extrabold uppercase leading-none"
         style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}
@@ -526,7 +526,7 @@ export function TodayPage() {
                   <LiveSwapPanel
                     id={swapPanelId}
                     assignmentId={assignmentId}
-                    swapKey={{ wodMovementId: m.id, planSlotMovementId: null }}
+                    swapKey={{ wodMovementId: m.id, programSlotMovementId: null }}
                     current={m.exercise}
                     prescribedId={m.prescribedId}
                     isSwapped={m.isSwapped}
@@ -778,8 +778,8 @@ function ToggleStart({
  * enrollment, a program that has not started, and Just WODs — which is a real
  * enrollment and deliberately not a program anyone chose.
  */
-function namedProgram(plan: TodayPlan | null): TodayPlan | null {
-  return plan && plan.planId !== DEFAULT_PLAN_ID ? plan : null;
+function namedProgram(program: TodayProgram | null): TodayProgram | null {
+  return program && program.programId !== DEFAULT_PROGRAM_ID ? program : null;
 }
 
 /**
@@ -832,7 +832,7 @@ function MakeupOffer({
   );
 }
 
-function restDayCopy(program: TodayPlan | null, date: string): string {
+function restDayCopy(program: TodayProgram | null, date: string): string {
   // "Planned rest" only when the program actually planned one. A flexible
   // program defers to the athlete's own training days, and telling them the
   // program planned a day they themselves took off would be the app taking
@@ -844,18 +844,18 @@ function restDayCopy(program: TodayPlan | null, date: string): string {
 }
 
 /** Where the athlete is in their program, above the plate. */
-function ProgramStrip({ plan, date }: { plan: TodayPlan; date: string }) {
+function ProgramStrip({ program, date }: { program: TodayProgram; date: string }) {
   const parts = [
-    plan.name.toUpperCase(),
-    plan.totalWeeks === null
-      ? `WK ${plan.week}`
-      : `WK ${plan.week}/${plan.totalWeeks}`,
+    program.name.toUpperCase(),
+    program.totalWeeks === null
+      ? `WK ${program.week}`
+      : `WK ${program.week}/${program.totalWeeks}`,
     `D ${dayOfProgramWeek(date)}`,
     // The authored week's own name, when it has one to add — "Deload" is the
     // part of today an athlete most wants to know before they start.
-    ...(plan.weekLabel ? [plan.weekLabel.toUpperCase()] : []),
-    // And the day's, from a routine that names its days (DN-155).
-    ...(plan.dayLabel ? [plan.dayLabel.toUpperCase()] : []),
+    ...(program.weekLabel ? [program.weekLabel.toUpperCase()] : []),
+    // And the day's, from a program that names its days (DN-155).
+    ...(program.dayLabel ? [program.dayLabel.toUpperCase()] : []),
   ];
   return (
     <p

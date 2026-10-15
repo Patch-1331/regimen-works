@@ -28,7 +28,7 @@ const ID = fixtures.ASSIGNMENT_ID;
 const PRESCRIBED = [
   fixtures.prescribedMovement(),
   fixtures.prescribedMovement({
-    id: "plan-slot-movement-2",
+    id: "program-slot-movement-2",
     order: 1,
     sets: 3,
     reps: 8,

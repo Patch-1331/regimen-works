@@ -758,7 +758,7 @@ model Program {
   // under way finishes on it unchanged, and history keeps its name.
   //
   // Unlike Exercise and Wod, archiving FREES the name. A structural edit to a
-  // routine somebody has enrolled in forks it (decision 6): the new row keeps
+  // program somebody has enrolled in forks it (decision 6): the new row keeps
   // the name and the old one is archived, so the two must coexist. Name
   // uniqueness is therefore over live rows only -- see below.
   archivedAt DateTime?
@@ -819,9 +819,9 @@ model ProgramSlot {
   // because resolveSlotForDate (DN-11) looks the day up by its weekday.
   dayOfWeek  Int
   kind       String
-  // The day's own name in a routine, e.g. "Chest and Triceps" (DN-155).
+  // The day's own name in a program, e.g. "Chest and Triceps" (DN-155).
   // Shown on Today beside the week's label. Wording, not structure: renaming
-  // a day of a routine someone has run saves in place (ADR 0006, decision 6).
+  // a day of a program someone has run saves in place (ADR 0006, decision 6).
   // Null where the day is known by its weekday alone.
   label      String?
 
@@ -908,7 +908,7 @@ model ProgramSlotMovement {
   //
   // `reps` is the count, or the *bottom* of a range -- never a lone
   // approximation of one. ADR 0005 has the reasoning: 12 of the 25
-  // prescriptions in the routine DN-131 measured are ranges, and storing only
+  // prescriptions in the program DN-131 measured are ranges, and storing only
   // the floor is a silent edit of what the source said.
   //
   // Counted in whatever unit the exercise uses -- `exercise.unit` is what makes
@@ -924,7 +924,7 @@ model ProgramSlotMovement {
 
   // Prescribed rest between sets, as the source stated it (ADR 0005). 0 says
   // "straight through" out loud, which is a prescription. Null says the
-  // source was silent, which is not one -- the routine DN-131 measured states
+  // source was silent, which is not one -- the program DN-131 measured states
   // rest 0 times in 25 movements. Nothing converts one into the other.
   //
   // What the athlete actually rests is resolved against
@@ -976,13 +976,13 @@ model ProgramEnrollment {
   // saying what it said, and the card drops a change it cannot name.
   startingMovements  Json      @default("{}")
   // The athlete's rest pace for this run (ADR 0005), set at the one moment
-  // they commit to a routine and editable while it runs. Overrides every
+  // they commit to a program and editable while it runs. Overrides every
   // `ProgramSlotMovement.restSeconds` in the run, deliberately and silently --
   // rest is how hard, not what, and the athlete decided it themselves.
   //
-  // Null keeps the routine's own, which is only an answer when the routine
+  // Null keeps the program's own, which is only an answer when the program
   // states one everywhere; the wizard refuses null otherwise. Here rather
-  // than on the program, so a shared routine never carries one athlete's pace,
+  // than on the program, so a shared program never carries one athlete's pace,
   // and rather than on the user, because a 5x5 day and a 15-20 day want
   // different rests. Non-negative by a CHECK in the rest_pace migration.
   defaultRestSeconds Int?

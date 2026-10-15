@@ -125,7 +125,7 @@ describe('snapshotMovements', () => {
         wodMovementId: 'wm-1',
         // A WOD day joins back to a WodMovement and has rounds rather than
         // sets, so the three straight-sets fields are absent facts (DN-20).
-        planSlotMovementId: null,
+        programSlotMovementId: null,
         sets: null,
         restSeconds: null,
         order: 1,
@@ -219,7 +219,7 @@ describe('snapshotPrescribedMovements', () => {
   it('joins back to the prescribed movement rather than a WOD one', () => {
     const [snapshot] = snapshotPrescribedMovements([resolved]);
 
-    expect(snapshot.planSlotMovementId).toBe('psm-1');
+    expect(snapshot.programSlotMovementId).toBe('psm-1');
     expect(snapshot.wodMovementId).toBeNull();
   });
 
@@ -265,7 +265,7 @@ describe('snapshotPrescribedMovements', () => {
 
     expect(
       snapshotPrescribedMovements([resolved, first]).map(
-        (m) => m.planSlotMovementId,
+        (m) => m.programSlotMovementId,
       ),
     ).toEqual(['psm-0', 'psm-1']);
   });

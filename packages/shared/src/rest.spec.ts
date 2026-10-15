@@ -52,7 +52,7 @@ describe("restClockSeconds", () => {
 });
 
 describe("restPaceRequired", () => {
-  it("asks nothing of a routine that states rest everywhere", () => {
+  it("asks nothing of a program that states rest everywhere", () => {
     expect(
       restPaceRequired([{ restSeconds: 90 }, { restSeconds: 0 }]),
     ).toBe(false);
@@ -64,7 +64,7 @@ describe("restPaceRequired", () => {
     ).toBe(true);
   });
 
-  it("asks nothing of a routine with no straight-sets movements", () => {
+  it("asks nothing of a program with no straight-sets movements", () => {
     expect(restPaceRequired([])).toBe(false);
   });
 });

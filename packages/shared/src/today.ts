@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { checklistExerciseSchema } from "./checklist.js";
-import { completedProgramSchema } from "./plan-enrollment.js";
-import { assignmentStatus, planSlotKind } from "./enums.js";
+import { completedProgramSchema } from "./program-enrollment.js";
+import { assignmentStatus, programSlotKind } from "./enums.js";
 import { prescriptionSchema } from "./prescription.js";
 import { wodSchema } from "./wod.js";
 import { workoutSessionSchema } from "./session.js";
@@ -28,7 +28,7 @@ export const todayAssignmentSchema = z
     /** Present once a workout has been started — lets a reloaded/locked screen resume the timer. */
     session: workoutSessionSchema.nullable(),
   })
-  // Exactly one, the same shape of rule as PlanSlotMovement's line/exercise
+  // Exactly one, the same shape of rule as ProgramSlotMovement's line/exercise
   // xor. Neither set is an assignment with no session in it, which is what a
   // WOD-less row looked like before DN-19 and is still a bug rather than a
   // day. Both set is two workouts and no way to choose.
@@ -41,19 +41,19 @@ export type TodayAssignment = z.infer<typeof todayAssignmentSchema>;
 /**
  * Which program day the athlete is training, when they are training one.
  *
- * Deliberately not the enrollment and not the plan: this block answers "where
+ * Deliberately not the enrollment and not the program: this block answers "where
  * am I in my program today?", and the screen that asks it wants a heading, not
- * a program definition. The full shapes are `planEnrollmentSchema` and
- * `planDetailSchema`, fetched by the screens that actually need them.
+ * a program definition. The full shapes are `programEnrollmentSchema` and
+ * `programDetailSchema`, fetched by the screens that actually need them.
  */
-export const todayPlanSchema = z.object({
+export const todayProgramSchema = z.object({
   enrollmentId: z.string(),
-  planId: z.string(),
+  programId: z.string(),
   /** The program's name, for the heading above the plate. */
   name: z.string(),
   /**
    * Which week the athlete is in, **1-based** — the only 1-based number in
-   * this vocabulary, because it is the one an athlete reads. `PlanWeek.order`
+   * this vocabulary, because it is the one an athlete reads. `ProgramWeek.order`
    * and `resolveSlotForDate`'s `weekIndex` are both 0-based and neither is
    * this: an authored core week is played several times over a run.
    */
@@ -70,9 +70,9 @@ export const todayPlanSchema = z.object({
    * which is a different fact from an authored `rest` and is why that function
    * keeps the two apart.
    */
-  slotKind: planSlotKind.nullable(),
+  slotKind: programSlotKind.nullable(),
 });
-export type TodayPlan = z.infer<typeof todayPlanSchema>;
+export type TodayProgram = z.infer<typeof todayProgramSchema>;
 
 /**
  * `assignment` is null exactly when `isRestDay` is true and no WOD has
@@ -125,7 +125,7 @@ export const todayResponseSchema = z.object({
    * that ignores this field still renders today correctly, which is what
    * makes the block safe to add before anything reads it.
    */
-  plan: todayPlanSchema.nullable(),
+  program: todayProgramSchema.nullable(),
   /**
    * The program that just finished, if one has and the athlete has not yet
    * dismissed the card (DN-18). Null the rest of the time, which is almost
@@ -133,14 +133,14 @@ export const todayResponseSchema = z.object({
    *
    * Here rather than behind its own request because the card sits above
    * today and both arrive together or the screen assembles itself in front
-   * of the athlete. Nullable like `plan` and `makeup`, which is also what
+   * of the athlete. Nullable like `program` and `makeup`, which is also what
    * keeps "a prompt never blocks a workout" structural rather than
    * intended: a client that ignores this field still renders today.
    */
   completedProgram: completedProgramSchema.nullable(),
   /**
    * The makeup offer (DN-17), or null when there is none to make. Like
-   * `plan`, nullable rather than a second response shape: a client that
+   * `program`, nullable rather than a second response shape: a client that
    * ignores it still renders the rest day correctly.
    */
   makeup: makeupOfferSchema.nullable(),

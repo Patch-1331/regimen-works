@@ -45,7 +45,7 @@ const RANGE = startDateRange('2026-09-19', false);
 
 function answers(overrides: Partial<CommitSetup> = {}): CommitSetup {
   return {
-    planId: 'program-1',
+    programId: 'program-1',
     trainingDays: [1, 3, 5],
     weeks: 6,
     startDate: '2026-09-19',

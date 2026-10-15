@@ -5,7 +5,7 @@ import {
   readBack,
   toPastedDraft,
   unresolved,
-} from "./pasteRoutine";
+} from "./pasteProgram";
 
 /**
  * The paste box's read-back and hand-off (DN-152). What a line matches is
@@ -44,27 +44,27 @@ describe("readBack", () => {
 
 describe("unresolved and pasteProblems", () => {
   it("holds a refused line until it is picked or left out", () => {
-    const { routine, lines } = readBack("Low Cable Fly 4x8\nPlank 3x60s", LIBRARY);
+    const { program, lines } = readBack("Low Cable Fly 4x8\nPlank 3x60s", LIBRARY);
     expect(unresolved(lines)).toHaveLength(1);
-    expect(pasteProblems(routine, lines)).toEqual(["1 line to pick or leave out."]);
+    expect(pasteProblems(program, lines)).toEqual(["1 line to pick or leave out."]);
 
     const picked = lines.map((l, i) =>
       i === 0 ? { ...l, picked: { exerciseId: "squat", movementGroup: null } } : l,
     );
-    expect(pasteProblems(routine, picked)).toEqual([]);
+    expect(pasteProblems(program, picked)).toEqual([]);
 
     const left = lines.map((l, i) => (i === 0 ? { ...l, leftOut: true } : l));
-    expect(pasteProblems(routine, left)).toEqual([]);
+    expect(pasteProblems(program, left)).toEqual([]);
   });
 
   it("refuses an empty paste, and one with everything left out", () => {
     const empty = readBack("  \n", LIBRARY);
-    expect(pasteProblems(empty.routine, empty.lines)).toEqual(["Nothing to read yet."]);
+    expect(pasteProblems(empty.program, empty.lines)).toEqual(["Nothing to read yet."]);
 
-    const { routine, lines } = readBack("Plank 3x60s", LIBRARY);
+    const { program, lines } = readBack("Plank 3x60s", LIBRARY);
     expect(
       pasteProblems(
-        routine,
+        program,
         lines.map((l) => ({ ...l, leftOut: true })),
       ),
     ).toEqual(["Every line is left out."]);
@@ -72,8 +72,8 @@ describe("unresolved and pasteProblems", () => {
 
   it("refuses more days than a week holds", () => {
     const text = Array.from({ length: 8 }, (_, i) => `Day ${i + 1}\nPlank 3x60s`).join("\n");
-    const { routine, lines } = readBack(text, LIBRARY);
-    expect(pasteProblems(routine, lines)).toEqual([
+    const { program, lines } = readBack(text, LIBRARY);
+    expect(pasteProblems(program, lines)).toEqual([
       "A week has seven days; this has 8.",
     ]);
   });
@@ -81,11 +81,11 @@ describe("unresolved and pasteProblems", () => {
 
 describe("toPastedDraft", () => {
   it("puts weekday-headed days on their weekdays, one line per scheme", () => {
-    const { routine, lines } = readBack(
+    const { program, lines } = readBack(
       "Tuesday\nBarbell Squat 2x10-15 & 2xfailure @ 225 rest 90s\nThursday\nPlank 3x60s",
       LIBRARY,
     );
-    const draft = toPastedDraft(routine, lines);
+    const draft = toPastedDraft(program, lines);
     expect(draft.scheduleMode).toBe("fixed");
     expect(Object.keys(draft.days)).toEqual(["2", "4"]);
     expect(draft.days[2]).toEqual([
@@ -111,8 +111,8 @@ describe("toPastedDraft", () => {
   });
 
   it("lays Day N days on the week in order, Monday first", () => {
-    const { routine, lines } = readBack("Day 1\nPlank 3x60s\nDay 2\nBarbell Squat 5x5", LIBRARY);
-    const draft = toPastedDraft(routine, lines);
+    const { program, lines } = readBack("Day 1\nPlank 3x60s\nDay 2\nBarbell Squat 5x5", LIBRARY);
+    const draft = toPastedDraft(program, lines);
     expect(draft.scheduleMode).toBe("flexible");
     expect(draft.days[1]?.[0].exerciseId).toBe("plank");
     expect(draft.days[2]?.[0].exerciseId).toBe("squat");
@@ -120,25 +120,25 @@ describe("toPastedDraft", () => {
 
   it("carries a heading's name onto its day (DN-155)", () => {
     const fixed = readBack("Monday — Chest and Triceps\nPlank 3x60s\nWednesday\nPlank 3x60s", LIBRARY);
-    expect(toPastedDraft(fixed.routine, fixed.lines).labels).toEqual({
+    expect(toPastedDraft(fixed.program, fixed.lines).labels).toEqual({
       1: "Chest and Triceps",
     });
 
     const ordered = readBack("Day 1\nPlank 3x60s\nDay 2 - Legs\nBarbell Squat 5x5", LIBRARY);
-    expect(toPastedDraft(ordered.routine, ordered.lines).labels).toEqual({ 2: "Legs" });
+    expect(toPastedDraft(ordered.program, ordered.lines).labels).toEqual({ 2: "Legs" });
   });
 
   it("cuts a heading's name to what a day's name may hold", () => {
-    const { routine, lines } = readBack(`Monday: ${"x".repeat(50)}\nPlank 3x60s`, LIBRARY);
-    expect(toPastedDraft(routine, lines).labels[1]).toHaveLength(40);
+    const { program, lines } = readBack(`Monday: ${"x".repeat(50)}\nPlank 3x60s`, LIBRARY);
+    expect(toPastedDraft(program, lines).labels[1]).toHaveLength(40);
   });
 
   it("uses what was picked, and leaves out what was left out", () => {
-    const { routine, lines } = readBack(
+    const { program, lines } = readBack(
       "Monday\nLow Cable Fly 4x8\nDips 3x8\nPlank 3x60s",
       LIBRARY,
     );
-    const draft = toPastedDraft(routine, [
+    const draft = toPastedDraft(program, [
       { ...lines[0], picked: { exerciseId: null, movementGroup: "push_horizontal" } },
       { ...lines[1], leftOut: true },
       lines[2],
@@ -150,8 +150,8 @@ describe("toPastedDraft", () => {
   });
 
   it("keeps a line that gave no scheme, for the sheet to ask about", () => {
-    const { routine, lines } = readBack("Plank", LIBRARY);
-    expect(toPastedDraft(routine, lines).days[1]).toEqual([
+    const { program, lines } = readBack("Plank", LIBRARY);
+    expect(toPastedDraft(program, lines).days[1]).toEqual([
       expect.objectContaining({ exerciseId: "plank", sets: null, reps: null }),
     ]);
   });

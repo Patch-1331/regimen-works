@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { enrollmentStatus, movementGroup } from "./enums.js";
-import { planSchema } from "./plan.js";
+import { programSchema } from "./program.js";
 import { restSecondsSchema } from "./rest.js";
 
 /**
@@ -69,9 +69,9 @@ export type EnrollmentSummary = z.infer<typeof enrollmentSummarySchema>;
  * partial unique index rather than by a check in application code, so two
  * tabs racing on "Start program" cannot both succeed.
  */
-export const planEnrollmentSchema = z.object({
+export const programEnrollmentSchema = z.object({
   id: z.string(),
-  plan: planSchema,
+  program: programSchema,
   /**
    * ISO date, as text — the same representation `DailyAssignment.date` uses,
    * so the two compare directly and `date < startDate` is the whole
@@ -82,7 +82,7 @@ export const planEnrollmentSchema = z.object({
    * future start needs no second enrollment and no status-flipping job.
    */
   startDate: z.string().date(),
-  /** How many weeks this run lasts, chosen within the plan's bounds. Null for an open-ended program, which never completes. */
+  /** How many weeks this run lasts, chosen within the program's bounds. Null for an open-ended program, which never completes. */
   weeks: z.number().int().positive().nullable(),
   status: enrollmentStatus,
   completedAt: z.string().datetime().nullable(),
@@ -94,20 +94,20 @@ export const planEnrollmentSchema = z.object({
   startingMovements: movementSnapshotSchema,
   /**
    * The athlete's rest pace for this run, set when they committed to the
-   * routine and editable while it runs (ADR 0005). Overrides every
-   * per-movement rest; null leaves the routine's own in charge. See
+   * program and editable while it runs (ADR 0005). Overrides every
+   * per-movement rest; null leaves the program's own in charge. See
    * `resolveRestSeconds`.
    */
   defaultRestSeconds: restSecondsSchema,
   /** Null while the program is still running, which is also how "has this been completed" reads without a join. */
   summary: enrollmentSummarySchema.nullable(),
 });
-export type PlanEnrollment = z.infer<typeof planEnrollmentSchema>;
+export type ProgramEnrollment = z.infer<typeof programEnrollmentSchema>;
 
 /**
  * What starting a program asks for.
  *
- * `planId` and a start date, and nothing else that can be derived: the
+ * `programId` and a start date, and nothing else that can be derived: the
  * starting movements are read from the athlete's own `SkillLevel` rows at the
  * moment of enrolling, and a client that could send them could misreport what
  * the program is measured against.
@@ -117,12 +117,12 @@ export type PlanEnrollment = z.infer<typeof planEnrollmentSchema>;
  * They belong to the service that has a clock (DN-13).
  */
 export const createEnrollmentSchema = z.object({
-  planId: z.string().min(1),
+  programId: z.string().min(1),
   startDate: z.string().date(),
   /**
-   * Null enrolls for the plan's own length, which for an open-ended program
-   * is no length at all. A number must fall within the plan's min/max, which
-   * is checked where the plan is loaded rather than here.
+   * Null enrolls for the program's own length, which for an open-ended program
+   * is no length at all. A number must fall within the program's min/max, which
+   * is checked where the program is loaded rather than here.
    */
   weeks: z.number().int().positive().nullable().default(null),
 });
@@ -132,8 +132,8 @@ export type CreateEnrollment = z.infer<typeof createEnrollmentSchema>;
  * A program the athlete finished, as the completion card and the Completed
  * list both render it (DN-18).
  *
- * The plan's name is carried rather than the plan, for the same reason
- * `todayPlanSchema` carries a heading rather than a program definition: both
+ * The program's name is carried rather than the program, for the same reason
+ * `todayProgramSchema` carries a heading rather than a program definition: both
  * screens want a line of text, and a program that was edited or archived since
  * should still name what the athlete actually ran.
  *
@@ -143,10 +143,10 @@ export type CreateEnrollment = z.infer<typeof createEnrollmentSchema>;
  */
 export const completedProgramSchema = z.object({
   enrollmentId: z.string(),
-  planId: z.string(),
-  planName: z.string(),
+  programId: z.string(),
+  programName: z.string(),
   completedAt: z.string().datetime(),
-  // False once the plan has been archived: the API refuses to run it again
+  // False once the program has been archived: the API refuses to run it again
   // (DN-144), so the card does not offer to (DN-153). A flag rather than the
   // archive timestamp, which stays server-side.
   canRunAgain: z.boolean(),

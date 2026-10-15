@@ -437,7 +437,7 @@ function RestPaceSetting({
       return;
     }
     if (parsed.kind === "blank" && pace.required) {
-      setRefused(`${pace.planName} leaves some rests unstated, so this run needs a pace.`);
+      setRefused(`${pace.programName} leaves some rests unstated, so this run needs a pace.`);
       return;
     }
     setRefused(null);
@@ -457,7 +457,7 @@ function RestPaceSetting({
         Rest between sets
       </label>
       <p className="mt-1 text-xs text-[var(--ink-faint)]">
-        For every set of {pace.planName}, for as long as this run lasts.
+        For every set of {pace.programName}, for as long as this run lasts.
       </p>
 
       <div className="mt-3 flex items-center gap-3">
@@ -482,7 +482,7 @@ function RestPaceSetting({
         />
         <span className="text-[12px] text-[var(--ink-soft)]">
           {pace.defaultRestSeconds === null
-            ? `As ${pace.planName} is written`
+            ? `As ${pace.programName} is written`
             : pace.defaultRestSeconds === 0
               ? "Straight through"
               : "seconds"}
@@ -492,7 +492,7 @@ function RestPaceSetting({
       <p className="mt-2 text-[11px] text-[var(--ink-faint)]">
         {pace.required
           ? "0 means straight through."
-          : `0 means straight through. Leave it blank to rest as ${pace.planName} is written.`}
+          : `0 means straight through. Leave it blank to rest as ${pace.programName} is written.`}
       </p>
       {message && (
         <p className="mt-2 text-[12px] text-[var(--danger)]" role="status">

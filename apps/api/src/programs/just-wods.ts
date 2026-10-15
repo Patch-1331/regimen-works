@@ -1,5 +1,8 @@
 import type { PrismaClient } from '@prisma/client';
-import { DEFAULT_PLAN_ID, DEFAULT_TRAINING_DAYS } from '@regimen-works/shared';
+import {
+  DEFAULT_PROGRAM_ID,
+  DEFAULT_TRAINING_DAYS,
+} from '@regimen-works/shared';
 
 /**
  * Just WODs as a real program (DN-13).
@@ -19,7 +22,7 @@ import { DEFAULT_PLAN_ID, DEFAULT_TRAINING_DAYS } from '@regimen-works/shared';
 // Re-exported from the shared package rather than declared here: the web app
 // has to recognise this id too (DN-16), and an id written down twice is an id
 // that can differ.
-export const JUST_WODS_PROGRAM_ID = DEFAULT_PLAN_ID;
+export const JUST_WODS_PROGRAM_ID = DEFAULT_PROGRAM_ID;
 export const JUST_WODS_WEEK_ID = 'plan_week_just_wods';
 
 /** Its slot for a given weekday. 0 = Sunday … 6 = Saturday, as everywhere else. */

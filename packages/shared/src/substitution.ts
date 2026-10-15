@@ -18,11 +18,11 @@ import { equipment, exerciseLevel } from "./enums.js";
 export const setSubstitutionRequestSchema = z
   .object({
     wodMovementId: z.string().min(1).nullable().default(null),
-    planSlotMovementId: z.string().min(1).nullable().default(null),
+    programSlotMovementId: z.string().min(1).nullable().default(null),
     exerciseId: z.string().min(1),
   })
   .refine(
-    (b) => (b.wodMovementId !== null) !== (b.planSlotMovementId !== null),
+    (b) => (b.wodMovementId !== null) !== (b.programSlotMovementId !== null),
     {
       message:
         "a swap names a WOD movement or a prescribed movement — one of them, not both and not neither",
@@ -40,10 +40,10 @@ export type SetSubstitutionRequest = z.infer<
 export const swapOptionsQuerySchema = z
   .object({
     wodMovementId: z.string().min(1).nullable().default(null),
-    planSlotMovementId: z.string().min(1).nullable().default(null),
+    programSlotMovementId: z.string().min(1).nullable().default(null),
   })
   .refine(
-    (q) => (q.wodMovementId !== null) !== (q.planSlotMovementId !== null),
+    (q) => (q.wodMovementId !== null) !== (q.programSlotMovementId !== null),
     {
       message:
         "options are for a WOD movement or a prescribed movement — one of them, not both and not neither",

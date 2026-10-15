@@ -15,9 +15,9 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { WarmupPage } from "./pages/WarmupPage";
 import { CooldownPage } from "./pages/CooldownPage";
 import { SetupPage } from "./pages/SetupPage";
-import { RoutinesPage } from "./pages/RoutinesPage";
-import { PasteRoutinePage } from "./pages/PasteRoutinePage";
-import { RoutineEditorPage } from "./pages/RoutineEditorPage";
+import { ProgramsPage } from "./pages/ProgramsPage";
+import { PasteProgramPage } from "./pages/PasteProgramPage";
+import { ProgramEditorPage } from "./pages/ProgramEditorPage";
 
 function TabbedLayout() {
   return (
@@ -69,9 +69,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
  */
 /**
  * Where an athlete who has not finished setup may be: the wizard, and the
- * routine editor its "Build your own" card opens (DN-145).
+ * program editor its "Build your own" card opens (DN-145).
  */
-const SETUP_PATHS = new Set(["/setup", "/library/routines/new"]);
+const SETUP_PATHS = new Set(["/setup", "/library/programs/new"]);
 
 function SetupGate({ children }: { children: React.ReactNode }) {
   const { data: me, isPending } = useQuery({
@@ -101,7 +101,7 @@ function App() {
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/library/movements/:id" element={<ExerciseDetailPage />} />
             <Route path="/library/wods" element={<WodLibraryPage />} />
-            <Route path="/library/routines" element={<RoutinesPage />} />
+            <Route path="/library/programs" element={<ProgramsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
           <Route
@@ -121,22 +121,22 @@ function App() {
           {/* Full-screen, and reachable before setup is finished: the
             wizard's "Build your own" opens it (DN-145). */}
           <Route
-            path="/library/routines/new"
-            element={<RoutineEditorPage />}
+            path="/library/programs/new"
+            element={<ProgramEditorPage />}
           />
           {/* Pasting one in (DN-152) hands its draft to the sheet above. */}
           <Route
-            path="/library/routines/paste"
-            element={<PasteRoutinePage />}
+            path="/library/programs/paste"
+            element={<PasteProgramPage />}
           />
           <Route
-            path="/library/routines/:id/edit"
-            element={<RoutineEditorPage />}
+            path="/library/programs/:id/edit"
+            element={<ProgramEditorPage />}
           />
-          {/* An admin's edit of a global routine (DN-148); the API refuses anyone else. */}
+          {/* An admin's edit of a global program (DN-148); the API refuses anyone else. */}
           <Route
-            path="/library/routines/global/:id/edit"
-            element={<RoutineEditorPage tier="global" />}
+            path="/library/programs/global/:id/edit"
+            element={<ProgramEditorPage tier="global" />}
           />
         </Routes>
       </SetupGate>

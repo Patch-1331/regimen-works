@@ -50,8 +50,8 @@ export function resolveScheduleLock(
   const week = expanded[resolution.weekIndex % expanded.length];
 
   return {
-    planId: program.programId,
-    planName: program.programName,
+    programId: program.programId,
+    programName: program.programName,
     // Rest is authored, so a rest slot is a day the program has decided the
     // athlete does not train -- it belongs out of this list as squarely as a
     // weekday the week says nothing about. Both are "not a training day", and

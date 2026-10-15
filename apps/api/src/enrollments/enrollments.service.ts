@@ -158,7 +158,7 @@ export class EnrollmentsService {
     if (!previous) {
       throw new NotFoundException('That is not a program you have finished.');
     }
-    // A new run is a start, and an archived routine cannot be started (ADR
+    // A new run is a start, and an archived program cannot be started (ADR
     // 0006, decision 5) -- after a fork it is the version the author replaced.
     // The card stays up: the athlete has not answered it.
     if (previous.program.archivedAt) {
@@ -212,7 +212,7 @@ export class EnrollmentsService {
    * (DN-90): the countdown between two sets should not change length because
    * the athlete opened Settings between them.
    *
-   * Blank is refused where the routine leaves some rest unstated, by the same
+   * Blank is refused where the program leaves some rest unstated, by the same
    * rule the wizard applies -- clearing it would leave a set with no rest to
    * run and nobody having been asked.
    */
@@ -228,7 +228,7 @@ export class EnrollmentsService {
     }
     if (pace.required && body.defaultRestSeconds === null) {
       throw new BadRequestException(
-        `${pace.planName} does not say how long to rest after every movement, so it needs a rest from you.`,
+        `${pace.programName} does not say how long to rest after every movement, so it needs a rest from you.`,
       );
     }
 
@@ -323,8 +323,8 @@ function toCompletedProgram(row: CompletedRow): CompletedProgram | null {
   if (!summary.success || row.completedAt === null) return null;
   return {
     enrollmentId: row.id,
-    planId: row.programId,
-    planName: row.program.name,
+    programId: row.programId,
+    programName: row.program.name,
     completedAt: row.completedAt.toISOString(),
     // runAgain refuses an archived program (DN-144); the card asks first (DN-153).
     canRunAgain: row.program.archivedAt === null,

@@ -9,16 +9,16 @@ import {
   readBack,
   toPastedDraft,
   type ReadBackLine,
-} from "../lib/pasteRoutine";
+} from "../lib/pasteProgram";
 import {
   blankLine,
   formatScheme,
   lineMovementName,
-} from "../lib/routineDraft";
+} from "../lib/programDraft";
 import { WEEKDAYS } from "../lib/weekdays";
 
 /**
- * Pasting a routine in from elsewhere (DN-152, DN-137's verdict).
+ * Pasting a program in from elsewhere (DN-152, DN-137's verdict).
  *
  * Not a second editor: the text is read back line by line, each line ✓ with
  * the library movement it was read as, or ✕ with why not. A ✕ is answered
@@ -41,7 +41,7 @@ Wednesday — Upper body
 Floor Press 2x10-15 & 2x5-8
 Plank 3x60s`;
 
-export function PasteRoutinePage() {
+export function PasteProgramPage() {
   const navigate = useNavigate();
   const { data: library = [] } = useQuery({
     queryKey: ["exercises"],
@@ -61,19 +61,19 @@ export function PasteRoutinePage() {
         },
     );
 
-  const problems = read ? pasteProblems(read.routine, read.lines) : [];
+  const problems = read ? pasteProblems(read.program, read.lines) : [];
 
   return (
     <div className="mx-auto max-w-md p-6 pb-32">
       <Link
-        to="/library/routines"
+        to="/library/programs"
         className="text-xs text-[var(--ink-faint)]"
         style={mono}
       >
         ← CANCEL
       </Link>
       <h1 className="mt-4 text-2xl font-bold text-[var(--ink)]" style={display}>
-        Paste a routine
+        Paste a program
       </h1>
       <p className="mt-2 text-sm text-[var(--ink-soft)]">
         One movement per line, with its sets × reps. Head each day with a
@@ -84,7 +84,7 @@ export function PasteRoutinePage() {
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder={PLACEHOLDER}
-        aria-label="Pasted routine"
+        aria-label="Pasted program"
         rows={10}
         className="mt-4 w-full border border-[var(--border)] bg-[var(--panel)] p-2 text-sm text-[var(--ink)]"
         style={mono}
@@ -107,15 +107,15 @@ export function PasteRoutinePage() {
         </p>
       )}
 
-      {read?.routine.days.map((day, index) => (
+      {read?.program.days.map((day, index) => (
         <section
           key={index}
-          aria-label={dayLabel(read.routine.scheduleMode, day.dayOfWeek, index)}
+          aria-label={dayLabel(read.program.scheduleMode, day.dayOfWeek, index)}
           className="mt-4 border border-[var(--border)] bg-[var(--panel)] p-3"
         >
           <header className="flex items-baseline gap-3">
             <span className="text-xs text-[var(--glow)]" style={mono}>
-              {dayLabel(read.routine.scheduleMode, day.dayOfWeek, index).toUpperCase()}
+              {dayLabel(read.program.scheduleMode, day.dayOfWeek, index).toUpperCase()}
             </span>
             {day.heading && (
               <span className="text-sm text-[var(--ink-faint)]">
@@ -159,8 +159,8 @@ export function PasteRoutinePage() {
               type="button"
               disabled={problems.length > 0}
               onClick={() =>
-                navigate("/library/routines/new", {
-                  state: { pasted: toPastedDraft(read.routine, read.lines) },
+                navigate("/library/programs/new", {
+                  state: { pasted: toPastedDraft(read.program, read.lines) },
                 })
               }
               className="w-full py-3 text-sm font-semibold uppercase tracking-[0.1em] disabled:opacity-40"

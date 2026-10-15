@@ -7,7 +7,7 @@ import { SchedulerService } from '../scheduler/scheduler.service';
 import { MovementResolutionService } from '../scheduler/movement-resolution.service';
 import { EnrollmentsService } from '../enrollments/enrollments.service';
 import { WodsService } from '../wods/wods.service';
-import { RoutinesService } from '../programs/routines.service';
+import { ProgramsService } from '../programs/programs.service';
 import type { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -408,22 +408,22 @@ describe('library ownership scoping', () => {
     }
   });
 
-  it('scopes "My routines" to the caller’s own, not the global programs', async () => {
+  it('scopes "Your programs" to the caller’s own, not the global programs', async () => {
     // Deliberately *not* the library scope: this list is what the caller
     // wrote. The global half here would show every athlete the curated
     // programs as if they had authored them.
     const prisma = recordingPrisma();
-    await new RoutinesService(prisma).listOwn(ALICE);
+    await new ProgramsService(prisma).listOwn(ALICE);
     for (const where of whereOf(prisma, 'program.findMany')) {
       expect(where).toBe(JSON.stringify({ ownerId: ALICE }));
     }
   });
 
-  it('scopes the routine the editor loads and saves to the caller’s own (DN-146)', async () => {
-    // The owner's tier alone, as with "My routines": a global routine is not
+  it('scopes the program the editor loads and saves to the caller’s own (DN-146)', async () => {
+    // The owner's tier alone, as with "Your programs": a global program is not
     // the caller's to edit from this route, and another athlete's is a 404.
     const prisma = recordingPrisma();
-    const service = new RoutinesService(prisma);
+    const service = new ProgramsService(prisma);
     await service
       .getForEditing({ ownerId: ALICE }, 'program-1')
       .catch(() => undefined);
@@ -457,9 +457,9 @@ describe('library ownership scoping', () => {
     }
   });
 
-  it('scopes removing and restoring a routine to the caller’s own (DN-147)', async () => {
+  it('scopes removing and restoring a program to the caller’s own (DN-147)', async () => {
     const prisma = recordingPrisma();
-    const service = new RoutinesService(prisma);
+    const service = new ProgramsService(prisma);
     await service
       .archive({ ownerId: ALICE }, 'program-1')
       .catch(() => undefined);
@@ -473,11 +473,11 @@ describe('library ownership scoping', () => {
     }
   });
 
-  it('publishes only a routine the admin owns (DN-148)', async () => {
+  it('publishes only a program the admin owns (DN-148)', async () => {
     // Promote takes a personal row and makes it global; found by id alone it
-    // would let an admin publish another athlete's routine out from under them.
+    // would let an admin publish another athlete's program out from under them.
     const prisma = recordingPrisma();
-    await new RoutinesService(prisma)
+    await new ProgramsService(prisma)
       .promote(ALICE, 'program-1')
       .catch(() => undefined);
     expect(whereOf(prisma, 'program.findFirst')).toEqual([
@@ -485,11 +485,11 @@ describe('library ownership scoping', () => {
     ]);
   });
 
-  it('prefills a copy from a global routine only (DN-149)', async () => {
+  it('prefills a copy from a global program only (DN-149)', async () => {
     // The copy route is open to every athlete; found by id alone it would hand
-    // one athlete another's personal routine.
+    // one athlete another's personal program.
     const prisma = recordingPrisma();
-    await new RoutinesService(prisma)
+    await new ProgramsService(prisma)
       .getForCopy('program-1')
       .catch(() => undefined);
     const [where] = whereOf(prisma, 'program.findFirst');
@@ -500,9 +500,9 @@ describe('library ownership scoping', () => {
 
   it('exports from the global tier only (DN-150)', async () => {
     // The only export there is; reading by id alone would let an admin ship
-    // an athlete's personal routine out in a file.
+    // an athlete's personal program out in a file.
     const prisma = recordingPrisma();
-    await new RoutinesService(prisma)
+    await new ProgramsService(prisma)
       .exportGlobal({ ids: ['program-1'] })
       .catch(() => undefined);
     const [where] = whereOf(prisma, 'program.findMany');
@@ -511,9 +511,9 @@ describe('library ownership scoping', () => {
     expect(AND).toContainEqual({ id: { in: ['program-1'] } });
   });
 
-  it('scopes the exercises a routine may name, and the name it may not reuse', async () => {
+  it('scopes the exercises a program may name, and the name it may not reuse', async () => {
     const prisma = recordingPrisma();
-    await new RoutinesService(prisma)
+    await new ProgramsService(prisma)
       .create(
         { ownerId: ALICE },
         {

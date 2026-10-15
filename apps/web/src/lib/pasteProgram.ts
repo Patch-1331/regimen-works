@@ -1,25 +1,25 @@
 import {
   matchPastedMovement,
-  parsePastedRoutine,
+  parsePastedProgram,
   type PastedLine,
   type PastedMatch,
-  type PastedRoutine,
+  type PastedProgram,
 } from "@regimen-works/shared";
 import type { ApiExercise } from "./api";
-import { lineId, type DraftLine, type RoutineDraft } from "./routineDraft";
+import { lineId, type DraftLine, type ProgramDraft } from "./programDraft";
 
 /**
  * The paste box's read-back (DN-152): every pasted line with the matcher's
  * answer, and what the athlete did about it. Only once nothing is left
  * unanswered does it become a draft for the week sheet -- which then holds
- * it to the sheet's own rules, like any routine typed there.
+ * it to the sheet's own rules, like any program typed there.
  */
 
 export type MovementChoice = Pick<DraftLine, "exerciseId" | "movementGroup">;
 
 export type ReadBackLine = {
   id: string;
-  /** Index into the parsed routine's days. */
+  /** Index into the parsed program's days. */
   day: number;
   line: PastedLine;
   match: PastedMatch<ApiExercise>;
@@ -30,11 +30,11 @@ export type ReadBackLine = {
 };
 
 export function readBack(text: string, library: ApiExercise[]) {
-  const routine = parsePastedRoutine(text);
-  // A retired movement can't go on a new routine; the picker doesn't offer
+  const program = parsePastedProgram(text);
+  // A retired movement can't go on a new program; the picker doesn't offer
   // one either.
   const live = library.filter((e) => e.archivedAt === null);
-  const lines: ReadBackLine[] = routine.days.flatMap((d, day) =>
+  const lines: ReadBackLine[] = program.days.flatMap((d, day) =>
     d.lines.map((line) => ({
       id: lineId(),
       day,
@@ -44,7 +44,7 @@ export function readBack(text: string, library: ApiExercise[]) {
       leftOut: false,
     })),
   );
-  return { routine, lines };
+  return { program, lines };
 }
 
 /** The movement a line will carry onto the sheet, or null while it has none. */
@@ -63,12 +63,12 @@ export function unresolved(lines: ReadBackLine[]): ReadBackLine[] {
 
 /** What stops the hand-off to the sheet, in the words the screen shows. */
 export function pasteProblems(
-  routine: PastedRoutine,
+  program: PastedProgram,
   lines: ReadBackLine[],
 ): string[] {
   if (lines.length === 0) return ["Nothing to read yet."];
-  if (routine.days.length > 7) {
-    return [`A week has seven days; this has ${routine.days.length}.`];
+  if (program.days.length > 7) {
+    return [`A week has seven days; this has ${program.days.length}.`];
   }
   const open = unresolved(lines).length;
   if (open > 0) {
@@ -88,18 +88,18 @@ const IN_ORDER = [1, 2, 3, 4, 5, 6, 0];
  * then asks for.
  */
 export function toPastedDraft(
-  routine: PastedRoutine,
+  program: PastedProgram,
   lines: ReadBackLine[],
-): RoutineDraft {
-  const days: RoutineDraft["days"] = {};
-  const labels: RoutineDraft["labels"] = {};
-  routine.days.forEach((d, i) => {
+): ProgramDraft {
+  const days: ProgramDraft["days"] = {};
+  const labels: ProgramDraft["labels"] = {};
+  program.days.forEach((d, i) => {
     if (d.name) labels[d.dayOfWeek ?? IN_ORDER[i]] = d.name.slice(0, 40);
   });
   for (const l of lines) {
     const choice = choiceOf(l);
     if (l.leftOut || !choice) continue;
-    const weekday = routine.days[l.day].dayOfWeek ?? IN_ORDER[l.day];
+    const weekday = program.days[l.day].dayOfWeek ?? IN_ORDER[l.day];
     const base = { ...choice, restSeconds: l.line.restSeconds };
     const out: DraftLine[] =
       l.line.schemes.length === 0
@@ -126,7 +126,7 @@ export function toPastedDraft(
   return {
     name: "",
     summary: "",
-    scheduleMode: routine.scheduleMode,
+    scheduleMode: program.scheduleMode,
     days,
     labels,
   };

@@ -543,8 +543,8 @@ describe('SettingsService under a fixed program', () => {
     const program = await enrolledIn(user.id, [1, 3, 5]);
 
     expect((await service().get(user.id)).scheduleLock).toEqual({
-      planId: program.id,
-      planName: 'Pull-Up Builder',
+      programId: program.id,
+      programName: 'Pull-Up Builder',
       days: [1, 3, 5],
     });
   });
@@ -647,7 +647,7 @@ describe('SettingsService under a fixed program', () => {
       equipment: [],
       patternCooldownDays: 0,
     });
-    expect(settings.scheduleLock?.planName).toBe('Pull-Up Builder');
+    expect(settings.scheduleLock?.programName).toBe('Pull-Up Builder');
   });
 
   it('accepts a training-days write again once the program is not running', async () => {

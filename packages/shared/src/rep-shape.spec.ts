@@ -11,7 +11,7 @@ import {
 /**
  * The three shapes a prescribed count comes in (DN-142), at the edge.
  *
- * The database's CHECK is the rule -- `plan-schema.db-spec.ts` pins that --
+ * The database's CHECK is the rule -- `program-schema.db-spec.ts` pins that --
  * and this is its mirror: what a request body or a snapshot read back from
  * jsonb is held to before it ever reaches Postgres. The two must agree, so
  * every combination refused below is one the CHECK refuses too.

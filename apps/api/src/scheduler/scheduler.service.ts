@@ -159,7 +159,7 @@ export class SchedulerService {
         // Recomputed rather than read back off the row's program columns. Those
         // record what produced the day and are history; this answers "where am
         // I today", which is a question about the enrollment as it stands now.
-        plan: strip,
+        program: strip,
         completedProgram: await this.enrollments.cardFor(userId),
         isRestDay: existing.status === 'skipped',
         assignment,
@@ -201,7 +201,7 @@ export class SchedulerService {
     if (resting) {
       return {
         date: today,
-        plan: strip,
+        program: strip,
         completedProgram: await this.enrollments.cardFor(userId),
         isRestDay: true,
         assignment: null,
@@ -235,7 +235,7 @@ export class SchedulerService {
 
       return {
         date: today,
-        plan: strip,
+        program: strip,
         completedProgram: await this.enrollments.cardFor(userId),
         isRestDay: false,
         makeup: null,
@@ -292,7 +292,7 @@ export class SchedulerService {
 
     return {
       date: today,
-      plan: strip,
+      program: strip,
       completedProgram: await this.enrollments.cardFor(userId),
       isRestDay: false,
       // Nothing to make up on a day that already has a session.
@@ -620,7 +620,7 @@ export class SchedulerService {
     const warmupCooldownEnabled = rule?.warmupCooldownEnabled ?? false;
     return {
       date: today,
-      plan: programBlock(day),
+      program: programBlock(day),
       completedProgram: await this.enrollments.cardFor(userId),
       isRestDay: false,
       // Taken, so there is nothing left to offer.
@@ -687,7 +687,7 @@ export class SchedulerService {
     );
     return {
       date: today,
-      plan: strip,
+      program: strip,
       completedProgram: await this.enrollments.cardFor(userId),
       isRestDay: true,
       assignment: null,
@@ -838,7 +838,7 @@ function programBlock(day: ProgramDay) {
   if (day.kind === 'fallback' || day.kind === 'completed') return null;
   return {
     enrollmentId: day.day.enrollmentId,
-    planId: day.day.programId,
+    programId: day.day.programId,
     name: day.day.programName,
     week: day.day.week,
     totalWeeks: day.day.totalWeeks,

@@ -1,14 +1,14 @@
 /**
- * Reading a routine pasted in from elsewhere (DN-152, from DN-137's verdict).
+ * Reading a program pasted in from elsewhere (DN-152, from DN-137's verdict).
  *
  * Two halves, both pure: the parser turns the text into days of lines, and
  * the matcher finds each line's movement in the library -- or refuses. What
- * the athlete accepts goes onto the routine editor's week sheet, which holds
- * it to the same rules as a routine typed there.
+ * the athlete accepts goes onto the program editor's week sheet, which holds
+ * it to the same rules as a program typed there.
  *
  * The matcher's bar is "the same movement", never "the nearest one". A
  * refusal costs the athlete one search in the picker; a wrong guess they do
- * not notice costs them a routine that trains something else.
+ * not notice costs them a program that trains something else.
  */
 
 /** One `sets × reps` of a pasted line. A hold in seconds keeps its count in `reps`. */
@@ -45,15 +45,15 @@ export type PastedDay = {
    * "Monday" or "Day 2", and for lines that came before any heading.
    */
   name: string | null;
-  /** 0 = Sunday. Null when the routine is an order rather than a schedule. */
+  /** 0 = Sunday. Null when the program is an order rather than a schedule. */
   dayOfWeek: number | null;
   lines: PastedLine[];
 };
 
-export type PastedRoutine = {
+export type PastedProgram = {
   /**
    * `fixed` only when every day was headed by a weekday. A "Day 1" anywhere
-   * makes the whole routine an order, since its weekdays were never all said.
+   * makes the whole program an order, since its weekdays were never all said.
    */
   scheduleMode: "fixed" | "flexible";
   days: PastedDay[];
@@ -130,8 +130,8 @@ export function parsePastedLine(text: string): PastedLine {
   };
 }
 
-/** A whole pasted routine: blank lines skipped, headings opening days. */
-export function parsePastedRoutine(text: string): PastedRoutine {
+/** A whole pasted program: blank lines skipped, headings opening days. */
+export function parsePastedProgram(text: string): PastedProgram {
   const days: PastedDay[] = [];
   let pinned = true;
   for (const raw of text.split(/\r?\n/)) {

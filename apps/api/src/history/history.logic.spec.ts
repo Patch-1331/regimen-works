@@ -20,7 +20,7 @@ function movement(
 ): SessionMovement {
   return {
     wodMovementId: 'wm-1',
-    planSlotMovementId: null,
+    programSlotMovementId: null,
     sets: null,
     restSeconds: null,
     order: 0,

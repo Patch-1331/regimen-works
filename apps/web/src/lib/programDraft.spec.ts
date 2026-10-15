@@ -1,21 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { createRoutineSchema } from "@regimen-works/shared";
+import { createProgramSchema } from "@regimen-works/shared";
 import * as fixtures from "../test/fixtures";
 import {
-  EMPTY_ROUTINE,
+  EMPTY_PROGRAM,
   blankLine,
   changesWeek,
   copyDay,
   draftProblems,
   duplicateLine,
-  fromRoutine,
+  fromProgram,
   lineProblems,
   searchExercises,
-  toCreateRoutine,
+  toCreateProgram,
   trainingDays,
   type DraftLine,
-  type RoutineDraft,
-} from "./routineDraft";
+  type ProgramDraft,
+} from "./programDraft";
 
 /**
  * The editor's working copy (DN-145). What matters is that a draft the
@@ -29,8 +29,8 @@ const line = (overrides: Partial<DraftLine> = {}): DraftLine => ({
   ...overrides,
 });
 
-const draft = (overrides: Partial<RoutineDraft> = {}): RoutineDraft => ({
-  ...EMPTY_ROUTINE,
+const draft = (overrides: Partial<ProgramDraft> = {}): ProgramDraft => ({
+  ...EMPTY_PROGRAM,
   name: "Mine",
   days: { 1: [line()], 4: [line({ movementGroup: "squat" })] },
   ...overrides,
@@ -63,55 +63,55 @@ describe("lineProblems", () => {
 
 describe("draftProblems", () => {
   it("wants a name and a day", () => {
-    expect(draftProblems({ ...EMPTY_ROUTINE })).toEqual([
-      "Name the routine.",
+    expect(draftProblems({ ...EMPTY_PROGRAM })).toEqual([
+      "Name the program.",
       "Add a movement to at least one day.",
     ]);
   });
 });
 
-describe("toCreateRoutine", () => {
+describe("toCreateProgram", () => {
   it("gives the API a body it accepts, rest days left out", () => {
-    const body = toCreateRoutine(draft({ days: { 1: [line()], 3: [] } }));
+    const body = toCreateProgram(draft({ days: { 1: [line()], 3: [] } }));
 
-    expect(createRoutineSchema.safeParse(body).success).toBe(true);
+    expect(createProgramSchema.safeParse(body).success).toBe(true);
     expect(body.days.map((d) => d.dayOfWeek)).toEqual([1]);
   });
 
   it("sends no count on a failure line, whatever the box held", () => {
-    const body = toCreateRoutine(
+    const body = toCreateProgram(
       draft({ days: { 1: [line({ toFailure: true, reps: 10 })] } }),
     );
 
     expect(body.days[0].lines[0]).toMatchObject({ reps: null, toFailure: true });
-    expect(createRoutineSchema.safeParse(body).success).toBe(true);
+    expect(createProgramSchema.safeParse(body).success).toBe(true);
   });
 
   it("sends a blank summary as none, for the API to write", () => {
-    expect(toCreateRoutine(draft({ summary: "  " })).summary).toBeNull();
+    expect(toCreateProgram(draft({ summary: "  " })).summary).toBeNull();
   });
 });
 
-describe("editing a saved routine (DN-146)", () => {
-  const saved = toCreateRoutine(
+describe("editing a saved program (DN-146)", () => {
+  const saved = toCreateProgram(
     draft({ summary: "Mine, twice", days: { 1: [line()], 4: [line({ toFailure: true })] } }),
   );
 
-  it("loads a saved routine into a draft that saves back the same", () => {
-    expect(toCreateRoutine(fromRoutine(saved))).toEqual(saved);
+  it("loads a saved program into a draft that saves back the same", () => {
+    expect(toCreateProgram(fromProgram(saved))).toEqual(saved);
   });
 
   it("loads no summary as a blank box", () => {
-    expect(fromRoutine({ ...saved, summary: null }).summary).toBe("");
+    expect(fromProgram({ ...saved, summary: null }).summary).toBe("");
   });
 
   it("calls a rename or a new summary no change to the week", () => {
-    const renamed = { ...fromRoutine(saved), name: "Yours", summary: "" };
+    const renamed = { ...fromProgram(saved), name: "Yours", summary: "" };
     expect(changesWeek(renamed, saved)).toBe(false);
   });
 
   it("calls a new line, a new count, or a new mode a change to the week", () => {
-    const loaded = fromRoutine(saved);
+    const loaded = fromProgram(saved);
     const monday = (loaded.days[1] ?? []).map((l) => ({ ...l, sets: 5 }));
     expect(changesWeek(copyDay(loaded, 1, [2]), saved)).toBe(true);
     expect(changesWeek({ ...loaded, days: { ...loaded.days, 1: monday } }, saved)).toBe(true);
@@ -121,7 +121,7 @@ describe("editing a saved routine (DN-146)", () => {
 
 describe("a day's name (DN-155)", () => {
   it("sends a day's name trimmed, and none where it is blank or the day rests", () => {
-    const body = toCreateRoutine(
+    const body = toCreateProgram(
       draft({ labels: { 1: "  Push  ", 4: " ", 6: "Rest day name" } }),
     );
 
@@ -129,20 +129,20 @@ describe("a day's name (DN-155)", () => {
       expect.objectContaining({ dayOfWeek: 1, label: "Push" }),
       expect.not.objectContaining({ label: expect.anything() }),
     ]);
-    expect(createRoutineSchema.safeParse(body).success).toBe(true);
+    expect(createProgramSchema.safeParse(body).success).toBe(true);
   });
 
   it("loads the names back, and saves them back the same", () => {
-    const saved = toCreateRoutine(draft({ labels: { 4: "Legs" } }));
-    const loaded = fromRoutine(saved);
+    const saved = toCreateProgram(draft({ labels: { 4: "Legs" } }));
+    const loaded = fromProgram(saved);
 
     expect(loaded.labels).toEqual({ 4: "Legs" });
-    expect(toCreateRoutine(loaded)).toEqual(saved);
+    expect(toCreateProgram(loaded)).toEqual(saved);
   });
 
   it("calls naming a day no change to the week", () => {
-    const saved = toCreateRoutine(draft({ labels: { 1: "Push" } }));
-    const loaded = fromRoutine(saved);
+    const saved = toCreateProgram(draft({ labels: { 1: "Push" } }));
+    const loaded = fromProgram(saved);
 
     expect(changesWeek({ ...loaded, labels: { 1: "Pull", 4: "Legs" } }, saved)).toBe(false);
     expect(changesWeek({ ...loaded, labels: {} }, saved)).toBe(false);

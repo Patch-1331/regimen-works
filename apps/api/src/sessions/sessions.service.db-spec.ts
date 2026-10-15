@@ -917,7 +917,7 @@ describe('SessionsService, on a prescribed day', () => {
 
     expect(session.movements).toHaveLength(2);
     expect(session.movements[0]).toMatchObject({
-      planSlotMovementId: movements[0].id,
+      programSlotMovementId: movements[0].id,
       wodMovementId: null,
       sets: 5,
       reps: 3,

@@ -6,9 +6,9 @@ import type { ExerciseUnit } from "./enums.js";
  *
  * A single `reps: number` assumed one author: the seed, written in TypeScript
  * with a compiler watching, which always knows the number because it invented
- * it. Measured against a routine written outside this app, 12 of 25
+ * it. Measured against a program written outside this app, 12 of 25
  * prescriptions are ranges and 1 is "until failure" -- so the column was not
- * expressive enough to write most of a real routine down, and storing a range
+ * expressive enough to write most of a real program down, and storing a range
  * as its floor is a silent edit of what the source said. ADR 0005 has the
  * argument in full.
  *

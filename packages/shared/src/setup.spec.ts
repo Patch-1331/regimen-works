@@ -19,7 +19,7 @@ import {
 
 function program(overrides: Record<string, unknown> = {}) {
   return {
-    id: "plan-1",
+    id: "program-1",
     name: "Pull-Up Builder",
     summary: "Six weeks to your first unassisted chin-up.",
     goal: "your first unassisted chin-up",
@@ -51,7 +51,7 @@ function options(overrides: Record<string, unknown> = {}) {
 
 function answers(overrides: Record<string, unknown> = {}) {
   return {
-    planId: "plan-1",
+    programId: "program-1",
     trainingDays: [1, 3, 5],
     weeks: 6,
     startDate: "2026-09-19",
@@ -85,8 +85,8 @@ describe("setupProgramSchema", () => {
     ).toBe(true);
   });
 
-  it("still enforces the plan's own schedule-mode rule", () => {
-    // The intersection must not weaken `planSchema`: a fixed program stating
+  it("still enforces the program's own schedule-mode rule", () => {
+    // The intersection must not weaken `programSchema`: a fixed program stating
     // day bounds is the case the database's CHECK also refuses.
     expect(
       setupProgramSchema.safeParse(program({ scheduleMode: "fixed" })).success,
@@ -171,7 +171,7 @@ describe("commitSetupSchema", () => {
   });
 
   it("refuses a program with no id", () => {
-    expect(commitSetupSchema.safeParse(answers({ planId: "" })).success).toBe(
+    expect(commitSetupSchema.safeParse(answers({ programId: "" })).success).toBe(
       false,
     );
   });

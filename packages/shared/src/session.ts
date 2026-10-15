@@ -28,13 +28,13 @@ export const sessionMovementSchema = z
     /**
      * The WodMovement this row stood in for -- the join back to the template.
      * Null on a straight-sets session (DN-20), where the day was prescribed by
-     * a program slot and there is no WOD; `planSlotMovementId` names the row
+     * a program slot and there is no WOD; `programSlotMovementId` names the row
      * instead. Exactly one of the two, the same xor `AssignmentSubstitution`
      * carries for the same reason.
      */
     wodMovementId: z.string().nullable().default(null),
-    /** The PlanSlotMovement this row stood in for, on a prescribed day (DN-20). */
-    planSlotMovementId: z.string().nullable().default(null),
+    /** The ProgramSlotMovement this row stood in for, on a prescribed day (DN-20). */
+    programSlotMovementId: z.string().nullable().default(null),
     /**
      * How many working sets this movement prescribes, on a straight-sets
      * session. Null on a WOD day, which has rounds rather than sets -- not zero,
@@ -94,7 +94,7 @@ export const sessionMovementSchema = z
     }),
   })
   .refine(
-    (m) => (m.wodMovementId !== null) !== (m.planSlotMovementId !== null),
+    (m) => (m.wodMovementId !== null) !== (m.programSlotMovementId !== null),
     {
       message:
         "a snapshotted movement joins back to a WOD movement or a prescribed one — one of them, not both and not neither",

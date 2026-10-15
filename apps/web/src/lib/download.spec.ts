@@ -18,15 +18,15 @@ describe("saveJson", () => {
     const click = vi
       .spyOn(HTMLAnchorElement.prototype, "click")
       .mockImplementation(function (this: HTMLAnchorElement) {
-        expect(this.download).toBe("routines.json");
+        expect(this.download).toBe("programs.json");
         expect(this.href).toBe("blob:file");
       });
 
-    saveJson("routines.json", { format: "x", routines: [] });
+    saveJson("programs.json", { format: "x", programs: [] });
 
     expect(click).toHaveBeenCalledOnce();
     expect(blob?.type).toBe("application/json");
-    expect(JSON.parse(await blob!.text())).toEqual({ format: "x", routines: [] });
+    expect(JSON.parse(await blob!.text())).toEqual({ format: "x", programs: [] });
     await vi.waitFor(() => expect(revoke).toHaveBeenCalledWith("blob:file"));
   });
 });

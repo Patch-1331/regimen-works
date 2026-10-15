@@ -2,16 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   matchPastedMovement,
   parsePastedLine,
-  parsePastedRoutine,
-} from "./paste-routine.js";
+  parsePastedProgram,
+} from "./paste-program.js";
 
 /**
- * Reading a routine pasted from elsewhere (DN-152).
+ * Reading a program pasted from elsewhere (DN-152).
  *
  * The parser is tested on its own text; the matcher on a small library built
  * for each rule. The worked example against the real library -- the issue's
  * acceptance table -- lives with the library, in the API's
- * `src/seed/paste-routine.spec.ts`.
+ * `src/seed/paste-program.spec.ts`.
  */
 
 describe("parsePastedLine", () => {
@@ -79,24 +79,24 @@ describe("parsePastedLine", () => {
   });
 });
 
-describe("parsePastedRoutine", () => {
+describe("parsePastedProgram", () => {
   it("pins weekday headings to their weekdays", () => {
-    const routine = parsePastedRoutine(
+    const program = parsePastedProgram(
       "Monday — Chest\nDips 3x8\n\nThu: Back\nBarbell Row 5x5\n",
     );
-    expect(routine.scheduleMode).toBe("fixed");
-    expect(routine.days.map((d) => [d.heading, d.dayOfWeek])).toEqual([
+    expect(program.scheduleMode).toBe("fixed");
+    expect(program.days.map((d) => [d.heading, d.dayOfWeek])).toEqual([
       ["Monday — Chest", 1],
       ["Thu: Back", 4],
     ]);
-    expect(routine.days[1].lines.map((l) => l.name)).toEqual(["Barbell Row"]);
+    expect(program.days[1].lines.map((l) => l.name)).toEqual(["Barbell Row"]);
   });
 
   it("names a day from what its heading says after the day (DN-155)", () => {
-    const routine = parsePastedRoutine(
+    const program = parsePastedProgram(
       "Monday — Chest and Triceps\nDips 3x8\nTue: Legs\nLeg Press 3x10\nWednesday\nPlank 3x60s\nDay 2 - Back\nBarbell Row 5x5",
     );
-    expect(routine.days.map((d) => d.name)).toEqual([
+    expect(program.days.map((d) => d.name)).toEqual([
       "Chest and Triceps",
       "Legs",
       null,
@@ -105,30 +105,30 @@ describe("parsePastedRoutine", () => {
   });
 
   it("reads Day N headings as any days, in order", () => {
-    const routine = parsePastedRoutine("Day 1\nDips 3x8\nDay 2 - Legs\nLeg Press 3x10");
-    expect(routine.scheduleMode).toBe("flexible");
-    expect(routine.days.map((d) => d.heading)).toEqual(["Day 1", "Day 2 - Legs"]);
-    expect(routine.days.map((d) => d.dayOfWeek)).toEqual([null, null]);
+    const program = parsePastedProgram("Day 1\nDips 3x8\nDay 2 - Legs\nLeg Press 3x10");
+    expect(program.scheduleMode).toBe("flexible");
+    expect(program.days.map((d) => d.heading)).toEqual(["Day 1", "Day 2 - Legs"]);
+    expect(program.days.map((d) => d.dayOfWeek)).toEqual([null, null]);
   });
 
   it("treats a mix of weekdays and Day N as an order, not a schedule", () => {
-    const routine = parsePastedRoutine("Monday\nDips 3x8\nDay 2\nLeg Press 3x10");
-    expect(routine.scheduleMode).toBe("flexible");
-    expect(routine.days.map((d) => d.dayOfWeek)).toEqual([null, null]);
+    const program = parsePastedProgram("Monday\nDips 3x8\nDay 2\nLeg Press 3x10");
+    expect(program.scheduleMode).toBe("flexible");
+    expect(program.days.map((d) => d.dayOfWeek)).toEqual([null, null]);
   });
 
   it("puts lines before any heading on a day of their own", () => {
-    const routine = parsePastedRoutine("Dips 3x8\nLeg Press 3x10");
-    expect(routine.scheduleMode).toBe("flexible");
-    expect(routine.days).toHaveLength(1);
-    expect(routine.days[0]).toMatchObject({ heading: null, name: null });
-    expect(routine.days[0].lines).toHaveLength(2);
+    const program = parsePastedProgram("Dips 3x8\nLeg Press 3x10");
+    expect(program.scheduleMode).toBe("flexible");
+    expect(program.days).toHaveLength(1);
+    expect(program.days[0]).toMatchObject({ heading: null, name: null });
+    expect(program.days[0].lines).toHaveLength(2);
   });
 
   it("does not take a movement that starts with a weekday's letters for a heading", () => {
-    const routine = parsePastedRoutine("Monday\nSunflower stretch 2x30s");
-    expect(routine.days).toHaveLength(1);
-    expect(routine.days[0].lines[0].name).toBe("Sunflower stretch");
+    const program = parsePastedProgram("Monday\nSunflower stretch 2x30s");
+    expect(program.days).toHaveLength(1);
+    expect(program.days[0].lines[0].name).toBe("Sunflower stretch");
   });
 });
 

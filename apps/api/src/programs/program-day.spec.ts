@@ -433,7 +433,7 @@ describe('resolveProgramDay', () => {
     });
 
     it('generates rather than showing an empty screen when a movements day prescribes nothing', () => {
-      // `planSlotSchema` refuses to author this and the API refuses to crash
+      // `programSlotSchema` refuses to author this and the API refuses to crash
       // on it -- the same stance as the pinned slot with nothing pinned. The
       // athlete still trains, and `slotKind` still says what the row claimed
       // to be.

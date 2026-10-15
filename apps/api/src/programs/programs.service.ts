@@ -7,21 +7,21 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
-  DEFAULT_PLAN_ID,
-  ROUTINE_EXPORT_FORMAT,
-  ROUTINE_EXPORT_VERSION,
-  createRoutineSchema,
-  defaultRoutineSummary,
-  exportRoutinesSchema,
-  routineExportEnvelopeSchema,
-  type CreateRoutine,
-  type EditableRoutine,
-  type GlobalRoutineSummary,
-  type RoutineArchiveResult,
-  type RoutineDay,
-  type RoutineExport,
-  type RoutineSaveResult,
-  type RoutineSummary,
+  DEFAULT_PROGRAM_ID,
+  PROGRAM_EXPORT_FORMAT,
+  PROGRAM_EXPORT_VERSION,
+  createProgramSchema,
+  defaultProgramSummary,
+  exportProgramsSchema,
+  programExportEnvelopeSchema,
+  type CreateProgram,
+  type EditableProgram,
+  type GlobalProgramSummary,
+  type ProgramArchiveResult,
+  type ProgramDay,
+  type ProgramExport,
+  type ProgramSaveResult,
+  type ProgramSummary,
 } from '@regimen-works/shared';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -33,14 +33,14 @@ import {
 } from '../library/visible-to';
 
 /**
- * How long an authored routine may run (DN-145). Its length is the athlete's
- * choice at enrolment, not the author's, so every routine carries the same
+ * How long an authored program may run (DN-145). Its length is the athlete's
+ * choice at enrolment, not the author's, so every program carries the same
  * wide bounds and setup asks for a number within them. Offering "no end" as
  * well is DN-154.
  */
-export const ROUTINE_WEEKS = { min: 1, max: 52, default: 8 } as const;
+export const PROGRAM_WEEKS = { min: 1, max: 52, default: 8 } as const;
 
-const ROUTINE_ROW = {
+const PROGRAM_ROW = {
   select: {
     id: true,
     name: true,
@@ -51,10 +51,10 @@ const ROUTINE_ROW = {
   },
 } satisfies Prisma.ProgramDefaultArgs;
 
-type RoutineRow = Prisma.ProgramGetPayload<typeof ROUTINE_ROW>;
+type ProgramRow = Prisma.ProgramGetPayload<typeof PROGRAM_ROW>;
 
 /** Everything the editor wrote, as stored: the one week, its days, their lines. */
-const ROUTINE_CONTENT = {
+const PROGRAM_CONTENT = {
   include: {
     weeks: {
       orderBy: { order: 'asc' },
@@ -68,58 +68,58 @@ const ROUTINE_CONTENT = {
   },
 } satisfies Prisma.ProgramDefaultArgs;
 
-type RoutineContent = Prisma.ProgramGetPayload<typeof ROUTINE_CONTENT>;
+type ProgramContent = Prisma.ProgramGetPayload<typeof PROGRAM_CONTENT>;
 
-/** What "copy to my routines" offers: the live global library, Just WODs aside. */
+/** What "copy to your programs" offers: the live global library, Just WODs aside. */
 const COPYABLE = {
   ...GLOBAL_LIBRARY,
   archivedAt: null,
-  id: { not: DEFAULT_PLAN_ID },
+  id: { not: DEFAULT_PROGRAM_ID },
 } satisfies Prisma.ProgramWhereInput;
 
 /** The client a write runs on: the service's own, or a transaction's. */
 type Db = Pick<PrismaService, 'program' | 'exercise'>;
 
 /**
- * Writing routines (ADR 0006). The first write path `Program` has had: until
+ * Writing programs (ADR 0006). The first write path `Program` has had: until
  * now every program was seeded.
  */
 @Injectable()
-export class RoutinesService {
+export class ProgramsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * The one way a routine is created. The editor calls it today; admin
+   * The one way a program is created. The editor calls it today; admin
    * create, copy and the import command will call it too (ADR 0006), which is
    * why it takes the body unparsed and holds it to the editor's rules itself
    * -- ADR 0005 moved that strictness out of the columns, so a caller that
-   * skipped the schema would store a half-written routine and nothing
+   * skipped the schema would store a half-written program and nothing
    * downstream would notice.
    *
    * The tier is `writer`, which comes from the route and never the body.
    */
-  async create(writer: LibraryWriter, body: unknown): Promise<RoutineSummary> {
-    const routine = validateBody(createRoutineSchema, body);
-    return this.insert(this.prisma, writer, routine);
+  async create(writer: LibraryWriter, body: unknown): Promise<ProgramSummary> {
+    const program = validateBody(createProgramSchema, body);
+    return this.insert(this.prisma, writer, program);
   }
 
   /**
-   * The routine as the editor loads it to change it (DN-146). Only the
-   * writer's own tier: another athlete's routine is a 404 rather than a 403,
+   * The program as the editor loads it to change it (DN-146). Only the
+   * writer's own tier: another athlete's program is a 404 rather than a 403,
    * as in setup, because whether it exists is none of the caller's business.
-   * Just WODs is a 404 from either route: it is not an authored routine.
+   * Just WODs is a 404 from either route: it is not an authored program.
    */
   async getForEditing(
     writer: LibraryWriter,
     id: string,
-  ): Promise<EditableRoutine> {
-    const program = await this.findOwned(writer, id);
-    const routine = toCreateRoutine(program);
+  ): Promise<EditableProgram> {
+    const stored = await this.findOwned(writer, id);
+    const program = toCreateProgram(stored);
     return {
-      id: program.id,
-      routine,
-      hasRuns: await this.hasRuns(this.prisma, program.id),
-      archived: program.archivedAt !== null,
+      id: stored.id,
+      program,
+      hasRuns: await this.hasRuns(this.prisma, stored.id),
+      archived: stored.archivedAt !== null,
     };
   }
 
@@ -129,8 +129,8 @@ export class RoutinesService {
    *
    * - **Wording** (name, summary) changes in place, always.
    * - **Structure** (schedule mode, days, lines) changes in place until anyone
-   *   has ever started the routine. After that a structural save **forks**:
-   *   the edit becomes a new routine, made the way `create` makes one, and
+   *   has ever started the program. After that a structural save **forks**:
+   *   the edit becomes a new program, made the way `create` makes one, and
    *   the old one is archived so runs on it finish the week they started.
    *
    * A save changing both is one fork carrying both, never an in-place
@@ -140,75 +140,75 @@ export class RoutinesService {
     writer: LibraryWriter,
     id: string,
     body: unknown,
-  ): Promise<RoutineSaveResult> {
-    if (id === DEFAULT_PLAN_ID) {
+  ): Promise<ProgramSaveResult> {
+    if (id === DEFAULT_PROGRAM_ID) {
       throw new ForbiddenException(
         'Just WODs is built in. It cannot be edited.',
       );
     }
-    const routine = validateBody(createRoutineSchema, body);
-    const program = await this.findOwned(writer, id);
-    if (program.archivedAt !== null) {
+    const program = validateBody(createProgramSchema, body);
+    const stored = await this.findOwned(writer, id);
+    if (stored.archivedAt !== null) {
       // Editing a retired version would fork it into a second live copy of a
-      // routine that already has one. Bringing it back first is DN-147's.
+      // program that already has one. Bringing it back first is DN-147's.
       throw new ConflictException(
-        'This routine is archived. Restore it before editing it.',
+        'This program is archived. Restore it before editing it.',
       );
     }
 
-    const structural = !sameStructure(toCreateRoutine(program), routine);
+    const structural = !sameStructure(toCreateProgram(stored), program);
 
     return this.prisma.$transaction(async (tx) => {
       // Asked inside the transaction, so it is the same answer the write
       // acts on rather than one taken a request earlier.
-      if (structural && (await this.hasRuns(tx, program.id))) {
+      if (structural && (await this.hasRuns(tx, stored.id))) {
         await tx.program.update({
-          where: { id: program.id },
+          where: { id: stored.id },
           data: { archivedAt: new Date() },
         });
-        const forked = await this.insert(tx, writer, routine);
-        return { routine: forked, forked: true };
+        const forked = await this.insert(tx, writer, program);
+        return { program: forked, forked: true };
       }
 
-      await this.assertNameFree(tx, writer, routine.name, program.id);
+      await this.assertNameFree(tx, writer, program.name, stored.id);
       if (structural) {
-        await this.assertExercisesReferenceable(tx, writer, routine);
+        await this.assertExercisesReferenceable(tx, writer, program);
         // Nobody has run it, so no assignment points at these slots and the
         // week can simply be written again.
-        await tx.programWeek.deleteMany({ where: { programId: program.id } });
+        await tx.programWeek.deleteMany({ where: { programId: stored.id } });
       }
-      const fields = programFields(routine);
+      const fields = programFields(program);
       if (!structural) {
         // The week stands, so its days keep their rows -- and the rows a
         // run's assignments point at. A day's name is wording (DN-155), so
         // it is written onto the slot where it is.
-        for (const day of routine.days) {
+        for (const day of program.days) {
           await tx.programSlot.updateMany({
             where: {
-              programWeek: { programId: program.id },
+              programWeek: { programId: stored.id },
               dayOfWeek: day.dayOfWeek,
             },
             data: { label: day.label ?? null },
           });
         }
       }
-      const row = await this.withNameGuard(writer, routine.name, () =>
+      const row = await this.withNameGuard(writer, program.name, () =>
         tx.program.update({
-          where: { id: program.id },
+          where: { id: stored.id },
           data: structural
-            ? { ...fields, weeks: weeksData(routine) }
+            ? { ...fields, weeks: weeksData(program) }
             : { name: fields.name, summary: fields.summary },
-          ...ROUTINE_ROW,
+          ...PROGRAM_ROW,
         }),
       );
-      return { routine: toSummary(row), forked: false };
+      return { program: toSummary(row), forked: false };
     });
   }
 
   /**
-   * Takes a routine off the shelf (ADR 0006, decision 5): out of the setup
+   * Takes a program off the shelf (ADR 0006, decision 5): out of the setup
    * picker and the editor, kept for every run on it. There is no hard delete,
-   * even for a routine nobody ran -- archiving is the only way out, and
+   * even for a program nobody ran -- archiving is the only way out, and
    * `restore` the way back. Idempotent.
    *
    * `running` is whether the caller's own active run is on it, so the screen
@@ -220,8 +220,8 @@ export class RoutinesService {
     writer: LibraryWriter,
     id: string,
     runnerId: string | null = writer.ownerId,
-  ): Promise<RoutineArchiveResult> {
-    if (id === DEFAULT_PLAN_ID) {
+  ): Promise<ProgramArchiveResult> {
+    if (id === DEFAULT_PROGRAM_ID) {
       throw new ForbiddenException(
         'Just WODs is built in. It cannot be removed.',
       );
@@ -233,22 +233,22 @@ export class RoutinesService {
         : await this.prisma.program.update({
             where: { id: program.id },
             data: { archivedAt: new Date() },
-            ...ROUTINE_ROW,
+            ...PROGRAM_ROW,
           });
     const running =
       runnerId !== null &&
       (await this.prisma.programEnrollment.count({
         where: { userId: runnerId, programId: program.id, status: 'active' },
       })) > 0;
-    return { routine: toSummary(row), running };
+    return { program: toSummary(row), running };
   }
 
   /**
-   * Puts an archived routine back. Archiving let its name go, so another
-   * live routine may hold it by now; that is the editor's "name taken", and
+   * Puts an archived program back. Archiving let its name go, so another
+   * live program may hold it by now; that is the editor's "name taken", and
    * the athlete renames one of them first. Idempotent.
    */
-  async restore(writer: LibraryWriter, id: string): Promise<RoutineSummary> {
+  async restore(writer: LibraryWriter, id: string): Promise<ProgramSummary> {
     const program = await this.findOwnedRow(writer, id);
     if (program.archivedAt === null) return toSummary(program);
 
@@ -257,30 +257,30 @@ export class RoutinesService {
       this.prisma.program.update({
         where: { id: program.id },
         data: { archivedAt: null },
-        ...ROUTINE_ROW,
+        ...PROGRAM_ROW,
       }),
     );
     return toSummary(row);
   }
 
   /**
-   * Publishes an admin's own routine to everyone (ADR 0006, decision 4): the
+   * Publishes an admin's own program to everyone (ADR 0006, decision 4): the
    * same row, its owner cleared. Every enrollment on it -- the admin's own
    * run included -- names the program, not the owner, so all of them carry on.
    *
    * One-way. There is no demote: once other athletes have started it, taking
-   * it back would pull a routine out from under their runs.
+   * it back would pull a program out from under their runs.
    *
-   * Refused while archived (restore it first), when a live global routine has
+   * Refused while archived (restore it first), when a live global program has
    * the name, and when it names a movement from the admin's own library -- a
    * global row pointing at a personal one is the reference the library never
    * allows (DN-93), since one athlete's archive would break everyone's run.
    */
-  async promote(adminId: string, id: string): Promise<RoutineSummary> {
+  async promote(adminId: string, id: string): Promise<ProgramSummary> {
     const program = await this.findOwned({ ownerId: adminId }, id);
     if (program.archivedAt !== null) {
       throw new ConflictException(
-        'This routine is archived. Restore it before publishing it.',
+        'This program is archived. Restore it before publishing it.',
       );
     }
     const personal = await this.prisma.exercise.findMany({
@@ -310,74 +310,74 @@ export class RoutinesService {
       this.prisma.program.update({
         where: { id: program.id },
         data: { ownerId: null },
-        ...ROUTINE_ROW,
+        ...PROGRAM_ROW,
       }),
     );
     return toSummary(row);
   }
 
   /**
-   * The global routines an athlete may copy (DN-149, ADR 0006 decision 7):
+   * The global programs an athlete may copy (DN-149, ADR 0006 decision 7):
    * live ones only, and not Just WODs, which has no week to copy.
    */
-  async listCopyable(): Promise<RoutineSummary[]> {
+  async listCopyable(): Promise<ProgramSummary[]> {
     const rows = await this.prisma.program.findMany({
       where: COPYABLE,
       orderBy: { name: 'asc' },
-      ...ROUTINE_ROW,
+      ...PROGRAM_ROW,
     });
     return rows.map(toSummary);
   }
 
   /**
-   * A global routine as the body that would create it, for the editor to
+   * A global program as the body that would create it, for the editor to
    * prefill a copy from. The copy is saved through `create` like any other
-   * routine, so it is the caller's, and nothing ties it back to this one.
+   * program, so it is the caller's, and nothing ties it back to this one.
    *
-   * Global rows only: an athlete's own routine -- anyone's -- is a 404 here,
+   * Global rows only: an athlete's own program -- anyone's -- is a 404 here,
    * so this cannot be used to read another athlete's work.
    */
-  async getForCopy(id: string): Promise<CreateRoutine> {
+  async getForCopy(id: string): Promise<CreateProgram> {
     const program = await this.prisma.program.findFirst({
       where: { AND: [COPYABLE, { id }] },
-      ...ROUTINE_CONTENT,
+      ...PROGRAM_CONTENT,
     });
-    if (!program) throw new NotFoundException('No such routine.');
-    return toCreateRoutine(program);
+    if (!program) throw new NotFoundException('No such program.');
+    return toCreateProgram(program);
   }
 
   /**
-   * The ticked global routines as one file (DN-150, ADR 0006 decision 8),
+   * The ticked global programs as one file (DN-150, ADR 0006 decision 8),
    * each entry the body that would create it. Live or archived; never Just
-   * WODs, which has no week to write down, and never a personal routine --
+   * WODs, which has no week to write down, and never a personal program --
    * this is the only export there is, and it reads the global tier alone.
    *
    * Every id must be one of those, or nothing is exported: a file quietly
-   * missing a routine is worse than no file.
+   * missing a program is worse than no file.
    */
-  async exportGlobal(body: unknown): Promise<RoutineExport> {
-    const { ids } = validateBody(exportRoutinesSchema, body);
+  async exportGlobal(body: unknown): Promise<ProgramExport> {
+    const { ids } = validateBody(exportProgramsSchema, body);
     const wanted = [...new Set(ids)];
     const programs = await this.prisma.program.findMany({
       where: {
         AND: [
           GLOBAL_LIBRARY,
           { id: { in: wanted } },
-          { id: { not: DEFAULT_PLAN_ID } },
+          { id: { not: DEFAULT_PROGRAM_ID } },
         ],
       },
       orderBy: { name: 'asc' },
-      ...ROUTINE_CONTENT,
+      ...PROGRAM_CONTENT,
     });
     if (programs.length !== wanted.length) {
       throw new NotFoundException(
-        'Only global routines can be exported, and not Just WODs.',
+        'Only global programs can be exported, and not Just WODs.',
       );
     }
     return {
-      format: ROUTINE_EXPORT_FORMAT,
-      version: ROUTINE_EXPORT_VERSION,
-      routines: programs.map(toCreateRoutine),
+      format: PROGRAM_EXPORT_FORMAT,
+      version: PROGRAM_EXPORT_VERSION,
+      programs: programs.map(toCreateProgram),
     };
   }
 
@@ -390,32 +390,32 @@ export class RoutinesService {
    * All or nothing: one transaction, so a failure leaves the library as it
    * was. Every message names the entry it is about.
    */
-  async importGlobal(file: unknown): Promise<RoutineSummary[]> {
-    const { routines: entries } = validateBody(
-      routineExportEnvelopeSchema,
+  async importGlobal(file: unknown): Promise<ProgramSummary[]> {
+    const { programs: entries } = validateBody(
+      programExportEnvelopeSchema,
       file,
     );
-    const routines: CreateRoutine[] = [];
+    const programs: CreateProgram[] = [];
     for (const [index, entry] of entries.entries()) {
-      routines.push(
+      programs.push(
         await inEntry(index, entry, () =>
-          validateBody(createRoutineSchema, entry),
+          validateBody(createProgramSchema, entry),
         ),
       );
     }
     return this.prisma.$transaction(
       async (tx) => {
-        const created: RoutineSummary[] = [];
-        for (const [index, routine] of routines.entries()) {
+        const created: ProgramSummary[] = [];
+        for (const [index, program] of programs.entries()) {
           created.push(
-            await inEntry(index, routine, () =>
-              this.insert(tx, GLOBAL_LIBRARY, routine),
+            await inEntry(index, program, () =>
+              this.insert(tx, GLOBAL_LIBRARY, program),
             ),
           );
         }
         return created;
       },
-      // A library's worth of routines, each a handful of statements; the
+      // A library's worth of programs, each a handful of statements; the
       // default five seconds is sized for one request's work.
       { timeout: 60_000 },
     );
@@ -425,18 +425,18 @@ export class RoutinesService {
    * The global library as an admin manages it, live and archived, Just WODs
    * first and marked built in so the screen offers it no actions.
    */
-  async listGlobal(): Promise<GlobalRoutineSummary[]> {
+  async listGlobal(): Promise<GlobalProgramSummary[]> {
     const rows = await this.prisma.program.findMany({
       where: GLOBAL_LIBRARY,
       orderBy: [
         { archivedAt: { sort: 'asc', nulls: 'first' } },
         { name: 'asc' },
       ],
-      ...ROUTINE_ROW,
+      ...PROGRAM_ROW,
     });
     const summaries = rows.map((row) => ({
       ...toSummary(row),
-      builtIn: row.id === DEFAULT_PLAN_ID,
+      builtIn: row.id === DEFAULT_PROGRAM_ID,
     }));
     return [
       ...summaries.filter((r) => r.builtIn),
@@ -448,12 +448,12 @@ export class RoutinesService {
   private async insert(
     db: Db,
     writer: LibraryWriter,
-    routine: CreateRoutine,
-  ): Promise<RoutineSummary> {
-    await this.assertNameFree(db, writer, routine.name);
-    await this.assertExercisesReferenceable(db, writer, routine);
-    const row = await this.withNameGuard(writer, routine.name, () =>
-      db.program.create({ data: programData(writer, routine), ...ROUTINE_ROW }),
+    program: CreateProgram,
+  ): Promise<ProgramSummary> {
+    await this.assertNameFree(db, writer, program.name);
+    await this.assertExercisesReferenceable(db, writer, program);
+    const row = await this.withNameGuard(writer, program.name, () =>
+      db.program.create({ data: programData(writer, program), ...PROGRAM_ROW }),
     );
     return toSummary(row);
   }
@@ -483,13 +483,13 @@ export class RoutinesService {
   private async findOwned(
     writer: LibraryWriter,
     id: string,
-  ): Promise<RoutineContent> {
+  ): Promise<ProgramContent> {
     const program = await this.prisma.program.findFirst({
       where: { id, ownerId: writer.ownerId },
-      ...ROUTINE_CONTENT,
+      ...PROGRAM_CONTENT,
     });
-    if (!program || program.id === DEFAULT_PLAN_ID) {
-      throw new NotFoundException('No such routine.');
+    if (!program || program.id === DEFAULT_PROGRAM_ID) {
+      throw new NotFoundException('No such program.');
     }
     return program;
   }
@@ -498,13 +498,13 @@ export class RoutinesService {
   private async findOwnedRow(
     writer: LibraryWriter,
     id: string,
-  ): Promise<RoutineRow> {
+  ): Promise<ProgramRow> {
     const program = await this.prisma.program.findFirst({
       where: { id, ownerId: writer.ownerId },
-      ...ROUTINE_ROW,
+      ...PROGRAM_ROW,
     });
-    if (!program || program.id === DEFAULT_PLAN_ID) {
-      throw new NotFoundException('No such routine.');
+    if (!program || program.id === DEFAULT_PROGRAM_ID) {
+      throw new NotFoundException('No such program.');
     }
     return program;
   }
@@ -518,25 +518,25 @@ export class RoutinesService {
   }
 
   /**
-   * The caller's own routines, live and archived -- the "My routines" list.
+   * The caller's own programs, live and archived -- the "Your programs" list.
    * Global programs are not here: this is what you wrote, not what you can
    * run, and the setup picker is the list of the second.
    */
-  async listOwn(userId: string): Promise<RoutineSummary[]> {
+  async listOwn(userId: string): Promise<ProgramSummary[]> {
     const rows = await this.prisma.program.findMany({
       where: { ownerId: userId },
       orderBy: [
         { archivedAt: { sort: 'asc', nulls: 'first' } },
         { name: 'asc' },
       ],
-      ...ROUTINE_ROW,
+      ...PROGRAM_ROW,
     });
     return rows.map(toSummary);
   }
 
   /**
-   * Only a live routine holds its name; an archived one has let it go. A
-   * routine being edited does not clash with itself.
+   * Only a live program holds its name; an archived one has let it go. A
+   * program being edited does not clash with itself.
    */
   private async assertNameFree(
     db: Db,
@@ -564,11 +564,11 @@ export class RoutinesService {
   private async assertExercisesReferenceable(
     db: Db,
     writer: LibraryWriter,
-    routine: CreateRoutine,
+    program: CreateProgram,
   ) {
     const ids = [
       ...new Set(
-        routine.days.flatMap((d) =>
+        program.days.flatMap((d) =>
           d.lines.flatMap((l) => (l.exerciseId ? [l.exerciseId] : [])),
         ),
       ),
@@ -594,49 +594,49 @@ export class RoutinesService {
  * `expandProgramWeeks` repeats it for however long the athlete chose, and one
  * `movements` slot per day trained.
  *
- * A flexible routine is "any N days a week" with N exactly the days written
+ * A flexible program is "any N days a week" with N exactly the days written
  * (DN-145): both bounds are N, so every session is kept and `priority` never
  * has to choose -- every slot is 0. Its written weekdays become the picker's
  * starting days.
  */
 function programData(
   writer: LibraryWriter,
-  routine: CreateRoutine,
+  program: CreateProgram,
 ): Prisma.ProgramCreateInput {
   return {
-    ...programFields(routine),
+    ...programFields(program),
     owner: writer.ownerId ? { connect: { id: writer.ownerId } } : undefined,
-    weeks: weeksData(routine),
+    weeks: weeksData(program),
   };
 }
 
-/** The program's own columns: what the routine says, minus its week. */
-function programFields(routine: CreateRoutine) {
-  const weekdays = routine.days.map((d) => d.dayOfWeek);
-  const flexible = routine.scheduleMode === 'flexible';
+/** The program's own columns: what the program says, minus its week. */
+function programFields(program: CreateProgram) {
+  const weekdays = program.days.map((d) => d.dayOfWeek);
+  const flexible = program.scheduleMode === 'flexible';
   return {
-    name: routine.name,
+    name: program.name,
     summary:
-      routine.summary ?? defaultRoutineSummary(routine.scheduleMode, weekdays),
-    scheduleMode: routine.scheduleMode,
+      program.summary ?? defaultProgramSummary(program.scheduleMode, weekdays),
+    scheduleMode: program.scheduleMode,
     minDaysPerWeek: flexible ? weekdays.length : null,
     maxDaysPerWeek: flexible ? weekdays.length : null,
     defaultDays: flexible ? [...weekdays].sort((a, b) => a - b) : [],
-    minWeeks: ROUTINE_WEEKS.min,
-    maxWeeks: ROUTINE_WEEKS.max,
-    defaultWeeks: ROUTINE_WEEKS.default,
+    minWeeks: PROGRAM_WEEKS.min,
+    maxWeeks: PROGRAM_WEEKS.max,
+    defaultWeeks: PROGRAM_WEEKS.default,
   } satisfies Prisma.ProgramUpdateInput;
 }
 
 /** The one repeating week, its days and their lines, ready to create. */
-function weeksData(routine: CreateRoutine) {
+function weeksData(program: CreateProgram) {
   return {
     create: [
       {
         order: 0,
         phase: 'core',
         slots: {
-          create: routine.days.map((day) => ({
+          create: program.days.map((day) => ({
             dayOfWeek: day.dayOfWeek,
             label: day.label ?? null,
             kind: 'movements',
@@ -663,22 +663,22 @@ function weeksData(routine: CreateRoutine) {
 }
 
 /**
- * The stored routine as the body that would write it again -- the inverse of
+ * The stored program as the body that would write it again -- the inverse of
  * `programData`, for the editor to load and for telling a structural edit from
  * a wording one.
  */
-function toCreateRoutine(program: RoutineContent): CreateRoutine {
-  const scheduleMode = program.scheduleMode as CreateRoutine['scheduleMode'];
-  const days: RoutineDay[] = program.weeks
+function toCreateProgram(program: ProgramContent): CreateProgram {
+  const scheduleMode = program.scheduleMode as CreateProgram['scheduleMode'];
+  const days: ProgramDay[] = program.weeks
     .flatMap((w) => w.slots)
     .map((slot) => ({
       dayOfWeek: slot.dayOfWeek,
-      // Only where the day has a name, so an unnamed routine reads back --
+      // Only where the day has a name, so an unnamed program reads back --
       // and exports -- exactly as it did before days could be named.
       ...(slot.label ? { label: slot.label } : {}),
       lines: slot.movements.map((m) => ({
         movementGroup:
-          m.movementGroup as RoutineDay['lines'][number]['movementGroup'],
+          m.movementGroup as ProgramDay['lines'][number]['movementGroup'],
         exerciseId: m.exerciseId,
         sets: m.sets,
         reps: m.reps,
@@ -688,7 +688,7 @@ function toCreateRoutine(program: RoutineContent): CreateRoutine {
       })),
     }))
     .sort((a, b) => a.dayOfWeek - b.dayOfWeek);
-  const written = defaultRoutineSummary(
+  const written = defaultProgramSummary(
     scheduleMode,
     days.map((d) => d.dayOfWeek),
   );
@@ -701,8 +701,8 @@ function toCreateRoutine(program: RoutineContent): CreateRoutine {
 }
 
 /** Whether two bodies describe the same week, whatever they are called. */
-function sameStructure(a: CreateRoutine, b: CreateRoutine): boolean {
-  const shape = (r: CreateRoutine) =>
+function sameStructure(a: CreateProgram, b: CreateProgram): boolean {
+  const shape = (r: CreateProgram) =>
     JSON.stringify({
       scheduleMode: r.scheduleMode,
       days: [...r.days]
@@ -723,7 +723,7 @@ function sameStructure(a: CreateRoutine, b: CreateRoutine): boolean {
   return shape(a) === shape(b);
 }
 
-function toSummary(row: RoutineRow): RoutineSummary {
+function toSummary(row: ProgramRow): ProgramSummary {
   const days = row.weeks
     .flatMap((w) => w.slots.map((s) => s.dayOfWeek))
     .filter((d, i, all) => all.indexOf(d) === i)
@@ -732,7 +732,7 @@ function toSummary(row: RoutineRow): RoutineSummary {
     id: row.id,
     name: row.name,
     summary: row.summary,
-    scheduleMode: row.scheduleMode as RoutineSummary['scheduleMode'],
+    scheduleMode: row.scheduleMode as ProgramSummary['scheduleMode'],
     days,
     archived: row.archivedAt !== null,
   };
@@ -740,7 +740,7 @@ function toSummary(row: RoutineRow): RoutineSummary {
 
 /**
  * Runs one entry of an import, prefixing whatever it refuses with which
- * entry that was -- "Routine 2 (Push days): ..." -- and keeping the status.
+ * entry that was -- "Program 2 (Push days): ..." -- and keeping the status.
  */
 async function inEntry<T>(
   index: number,
@@ -758,7 +758,7 @@ async function inEntry<T>(
       typeof entry.name === 'string'
         ? ` (${entry.name})`
         : '';
-    const label = `Routine ${index + 1}${name}`;
+    const label = `Program ${index + 1}${name}`;
     const response = error.getResponse();
     const message =
       typeof response === 'string'
@@ -780,7 +780,7 @@ async function inEntry<T>(
 function nameTaken(writer: LibraryWriter, name: string) {
   return new ConflictException(
     writer.ownerId === null
-      ? `There is already a global routine called "${name}"`
-      : `You already have a routine called "${name}"`,
+      ? `There is already a global program called "${name}"`
+      : `You already have a program called "${name}"`,
   );
 }

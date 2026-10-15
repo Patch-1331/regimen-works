@@ -50,7 +50,7 @@ export type ProgramSlot = {
    */
   priority: number;
   kind: string;
-  /** The day's own name, from a routine (DN-155). Null on most days. */
+  /** The day's own name, from a program (DN-155). Null on most days. */
   label: string | null;
   wodId: string | null;
   pattern: string | null;
@@ -78,7 +78,7 @@ export type ActiveProgram = {
   /** The run's length. Null for an open-ended program, which never completes. */
   weeks: number | null;
   /**
-   * The athlete's rest pace for this run, or null to keep the routine's own
+   * The athlete's rest pace for this run, or null to keep the program's own
    * (ADR 0005). Carried here because the prescription a day hands over is
    * resolved through it -- see `resolveRestSeconds`.
    */
@@ -286,7 +286,7 @@ export function resolveProgramDay(
   //   - `wod_generated`, the ordinary one, with the slot's constraints.
   //   - a `movements` slot with nothing prescribed, and a `wod_pinned` slot
   //     whose WOD is somehow null. A CHECK makes the second unrepresentable
-  //     and `planSlotSchema`'s refinement refuses to author the first, so
+  //     and `programSlotSchema`'s refinement refuses to author the first, so
   //     neither is a case so much as a refusal to turn an impossible row into
   //     an empty screen. An athlete on such a day still trains.
   return {

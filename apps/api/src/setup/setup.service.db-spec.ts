@@ -1,5 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { DEFAULT_PLAN_ID } from '@regimen-works/shared';
+import { DEFAULT_PROGRAM_ID } from '@regimen-works/shared';
 import type { CommitSetup } from '@regimen-works/shared';
 import type { PrismaClient } from '@prisma/client';
 import { testPrisma } from '../test-support/database';
@@ -37,7 +37,7 @@ function service(client: PrismaClient = testPrisma()): SetupService {
 
 function answers(overrides: Partial<CommitSetup> = {}): CommitSetup {
   return {
-    planId: 'program-1',
+    programId: 'program-1',
     trainingDays: [1, 3, 5],
     weeks: 6,
     startDate: TODAY,
@@ -58,7 +58,7 @@ async function provisionedAthlete(trainingDays = [1, 2, 3, 4, 5]) {
     data: { userId: user.id, trainingDays },
   });
   const enrollment = await createEnrollment(user.id, {
-    programId: DEFAULT_PLAN_ID,
+    programId: DEFAULT_PROGRAM_ID,
     startDate: TODAY,
     weeks: null,
   });
@@ -82,7 +82,7 @@ describe('SetupService.options', () => {
     // First because it is what every athlete is already on and what the
     // picker recommends to anyone unsure -- not a consolation prize sorted
     // to the bottom under Z.
-    expect(options.programs[0].id).toBe(DEFAULT_PLAN_ID);
+    expect(options.programs[0].id).toBe(DEFAULT_PROGRAM_ID);
     const rest = options.programs.slice(1).map((p) => p.name);
     expect(rest).toEqual(['Ankle Program', 'Zebra Program']);
   });
@@ -163,7 +163,7 @@ describe('SetupService.options', () => {
     const options = await service().options(userId, TODAY);
 
     expect(
-      options.programs.find((p) => p.id === DEFAULT_PLAN_ID)!.scheduleNote,
+      options.programs.find((p) => p.id === DEFAULT_PROGRAM_ID)!.scheduleNote,
     ).toBeNull();
   });
 
@@ -172,7 +172,7 @@ describe('SetupService.options', () => {
 
     const options = await service().options(userId, TODAY);
 
-    const justWods = options.programs.find((p) => p.id === DEFAULT_PLAN_ID)!;
+    const justWods = options.programs.find((p) => p.id === DEFAULT_PROGRAM_ID)!;
     expect(justWods.fixedDays).toEqual([]);
   });
 
@@ -255,7 +255,7 @@ describe('SetupService.commit', () => {
 
     await service().commit(
       userId,
-      answers({ planId: program.id, weeks: 6, startDate: '2026-09-21' }),
+      answers({ programId: program.id, weeks: 6, startDate: '2026-09-21' }),
       TODAY,
     );
 
@@ -280,7 +280,7 @@ describe('SetupService.commit', () => {
     await createSkillLevel(userId, 'squat', goblet.id);
     const program = await createProgram();
 
-    await service().commit(userId, answers({ planId: program.id }), TODAY);
+    await service().commit(userId, answers({ programId: program.id }), TODAY);
 
     expect((await activeEnrollment(userId)).startingMovements).toEqual({
       pull: chinUp.id,
@@ -294,7 +294,7 @@ describe('SetupService.commit', () => {
     const { userId } = await provisionedAthlete();
     const program = await createProgram();
 
-    await service().commit(userId, answers({ planId: program.id }), TODAY);
+    await service().commit(userId, answers({ programId: program.id }), TODAY);
 
     expect((await activeEnrollment(userId)).startingMovements).toEqual({});
   });
@@ -311,7 +311,7 @@ describe('SetupService.commit', () => {
     });
     const program = await createProgram();
 
-    await service().commit(userId, answers({ planId: program.id }), TODAY);
+    await service().commit(userId, answers({ programId: program.id }), TODAY);
 
     const after = await testPrisma().programEnrollment.findUniqueOrThrow({
       where: { id: finished.id },
@@ -330,7 +330,7 @@ describe('SetupService.commit', () => {
     });
     const program = await createProgram();
 
-    await service().commit(userId, answers({ planId: program.id }), TODAY);
+    await service().commit(userId, answers({ programId: program.id }), TODAY);
 
     expect((await activeEnrollment(userId)).programId).toBe(program.id);
   });
@@ -341,7 +341,7 @@ describe('SetupService.commit', () => {
 
     await service().commit(
       userId,
-      answers({ planId: program.id, trainingDays: [2, 4, 6], weeks: 4 }),
+      answers({ programId: program.id, trainingDays: [2, 4, 6], weeks: 4 }),
       TODAY,
     );
 
@@ -359,7 +359,7 @@ describe('SetupService.commit', () => {
 
     await service().commit(
       userId,
-      answers({ planId: fixed.id, trainingDays: null, weeks: 6 }),
+      answers({ programId: fixed.id, trainingDays: null, weeks: 6 }),
       TODAY,
     );
 
@@ -375,7 +375,7 @@ describe('SetupService.commit', () => {
 
     const result = await service().commit(
       userId,
-      answers({ planId: program.id }),
+      answers({ programId: program.id }),
       TODAY,
     );
 
@@ -395,7 +395,7 @@ describe('SetupService.commit', () => {
 
     await service().commit(
       userId,
-      answers({ planId: program.id, startDate: TODAY }),
+      answers({ programId: program.id, startDate: TODAY }),
       TODAY,
     );
 
@@ -415,7 +415,7 @@ describe('SetupService.commit', () => {
 
     await service().commit(
       userId,
-      answers({ planId: program.id, startDate: '2026-09-21' }),
+      answers({ programId: program.id, startDate: '2026-09-21' }),
       TODAY,
     );
 
@@ -434,7 +434,7 @@ describe('SetupService.commit', () => {
 
     await service().commit(
       userId,
-      answers({ planId: program.id, startDate: TODAY }),
+      answers({ programId: program.id, startDate: TODAY }),
       TODAY,
     );
 
@@ -453,12 +453,12 @@ describe('SetupService.commit', () => {
     const theirs = await createProgram({ ownerId: stranger.id });
 
     await expect(
-      service().commit(userId, answers({ planId: theirs.id }), TODAY),
+      service().commit(userId, answers({ programId: theirs.id }), TODAY),
     ).rejects.toThrow(NotFoundException);
   });
 
   it('refuses an archived program, even the athlete own', async () => {
-    // ADR 0006, decision 5: an archived routine leaves the picker so nobody
+    // ADR 0006, decision 5: an archived program leaves the picker so nobody
     // new can start it. Hiding it from `options` alone would leave the door
     // open to anyone who kept the id.
     const { userId } = await provisionedAthlete();
@@ -468,7 +468,7 @@ describe('SetupService.commit', () => {
     });
 
     await expect(
-      service().commit(userId, answers({ planId: archived.id }), TODAY),
+      service().commit(userId, answers({ programId: archived.id }), TODAY),
     ).rejects.toThrow(NotFoundException);
   });
 
@@ -476,7 +476,7 @@ describe('SetupService.commit', () => {
     const { userId } = await provisionedAthlete();
 
     await expect(
-      service().commit(userId, answers({ planId: 'program_nope' }), TODAY),
+      service().commit(userId, answers({ programId: 'program_nope' }), TODAY),
     ).rejects.toThrow(NotFoundException);
   });
 
@@ -490,14 +490,14 @@ describe('SetupService.commit', () => {
     await expect(
       service().commit(
         userId,
-        answers({ planId: program.id, trainingDays: [2] }),
+        answers({ programId: program.id, trainingDays: [2] }),
         TODAY,
       ),
     ).rejects.toThrow(BadRequestException);
 
     const enrollment = await activeEnrollment(userId);
     expect(enrollment.id).toBe(enrollmentId);
-    expect(enrollment.programId).toBe(DEFAULT_PLAN_ID);
+    expect(enrollment.programId).toBe(DEFAULT_PROGRAM_ID);
     const user = await testPrisma().user.findUniqueOrThrow({
       where: { id: userId },
     });
@@ -515,7 +515,7 @@ describe('SetupService.commit', () => {
     await expect(
       service().commit(
         userId,
-        answers({ planId: program.id, startDate: TODAY }),
+        answers({ programId: program.id, startDate: TODAY }),
         TODAY,
       ),
     ).rejects.toThrow(BadRequestException);
@@ -549,7 +549,7 @@ describe('SetupService, the rest pace', () => {
                 kind: 'movements',
                 movements: {
                   // Every week states its rest except the last, which is the
-                  // one the routine is silent in.
+                  // one the program is silent in.
                   create: rests.map((restSeconds, i) => ({
                     order: i,
                     movementGroup: 'pull',
@@ -579,7 +579,7 @@ describe('SetupService, the rest pace', () => {
     // Just WODs has no straight sets at all: no pace to offer, and nothing to
     // leave unstated.
     expect(
-      options.programs.find((p) => p.id === DEFAULT_PLAN_ID),
+      options.programs.find((p) => p.id === DEFAULT_PROGRAM_ID),
     ).toMatchObject({ hasStraightSets: false, restPaceRequired: false });
   });
 
@@ -625,7 +625,7 @@ describe('SetupService, the rest pace', () => {
 
     await service().commit(
       userId,
-      answers({ planId: program.id, defaultRestSeconds: 120 }),
+      answers({ programId: program.id, defaultRestSeconds: 120 }),
       TODAY,
     );
 
@@ -639,13 +639,13 @@ describe('SetupService, the rest pace', () => {
     await expect(
       service().commit(
         userId,
-        answers({ planId: program.id, defaultRestSeconds: null }),
+        answers({ programId: program.id, defaultRestSeconds: null }),
         TODAY,
       ),
     ).rejects.toThrow(BadRequestException);
     const enrollment = await activeEnrollment(userId);
     expect(enrollment.id).toBe(enrollmentId);
-    expect(enrollment.programId).toBe(DEFAULT_PLAN_ID);
+    expect(enrollment.programId).toBe(DEFAULT_PROGRAM_ID);
   });
 
   it('takes a pace for a program that leaves rest unstated', async () => {
@@ -654,7 +654,7 @@ describe('SetupService, the rest pace', () => {
 
     await service().commit(
       userId,
-      answers({ planId: program.id, defaultRestSeconds: 60 }),
+      answers({ programId: program.id, defaultRestSeconds: 60 }),
       TODAY,
     );
 

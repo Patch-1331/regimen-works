@@ -3,8 +3,8 @@ import { dailyAssignmentSchema } from "./assignment.js";
 import {
   enrollmentStatus,
   movementPattern,
-  planPhase,
-  planSlotKind,
+  programPhase,
+  programSlotKind,
   movementGroup,
   resultType,
   scheduleMode,
@@ -36,12 +36,12 @@ import {
   swapOptionsQuerySchema,
 } from "./substitution.js";
 import { createWodSchema, updateWodSchema } from "./wod.js";
-import { planDetailSchema, planSchema, planSlotSchema } from "./plan.js";
+import { programDetailSchema, programSchema, programSlotSchema } from "./program.js";
 import {
   completedProgramSchema,
   createEnrollmentSchema,
-  planEnrollmentSchema,
-} from "./plan-enrollment.js";
+  programEnrollmentSchema,
+} from "./program-enrollment.js";
 import { todayResponseSchema } from "./today.js";
 import { wodMovementSchema, wodSchema } from "./wod.js";
 
@@ -323,7 +323,7 @@ describe("sessionMovementSchema", () => {
     const { wodMovementId: _omitted, ...prescribed } = sessionMovement();
     const parsed = sessionMovementSchema.parse({
       ...prescribed,
-      planSlotMovementId: "plan-slot-movement-1",
+      programSlotMovementId: "program-slot-movement-1",
       sets: 5,
       restSeconds: 90,
     });
@@ -336,7 +336,7 @@ describe("sessionMovementSchema", () => {
     expect(
       sessionMovementSchema.safeParse({
         ...sessionMovement(),
-        planSlotMovementId: "plan-slot-movement-1",
+        programSlotMovementId: "program-slot-movement-1",
       }).success,
     ).toBe(false);
   });
@@ -348,7 +348,7 @@ describe("sessionMovementSchema", () => {
 
     expect(parsed.sets).toBeNull();
     expect(parsed.restSeconds).toBeNull();
-    expect(parsed.planSlotMovementId).toBeNull();
+    expect(parsed.programSlotMovementId).toBeNull();
   });
 });
 
@@ -602,7 +602,7 @@ describe("settingsSchema", () => {
     // told no instead of watching it vanish.
     expect(
       updateSettingsSchema.safeParse({
-        scheduleLock: { planId: "p", planName: "Pull-Up Builder", days: [1] },
+        scheduleLock: { programId: "p", programName: "Pull-Up Builder", days: [1] },
       }).success,
     ).toBe(false);
   });
@@ -614,7 +614,7 @@ describe("settingsSchema", () => {
       updateSettingsSchema.safeParse({
         restPace: {
           enrollmentId: "e",
-          planName: "Pull-Up Builder",
+          programName: "Pull-Up Builder",
           defaultRestSeconds: 90,
           required: false,
         },
@@ -626,7 +626,7 @@ describe("settingsSchema", () => {
     // "Locked" without naming the program is not an answer the athlete can
     // act on: ending that program is the action available to them.
     expect(
-      scheduleLockSchema.safeParse({ planId: "p", days: [1] }).success,
+      scheduleLockSchema.safeParse({ programId: "p", days: [1] }).success,
     ).toBe(false);
   });
 
@@ -636,8 +636,8 @@ describe("settingsSchema", () => {
     // coaching decision, and this is how it says so.
     expect(
       scheduleLockSchema.safeParse({
-        planId: "p",
-        planName: "Deload",
+        programId: "p",
+        programName: "Deload",
         days: [],
       }).success,
     ).toBe(true);
@@ -1059,7 +1059,7 @@ describe("setSubstitutionRequestSchema", () => {
     // A program's straight-sets day carries no WodMovement at all (DN-125).
     expect(
       setSubstitutionRequestSchema.safeParse({
-        planSlotMovementId: "psm-1",
+        programSlotMovementId: "psm-1",
         exerciseId: "e-2",
       }).success,
     ).toBe(true);
@@ -1069,7 +1069,7 @@ describe("setSubstitutionRequestSchema", () => {
     expect(
       setSubstitutionRequestSchema.safeParse({
         wodMovementId: "wm-1",
-        planSlotMovementId: "psm-1",
+        programSlotMovementId: "psm-1",
         exerciseId: "e-2",
       }).success,
     ).toBe(false);
@@ -1086,7 +1086,7 @@ describe("setSubstitutionRequestSchema", () => {
       setSubstitutionRequestSchema.parse({
         wodMovementId: "wm-1",
         exerciseId: "e-2",
-      }).planSlotMovementId,
+      }).programSlotMovementId,
     ).toBeNull();
   });
 });
@@ -1134,7 +1134,7 @@ describe("todayResponseSchema", () => {
     warmupCooldownEnabled: true,
     warmup: [{ id: "c-1", name: "Arm circles", instructions: [] }],
     cooldown: [],
-    plan: null,
+    program: null,
     completedProgram: null,
     makeup: null,
     ...overrides,
@@ -1142,8 +1142,8 @@ describe("todayResponseSchema", () => {
 
   const completedProgramBlock = (overrides: Record<string, unknown> = {}) => ({
     enrollmentId: "enrollment-1",
-    planId: "plan-1",
-    planName: "Pull-Up Builder",
+    programId: "program-1",
+    programName: "Pull-Up Builder",
     completedAt: "2026-09-15T09:00:00.000Z",
     canRunAgain: true,
     summary: {
@@ -1163,9 +1163,9 @@ describe("todayResponseSchema", () => {
     ...overrides,
   });
 
-  const planBlock = (overrides: Record<string, unknown> = {}) => ({
+  const programBlock = (overrides: Record<string, unknown> = {}) => ({
     enrollmentId: "enrollment-1",
-    planId: "plan-1",
+    programId: "program-1",
     name: "Pull-Up Builder",
     week: 2,
     totalWeeks: 6,
@@ -1188,11 +1188,11 @@ describe("todayResponseSchema", () => {
     expect(todayResponseSchema.safeParse(rest).success).toBe(false);
   });
 
-  it("refuses a plan block without its day's name, null or not (DN-155)", () => {
-    const { dayLabel: _omitted, ...plan } = planBlock();
-    expect(todayResponseSchema.safeParse(todayPayload({ plan })).success).toBe(false);
+  it("refuses a program block without its day's name, null or not (DN-155)", () => {
+    const { dayLabel: _omitted, ...unlabelled } = programBlock();
+    expect(todayResponseSchema.safeParse(todayPayload({ program: unlabelled })).success).toBe(false);
     expect(
-      todayResponseSchema.safeParse(todayPayload({ plan: planBlock({ dayLabel: null }) }))
+      todayResponseSchema.safeParse(todayPayload({ program: programBlock({ dayLabel: null }) }))
         .success,
     ).toBe(true);
   });
@@ -1292,12 +1292,12 @@ describe("todayResponseSchema", () => {
     ).toBe(false);
   });
 
-  it("requires the plan block to be stated, even as null", () => {
+  it("requires the program block to be stated, even as null", () => {
     // Nullable, not optional. An API that omits it is an API whose response
     // the client rejects, which is the whole reason the field is spelled out
     // on every path in SchedulerService rather than added where convenient.
-    const { plan: _omitted, ...withoutPlan } = todayPayload();
-    expect(todayResponseSchema.safeParse(withoutPlan).success).toBe(false);
+    const { program: _omitted, ...withoutProgram } = todayPayload();
+    expect(todayResponseSchema.safeParse(withoutProgram).success).toBe(false);
   });
 
   it("requires the makeup block to be stated, even as null", () => {
@@ -1342,7 +1342,7 @@ describe("todayResponseSchema", () => {
 
   it("parses a day inside a program", () => {
     expect(
-      todayResponseSchema.safeParse(todayPayload({ plan: planBlock() }))
+      todayResponseSchema.safeParse(todayPayload({ program: programBlock() }))
         .success,
     ).toBe(true);
   });
@@ -1352,7 +1352,7 @@ describe("todayResponseSchema", () => {
     expect(
       todayResponseSchema.safeParse(
         todayPayload({
-          plan: planBlock({ week: 37, totalWeeks: null, weekLabel: null }),
+          program: programBlock({ week: 37, totalWeeks: null, weekLabel: null }),
         }),
       ).success,
     ).toBe(true);
@@ -1364,7 +1364,7 @@ describe("todayResponseSchema", () => {
     // which is a positive instruction.
     expect(
       todayResponseSchema.safeParse(
-        todayPayload({ plan: planBlock({ slotKind: null }) }),
+        todayPayload({ program: programBlock({ slotKind: null }) }),
       ).success,
     ).toBe(true);
   });
@@ -1374,7 +1374,7 @@ describe("todayResponseSchema", () => {
     // athlete reads. Accepting 0 would put "Week 0" on someone's screen.
     expect(
       todayResponseSchema.safeParse(
-        todayPayload({ plan: planBlock({ week: 0 }) }),
+        todayPayload({ program: programBlock({ week: 0 }) }),
       ).success,
     ).toBe(false);
   });
@@ -1382,7 +1382,7 @@ describe("todayResponseSchema", () => {
   it("rejects a slot kind the program vocabulary does not have", () => {
     expect(
       todayResponseSchema.safeParse(
-        todayPayload({ plan: planBlock({ slotKind: "wod" }) }),
+        todayPayload({ program: programBlock({ slotKind: "wod" }) }),
       ).success,
     ).toBe(false);
   });
@@ -1394,8 +1394,8 @@ describe("enums", () => {
     ["movementGroup", movementGroup, "core_hold", "core"],
     ["wodType", wodType, "amrap", "chipper"],
     ["resultType", resultType, "total_reps", "calories"],
-    ["planPhase", planPhase, "core", "deload"],
-    ["planSlotKind", planSlotKind, "wod_generated", "wod"],
+    ["programPhase", programPhase, "core", "deload"],
+    ["programSlotKind", programSlotKind, "wod_generated", "wod"],
     ["scheduleMode", scheduleMode, "flexible", "strict"],
     ["enrollmentStatus", enrollmentStatus, "completed", "cancelled"],
   ])(
@@ -1692,9 +1692,9 @@ function slot(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function plan(overrides: Record<string, unknown> = {}) {
+function program(overrides: Record<string, unknown> = {}) {
   return {
-    id: "plan-1",
+    id: "program-1",
     name: "Pull-Up Builder",
     summary: "Six weeks to your first unassisted chin-up.",
     goal: "your first unassisted chin-up",
@@ -1710,16 +1710,16 @@ function plan(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("planSlotSchema's pinned-WOD refinement", () => {
+describe("programSlotSchema's pinned-WOD refinement", () => {
   it("accepts a pinned slot that names a WOD", () => {
     expect(
-      planSlotSchema.safeParse(slot({ kind: "wod_pinned", wodId: "wod-1" }))
+      programSlotSchema.safeParse(slot({ kind: "wod_pinned", wodId: "wod-1" }))
         .success,
     ).toBe(true);
   });
 
   it("rejects a pinned slot with nothing pinned", () => {
-    const result = planSlotSchema.safeParse(
+    const result = programSlotSchema.safeParse(
       slot({ kind: "wod_pinned", wodId: null }),
     );
     expect(result.success).toBe(false);
@@ -1731,13 +1731,13 @@ describe("planSlotSchema's pinned-WOD refinement", () => {
     // day carrying a WOD is a row whose `kind` and `wodId` tell different
     // stories, and whichever a reader believes, the other is a bug.
     expect(
-      planSlotSchema.safeParse(slot({ kind: "rest", wodId: "wod-1" })).success,
+      programSlotSchema.safeParse(slot({ kind: "rest", wodId: "wod-1" })).success,
     ).toBe(false);
   });
 
   it("rejects a generated slot that points at a WOD", () => {
     expect(
-      planSlotSchema.safeParse(slot({ kind: "wod_generated", wodId: "wod-1" }))
+      programSlotSchema.safeParse(slot({ kind: "wod_generated", wodId: "wod-1" }))
         .success,
     ).toBe(false);
   });
@@ -1745,27 +1745,27 @@ describe("planSlotSchema's pinned-WOD refinement", () => {
   it("accepts a generated slot with every constraint left open", () => {
     // A null skips its axis rather than narrowing to nothing.
     expect(
-      planSlotSchema.safeParse(
+      programSlotSchema.safeParse(
         slot({ pattern: null, wodType: null, maxTimeCapMinutes: null }),
       ).success,
     ).toBe(true);
   });
 
   it("rejects a weekday outside 0-6", () => {
-    expect(planSlotSchema.safeParse(slot({ dayOfWeek: 7 })).success).toBe(
+    expect(programSlotSchema.safeParse(slot({ dayOfWeek: 7 })).success).toBe(
       false,
     );
-    expect(planSlotSchema.safeParse(slot({ dayOfWeek: -1 })).success).toBe(
+    expect(programSlotSchema.safeParse(slot({ dayOfWeek: -1 })).success).toBe(
       false,
     );
   });
 
   it("accepts Sunday, which is 0 and not 7", () => {
-    expect(planSlotSchema.safeParse(slot({ dayOfWeek: 0 })).success).toBe(true);
+    expect(programSlotSchema.safeParse(slot({ dayOfWeek: 0 })).success).toBe(true);
   });
 });
 
-describe("planSlotSchema's prescription refinement", () => {
+describe("programSlotSchema's prescription refinement", () => {
   const prescribed = (overrides: Record<string, unknown> = {}) => ({
     id: "psm-1",
     order: 0,
@@ -1787,7 +1787,7 @@ describe("planSlotSchema's prescription refinement", () => {
     });
 
   it("accepts a movements day that prescribes something", () => {
-    expect(planSlotSchema.safeParse(movementDay([prescribed()])).success).toBe(
+    expect(programSlotSchema.safeParse(movementDay([prescribed()])).success).toBe(
       true,
     );
   });
@@ -1796,7 +1796,7 @@ describe("planSlotSchema's prescription refinement", () => {
     // The rule no CHECK can hold: `kind` is on the slot and the rows are on
     // another table (DN-19). A day of this kind with an empty prescription is
     // a screen with nothing on it.
-    const result = planSlotSchema.safeParse(movementDay([]));
+    const result = programSlotSchema.safeParse(movementDay([]));
     expect(result.success).toBe(false);
     expect(result.error?.issues[0].path).toEqual(["movements"]);
   });
@@ -1805,7 +1805,7 @@ describe("planSlotSchema's prescription refinement", () => {
     // The same biconditional as the pinned-WOD rule, refused for the same
     // reason: two halves of one row describing different days.
     expect(
-      planSlotSchema.safeParse(
+      programSlotSchema.safeParse(
         slot({ kind: "rest", movements: [prescribed()] }),
       ).success,
     ).toBe(false);
@@ -1814,13 +1814,13 @@ describe("planSlotSchema's prescription refinement", () => {
   it("leaves every other kind with an empty prescription by default", () => {
     // Why the field is defaulted rather than required: every slot authored
     // before DN-19 still parses as the WOD day it describes.
-    const parsed = planSlotSchema.parse(slot());
+    const parsed = programSlotSchema.parse(slot());
     expect(parsed.movements).toEqual([]);
   });
 
   it("accepts a prescription pinned to an exercise instead of a movementGroup", () => {
     expect(
-      planSlotSchema.safeParse(
+      programSlotSchema.safeParse(
         movementDay([prescribed({ movementGroup: null, exerciseId: "ex-1" })]),
       ).success,
     ).toBe(true);
@@ -1828,7 +1828,7 @@ describe("planSlotSchema's prescription refinement", () => {
 
   it("rejects a prescribed movement naming both a movementGroup and an exercise", () => {
     expect(
-      planSlotSchema.safeParse(
+      programSlotSchema.safeParse(
         movementDay([prescribed({ exerciseId: "ex-1" })]),
       ).success,
     ).toBe(false);
@@ -1837,7 +1837,7 @@ describe("planSlotSchema's prescription refinement", () => {
   it("rejects a prescribed movement naming neither", () => {
     // Sets and reps attached to nothing.
     expect(
-      planSlotSchema.safeParse(
+      programSlotSchema.safeParse(
         movementDay([prescribed({ movementGroup: null })]),
       ).success,
     ).toBe(false);
@@ -1845,40 +1845,40 @@ describe("planSlotSchema's prescription refinement", () => {
 
   it("rejects zero sets and zero reps", () => {
     expect(
-      planSlotSchema.safeParse(movementDay([prescribed({ sets: 0 })])).success,
+      programSlotSchema.safeParse(movementDay([prescribed({ sets: 0 })])).success,
     ).toBe(false);
     expect(
-      planSlotSchema.safeParse(movementDay([prescribed({ reps: 0 })])).success,
+      programSlotSchema.safeParse(movementDay([prescribed({ reps: 0 })])).success,
     ).toBe(false);
   });
 
   it("accepts no rest but refuses negative rest", () => {
     // 0 is a prescription -- straight through -- rather than an omission.
     expect(
-      planSlotSchema.safeParse(movementDay([prescribed({ restSeconds: 0 })]))
+      programSlotSchema.safeParse(movementDay([prescribed({ restSeconds: 0 })]))
         .success,
     ).toBe(true);
     // And null is the omission: the source said nothing (ADR 0005).
     expect(
-      planSlotSchema.safeParse(movementDay([prescribed({ restSeconds: null })]))
+      programSlotSchema.safeParse(movementDay([prescribed({ restSeconds: null })]))
         .success,
     ).toBe(true);
     expect(
-      planSlotSchema.safeParse(movementDay([prescribed({ restSeconds: -1 })]))
+      programSlotSchema.safeParse(movementDay([prescribed({ restSeconds: -1 })]))
         .success,
     ).toBe(false);
   });
 });
 
-describe("planSchema's schedule-mode refinement", () => {
+describe("programSchema's schedule-mode refinement", () => {
   it("accepts a flexible program carrying both day bounds", () => {
-    expect(planSchema.safeParse(plan()).success).toBe(true);
+    expect(programSchema.safeParse(program()).success).toBe(true);
   });
 
   it("accepts a fixed program carrying neither", () => {
     expect(
-      planSchema.safeParse(
-        plan({
+      programSchema.safeParse(
+        program({
           scheduleMode: "fixed",
           minDaysPerWeek: null,
           maxDaysPerWeek: null,
@@ -1891,28 +1891,28 @@ describe("planSchema's schedule-mode refinement", () => {
     // The slot layout IS a fixed program's schedule, so a day count beside it
     // is a second answer to a question already settled -- and the one the
     // scheduler ignores.
-    const result = planSchema.safeParse(plan({ scheduleMode: "fixed" }));
+    const result = programSchema.safeParse(program({ scheduleMode: "fixed" }));
     expect(result.success).toBe(false);
     expect(result.error?.issues[0].path).toEqual(["scheduleMode"]);
   });
 
   it("rejects a fixed program stating just one of them", () => {
     expect(
-      planSchema.safeParse(
-        plan({ scheduleMode: "fixed", maxDaysPerWeek: null }),
+      programSchema.safeParse(
+        program({ scheduleMode: "fixed", maxDaysPerWeek: null }),
       ).success,
     ).toBe(false);
   });
 
   it("rejects a flexible program missing its bounds", () => {
     expect(
-      planSchema.safeParse(plan({ minDaysPerWeek: null, maxDaysPerWeek: null }))
+      programSchema.safeParse(program({ minDaysPerWeek: null, maxDaysPerWeek: null }))
         .success,
     ).toBe(false);
   });
 
   it("rejects a flexible program stating only one bound", () => {
-    expect(planSchema.safeParse(plan({ maxDaysPerWeek: null })).success).toBe(
+    expect(programSchema.safeParse(program({ maxDaysPerWeek: null })).success).toBe(
       false,
     );
   });
@@ -1920,8 +1920,8 @@ describe("planSchema's schedule-mode refinement", () => {
   it("accepts an open-ended program, which has no length to choose", () => {
     // Just WODs: fixed, never finishes, so all three week fields are null.
     expect(
-      planSchema.safeParse(
-        plan({
+      programSchema.safeParse(
+        program({
           name: "Just WODs",
           goal: null,
           scheduleMode: "fixed",
@@ -1941,22 +1941,22 @@ describe("planSchema's schedule-mode refinement", () => {
     // about why its week is shaped that way and one who decided there is
     // nothing to explain are different facts, and only the second is a null.
     expect(
-      planSchema.safeParse(plan({ scheduleNote: undefined })).success,
+      programSchema.safeParse(program({ scheduleNote: undefined })).success,
     ).toBe(false);
     expect(
-      planSchema.safeParse(plan({ scheduleNote: "Two heavy pull days." }))
+      programSchema.safeParse(program({ scheduleNote: "Two heavy pull days." }))
         .success,
     ).toBe(true);
   });
 
   it("rejects a program with no summary to tell it apart", () => {
-    expect(planSchema.safeParse(plan({ summary: undefined })).success).toBe(
+    expect(programSchema.safeParse(program({ summary: undefined })).success).toBe(
       false,
     );
   });
 });
 
-describe("planDetailSchema", () => {
+describe("programDetailSchema", () => {
   const week = (overrides: Record<string, unknown> = {}) => ({
     id: "week-1",
     order: 0,
@@ -1968,16 +1968,16 @@ describe("planDetailSchema", () => {
 
   it("parses a program with its authored weeks", () => {
     expect(
-      planDetailSchema.safeParse({ ...plan(), weeks: [week()] }).success,
+      programDetailSchema.safeParse({ ...program(), weeks: [week()] }).success,
     ).toBe(true);
   });
 
-  it("carries the same schedule-mode rule as planSchema", () => {
+  it("carries the same schedule-mode rule as programSchema", () => {
     // One predicate, applied twice -- a rule restated in two places is a rule
     // that eventually becomes two different rules.
     expect(
-      planDetailSchema.safeParse({
-        ...plan({ scheduleMode: "fixed" }),
+      programDetailSchema.safeParse({
+        ...program({ scheduleMode: "fixed" }),
         weeks: [week()],
       }).success,
     ).toBe(false);
@@ -1986,14 +1986,14 @@ describe("planDetailSchema", () => {
   it("rejects a malformed slot nested two levels down", () => {
     const bad = week({ slots: [slot({ kind: "rest", wodId: "wod-1" })] });
     expect(
-      planDetailSchema.safeParse({ ...plan(), weeks: [bad] }).success,
+      programDetailSchema.safeParse({ ...program(), weeks: [bad] }).success,
     ).toBe(false);
   });
 
-  it("rejects a week whose phase is not one expandPlanWeeks will play", () => {
+  it("rejects a week whose phase is not one expandProgramWeeks will play", () => {
     expect(
-      planDetailSchema.safeParse({
-        ...plan(),
+      programDetailSchema.safeParse({
+        ...program(),
         weeks: [week({ phase: "deload" })],
       }).success,
     ).toBe(false);
@@ -2003,16 +2003,16 @@ describe("planDetailSchema", () => {
     // An empty list is a program under construction, not a malformed one.
     // What a program may not do is run without weeks, which is
     // minimumViableWeeks' job and not a shape question.
-    expect(planDetailSchema.safeParse({ ...plan(), weeks: [] }).success).toBe(
+    expect(programDetailSchema.safeParse({ ...program(), weeks: [] }).success).toBe(
       true,
     );
   });
 });
 
-describe("planEnrollmentSchema", () => {
+describe("programEnrollmentSchema", () => {
   const enrollment = (overrides: Record<string, unknown> = {}) => ({
     id: "enrollment-1",
-    plan: plan(),
+    program: program(),
     startDate: "2026-09-14",
     weeks: 6,
     status: "active",
@@ -2024,12 +2024,12 @@ describe("planEnrollmentSchema", () => {
   });
 
   it("parses an active run", () => {
-    expect(planEnrollmentSchema.safeParse(enrollment()).success).toBe(true);
+    expect(programEnrollmentSchema.safeParse(enrollment()).success).toBe(true);
   });
 
   it("parses a completed run with its snapshotted card", () => {
     expect(
-      planEnrollmentSchema.safeParse(
+      programEnrollmentSchema.safeParse(
         enrollment({
           status: "completed",
           completedAt: "2026-10-26T09:00:00.000Z",
@@ -2055,14 +2055,14 @@ describe("planEnrollmentSchema", () => {
     // A new athlete has no SkillLevel rows (DN-86). An exhaustive record would
     // reject exactly the athlete this snapshot exists to describe.
     expect(
-      planEnrollmentSchema.safeParse(enrollment({ startingMovements: {} }))
+      programEnrollmentSchema.safeParse(enrollment({ startingMovements: {} }))
         .success,
     ).toBe(true);
   });
 
   it("does not require a choice for every movementGroup in the app", () => {
     expect(
-      planEnrollmentSchema.safeParse(
+      programEnrollmentSchema.safeParse(
         enrollment({ startingMovements: { pull: "ex-chin-up" } }),
       ).success,
     ).toBe(true);
@@ -2070,7 +2070,7 @@ describe("planEnrollmentSchema", () => {
 
   it("rejects a snapshot keyed by something that is not a movementGroup", () => {
     expect(
-      planEnrollmentSchema.safeParse(
+      programEnrollmentSchema.safeParse(
         enrollment({ startingMovements: { biceps: "ex-curl" } }),
       ).success,
     ).toBe(false);
@@ -2081,11 +2081,11 @@ describe("planEnrollmentSchema", () => {
     // in another format does not merely look wrong -- it sorts wrong, and the
     // program silently never starts.
     expect(
-      planEnrollmentSchema.safeParse(enrollment({ startDate: "14/09/2026" }))
+      programEnrollmentSchema.safeParse(enrollment({ startDate: "14/09/2026" }))
         .success,
     ).toBe(false);
     expect(
-      planEnrollmentSchema.safeParse(
+      programEnrollmentSchema.safeParse(
         enrollment({ startDate: "2026-09-14T00:00:00Z" }),
       ).success,
     ).toBe(false);
@@ -2093,38 +2093,38 @@ describe("planEnrollmentSchema", () => {
 
   it("accepts an open-ended run, which has no length and never completes", () => {
     expect(
-      planEnrollmentSchema.safeParse(enrollment({ weeks: null })).success,
+      programEnrollmentSchema.safeParse(enrollment({ weeks: null })).success,
     ).toBe(true);
   });
 
   it("rejects a run of zero weeks", () => {
     expect(
-      planEnrollmentSchema.safeParse(enrollment({ weeks: 0 })).success,
+      programEnrollmentSchema.safeParse(enrollment({ weeks: 0 })).success,
     ).toBe(false);
   });
 
-  it("rejects a malformed plan nested inside it", () => {
+  it("rejects a malformed program nested inside it", () => {
     expect(
-      planEnrollmentSchema.safeParse(
-        enrollment({ plan: plan({ scheduleMode: "fixed" }) }),
+      programEnrollmentSchema.safeParse(
+        enrollment({ program: program({ scheduleMode: "fixed" }) }),
       ).success,
     ).toBe(false);
   });
 });
 
 describe("createEnrollmentSchema", () => {
-  it("defaults weeks to null, which is the plan's own length", () => {
+  it("defaults weeks to null, which is the program's own length", () => {
     const result = createEnrollmentSchema.safeParse({
-      planId: "plan-1",
+      programId: "program-1",
       startDate: "2026-09-14",
     });
     expect(result.success).toBe(true);
     expect(result.data?.weeks).toBeNull();
   });
 
-  it("rejects an empty planId", () => {
+  it("rejects an empty programId", () => {
     expect(
-      createEnrollmentSchema.safeParse({ planId: "", startDate: "2026-09-14" })
+      createEnrollmentSchema.safeParse({ programId: "", startDate: "2026-09-14" })
         .success,
     ).toBe(false);
   });
@@ -2134,7 +2134,7 @@ describe("createEnrollmentSchema", () => {
     // client that could send them could misreport what the program is
     // measured against.
     const result = createEnrollmentSchema.safeParse({
-      planId: "plan-1",
+      programId: "program-1",
       startDate: "2026-09-14",
       startingMovements: { pull: "ex-muscle-up" },
     });
@@ -2152,10 +2152,10 @@ describe("createEnrollmentSchema", () => {
  * trained has no sessions and nothing that moved.
  */
 describe("completedProgramSchema", () => {
-  const program = (overrides: Record<string, unknown> = {}) => ({
+  const completed = (overrides: Record<string, unknown> = {}) => ({
     enrollmentId: "enrollment-1",
-    planId: "plan-1",
-    planName: "Pull-Up Builder",
+    programId: "program-1",
+    programName: "Pull-Up Builder",
     completedAt: "2026-09-15T09:00:00.000Z",
     canRunAgain: true,
     summary: {
@@ -2175,18 +2175,18 @@ describe("completedProgramSchema", () => {
   });
 
   it("refuses a program that does not say whether it can run again (DN-153)", () => {
-    const { canRunAgain: _omitted, ...rest } = program();
+    const { canRunAgain: _omitted, ...rest } = completed();
     expect(completedProgramSchema.safeParse(rest).success).toBe(false);
   });
 
   it("parses a finished program", () => {
-    expect(completedProgramSchema.safeParse(program()).success).toBe(true);
+    expect(completedProgramSchema.safeParse(completed()).success).toBe(true);
   });
 
   it("accepts a run that had no length to report", () => {
     expect(
       completedProgramSchema.safeParse(
-        program({
+        completed({
           summary: { weeks: null, sessions: 12, movementChanges: [] },
         }),
       ).success,
@@ -2196,7 +2196,7 @@ describe("completedProgramSchema", () => {
   it("accepts a program nobody trained", () => {
     expect(
       completedProgramSchema.safeParse(
-        program({ summary: { weeks: 6, sessions: 0, movementChanges: [] } }),
+        completed({ summary: { weeks: 6, sessions: 0, movementChanges: [] } }),
       ).success,
     ).toBe(true);
   });
@@ -2204,7 +2204,7 @@ describe("completedProgramSchema", () => {
   it("refuses zero weeks, which is not a run that happened", () => {
     expect(
       completedProgramSchema.safeParse(
-        program({ summary: { weeks: 0, sessions: 0, movementChanges: [] } }),
+        completed({ summary: { weeks: 0, sessions: 0, movementChanges: [] } }),
       ).success,
     ).toBe(false);
   });
@@ -2212,7 +2212,7 @@ describe("completedProgramSchema", () => {
   it("refuses a negative session count", () => {
     expect(
       completedProgramSchema.safeParse(
-        program({ summary: { weeks: 6, sessions: -1, movementChanges: [] } }),
+        completed({ summary: { weeks: 6, sessions: -1, movementChanges: [] } }),
       ).success,
     ).toBe(false);
   });
@@ -2220,7 +2220,7 @@ describe("completedProgramSchema", () => {
   it("refuses a movement change on a movementGroup the app does not have", () => {
     expect(
       completedProgramSchema.safeParse(
-        program({
+        completed({
           summary: {
             weeks: 6,
             sessions: 24,
@@ -2244,7 +2244,7 @@ describe("completedProgramSchema", () => {
     // renders "pull: negative → " is worse than one that omits the group.
     expect(
       completedProgramSchema.safeParse(
-        program({
+        completed({
           summary: {
             weeks: 6,
             sessions: 24,
@@ -2266,14 +2266,14 @@ describe("completedProgramSchema", () => {
     // `completedAt` is a timestamp, unlike the ISO dates elsewhere in the
     // program vocabulary -- two programs can finish on the same day.
     expect(
-      completedProgramSchema.safeParse(program({ completedAt: "2026-09-15" }))
+      completedProgramSchema.safeParse(completed({ completedAt: "2026-09-15" }))
         .success,
     ).toBe(false);
   });
 
   it("refuses a run that has not finished", () => {
     expect(
-      completedProgramSchema.safeParse(program({ completedAt: null })).success,
+      completedProgramSchema.safeParse(completed({ completedAt: null })).success,
     ).toBe(false);
   });
 });
@@ -2281,13 +2281,13 @@ describe("completedProgramSchema", () => {
 describe("swapOptionsQuerySchema", () => {
   it("asks about one movement, of either kind", () => {
     expect(swapOptionsQuerySchema.safeParse({ wodMovementId: "wm-1" }).success).toBe(true);
-    expect(swapOptionsQuerySchema.safeParse({ planSlotMovementId: "pm-1" }).success).toBe(true);
+    expect(swapOptionsQuerySchema.safeParse({ programSlotMovementId: "pm-1" }).success).toBe(true);
   });
 
   it("refuses both and neither", () => {
     expect(swapOptionsQuerySchema.safeParse({}).success).toBe(false);
     expect(
-      swapOptionsQuerySchema.safeParse({ wodMovementId: "wm-1", planSlotMovementId: "pm-1" })
+      swapOptionsQuerySchema.safeParse({ wodMovementId: "wm-1", programSlotMovementId: "pm-1" })
         .success,
     ).toBe(false);
   });

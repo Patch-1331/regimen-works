@@ -15,12 +15,12 @@ import { movementExerciseSchema } from "./wod.js";
  * what lets one program fit every athlete; what arrives here is the movement
  * this athlete performs in that group, dropped to its no-equipment
  * alternative where they own nothing for it. The authoring shape
- * is `planSlotMovementSchema` in `plan.ts`, and the two are deliberately
+ * is `programSlotMovementSchema` in `program.ts`, and the two are deliberately
  * different: an author writes "pull", an athlete reads "chin-up".
  */
 export const prescribedMovementSchema = z
   .object({
-    /** The `PlanSlotMovement` id. Stable across reads, which is what a per-set log will key on (DN-21). */
+    /** The `ProgramSlotMovement` id. Stable across reads, which is what a per-set log will key on (DN-21). */
     id: z.string(),
     order: z.number().int().nonnegative(),
     sets: z.number().int().positive(),

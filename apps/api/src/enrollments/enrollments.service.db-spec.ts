@@ -200,8 +200,8 @@ describe('EnrollmentsService.cardFor', () => {
 
     await expect(service().cardFor(user.id)).resolves.toMatchObject({
       enrollmentId: enrollment.id,
-      planId: program.id,
-      planName: 'Pull-Up Builder',
+      programId: program.id,
+      programName: 'Pull-Up Builder',
       summary: { weeks: 6, sessions: 24 },
     });
   });
@@ -360,7 +360,7 @@ describe('EnrollmentsService.dismiss', () => {
   });
 
   it('refuses a program archived since, and writes nothing', async () => {
-    // ADR 0006, decision 5: an archived routine cannot be started, and a new
+    // ADR 0006, decision 5: an archived program cannot be started, and a new
     // run is a start. After a structural edit (decision 6) the finished run
     // points at the archived original, so allowing this would quietly run
     // the version the author replaced.
