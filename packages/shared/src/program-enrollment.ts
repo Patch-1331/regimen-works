@@ -86,6 +86,8 @@ export const programEnrollmentSchema = z.object({
   weeks: z.number().int().positive().nullable(),
   status: enrollmentStatus,
   completedAt: z.string().datetime().nullable(),
+  /** When the athlete left the run for another program. Null unless `ended`. */
+  endedAt: z.string().datetime().nullable(),
   /**
    * Where every group stood on the start date. `SkillLevel` keeps only
    * the current value, so without this a finished program can count sessions

@@ -959,10 +959,15 @@ model ProgramEnrollment {
   // How many weeks this run lasts, chosen within the program's bounds. Null for
   // an open-ended program, which has no last day and so never completes.
   weeks     Int?
-  status    String @default("active") // active | completed
+  // active | completed | ended. Ended is a run the athlete left part-way by
+  // starting another program (ADR 0009, decision 1): it keeps the days trained
+  // on it, and earns no completion card. The week it reached is not stored --
+  // it is `startDate` to `endedAt`, counted the way Today counts weeks.
+  status    String @default("active")
 
   createdAt   DateTime  @default(now())
   completedAt DateTime?
+  endedAt     DateTime?
 
   // Every group's chosen member on the start date, as { group: exerciseId }.
   // SkillLevel only keeps the current value, so without this a finished program

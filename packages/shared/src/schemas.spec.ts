@@ -2017,6 +2017,7 @@ describe("programEnrollmentSchema", () => {
     weeks: 6,
     status: "active",
     completedAt: null,
+    endedAt: null,
     startingMovements: { pull: "ex-chin-up", squat: "ex-goblet-squat" },
     defaultRestSeconds: null,
     summary: null,
@@ -2025,6 +2026,14 @@ describe("programEnrollmentSchema", () => {
 
   it("parses an active run", () => {
     expect(programEnrollmentSchema.safeParse(enrollment()).success).toBe(true);
+  });
+
+  it("parses a run the athlete left for another program", () => {
+    expect(
+      programEnrollmentSchema.safeParse(
+        enrollment({ status: "ended", endedAt: "2026-10-01T09:00:00.000Z" }),
+      ).success,
+    ).toBe(true);
   });
 
   it("parses a completed run with its snapshotted card", () => {
