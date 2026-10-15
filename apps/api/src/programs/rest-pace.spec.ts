@@ -37,8 +37,8 @@ function program(
 ): ActiveProgram {
   return {
     enrollmentId: 'enr_1',
-    planId: 'plan_1',
-    planName: 'Strength Base',
+    programId: 'program_1',
+    programName: 'Strength Base',
     scheduleMode: 'flexible',
     startDate: '2026-09-14',
     weeks: 6,

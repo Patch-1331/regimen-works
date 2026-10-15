@@ -51,8 +51,8 @@ function week(days: number[], overrides: Record<string, unknown> = {}) {
 function program(overrides: Partial<ActiveProgram> = {}): ActiveProgram {
   return {
     enrollmentId: 'enr_1',
-    planId: 'plan_pull_up_builder',
-    planName: 'Pull-Up Builder',
+    programId: 'program_pull_up_builder',
+    programName: 'Pull-Up Builder',
     scheduleMode: 'fixed',
     startDate: MONDAY,
     weeks: null,
@@ -65,7 +65,7 @@ function program(overrides: Partial<ActiveProgram> = {}): ActiveProgram {
 describe('resolveScheduleLock', () => {
   it('locks the week to a fixed program that is running', () => {
     expect(resolveScheduleLock(program(), MONDAY)).toEqual({
-      planId: 'plan_pull_up_builder',
+      planId: 'program_pull_up_builder',
       planName: 'Pull-Up Builder',
       days: [1, 3, 5],
     });
@@ -204,7 +204,7 @@ describe('resolveScheduleLock', () => {
     expect(
       resolveScheduleLock(program({ authoredWeeks: [week([])] }), MONDAY),
     ).toEqual({
-      planId: 'plan_pull_up_builder',
+      planId: 'program_pull_up_builder',
       planName: 'Pull-Up Builder',
       days: [],
     });

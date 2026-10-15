@@ -8,7 +8,7 @@
  * Lifted out of `SchedulerController` (DN-13) once provisioning needed the
  * same answer for a new enrollment's start date. Two functions deciding what
  * day it is, in an app where `DailyAssignment.date` and
- * `PlanEnrollment.startDate` are compared as strings, is two chances to
+ * `ProgramEnrollment.startDate` are compared as strings, is two chances to
  * disagree about whether a program has started.
  */
 export function todayIsoDate(now: Date = new Date()): string {

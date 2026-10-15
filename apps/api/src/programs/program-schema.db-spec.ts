@@ -3,7 +3,7 @@ import {
   createAssignment,
   createEnrollment,
   createExercise,
-  createPlan,
+  createProgram,
   createUser,
   createWod,
 } from '../test-support/fixtures';
@@ -36,7 +36,7 @@ describe('one active enrollment per athlete', () => {
   it('allows a new one once the first is completed', async () => {
     const user = await createUser();
     const first = await createEnrollment(user.id);
-    await testPrisma().planEnrollment.update({
+    await testPrisma().programEnrollment.update({
       where: { id: first.id },
       data: { status: 'completed', completedAt: new Date() },
     });
@@ -50,7 +50,9 @@ describe('one active enrollment per athlete', () => {
     await createEnrollment(user.id, { status: 'completed' });
 
     expect(
-      await testPrisma().planEnrollment.count({ where: { userId: user.id } }),
+      await testPrisma().programEnrollment.count({
+        where: { userId: user.id },
+      }),
     ).toBe(2);
   });
 
@@ -66,15 +68,15 @@ describe('one active enrollment per athlete', () => {
     // serialise on one connection and both succeed; two connections is what
     // two HTTP requests actually are (DN-105).
     const user = await createUser();
-    const plan = await createPlan();
+    const program = await createProgram();
 
     const results = await withSeparateConnections(2, (clients) =>
       Promise.allSettled(
         clients.map((client) =>
-          client.planEnrollment.create({
+          client.programEnrollment.create({
             data: {
               userId: user.id,
-              planId: plan.id,
+              programId: program.id,
               startDate: '2026-09-16',
               weeks: 6,
             },
@@ -85,7 +87,7 @@ describe('one active enrollment per athlete', () => {
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect(
-      await testPrisma().planEnrollment.count({
+      await testPrisma().programEnrollment.count({
         where: { userId: user.id, status: 'active' },
       }),
     ).toBe(1);
@@ -93,16 +95,21 @@ describe('one active enrollment per athlete', () => {
 });
 
 describe('a pinned slot has something pinned', () => {
-  /** A slot on a throwaway plan, so each call is independent of the last. */
+  /** A slot on a throwaway program, so each call is independent of the last. */
   async function slot(overrides: Record<string, unknown>) {
-    const plan = await createPlan({
+    const program = await createProgram({
       weeks: { create: [{ order: 0, phase: 'core' }] },
     });
-    const week = await testPrisma().planWeek.findFirstOrThrow({
-      where: { planId: plan.id },
+    const week = await testPrisma().programWeek.findFirstOrThrow({
+      where: { programId: program.id },
     });
-    return testPrisma().planSlot.create({
-      data: { planWeekId: week.id, dayOfWeek: 1, kind: 'rest', ...overrides },
+    return testPrisma().programSlot.create({
+      data: {
+        programWeekId: week.id,
+        dayOfWeek: 1,
+        kind: 'rest',
+        ...overrides,
+      },
     });
   }
 
@@ -151,7 +158,7 @@ describe('a pinned slot has something pinned', () => {
 describe('the two schedule modes stay distinguishable', () => {
   it('refuses a fixed program carrying a days-per-week range', async () => {
     await expect(
-      createPlan({
+      createProgram({
         scheduleMode: 'fixed',
         minDaysPerWeek: 3,
         maxDaysPerWeek: 5,
@@ -160,17 +167,17 @@ describe('the two schedule modes stay distinguishable', () => {
   });
 
   it('refuses a flexible program missing either bound', async () => {
-    await expect(createPlan({ maxDaysPerWeek: null })).rejects.toThrow(
+    await expect(createProgram({ maxDaysPerWeek: null })).rejects.toThrow(
       CHECK_VIOLATION,
     );
-    await expect(createPlan({ minDaysPerWeek: null })).rejects.toThrow(
+    await expect(createProgram({ minDaysPerWeek: null })).rejects.toThrow(
       CHECK_VIOLATION,
     );
   });
 
   it('accepts a fixed program that carries neither', async () => {
     await expect(
-      createPlan({
+      createProgram({
         scheduleMode: 'fixed',
         minDaysPerWeek: null,
         maxDaysPerWeek: null,
@@ -182,36 +189,36 @@ describe('the two schedule modes stay distinguishable', () => {
     // Not a third rule: the CHECK is written as two implications, so a value
     // outside the pair satisfies neither branch. Worth pinning, because that
     // is the behaviour a String column would otherwise leave to the writer.
-    await expect(createPlan({ scheduleMode: 'whenever' })).rejects.toThrow(
+    await expect(createProgram({ scheduleMode: 'whenever' })).rejects.toThrow(
       CHECK_VIOLATION,
     );
   });
 });
 
-describe('plan names', () => {
-  it('refuses two global plans of the same name', async () => {
-    await createPlan({ name: 'Just WODs' });
+describe('program names', () => {
+  it('refuses two global programs of the same name', async () => {
+    await createProgram({ name: 'Just WODs' });
 
-    await expect(createPlan({ name: 'Just WODs' })).rejects.toThrow(
+    await expect(createProgram({ name: 'Just WODs' })).rejects.toThrow(
       UNIQUE_VIOLATION,
     );
   });
 
-  it('lets an athlete name their own plan after a global one', async () => {
+  it('lets an athlete name their own program after a global one', async () => {
     const user = await createUser();
-    await createPlan({ name: 'Just WODs' });
+    await createProgram({ name: 'Just WODs' });
 
     await expect(
-      createPlan({ name: 'Just WODs', ownerId: user.id }),
+      createProgram({ name: 'Just WODs', ownerId: user.id }),
     ).resolves.toBeDefined();
   });
 
-  it('refuses one athlete two plans of the same name', async () => {
+  it('refuses one athlete two programs of the same name', async () => {
     const user = await createUser();
-    await createPlan({ name: 'Mine', ownerId: user.id });
+    await createProgram({ name: 'Mine', ownerId: user.id });
 
     await expect(
-      createPlan({ name: 'Mine', ownerId: user.id }),
+      createProgram({ name: 'Mine', ownerId: user.id }),
     ).rejects.toThrow(UNIQUE_VIOLATION);
   });
 
@@ -220,37 +227,37 @@ describe('plan names', () => {
   // opposite of Exercise and Wod, so both tiers are pinned here.
   const archived = { archivedAt: new Date('2026-09-01T00:00:00Z') };
 
-  it('lets a live global plan share a name with an archived one', async () => {
-    await createPlan({ name: 'Forked', ...archived });
+  it('lets a live global program share a name with an archived one', async () => {
+    await createProgram({ name: 'Forked', ...archived });
 
-    await expect(createPlan({ name: 'Forked' })).resolves.toBeDefined();
+    await expect(createProgram({ name: 'Forked' })).resolves.toBeDefined();
   });
 
-  it('lets an athlete reuse the name of their own archived plan', async () => {
+  it('lets an athlete reuse the name of their own archived program', async () => {
     const user = await createUser();
-    await createPlan({ name: 'Mine', ownerId: user.id, ...archived });
+    await createProgram({ name: 'Mine', ownerId: user.id, ...archived });
 
     await expect(
-      createPlan({ name: 'Mine', ownerId: user.id }),
+      createProgram({ name: 'Mine', ownerId: user.id }),
     ).resolves.toBeDefined();
   });
 
-  it('still refuses a second live global plan beside an archived one', async () => {
-    await createPlan({ name: 'Forked', ...archived });
-    await createPlan({ name: 'Forked' });
+  it('still refuses a second live global program beside an archived one', async () => {
+    await createProgram({ name: 'Forked', ...archived });
+    await createProgram({ name: 'Forked' });
 
-    await expect(createPlan({ name: 'Forked' })).rejects.toThrow(
+    await expect(createProgram({ name: 'Forked' })).rejects.toThrow(
       UNIQUE_VIOLATION,
     );
   });
 
-  it('still refuses an athlete a second live plan beside an archived one', async () => {
+  it('still refuses an athlete a second live program beside an archived one', async () => {
     const user = await createUser();
-    await createPlan({ name: 'Mine', ownerId: user.id, ...archived });
-    await createPlan({ name: 'Mine', ownerId: user.id });
+    await createProgram({ name: 'Mine', ownerId: user.id, ...archived });
+    await createProgram({ name: 'Mine', ownerId: user.id });
 
     await expect(
-      createPlan({ name: 'Mine', ownerId: user.id }),
+      createProgram({ name: 'Mine', ownerId: user.id }),
     ).rejects.toThrow(UNIQUE_VIOLATION);
   });
 });
@@ -271,7 +278,7 @@ describe("an assignment cannot claim another athlete's enrollment", () => {
 
     const assignment = await createAssignment(user.id, {
       enrollmentId: enrollment.id,
-      planDayIndex: 4,
+      programDayIndex: 4,
     });
     expect(assignment.enrollmentId).toBe(enrollment.id);
   });
@@ -287,7 +294,7 @@ describe("an assignment cannot claim another athlete's enrollment", () => {
     await createAssignment(user.id, { enrollmentId: enrollment.id });
 
     await expect(
-      testPrisma().planEnrollment.delete({ where: { id: enrollment.id } }),
+      testPrisma().programEnrollment.delete({ where: { id: enrollment.id } }),
     ).rejects.toThrow();
   });
 
@@ -301,7 +308,7 @@ describe("an assignment cannot claim another athlete's enrollment", () => {
 
     await testPrisma().user.delete({ where: { id: user.id } });
 
-    expect(await testPrisma().planEnrollment.count()).toBe(0);
+    expect(await testPrisma().programEnrollment.count()).toBe(0);
     expect(await testPrisma().dailyAssignment.count()).toBe(0);
   });
 
@@ -309,19 +316,19 @@ describe("an assignment cannot claim another athlete's enrollment", () => {
     // The same guarantee on the other program foreign key: editing a program
     // people are running archives rather than deletes.
     const user = await createUser();
-    const plan = await createPlan({
+    const program = await createProgram({
       weeks: { create: [{ order: 0, phase: 'core' }] },
     });
-    const week = await testPrisma().planWeek.findFirstOrThrow({
-      where: { planId: plan.id },
+    const week = await testPrisma().programWeek.findFirstOrThrow({
+      where: { programId: program.id },
     });
-    const planSlot = await testPrisma().planSlot.create({
-      data: { planWeekId: week.id, dayOfWeek: 1, kind: 'wod_generated' },
+    const programSlot = await testPrisma().programSlot.create({
+      data: { programWeekId: week.id, dayOfWeek: 1, kind: 'wod_generated' },
     });
-    await createAssignment(user.id, { planSlotId: planSlot.id });
+    await createAssignment(user.id, { programSlotId: programSlot.id });
 
     await expect(
-      testPrisma().planSlot.delete({ where: { id: planSlot.id } }),
+      testPrisma().programSlot.delete({ where: { id: programSlot.id } }),
     ).rejects.toThrow();
   });
 });
@@ -330,7 +337,7 @@ describe("an assignment cannot claim another athlete's enrollment", () => {
  * The prescription on a `movements` day (DN-19).
  *
  * Two CHECKs, both of them about rows nothing in the app can produce yet:
- * there is no program editor, and no seeded plan authors a `movements` slot.
+ * there is no program editor, and no seeded program authors a `movements` slot.
  * That is exactly why they are written now -- the first author of one of
  * these rows will be a migration or a seed script, and neither gets a code
  * review that catches "sets: 0".
@@ -338,7 +345,7 @@ describe("an assignment cannot claim another athlete's enrollment", () => {
 describe('a prescribed movement names one movement and prescribes work', () => {
   /** A prescription row on a throwaway slot, so each call stands alone. */
   async function prescribe(overrides: Record<string, unknown> = {}) {
-    const plan = await createPlan({
+    const program = await createProgram({
       weeks: {
         create: [
           {
@@ -349,12 +356,12 @@ describe('a prescribed movement names one movement and prescribes work', () => {
         ],
       },
     });
-    const planSlot = await testPrisma().planSlot.findFirstOrThrow({
-      where: { planWeek: { planId: plan.id } },
+    const programSlot = await testPrisma().programSlot.findFirstOrThrow({
+      where: { programWeek: { programId: program.id } },
     });
-    return testPrisma().planSlotMovement.create({
+    return testPrisma().programSlotMovement.create({
       data: {
-        planSlotId: planSlot.id,
+        programSlotId: programSlot.id,
         order: 0,
         movementGroup: 'pull',
         sets: 5,
@@ -501,9 +508,9 @@ describe('a prescribed movement names one movement and prescribes work', () => {
   it('refuses two movements in the same position', async () => {
     const first = await prescribe();
     await expect(
-      testPrisma().planSlotMovement.create({
+      testPrisma().programSlotMovement.create({
         data: {
-          planSlotId: first.planSlotId,
+          programSlotId: first.programSlotId,
           order: 0,
           movementGroup: 'squat',
           sets: 3,
@@ -530,10 +537,12 @@ describe('a prescribed movement names one movement and prescribes work', () => {
     // Cascade here, unlike the assignment rules: a slot's prescription is
     // part of the slot rather than a record of anything the athlete did.
     const row = await prescribe();
-    await testPrisma().planSlot.delete({ where: { id: row.planSlotId } });
+    await testPrisma().programSlot.delete({ where: { id: row.programSlotId } });
 
     expect(
-      await testPrisma().planSlotMovement.findUnique({ where: { id: row.id } }),
+      await testPrisma().programSlotMovement.findUnique({
+        where: { id: row.id },
+      }),
     ).toBeNull();
   });
 });

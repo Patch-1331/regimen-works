@@ -1,5 +1,5 @@
 import type { ScheduleLock } from '@regimen-works/shared';
-import { expandPlanWeeks, resolveSlotForDate } from './plan.logic';
+import { expandProgramWeeks, resolveSlotForDate } from './program.logic';
 import type { ActiveProgram } from './program-day';
 
 /**
@@ -24,7 +24,7 @@ export function resolveScheduleLock(
   const expanded =
     program.weeks === null
       ? program.authoredWeeks
-      : expandPlanWeeks(program.authoredWeeks, program.weeks);
+      : expandProgramWeeks(program.authoredWeeks, program.weeks);
 
   // Resolved rather than computed by hand, so "which week is the athlete in"
   // has exactly one answer in this codebase -- the one `getToday` uses. The
@@ -50,8 +50,8 @@ export function resolveScheduleLock(
   const week = expanded[resolution.weekIndex % expanded.length];
 
   return {
-    planId: program.planId,
-    planName: program.planName,
+    planId: program.programId,
+    planName: program.programName,
     // Rest is authored, so a rest slot is a day the program has decided the
     // athlete does not train -- it belongs out of this list as squarely as a
     // weekday the week says nothing about. Both are "not a training day", and

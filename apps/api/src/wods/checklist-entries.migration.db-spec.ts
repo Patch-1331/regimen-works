@@ -30,13 +30,26 @@ const MIGRATION = join(
   '../../prisma/migrations/20261012000000_checklist_entries/migration.sql',
 );
 
+/**
+ * Tables renamed by a later migration, as the replay must name them: the
+ * file is replayed against today's schema, not the one it first ran on.
+ * `20261015000000_rename_plan_to_program` (DN-176) made `PlanSlotMovement`
+ * `ProgramSlotMovement`.
+ */
+const RENAMED_SINCE: [string, string][] = [
+  ['"PlanSlotMovement"', '"ProgramSlotMovement"'],
+];
+
 /** The migration's numbered section `n`, up to the next one. */
 function section(n: number): string {
   const sql = readFileSync(MIGRATION, 'utf8');
   const start = sql.indexOf(`-- ${n}.`);
   const end = sql.indexOf(`-- ${n + 1}.`);
   if (start < 0 || end < 0) throw new Error(`no section ${n} in ${MIGRATION}`);
-  return sql.slice(start, end);
+  return RENAMED_SINCE.reduce(
+    (text, [then, now]) => text.replaceAll(then, now),
+    sql.slice(start, end),
+  );
 }
 
 /** Steps 2 and 3: every phase to an entry, and the duplicate squat folded. */

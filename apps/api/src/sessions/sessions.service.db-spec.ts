@@ -8,7 +8,7 @@ import {
   createEnrollment,
   createExercise,
   createGroup,
-  createPlan,
+  createProgram,
   createSkillLevel,
   createUser,
   createWod,
@@ -810,7 +810,7 @@ async function prescribedDay(
     'Pull-up',
   ]);
   const push = await createExercise({ name: 'Push-up', pattern: 'push' });
-  const plan = await createPlan({
+  const program = await createProgram({
     weeks: {
       create: [
         {
@@ -846,15 +846,15 @@ async function prescribedDay(
       ],
     },
   });
-  const slot = await testPrisma().planSlot.findFirstOrThrow({
-    where: { planWeek: { planId: plan.id } },
+  const slot = await testPrisma().programSlot.findFirstOrThrow({
+    where: { programWeek: { programId: program.id } },
     include: { movements: { orderBy: { order: 'asc' } } },
   });
   const enrollment =
     options.defaultRestSeconds === undefined
       ? null
       : await createEnrollment(user.id, {
-          planId: plan.id,
+          programId: program.id,
           defaultRestSeconds: options.defaultRestSeconds,
         });
   const assignment = await testPrisma().dailyAssignment.create({
@@ -862,7 +862,7 @@ async function prescribedDay(
       userId: user.id,
       date: '2026-09-16',
       status: 'scheduled',
-      planSlotId: slot.id,
+      programSlotId: slot.id,
       enrollmentId: enrollment?.id ?? null,
     },
   });

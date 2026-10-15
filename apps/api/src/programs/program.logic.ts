@@ -37,10 +37,10 @@ export type AuthoredSlot = {
  *
  *   - a program with no core weeks at all has nothing to cycle, so it plays
  *     its intro and peak once and stops. `minimumViableWeeks` is what stops a
- *     plan being authored that way.
+ *     program being authored that way.
  *   - a `chosenWeeks` below zero, or an empty `weeks`, gives an empty result.
  */
-export function expandPlanWeeks<W extends AuthoredWeek>(
+export function expandProgramWeeks<W extends AuthoredWeek>(
   weeks: W[],
   chosenWeeks: number,
 ): W[] {
@@ -92,18 +92,18 @@ function cycle<W>(block: W[], count: number): W[] {
  * The shortest run that plays every authored week at least once: intro, one
  * whole core block, then peak.
  *
- * A `Plan.minWeeks` below this lets the athlete pick a length that ends
+ * A `Program.minWeeks` below this lets the athlete pick a length that ends
  * partway through the core block — on whichever week of the wave happens to
  * fall last, which is as likely to be a light one as a heavy one. A program
  * that can finish on its deload week is not a program.
  *
  * Kept as a number rather than a validator so the caller says what it wants
  * with it: DN-13's seed asserts on it, and the Program-Editor will refuse a
- * plan below it with a message naming the figure.
+ * program below it with a message naming the figure.
  */
 export function minimumViableWeeks(weeks: AuthoredWeek[]): number {
   // Counted by phase rather than as weeks.length, so it stays the number
-  // `expandPlanWeeks` would actually play. A week carrying some other phase is
+  // `expandProgramWeeks` would actually play. A week carrying some other phase is
   // dropped there and must not be charged for here -- the two functions
   // disagreeing about how long a program is would be worse than either being
   // wrong on its own.
@@ -128,7 +128,7 @@ export type SlotResolution<S> =
       status: 'scheduled';
       slot: S;
       weekIndex: number;
-      /** Days since the start date. This is what DailyAssignment.planDayIndex stores. */
+      /** Days since the start date. This is what DailyAssignment.programDayIndex stores. */
       dayIndex: number;
     }
   /**
@@ -152,7 +152,7 @@ export type SlotResolution<S> =
  * mid-week start simply gives a short first week — the days before it fall
  * back to Just WODs like any other pre-start day.
  *
- * `expandedWeeks` is the output of `expandPlanWeeks`, or the authored weeks
+ * `expandedWeeks` is the output of `expandProgramWeeks`, or the authored weeks
  * as they are when the enrollment is open-ended.
  */
 export function resolveSlotForDate<S extends AuthoredSlot>(

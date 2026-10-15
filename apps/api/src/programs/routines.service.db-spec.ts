@@ -60,7 +60,7 @@ const body = (overrides: Record<string, unknown> = {}) => ({
 });
 
 function stored(id: string) {
-  return testPrisma().plan.findUniqueOrThrow({
+  return testPrisma().program.findUniqueOrThrow({
     where: { id },
     include: {
       weeks: {
@@ -77,12 +77,12 @@ describe('RoutinesService.create', () => {
     const alice = await createUser();
 
     const created = await routines().create({ ownerId: alice.id }, body());
-    const plan = await stored(created.id);
+    const program = await stored(created.id);
 
-    expect(plan.ownerId).toBe(alice.id);
-    expect(plan.weeks).toHaveLength(1);
-    expect(plan.weeks[0]).toMatchObject({ order: 0, phase: 'core' });
-    const slots = [...plan.weeks[0].slots].sort(
+    expect(program.ownerId).toBe(alice.id);
+    expect(program.weeks).toHaveLength(1);
+    expect(program.weeks[0]).toMatchObject({ order: 0, phase: 'core' });
+    const slots = [...program.weeks[0].slots].sort(
       (a, b) => a.dayOfWeek - b.dayOfWeek,
     );
     expect(slots.map((s) => [s.dayOfWeek, s.kind, s.priority])).toEqual([
@@ -106,11 +106,11 @@ describe('RoutinesService.create', () => {
   it('leaves the length to enrolment, within wide bounds', async () => {
     const alice = await createUser();
 
-    const plan = await stored(
+    const program = await stored(
       (await routines().create({ ownerId: alice.id }, body())).id,
     );
 
-    expect([plan.minWeeks, plan.maxWeeks, plan.defaultWeeks]).toEqual([
+    expect([program.minWeeks, program.maxWeeks, program.defaultWeeks]).toEqual([
       ROUTINE_WEEKS.min,
       ROUTINE_WEEKS.max,
       ROUTINE_WEEKS.default,
@@ -120,11 +120,11 @@ describe('RoutinesService.create', () => {
   it('stores "any N days a week" as exactly N, starting on the days written', async () => {
     const alice = await createUser();
 
-    const plan = await stored(
+    const program = await stored(
       (await routines().create({ ownerId: alice.id }, body())).id,
     );
 
-    expect(plan).toMatchObject({
+    expect(program).toMatchObject({
       scheduleMode: 'flexible',
       minDaysPerWeek: 2,
       maxDaysPerWeek: 2,
@@ -135,7 +135,7 @@ describe('RoutinesService.create', () => {
   it('stores "on these weekdays" as fixed, with no day bounds', async () => {
     const alice = await createUser();
 
-    const plan = await stored(
+    const program = await stored(
       (
         await routines().create(
           { ownerId: alice.id },
@@ -144,7 +144,7 @@ describe('RoutinesService.create', () => {
       ).id,
     );
 
-    expect(plan).toMatchObject({
+    expect(program).toMatchObject({
       scheduleMode: 'fixed',
       minDaysPerWeek: null,
       maxDaysPerWeek: null,
@@ -188,7 +188,7 @@ describe('RoutinesService.create', () => {
       ),
     ).rejects.toThrow(BadRequestException);
     expect(
-      await testPrisma().plan.count({ where: { ownerId: alice.id } }),
+      await testPrisma().program.count({ where: { ownerId: alice.id } }),
     ).toBe(0);
   });
 
@@ -212,11 +212,10 @@ describe('RoutinesService.create', () => {
       }),
     );
 
-    const plan = await stored(created.id);
-    expect(plan.weeks[0].slots[0].movements.map((m) => m.exerciseId)).toEqual([
-      global.id,
-      own.id,
-    ]);
+    const program = await stored(created.id);
+    expect(
+      program.weeks[0].slots[0].movements.map((m) => m.exerciseId),
+    ).toEqual([global.id, own.id]);
   });
 
   it('refuses another athlete’s exercise, and an archived one', async () => {
@@ -258,7 +257,7 @@ describe('RoutinesService.create', () => {
     const alice = await createUser();
     const bob = await createUser();
     const first = await routines().create({ ownerId: alice.id }, body());
-    await testPrisma().plan.update({
+    await testPrisma().program.update({
       where: { id: first.id },
       data: { archivedAt: new Date() },
     });
@@ -280,7 +279,7 @@ describe('RoutinesService.listOwn', () => {
       { ownerId: alice.id },
       body({ name: 'A old' }),
     );
-    await testPrisma().plan.update({
+    await testPrisma().program.update({
       where: { id: old.id },
       data: { archivedAt: new Date() },
     });
@@ -348,7 +347,7 @@ describe('RoutinesService.update', () => {
       'hinge',
     ]);
     expect(
-      await testPrisma().plan.count({ where: { ownerId: alice.id } }),
+      await testPrisma().program.count({ where: { ownerId: alice.id } }),
     ).toBe(1);
   });
 
@@ -374,7 +373,7 @@ describe('RoutinesService.update', () => {
     it('forks a change to the week, archiving the version being run', async () => {
       const alice = await createUser();
       const routine = await written(alice.id);
-      await createEnrollment(alice.id, { planId: routine.id });
+      await createEnrollment(alice.id, { programId: routine.id });
 
       const saved = await routines().update(
         { ownerId: alice.id },
@@ -404,7 +403,7 @@ describe('RoutinesService.update', () => {
     it('leaves the run under way on the version it started', async () => {
       const alice = await createUser();
       const routine = await written(alice.id);
-      await createEnrollment(alice.id, { planId: routine.id });
+      await createEnrollment(alice.id, { programId: routine.id });
       const before = await loadActiveProgram(testPrisma(), alice.id);
 
       await routines().update(
@@ -414,7 +413,7 @@ describe('RoutinesService.update', () => {
       );
 
       const after = await loadActiveProgram(testPrisma(), alice.id);
-      expect(after?.planId).toBe(routine.id);
+      expect(after?.programId).toBe(routine.id);
       expect(after?.authoredWeeks).toEqual(before?.authoredWeeks);
     });
 
@@ -422,7 +421,7 @@ describe('RoutinesService.update', () => {
       const alice = await createUser();
       const routine = await written(alice.id);
       await createEnrollment(alice.id, {
-        planId: routine.id,
+        programId: routine.id,
         status: 'completed',
       });
 
@@ -438,7 +437,7 @@ describe('RoutinesService.update', () => {
     it('renames in place, whoever is running it', async () => {
       const alice = await createUser();
       const routine = await written(alice.id);
-      await createEnrollment(alice.id, { planId: routine.id });
+      await createEnrollment(alice.id, { programId: routine.id });
 
       const saved = await routines().update(
         { ownerId: alice.id },
@@ -455,14 +454,14 @@ describe('RoutinesService.update', () => {
         },
       });
       expect(
-        await testPrisma().plan.count({ where: { ownerId: alice.id } }),
+        await testPrisma().program.count({ where: { ownerId: alice.id } }),
       ).toBe(1);
     });
 
     it('carries a rename and a new week in one fork, leaving the old name on the old version', async () => {
       const alice = await createUser();
       const routine = await written(alice.id);
-      await createEnrollment(alice.id, { planId: routine.id });
+      await createEnrollment(alice.id, { programId: routine.id });
 
       const saved = await routines().update(
         { ownerId: alice.id },
@@ -481,7 +480,7 @@ describe('RoutinesService.update', () => {
   it('treats a save that changes nothing as a wording edit', async () => {
     const alice = await createUser();
     const routine = await written(alice.id);
-    await createEnrollment(alice.id, { planId: routine.id });
+    await createEnrollment(alice.id, { programId: routine.id });
 
     const saved = await routines().update(
       { ownerId: alice.id },
@@ -583,7 +582,7 @@ describe('RoutinesService.update', () => {
   it('refuses an archived routine until it is brought back', async () => {
     const alice = await createUser();
     const routine = await written(alice.id);
-    await testPrisma().plan.update({
+    await testPrisma().program.update({
       where: { id: routine.id },
       data: { archivedAt: new Date() },
     });
@@ -639,7 +638,7 @@ describe('naming the days of a routine', () => {
       { ownerId: alice.id },
       named({ 1: 'Upper', 4: null }),
     );
-    await createEnrollment(alice.id, { planId: routine.id });
+    await createEnrollment(alice.id, { programId: routine.id });
     const slotIds = (await stored(routine.id)).weeks[0].slots.map((s) => s.id);
 
     const saved = await routines().update(
@@ -654,7 +653,7 @@ describe('naming the days of a routine', () => {
       slotIds,
     );
     expect(
-      await testPrisma().plan.count({ where: { ownerId: alice.id } }),
+      await testPrisma().program.count({ where: { ownerId: alice.id } }),
     ).toBe(1);
   });
 
@@ -664,7 +663,7 @@ describe('naming the days of a routine', () => {
       { ownerId: alice.id },
       named({ 1: 'Upper', 4: 'Lower' }),
     );
-    await createEnrollment(alice.id, { planId: routine.id });
+    await createEnrollment(alice.id, { programId: routine.id });
 
     await routines().update(
       { ownerId: alice.id },
@@ -681,7 +680,7 @@ describe('naming the days of a routine', () => {
       { ownerId: alice.id },
       named({ 1: 'Upper', 4: 'Lower' }),
     );
-    await createEnrollment(alice.id, { planId: routine.id });
+    await createEnrollment(alice.id, { programId: routine.id });
 
     const saved = await routines().update(
       { ownerId: alice.id },
@@ -724,7 +723,7 @@ describe('naming the days of a routine', () => {
       { ownerId: alice.id },
       named({ 1: 'Upper', 4: null }),
     );
-    await createEnrollment(alice.id, { planId: routine.id });
+    await createEnrollment(alice.id, { programId: routine.id });
 
     const program = await loadActiveProgram(testPrisma(), alice.id);
     expect(
@@ -770,7 +769,7 @@ describe('RoutinesService.getForEditing', () => {
     const alice = await createUser();
     const routine = await routines().create({ ownerId: alice.id }, body());
     await createEnrollment(alice.id, {
-      planId: routine.id,
+      programId: routine.id,
       status: 'completed',
     });
 
@@ -822,14 +821,14 @@ describe('RoutinesService.archive and restore', () => {
   it('leaves the run under way on it resolving, and says it is running', async () => {
     const alice = await createUser();
     const routine = await routines().create({ ownerId: alice.id }, body());
-    await createEnrollment(alice.id, { planId: routine.id });
+    await createEnrollment(alice.id, { programId: routine.id });
     const before = await loadActiveProgram(testPrisma(), alice.id);
 
     const removed = await routines().archive({ ownerId: alice.id }, routine.id);
 
     expect(removed.running).toBe(true);
     const after = await loadActiveProgram(testPrisma(), alice.id);
-    expect(after?.planId).toBe(routine.id);
+    expect(after?.programId).toBe(routine.id);
     expect(after?.authoredWeeks).toEqual(before?.authoredWeeks);
   });
 
@@ -837,7 +836,7 @@ describe('RoutinesService.archive and restore', () => {
     const alice = await createUser();
     const routine = await routines().create({ ownerId: alice.id }, body());
     await createEnrollment(alice.id, {
-      planId: routine.id,
+      programId: routine.id,
       status: 'completed',
     });
 
@@ -851,9 +850,9 @@ describe('RoutinesService.archive and restore', () => {
 
     await routines().archive({ ownerId: alice.id }, routine.id);
 
-    const plan = await stored(routine.id);
-    expect(plan.archivedAt).not.toBeNull();
-    expect(plan.weeks[0].slots).toHaveLength(2);
+    const program = await stored(routine.id);
+    expect(program.archivedAt).not.toBeNull();
+    expect(program.weeks[0].slots).toHaveLength(2);
   });
 
   it('is idempotent both ways', async () => {
@@ -937,7 +936,7 @@ describe('the global tier (DN-148)', () => {
       const admin = await createUser();
       const bob = await createUser();
       const routine = await routines().create({ ownerId: admin.id }, body());
-      await createEnrollment(admin.id, { planId: routine.id });
+      await createEnrollment(admin.id, { programId: routine.id });
       const before = await loadActiveProgram(testPrisma(), admin.id);
 
       const published = await routines().promote(admin.id, routine.id);
@@ -945,7 +944,7 @@ describe('the global tier (DN-148)', () => {
       expect(published).toEqual(routine);
       expect((await stored(routine.id)).ownerId).toBeNull();
       const after = await loadActiveProgram(testPrisma(), admin.id);
-      expect(after?.planId).toBe(routine.id);
+      expect(after?.programId).toBe(routine.id);
       expect(after?.authoredWeeks).toEqual(before?.authoredWeeks);
       expect(await offered(bob.id)).toContain(routine.id);
       expect(await routines().listOwn(admin.id)).toEqual([]);
@@ -1031,14 +1030,14 @@ describe('the global tier (DN-148)', () => {
     const admin = await createUser();
     const bob = await createUser();
     const routine = await routines().create(GLOBAL, body());
-    await createEnrollment(bob.id, { planId: routine.id });
+    await createEnrollment(bob.id, { programId: routine.id });
 
     const removed = await routines().archive(GLOBAL, routine.id, admin.id);
 
     expect(removed.running).toBe(false);
     expect(await offered(admin.id)).not.toContain(routine.id);
     expect(await offered(bob.id)).not.toContain(routine.id);
-    expect((await loadActiveProgram(testPrisma(), bob.id))?.planId).toBe(
+    expect((await loadActiveProgram(testPrisma(), bob.id))?.programId).toBe(
       routine.id,
     );
 
@@ -1049,7 +1048,7 @@ describe('the global tier (DN-148)', () => {
   it("says the admin's own run carries on when they archive what they run", async () => {
     const admin = await createUser();
     const routine = await routines().create(GLOBAL, body());
-    await createEnrollment(admin.id, { planId: routine.id });
+    await createEnrollment(admin.id, { programId: routine.id });
 
     const removed = await routines().archive(GLOBAL, routine.id, admin.id);
 
@@ -1059,7 +1058,7 @@ describe('the global tier (DN-148)', () => {
   it('forks a global routine once any athlete has started it, still global', async () => {
     const bob = await createUser();
     const routine = await routines().create(GLOBAL, body());
-    await createEnrollment(bob.id, { planId: routine.id });
+    await createEnrollment(bob.id, { programId: routine.id });
 
     const saved = await routines().update(
       GLOBAL,
@@ -1103,8 +1102,8 @@ describe('the global tier (DN-148)', () => {
 
 /** Everything a routine is stored as, minus the ids that make it a row. */
 async function shape(id: string) {
-  const plan = await stored(id);
-  return plan.weeks.map((week) => ({
+  const program = await stored(id);
+  return program.weeks.map((week) => ({
     order: week.order,
     phase: week.phase,
     slots: [...week.slots]
@@ -1116,7 +1115,7 @@ async function shape(id: string) {
         movements: slot.movements.map((movement) => ({
           ...movement,
           id: undefined,
-          planSlotId: undefined,
+          programSlotId: undefined,
         })),
       })),
   }));
@@ -1255,7 +1254,7 @@ describe('exporting and importing global routines (DN-150)', () => {
   }
 
   async function globalCount() {
-    return testPrisma().plan.count({ where: { ownerId: null } });
+    return testPrisma().program.count({ where: { ownerId: null } });
   }
 
   it('round-trips: exported routines import into an empty library as they were', async () => {
@@ -1285,7 +1284,7 @@ describe('exporting and importing global routines (DN-150)', () => {
     });
     expect(file.routines.map((r) => r.name)).toEqual(['Legs', 'Pull focus']);
 
-    await testPrisma().plan.deleteMany({ where: { ownerId: null } });
+    await testPrisma().program.deleteMany({ where: { ownerId: null } });
     // Through JSON, as the file travels.
     const created = await routines().importGlobal(
       JSON.parse(JSON.stringify(file)),

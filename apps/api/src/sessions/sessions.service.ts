@@ -18,7 +18,7 @@ import {
   resolveIntervalConfig,
   straightSetsStateAt,
 } from '@regimen-works/shared';
-import { loadPrescribedSlot } from '../plans/prescribed-slot';
+import { loadPrescribedSlot } from '../programs/prescribed-slot';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   MovementResolutionService,
@@ -82,7 +82,7 @@ export class SessionsService {
     // and asking twice is two chances to disagree.
     const prescribed = assignment.wod
       ? null
-      : await loadPrescribedSlot(this.prisma, assignment.planSlotId);
+      : await loadPrescribedSlot(this.prisma, assignment.programSlotId);
     if (!assignment.wod && !prescribed)
       throw new BadRequestException('Rest days have no workout to start');
 

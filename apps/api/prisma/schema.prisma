@@ -30,10 +30,10 @@ model User {
   // owner and appear in nobody's list here.
   ownExercises        Exercise[]
   ownWods             Wod[]
-  ownPlans            Plan[]
+  ownPrograms            Program[]
   ownChecklistEntries ChecklistEntry[]
 
-  enrollments PlanEnrollment[]
+  enrollments ProgramEnrollment[]
 }
 
 model Exercise {
@@ -151,7 +151,7 @@ model Exercise {
   substitutedIn    AssignmentSubstitution[]
   // The program slots that pin this exercise by name rather than by line
   // (DN-19).
-  prescribedIn     PlanSlotMovement[]
+  prescribedIn     ProgramSlotMovement[]
   setLogs          WorkoutSetLog[]
   // The athletes who have picked this movement as their default for its
   // group (DN-139).
@@ -309,7 +309,7 @@ model Wod {
 
   movements   WodMovement[]
   assignments DailyAssignment[]
-  planSlots   PlanSlot[]
+  programSlots   ProgramSlot[]
 
   // Soft delete, same semantics as Exercise.archivedAt (DN-25). Written by
   // DN-26's endpoints; it lands here early because `libraryVisibleTo` filters
@@ -416,7 +416,7 @@ model DailyAssignment {
   // are null on a Just WODs day, and stay null until DN-16 teaches `getToday`
   // to resolve the day through an enrollment -- nothing writes them yet.
   //
-  // `planDayIndex` is denormalised on purpose. It is derivable from the date
+  // `programDayIndex` is denormalised on purpose. It is derivable from the date
   // and the enrollment's start date, but it is what "day 17 of 24" on the
   // completion card counts, and recomputing a date difference on every row of
   // a history page to answer it is work the write already knows the answer to.
@@ -433,14 +433,14 @@ model DailyAssignment {
   // Cascade, which would take the athlete's training day with the enrollment.
   // So read this as a guard against Cascade, not as a fine distinction between
   // the other three.
-  enrollment   PlanEnrollment? @relation(fields: [enrollmentId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
-  planSlotId   String?
+  enrollment   ProgramEnrollment? @relation(fields: [enrollmentId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction)
+  programSlotId   String?
   // Same intent: an authored slot cannot be deleted while a day the athlete
   // trained points at it. Editing a program people are running has to archive
   // rather than delete, the answer DN-25 reached for Exercise and Wod --
   // history is not rewritten by a later edit.
-  planSlot     PlanSlot?       @relation(fields: [planSlotId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  planDayIndex Int?
+  programSlot     ProgramSlot?       @relation(fields: [programSlotId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  programDayIndex Int?
 
   session       WorkoutSession?
   log           WorkoutLog?
@@ -472,7 +472,7 @@ model AssignmentSubstitution {
   // an assignment belonging to another user.
   assignment         DailyAssignment   @relation(fields: [assignmentId, userId], references: [id, userId], onDelete: Cascade)
   // **Exactly one of these two.** A CHECK in DN-125's migration holds it, the
-  // same shape of rule as PlanSlotMovement's own line/exerciseId xor.
+  // same shape of rule as ProgramSlotMovement's own line/exerciseId xor.
   //
   // A swap is keyed by the movement the athlete tapped rather than by the
   // exercise, so a day naming the same group twice moves only the row they
@@ -482,8 +482,8 @@ model AssignmentSubstitution {
   // movement that does not exist.
   wodMovementId      String?
   wodMovement        WodMovement?      @relation(fields: [wodMovementId], references: [id], onDelete: Cascade)
-  planSlotMovementId String?
-  planSlotMovement   PlanSlotMovement? @relation(fields: [planSlotMovementId], references: [id], onDelete: Cascade)
+  programSlotMovementId String?
+  programSlotMovement   ProgramSlotMovement? @relation(fields: [programSlotMovementId], references: [id], onDelete: Cascade)
   exerciseId         String
   exercise           Exercise          @relation(fields: [exerciseId], references: [id])
   createdAt          DateTime          @default(now())
@@ -503,7 +503,7 @@ model AssignmentSubstitution {
   // row, and vice versa. A raw partial index would say the same thing and cost
   // the upserts their compound key.
   @@unique([assignmentId, wodMovementId])
-  @@unique([assignmentId, planSlotMovementId])
+  @@unique([assignmentId, programSlotMovementId])
 }
 
 // The live timer's state. roundSplits is jsonb: [{ round, atSeconds }],
@@ -615,7 +615,7 @@ model WorkoutSetLog {
   // Where this set sits, against the session's **own snapshot** -- the list
   // `setsCompleted` already indexes into, resolved by `straightSetsStateAt`.
   //
-  // Not `planSlotMovementId`. The snapshot is what the session runs under, so
+  // Not `programSlotMovementId`. The snapshot is what the session runs under, so
   // a program editing the slot mid-run cannot move rows already written, and a
   // slot id is program-specific besides: it cannot answer "this movement over
   // time" across two programs that both prescribe chin-ups.
@@ -630,7 +630,7 @@ model WorkoutSetLog {
   exercise            Exercise @relation(fields: [exerciseId], references: [id])
   /// What the day asked for, copied so a later edit to the slot cannot change
   /// what a past set was measured against. The same three shapes
-  /// `PlanSlotMovement` carries (DN-142), copied whole: recording a range as
+  /// `ProgramSlotMovement` carries (DN-142), copied whole: recording a range as
   /// its floor would make history claim the day asked for something it did
   /// not. No CHECK here -- these are a snapshot of a row that was already
   /// checked, and a set logged against a WOD is always the fixed shape.
@@ -682,8 +682,8 @@ model WorkoutLog {
 // Nothing reads these four models yet. They land ahead of the code because
 // "Just WODs is itself a program" (docs/design/programs.md) only pays off if
 // `getToday` can be written with one path instead of two, and that rewrite
-// (DN-16) needs a plan to already exist to resolve against.
-model Plan {
+// (DN-16) needs a program to already exist to resolve against.
+model Program {
   id      String  @id @default(cuid())
   // The name the athlete picks it by, e.g. "Pull-Up Builder".
   name    String
@@ -734,8 +734,8 @@ model Plan {
   // is therefore a property of a program, not of every program.
   //
   // `minWeeks` has to be at least intro + one whole core block + peak, or
-  // `expandPlanWeeks` (DN-11) truncates mid-wave and the program ends on a
-  // light week. That is a count of PlanWeek rows, so it is checked where the
+  // `expandProgramWeeks` (DN-11) truncates mid-wave and the program ends on a
+  // light week. That is a count of ProgramWeek rows, so it is checked where the
   // rows are visible rather than by a constraint here.
   minWeeks     Int?
   maxWeeks     Int?
@@ -745,12 +745,12 @@ model Plan {
   // Wod (DN-93): null is global, admin-curated content; set is that athlete's
   // own. "Build your own program", stubbed in DN-15's wizard, is the owned
   // case, and the column is cheaper to add now -- while nothing points at a
-  // Plan -- than after enrollments do.
+  // Program -- than after enrollments do.
   ownerId String?
   owner   User?   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
-  weeks       PlanWeek[]
-  enrollments PlanEnrollment[]
+  weeks       ProgramWeek[]
+  enrollments ProgramEnrollment[]
 
   // Soft delete (ADR 0006, decision 5), meaning what it means on Exercise and
   // Wod: the row leaves the picker, so nobody new can start it, while every
@@ -767,23 +767,23 @@ model Plan {
   // across the global tier (Postgres treats NULLs as distinct, so the first
   // cannot cover the second -- the reasons are on Exercise). Both are partial
   // indexes over live rows, `WHERE "archivedAt" IS NULL`, which Prisma cannot
-  // express, so they live only in the migration: `Plan_live_owned_name_key`
-  // and `Plan_live_global_name_key`. `prisma migrate dev` will offer to drop
+  // express, so they live only in the migration: `Program_live_owned_name_key`
+  // and `Program_live_global_name_key`. `prisma migrate dev` will offer to drop
   // them on the next model change. Keep them.
 }
 
 // One authored week of a program.
 //
 // `phase` is what makes a program scale to a length the athlete chose:
-// `expandPlanWeeks` (DN-11) plays the intro weeks in order, cycles the core
+// `expandProgramWeeks` (DN-11) plays the intro weeks in order, cycles the core
 // weeks to fill the middle, then plays the peak weeks. Core weeks cycle **in
 // order and never shuffled**, because escalation is authored as a wave across
 // the block (3x5, 4x5, 5x5, repeat) rather than applied by a multiplier --
 // shuffling them flattens the wave into noise.
-model PlanWeek {
+model ProgramWeek {
   id     String  @id @default(cuid())
-  planId String
-  plan   Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  programId String
+  program   Program    @relation(fields: [programId], references: [id], onDelete: Cascade)
   // Position within the program as authored, 0-indexed. Not the week the
   // athlete is in: that is a count from their start date, and one authored
   // week can be played several times.
@@ -793,9 +793,9 @@ model PlanWeek {
   // week has nothing to say beyond its number.
   label  String?
 
-  slots PlanSlot[]
+  slots ProgramSlot[]
 
-  @@unique([planId, order])
+  @@unique([programId, order])
 }
 
 // One day of one authored week. `kind` is the fork that makes a training day
@@ -810,10 +810,10 @@ model PlanWeek {
 //                    prescription are DN-19's; this model reserves the `kind`
 //                    so the fork is complete, and nothing writes that value
 //                    until they exist.
-model PlanSlot {
+model ProgramSlot {
   id         String   @id @default(cuid())
-  planWeekId String
-  planWeek   PlanWeek @relation(fields: [planWeekId], references: [id], onDelete: Cascade)
+  programWeekId String
+  programWeek   ProgramWeek @relation(fields: [programWeekId], references: [id], onDelete: Cascade)
   // 0 = Sunday … 6 = Saturday, the numbering Date.getUTCDay() uses and the
   // same one ScheduleRule.trainingDays is in. One slot per weekday per week,
   // because resolveSlotForDate (DN-11) looks the day up by its weekday.
@@ -857,11 +857,11 @@ model PlanSlot {
   // and the rows on another, which no CHECK can span -- so `resolveProgramDay`
   // is where it is read, and a `movements` slot with nothing prescribed falls
   // back rather than handing the athlete an empty day.
-  movements PlanSlotMovement[]
+  movements ProgramSlotMovement[]
 
   assignments DailyAssignment[]
 
-  @@unique([planWeekId, dayOfWeek])
+  @@unique([programWeekId, dayOfWeek])
 }
 
 // One prescribed movement on a `movements` day: "pull, 5x3, rest 90s"
@@ -870,12 +870,12 @@ model PlanSlot {
 //
 // Sets and reps sit here directly -- no multiplier and no progression rule.
 // An author wanting escalation writes a core block that already waves
-// (3x5 / 4x5 / 5x5), which `expandPlanWeeks` then repeats as a wave. A
+// (3x5 / 4x5 / 5x5), which `expandProgramWeeks` then repeats as a wave. A
 // multiplier would put the same fact in two places and let them disagree.
-model PlanSlotMovement {
+model ProgramSlotMovement {
   id         String   @id @default(cuid())
-  planSlotId String
-  planSlot   PlanSlot @relation(fields: [planSlotId], references: [id], onDelete: Cascade)
+  programSlotId String
+  programSlot   ProgramSlot @relation(fields: [programSlotId], references: [id], onDelete: Cascade)
   // Position in the session, 0-based, the way WodMovement.order is.
   order      Int
 
@@ -928,12 +928,12 @@ model PlanSlotMovement {
   // rest 0 times in 25 movements. Nothing converts one into the other.
   //
   // What the athlete actually rests is resolved against
-  // `PlanEnrollment.defaultRestSeconds` by `resolveRestSeconds` in the shared
+  // `ProgramEnrollment.defaultRestSeconds` by `resolveRestSeconds` in the shared
   // package, and nowhere else. The CHECK keeping it non-negative is in the
   // rest_pace migration, written so a null cannot switch off the `sets` half.
   restSeconds Int?
 
-  @@unique([planSlotId, order])
+  @@unique([programSlotId, order])
 }
 
 // One athlete's run at one program.
@@ -942,12 +942,12 @@ model PlanSlotMovement {
 // that only the migration can express. Without it two tabs racing on "Start
 // program" both succeed and the athlete has two programs claiming the same
 // day.
-model PlanEnrollment {
+model ProgramEnrollment {
   id     String @id @default(cuid())
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  planId String
-  plan   Plan   @relation(fields: [planId], references: [id])
+  programId String
+  program   Program   @relation(fields: [programId], references: [id])
 
   // ISO date, stored as text like DailyAssignment.date so the two compare
   // directly. May be in the future: enrolling on Thursday to start Monday is
@@ -956,7 +956,7 @@ model PlanEnrollment {
   // future start needs no second enrollment and no status-flipping job -- the
   // partial unique index above still holds while the program waits.
   startDate String
-  // How many weeks this run lasts, chosen within the plan's bounds. Null for
+  // How many weeks this run lasts, chosen within the program's bounds. Null for
   // an open-ended program, which has no last day and so never completes.
   weeks     Int?
   status    String @default("active") // active | completed
@@ -977,12 +977,12 @@ model PlanEnrollment {
   startingMovements  Json      @default("{}")
   // The athlete's rest pace for this run (ADR 0005), set at the one moment
   // they commit to a routine and editable while it runs. Overrides every
-  // `PlanSlotMovement.restSeconds` in the run, deliberately and silently --
+  // `ProgramSlotMovement.restSeconds` in the run, deliberately and silently --
   // rest is how hard, not what, and the athlete decided it themselves.
   //
   // Null keeps the routine's own, which is only an answer when the routine
   // states one everywhere; the wizard refuses null otherwise. Here rather
-  // than on the plan, so a shared routine never carries one athlete's pace,
+  // than on the program, so a shared routine never carries one athlete's pace,
   // and rather than on the user, because a 5x5 day and a 15-20 day want
   // different rests. Non-negative by a CHECK in the rest_pace migration.
   defaultRestSeconds Int?

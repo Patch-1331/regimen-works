@@ -6,7 +6,7 @@ import {
   createAssignment,
   createEnrollment,
   createGroup,
-  createPlan,
+  createProgram,
   createSkillLevel,
   createUser,
 } from '../test-support/fixtures';
@@ -56,7 +56,7 @@ describe('EnrollmentsService.completeRun', () => {
 
     await service().completeRun(user.id, enrollment.id);
 
-    const after = await testPrisma().planEnrollment.findUniqueOrThrow({
+    const after = await testPrisma().programEnrollment.findUniqueOrThrow({
       where: { id: enrollment.id },
     });
     expect(after.status).toBe('completed');
@@ -96,7 +96,7 @@ describe('EnrollmentsService.completeRun', () => {
 
     await service().completeRun(user.id, enrollment.id);
 
-    const after = await testPrisma().planEnrollment.findUniqueOrThrow({
+    const after = await testPrisma().programEnrollment.findUniqueOrThrow({
       where: { id: enrollment.id },
     });
     expect(after.summary).toMatchObject({ weeks: 6, sessions: 2 });
@@ -112,7 +112,7 @@ describe('EnrollmentsService.completeRun', () => {
 
     await service().completeRun(user.id, enrollment.id);
 
-    const after = await testPrisma().planEnrollment.findUniqueOrThrow({
+    const after = await testPrisma().programEnrollment.findUniqueOrThrow({
       where: { id: enrollment.id },
     });
     expect(after.summary).toMatchObject({
@@ -136,7 +136,7 @@ describe('EnrollmentsService.completeRun', () => {
 
     await service().completeRun(user.id, enrollment.id);
 
-    const after = await testPrisma().planEnrollment.findUniqueOrThrow({
+    const after = await testPrisma().programEnrollment.findUniqueOrThrow({
       where: { id: enrollment.id },
     });
     expect(after.summary).toEqual({
@@ -155,7 +155,7 @@ describe('EnrollmentsService.completeRun', () => {
 
     await service().completeRun(user.id, enrollment.id);
 
-    const after = await testPrisma().planEnrollment.findUniqueOrThrow({
+    const after = await testPrisma().programEnrollment.findUniqueOrThrow({
       where: { id: enrollment.id },
     });
     expect(after.completedAt).toEqual(before);
@@ -168,7 +168,7 @@ describe('EnrollmentsService.completeRun', () => {
 
     await service().completeRun(stranger.id, enrollment.id);
 
-    const after = await testPrisma().planEnrollment.findUniqueOrThrow({
+    const after = await testPrisma().programEnrollment.findUniqueOrThrow({
       where: { id: enrollment.id },
     });
     expect(after.status).toBe('active');
@@ -185,7 +185,7 @@ describe('EnrollmentsService.completeRun', () => {
     await expect(
       service().completeRun(user.id, enrollment.id),
     ).resolves.toBeUndefined();
-    const after = await testPrisma().planEnrollment.findUniqueOrThrow({
+    const after = await testPrisma().programEnrollment.findUniqueOrThrow({
       where: { id: enrollment.id },
     });
     expect(after.status).toBe('completed');
@@ -195,31 +195,31 @@ describe('EnrollmentsService.completeRun', () => {
 describe('EnrollmentsService.cardFor', () => {
   it('offers the run that just finished', async () => {
     const user = await createUser();
-    const plan = await createPlan({ name: 'Pull-Up Builder' });
-    const enrollment = await completedRun(user.id, { planId: plan.id });
+    const program = await createProgram({ name: 'Pull-Up Builder' });
+    const enrollment = await completedRun(user.id, { programId: program.id });
 
     await expect(service().cardFor(user.id)).resolves.toMatchObject({
       enrollmentId: enrollment.id,
-      planId: plan.id,
+      planId: program.id,
       planName: 'Pull-Up Builder',
       summary: { weeks: 6, sessions: 24 },
     });
   });
 
-  it('says a run on a live plan can be run again', async () => {
+  it('says a run on a live program can be run again', async () => {
     const user = await createUser();
-    await completedRun(user.id, { planId: (await createPlan()).id });
+    await completedRun(user.id, { programId: (await createProgram()).id });
 
     await expect(service().cardFor(user.id)).resolves.toMatchObject({
       canRunAgain: true,
     });
   });
 
-  it('says a run on an archived plan cannot be run again', async () => {
+  it('says a run on an archived program cannot be run again', async () => {
     // runAgain refuses it (DN-144), so the card must not offer it (DN-153).
     const user = await createUser();
-    const plan = await createPlan({ archivedAt: new Date() });
-    await completedRun(user.id, { planId: plan.id });
+    const program = await createProgram({ archivedAt: new Date() });
+    await completedRun(user.id, { programId: program.id });
 
     await expect(service().cardFor(user.id)).resolves.toMatchObject({
       canRunAgain: false,
@@ -353,7 +353,7 @@ describe('EnrollmentsService.dismiss', () => {
     await expect(service().dismiss(stranger.id, enrollment.id)).rejects.toThrow(
       NotFoundException,
     );
-    const after = await testPrisma().planEnrollment.findUniqueOrThrow({
+    const after = await testPrisma().programEnrollment.findUniqueOrThrow({
       where: { id: enrollment.id },
     });
     expect(after.summaryDismissedAt).toBeNull();
@@ -365,14 +365,14 @@ describe('EnrollmentsService.dismiss', () => {
     // points at the archived original, so allowing this would quietly run
     // the version the author replaced.
     const user = await createUser();
-    const plan = await createPlan({ archivedAt: new Date() });
-    const previous = await completedRun(user.id, { planId: plan.id });
+    const program = await createProgram({ archivedAt: new Date() });
+    const previous = await completedRun(user.id, { programId: program.id });
 
     await expect(
       service().runAgain(user.id, previous.id, TODAY),
     ).rejects.toThrow(NotFoundException);
     await expect(
-      testPrisma().planEnrollment.count({
+      testPrisma().programEnrollment.count({
         where: { userId: user.id, status: 'active' },
       }),
     ).resolves.toBe(0);
@@ -391,9 +391,9 @@ describe('EnrollmentsService.dismiss', () => {
 describe('EnrollmentsService.runAgain', () => {
   it('starts the same program over from today', async () => {
     const user = await createUser();
-    const plan = await createPlan();
+    const program = await createProgram();
     const previous = await completedRun(user.id, {
-      planId: plan.id,
+      programId: program.id,
       weeks: 8,
     });
 
@@ -403,11 +403,11 @@ describe('EnrollmentsService.runAgain', () => {
       TODAY,
     );
 
-    const created = await testPrisma().planEnrollment.findUniqueOrThrow({
+    const created = await testPrisma().programEnrollment.findUniqueOrThrow({
       where: { id: enrollmentId },
     });
     expect(created).toMatchObject({
-      planId: plan.id,
+      programId: program.id,
       weeks: 8,
       status: 'active',
       startDate: TODAY,
@@ -431,7 +431,7 @@ describe('EnrollmentsService.runAgain', () => {
       TODAY,
     );
 
-    const created = await testPrisma().planEnrollment.findUniqueOrThrow({
+    const created = await testPrisma().programEnrollment.findUniqueOrThrow({
       where: { id: enrollmentId },
     });
     expect(created.startingMovements).toEqual({ pull: members[2].id });
@@ -447,7 +447,7 @@ describe('EnrollmentsService.runAgain', () => {
       TODAY,
     );
 
-    const created = await testPrisma().planEnrollment.findUniqueOrThrow({
+    const created = await testPrisma().programEnrollment.findUniqueOrThrow({
       where: { id: enrollmentId },
     });
     expect(created.defaultRestSeconds).toBe(120);
@@ -477,7 +477,7 @@ describe('EnrollmentsService.runAgain', () => {
 
     expect(enrollmentId).toBe(active.id);
     await expect(
-      testPrisma().planEnrollment.count({
+      testPrisma().programEnrollment.count({
         where: { userId: user.id, status: 'active' },
       }),
     ).resolves.toBe(1);
@@ -492,7 +492,7 @@ describe('EnrollmentsService.runAgain', () => {
       service().runAgain(stranger.id, previous.id, TODAY),
     ).rejects.toThrow(NotFoundException);
     await expect(
-      testPrisma().planEnrollment.count({ where: { userId: stranger.id } }),
+      testPrisma().programEnrollment.count({ where: { userId: stranger.id } }),
     ).resolves.toBe(0);
   });
 
@@ -512,8 +512,8 @@ describe('EnrollmentsService.runAgain', () => {
  */
 describe('EnrollmentsService.updateRestPace', () => {
   /** A program of one straight-sets day whose movements rest as given. */
-  async function restingPlan(rests: (number | null)[]) {
-    return createPlan({
+  async function restingProgram(rests: (number | null)[]) {
+    return createProgram({
       weeks: {
         create: [
           {
@@ -544,8 +544,8 @@ describe('EnrollmentsService.updateRestPace', () => {
 
   it('sets the pace on the run under way', async () => {
     const user = await createUser();
-    const plan = await restingPlan([90]);
-    const run = await createEnrollment(user.id, { planId: plan.id });
+    const program = await restingProgram([90]);
+    const run = await createEnrollment(user.id, { programId: program.id });
 
     const pace = await service().updateRestPace(user.id, {
       defaultRestSeconds: 60,
@@ -556,7 +556,7 @@ describe('EnrollmentsService.updateRestPace', () => {
       defaultRestSeconds: 60,
       required: false,
     });
-    const stored = await testPrisma().planEnrollment.findUniqueOrThrow({
+    const stored = await testPrisma().programEnrollment.findUniqueOrThrow({
       where: { id: run.id },
     });
     expect(stored.defaultRestSeconds).toBe(60);
@@ -564,9 +564,9 @@ describe('EnrollmentsService.updateRestPace', () => {
 
   it("clears it back to the program's own where the program states every rest", async () => {
     const user = await createUser();
-    const plan = await restingPlan([90, 0]);
+    const program = await restingProgram([90, 0]);
     await createEnrollment(user.id, {
-      planId: plan.id,
+      programId: program.id,
       defaultRestSeconds: 60,
     });
 
@@ -581,16 +581,16 @@ describe('EnrollmentsService.updateRestPace', () => {
     // Clearing it would hand the athlete a set with no rest to run and nobody
     // having been asked -- the same rule the wizard holds at the start.
     const user = await createUser();
-    const plan = await restingPlan([90, null]);
+    const program = await restingProgram([90, null]);
     const run = await createEnrollment(user.id, {
-      planId: plan.id,
+      programId: program.id,
       defaultRestSeconds: 60,
     });
 
     await expect(
       service().updateRestPace(user.id, { defaultRestSeconds: null }),
     ).rejects.toThrow(BadRequestException);
-    const stored = await testPrisma().planEnrollment.findUniqueOrThrow({
+    const stored = await testPrisma().programEnrollment.findUniqueOrThrow({
       where: { id: run.id },
     });
     expect(stored.defaultRestSeconds).toBe(60);
@@ -609,13 +609,13 @@ describe('EnrollmentsService.updateRestPace', () => {
   it("leaves another athlete's run alone", async () => {
     const user = await createUser();
     const other = await createUser();
-    const plan = await restingPlan([90]);
-    await createEnrollment(user.id, { planId: plan.id });
-    const theirs = await createEnrollment(other.id, { planId: plan.id });
+    const program = await restingProgram([90]);
+    await createEnrollment(user.id, { programId: program.id });
+    const theirs = await createEnrollment(other.id, { programId: program.id });
 
     await service().updateRestPace(user.id, { defaultRestSeconds: 30 });
 
-    const stored = await testPrisma().planEnrollment.findUniqueOrThrow({
+    const stored = await testPrisma().programEnrollment.findUniqueOrThrow({
       where: { id: theirs.id },
     });
     expect(stored.defaultRestSeconds).toBeNull();

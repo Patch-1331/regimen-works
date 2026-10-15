@@ -7,7 +7,7 @@ import { SchedulerService } from '../scheduler/scheduler.service';
 import { MovementResolutionService } from '../scheduler/movement-resolution.service';
 import { EnrollmentsService } from '../enrollments/enrollments.service';
 import { WodsService } from '../wods/wods.service';
-import { RoutinesService } from '../plans/routines.service';
+import { RoutinesService } from '../programs/routines.service';
 import type { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -92,17 +92,17 @@ function recordingPrisma() {
       }),
       findUnique: record('wod.findUnique'),
     },
-    plan: {
+    program: {
       findMany: jest.fn((args: unknown) => {
-        (calls['plan.findMany'] ??= []).push(args);
+        (calls['program.findMany'] ??= []).push(args);
         return Promise.resolve([]);
       }),
-      findFirst: record('plan.findFirst'),
-      create: record('plan.create'),
+      findFirst: record('program.findFirst'),
+      create: record('program.create'),
     },
-    planEnrollment: {
-      findFirst: record('planEnrollment.findFirst'),
-      updateMany: record('planEnrollment.updateMany'),
+    programEnrollment: {
+      findFirst: record('programEnrollment.findFirst'),
+      updateMany: record('programEnrollment.updateMany'),
     },
   };
   return prisma as typeof prisma & PrismaService;
@@ -163,7 +163,7 @@ describe('per-user query scoping', () => {
     // somebody else's program as the thing locking this athlete's week.
     const prisma = recordingPrisma();
     await new SettingsService(prisma).get(ALICE, '2026-09-07');
-    for (const where of whereOf(prisma, 'planEnrollment.findFirst')) {
+    for (const where of whereOf(prisma, 'programEnrollment.findFirst')) {
       expect(where).toContain(ALICE);
     }
   });
@@ -365,7 +365,7 @@ describe('library ownership scoping', () => {
       .getToday(ALICE, '2026-09-07')
       .catch(() => undefined);
 
-    for (const where of whereOf(prisma, 'planEnrollment.findFirst')) {
+    for (const where of whereOf(prisma, 'programEnrollment.findFirst')) {
       expect(where).toContain(ALICE);
     }
   });
@@ -414,7 +414,7 @@ describe('library ownership scoping', () => {
     // programs as if they had authored them.
     const prisma = recordingPrisma();
     await new RoutinesService(prisma).listOwn(ALICE);
-    for (const where of whereOf(prisma, 'plan.findMany')) {
+    for (const where of whereOf(prisma, 'program.findMany')) {
       expect(where).toBe(JSON.stringify({ ownerId: ALICE }));
     }
   });
@@ -425,10 +425,10 @@ describe('library ownership scoping', () => {
     const prisma = recordingPrisma();
     const service = new RoutinesService(prisma);
     await service
-      .getForEditing({ ownerId: ALICE }, 'plan-1')
+      .getForEditing({ ownerId: ALICE }, 'program-1')
       .catch(() => undefined);
     await service
-      .update({ ownerId: ALICE }, 'plan-1', {
+      .update({ ownerId: ALICE }, 'program-1', {
         name: 'Mine',
         summary: null,
         scheduleMode: 'fixed',
@@ -450,22 +450,26 @@ describe('library ownership scoping', () => {
         ],
       })
       .catch(() => undefined);
-    const wheres = whereOf(prisma, 'plan.findFirst');
+    const wheres = whereOf(prisma, 'program.findFirst');
     expect(wheres).toHaveLength(2);
     for (const where of wheres) {
-      expect(where).toBe(JSON.stringify({ id: 'plan-1', ownerId: ALICE }));
+      expect(where).toBe(JSON.stringify({ id: 'program-1', ownerId: ALICE }));
     }
   });
 
   it('scopes removing and restoring a routine to the caller’s own (DN-147)', async () => {
     const prisma = recordingPrisma();
     const service = new RoutinesService(prisma);
-    await service.archive({ ownerId: ALICE }, 'plan-1').catch(() => undefined);
-    await service.restore({ ownerId: ALICE }, 'plan-1').catch(() => undefined);
-    const wheres = whereOf(prisma, 'plan.findFirst');
+    await service
+      .archive({ ownerId: ALICE }, 'program-1')
+      .catch(() => undefined);
+    await service
+      .restore({ ownerId: ALICE }, 'program-1')
+      .catch(() => undefined);
+    const wheres = whereOf(prisma, 'program.findFirst');
     expect(wheres).toHaveLength(2);
     for (const where of wheres) {
-      expect(where).toBe(JSON.stringify({ id: 'plan-1', ownerId: ALICE }));
+      expect(where).toBe(JSON.stringify({ id: 'program-1', ownerId: ALICE }));
     }
   });
 
@@ -474,10 +478,10 @@ describe('library ownership scoping', () => {
     // would let an admin publish another athlete's routine out from under them.
     const prisma = recordingPrisma();
     await new RoutinesService(prisma)
-      .promote(ALICE, 'plan-1')
+      .promote(ALICE, 'program-1')
       .catch(() => undefined);
-    expect(whereOf(prisma, 'plan.findFirst')).toEqual([
-      JSON.stringify({ id: 'plan-1', ownerId: ALICE }),
+    expect(whereOf(prisma, 'program.findFirst')).toEqual([
+      JSON.stringify({ id: 'program-1', ownerId: ALICE }),
     ]);
   });
 
@@ -486,11 +490,11 @@ describe('library ownership scoping', () => {
     // one athlete another's personal routine.
     const prisma = recordingPrisma();
     await new RoutinesService(prisma)
-      .getForCopy('plan-1')
+      .getForCopy('program-1')
       .catch(() => undefined);
-    const [where] = whereOf(prisma, 'plan.findFirst');
+    const [where] = whereOf(prisma, 'program.findFirst');
     expect(JSON.parse(where)).toMatchObject({
-      AND: [{ ownerId: null }, { id: 'plan-1' }],
+      AND: [{ ownerId: null }, { id: 'program-1' }],
     });
   });
 
@@ -499,12 +503,12 @@ describe('library ownership scoping', () => {
     // an athlete's personal routine out in a file.
     const prisma = recordingPrisma();
     await new RoutinesService(prisma)
-      .exportGlobal({ ids: ['plan-1'] })
+      .exportGlobal({ ids: ['program-1'] })
       .catch(() => undefined);
-    const [where] = whereOf(prisma, 'plan.findMany');
+    const [where] = whereOf(prisma, 'program.findMany');
     const { AND } = JSON.parse(where) as { AND: unknown[] };
     expect(AND).toContainEqual({ ownerId: null });
-    expect(AND).toContainEqual({ id: { in: ['plan-1'] } });
+    expect(AND).toContainEqual({ id: { in: ['program-1'] } });
   });
 
   it('scopes the exercises a routine may name, and the name it may not reuse', async () => {
@@ -535,7 +539,7 @@ describe('library ownership scoping', () => {
         },
       )
       .catch(() => undefined);
-    for (const where of whereOf(prisma, 'plan.findFirst')) {
+    for (const where of whereOf(prisma, 'program.findFirst')) {
       expect(where).toContain(ALICE);
     }
     for (const where of whereOf(prisma, 'exercise.findMany')) {

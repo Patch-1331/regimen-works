@@ -7,4 +7,4 @@ import { RoutinesService } from './routines.service';
   controllers: [RoutinesController, AdminRoutinesController],
   providers: [RoutinesService],
 })
-export class PlansModule {}
+export class ProgramsModule {}

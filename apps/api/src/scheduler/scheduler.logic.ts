@@ -1,5 +1,5 @@
 import { addIsoDays } from '@regimen-works/shared';
-import { usableChoice, type GroupMember } from '../plans/group-choice';
+import { usableChoice, type GroupMember } from '../programs/group-choice';
 
 /**
  * Pure scheduling logic — no DB, no Date.now(), no Math.random() calls

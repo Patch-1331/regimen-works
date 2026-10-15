@@ -66,10 +66,10 @@ describe('the test database', () => {
       testPrisma().skillLevel.count(),
       testPrisma().scheduleRule.count(),
       testPrisma().assignmentSubstitution.count(),
-      testPrisma().plan.count(),
-      testPrisma().planWeek.count(),
-      testPrisma().planSlot.count(),
-      testPrisma().planEnrollment.count(),
+      testPrisma().program.count(),
+      testPrisma().programWeek.count(),
+      testPrisma().programSlot.count(),
+      testPrisma().programEnrollment.count(),
     ]);
     expect(counts).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
   });

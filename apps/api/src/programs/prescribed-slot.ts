@@ -16,12 +16,12 @@ import type { PrismaService } from '../prisma/prisma.service';
  */
 export async function loadPrescribedSlot(
   prisma: PrismaService,
-  planSlotId: string | null,
+  programSlotId: string | null,
 ) {
-  if (planSlotId === null) return null;
+  if (programSlotId === null) return null;
 
-  const slot = await prisma.planSlot.findUnique({
-    where: { id: planSlotId },
+  const slot = await prisma.programSlot.findUnique({
+    where: { id: programSlotId },
     include: { movements: { orderBy: { order: 'asc' } } },
   });
   if (!slot || slot.kind !== 'movements' || slot.movements.length === 0) {

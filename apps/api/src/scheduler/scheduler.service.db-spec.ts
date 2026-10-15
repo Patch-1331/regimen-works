@@ -7,7 +7,7 @@ import {
   createChecklistEntry,
   createEnrollment,
   createExercise,
-  createPlan,
+  createProgram,
   createSkillLevel,
   createUser,
   createWod,
@@ -973,14 +973,14 @@ async function athlete(trainingDays = [1, 2, 3, 4, 5]) {
   return user;
 }
 
-/** A plan whose single core week authors `kind` on every weekday. */
-async function everyDayPlan(
+/** A program whose single core week authors `kind` on every weekday. */
+async function everyDayProgram(
   kind: string,
   slotOverrides: Record<string, unknown> = {},
-  planOverrides: Record<string, unknown> = {},
+  programOverrides: Record<string, unknown> = {},
 ) {
-  return createPlan({
-    ...planOverrides,
+  return createProgram({
+    ...programOverrides,
     weeks: {
       create: [
         {
@@ -1038,9 +1038,11 @@ describe('SchedulerService.getToday, under a program', () => {
     // everyone in DN-13 would have silently turned every day into a training
     // day for every athlete in the app.
     const user = await athlete();
-    const plan = await everyDayPlan('wod_generated', { allowNamed: true });
+    const program = await everyDayProgram('wod_generated', {
+      allowNamed: true,
+    });
     await createEnrollment(user.id, {
-      planId: plan.id,
+      programId: program.id,
       startDate: MONDAY,
       weeks: null,
     });
@@ -1051,7 +1053,7 @@ describe('SchedulerService.getToday, under a program', () => {
     expect(saturday.isRestDay).toBe(true);
     // The program is still context even on a day it is not running: the
     // athlete is in week 1 of it whether or not they train on Saturday.
-    expect(saturday.plan).toMatchObject({ name: plan.name, week: 1 });
+    expect(saturday.plan).toMatchObject({ name: program.name, week: 1 });
     // Null rather than the slot's own kind -- the day is off because the
     // athlete said so, not because the program planned a rest.
     expect(saturday.plan?.slotKind).toBeNull();
@@ -1059,13 +1061,13 @@ describe('SchedulerService.getToday, under a program', () => {
 
   it('overrides them on a fixed program, whose slots are the schedule', async () => {
     const user = await athlete();
-    const plan = await everyDayPlan(
+    const program = await everyDayProgram(
       'wod_generated',
       { allowNamed: true },
       { scheduleMode: 'fixed', minDaysPerWeek: null, maxDaysPerWeek: null },
     );
     await createEnrollment(user.id, {
-      planId: plan.id,
+      programId: program.id,
       startDate: MONDAY,
       weeks: null,
     });
@@ -1079,9 +1081,9 @@ describe('SchedulerService.getToday, under a program', () => {
 
   it('rests on an authored rest day, and says the program planned it', async () => {
     const user = await athlete();
-    const plan = await everyDayPlan('rest');
+    const program = await everyDayProgram('rest');
     await createEnrollment(user.id, {
-      planId: plan.id,
+      programId: program.id,
       startDate: MONDAY,
       weeks: null,
     });
@@ -1098,9 +1100,9 @@ describe('SchedulerService.getToday, under a program', () => {
     // A second WOD in the library, so passing cannot be an accident of there
     // being only one thing to pick.
     await createWod({ name: 'Cindy' });
-    const plan = await everyDayPlan('wod_pinned', { wodId: pinned.id });
+    const program = await everyDayProgram('wod_pinned', { wodId: pinned.id });
     await createEnrollment(user.id, {
-      planId: plan.id,
+      programId: program.id,
       startDate: MONDAY,
       weeks: null,
     });
@@ -1115,12 +1117,12 @@ describe('SchedulerService.getToday, under a program', () => {
     const user = await athlete();
     await createWod({ name: 'Push day', dominantPattern: 'push' });
     const pull = await createWod({ name: 'Pull day', dominantPattern: 'pull' });
-    const plan = await everyDayPlan('wod_generated', {
+    const program = await everyDayProgram('wod_generated', {
       pattern: 'pull',
       allowNamed: true,
     });
     await createEnrollment(user.id, {
-      planId: plan.id,
+      programId: program.id,
       startDate: MONDAY,
       weeks: null,
     });
@@ -1160,12 +1162,12 @@ describe('SchedulerService.getToday, under a program', () => {
       movements: [{ exerciseId: bar.id, reps: 30, order: 0 }],
     });
     const push = await createWod({ name: 'Push day', dominantPattern: 'push' });
-    const plan = await everyDayPlan('wod_generated', {
+    const program = await everyDayProgram('wod_generated', {
       pattern: 'pull',
       allowNamed: true,
     });
     await createEnrollment(user.id, {
-      planId: plan.id,
+      programId: program.id,
       startDate: MONDAY,
       weeks: null,
     });
@@ -1181,9 +1183,9 @@ describe('SchedulerService.getToday, under a program', () => {
     const user = await athlete();
     await createWod({ name: 'Fran', isNamed: true, dominantPattern: 'pull' });
     const plain = await createWod({ name: 'Plain', dominantPattern: 'pull' });
-    const plan = await everyDayPlan('wod_generated', { pattern: 'pull' });
+    const program = await everyDayProgram('wod_generated', { pattern: 'pull' });
     await createEnrollment(user.id, {
-      planId: plan.id,
+      programId: program.id,
       startDate: MONDAY,
       weeks: null,
     });
@@ -1205,7 +1207,7 @@ describe('SchedulerService.getToday, under a program', () => {
 
     afterEach(() => warn.mockRestore());
 
-    it('warns with the plan, the week and the axes it gave up', async () => {
+    it('warns with the program, the week and the axes it gave up', async () => {
       // No squat-dominant WOD exists in the library, which is true of the
       // seeded library today and is exactly what DN-23 fixes. Until then this
       // fires on every squat slot, and that firing is how anyone finds out.
@@ -1214,12 +1216,12 @@ describe('SchedulerService.getToday, under a program', () => {
         name: 'Pull day',
         dominantPattern: 'pull',
       });
-      const plan = await everyDayPlan('wod_generated', {
+      const program = await everyDayProgram('wod_generated', {
         pattern: 'squat',
         allowNamed: true,
       });
       await createEnrollment(user.id, {
-        planId: plan.id,
+        programId: program.id,
         startDate: MONDAY,
         weeks: null,
       });
@@ -1232,8 +1234,8 @@ describe('SchedulerService.getToday, under a program', () => {
       // The four things the group has to answer: what is missing, and which
       // slot of which program asked for it.
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('pattern'));
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining(plan.name));
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining(plan.id));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining(program.name));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining(program.id));
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('week 1'));
     });
 
@@ -1242,12 +1244,12 @@ describe('SchedulerService.getToday, under a program', () => {
       // line every day would make the one that matters unfindable.
       const user = await athlete();
       await createWod({ name: 'Pull day', dominantPattern: 'pull' });
-      const plan = await everyDayPlan('wod_generated', {
+      const program = await everyDayProgram('wod_generated', {
         pattern: 'pull',
         allowNamed: true,
       });
       await createEnrollment(user.id, {
-        planId: plan.id,
+        programId: program.id,
         startDate: MONDAY,
         weeks: null,
       });
@@ -1273,9 +1275,11 @@ describe('SchedulerService.getToday, under a program', () => {
     // The three columns exist so History and the completion card can say "day
     // 17 of 24" without recomputing a date difference per row.
     const user = await athlete();
-    const plan = await everyDayPlan('wod_generated', { allowNamed: true });
+    const program = await everyDayProgram('wod_generated', {
+      allowNamed: true,
+    });
     const enrollment = await createEnrollment(user.id, {
-      planId: plan.id,
+      programId: program.id,
       startDate: MONDAY,
       weeks: null,
     });
@@ -1287,11 +1291,11 @@ describe('SchedulerService.getToday, under a program', () => {
       where: { userId: user.id, date: NEXT_MONDAY },
     });
     expect(stored.enrollmentId).toBe(enrollment.id);
-    expect(stored.planDayIndex).toBe(7);
-    expect(stored.planSlotId).not.toBeNull();
+    expect(stored.programDayIndex).toBe(7);
+    expect(stored.programSlotId).not.toBeNull();
   });
 
-  it('leaves the plan columns null on a day no program produced', async () => {
+  it('leaves the program columns null on a day no program produced', async () => {
     const user = await athlete();
     await createWod();
 
@@ -1301,15 +1305,17 @@ describe('SchedulerService.getToday, under a program', () => {
       where: { userId: user.id, date: MONDAY },
     });
     expect(stored.enrollmentId).toBeNull();
-    expect(stored.planSlotId).toBeNull();
-    expect(stored.planDayIndex).toBeNull();
+    expect(stored.programSlotId).toBeNull();
+    expect(stored.programDayIndex).toBeNull();
   });
 
   it('counts the athlete’s week from one', async () => {
     const user = await athlete();
-    const plan = await everyDayPlan('wod_generated', { allowNamed: true });
+    const program = await everyDayProgram('wod_generated', {
+      allowNamed: true,
+    });
     await createEnrollment(user.id, {
-      planId: plan.id,
+      programId: program.id,
       startDate: MONDAY,
       weeks: null,
     });
@@ -1326,9 +1332,9 @@ describe('SchedulerService.getToday, at the edges of a run', () => {
     // How enrolling on Thursday to start Monday works: one active
     // enrollment, and the days in between are ordinary Just WODs days.
     const user = await athlete();
-    const plan = await everyDayPlan('rest');
+    const program = await everyDayProgram('rest');
     const enrollment = await createEnrollment(user.id, {
-      planId: plan.id,
+      programId: program.id,
       startDate: NEXT_MONDAY,
       weeks: 4,
     });
@@ -1341,7 +1347,7 @@ describe('SchedulerService.getToday, at the edges of a run', () => {
     // not started: the athlete trains.
     expect(today.assignment).not.toBeNull();
     expect(
-      await testPrisma().planEnrollment.findUniqueOrThrow({
+      await testPrisma().programEnrollment.findUniqueOrThrow({
         where: { id: enrollment.id },
       }),
     ).toMatchObject({ status: 'active', completedAt: null });
@@ -1352,9 +1358,9 @@ describe('SchedulerService.getToday, at the edges of a run', () => {
     // is a day the athlete opens Today, and nobody needs the row flipped
     // before then.
     const user = await athlete();
-    const plan = await everyDayPlan('rest');
+    const program = await everyDayProgram('rest');
     const enrollment = await createEnrollment(user.id, {
-      planId: plan.id,
+      programId: program.id,
       startDate: MONDAY,
       weeks: 1,
     });
@@ -1363,7 +1369,7 @@ describe('SchedulerService.getToday, at the edges of a run', () => {
     const today = await programService().getToday(user.id, NEXT_MONDAY);
 
     expect(
-      await testPrisma().planEnrollment.findUniqueOrThrow({
+      await testPrisma().programEnrollment.findUniqueOrThrow({
         where: { id: enrollment.id },
       }),
     ).toMatchObject({ status: 'completed' });
@@ -1375,16 +1381,16 @@ describe('SchedulerService.getToday, at the edges of a run', () => {
 
   it('is unchanged by a second request once the run has completed', async () => {
     const user = await athlete();
-    const plan = await everyDayPlan('rest');
+    const program = await everyDayProgram('rest');
     const enrollment = await createEnrollment(user.id, {
-      planId: plan.id,
+      programId: program.id,
       startDate: MONDAY,
       weeks: 1,
     });
     await createWod();
     await programService().getToday(user.id, NEXT_MONDAY);
     const completedAt = (
-      await testPrisma().planEnrollment.findUniqueOrThrow({
+      await testPrisma().programEnrollment.findUniqueOrThrow({
         where: { id: enrollment.id },
       })
     ).completedAt;
@@ -1394,7 +1400,7 @@ describe('SchedulerService.getToday, at the edges of a run', () => {
     // `updateMany` is scoped to active rows, so the second pass cannot
     // re-stamp a completion the athlete already has.
     expect(
-      await testPrisma().planEnrollment.findUniqueOrThrow({
+      await testPrisma().programEnrollment.findUniqueOrThrow({
         where: { id: enrollment.id },
       }),
     ).toMatchObject({ completedAt });
@@ -1402,9 +1408,9 @@ describe('SchedulerService.getToday, at the edges of a run', () => {
 
   it('ignores an enrollment that is not active', async () => {
     const user = await athlete();
-    const plan = await everyDayPlan('rest');
+    const program = await everyDayProgram('rest');
     await createEnrollment(user.id, {
-      planId: plan.id,
+      programId: program.id,
       startDate: MONDAY,
       weeks: null,
       status: 'completed',
@@ -1418,12 +1424,14 @@ describe('SchedulerService.getToday, at the edges of a run', () => {
   });
 
   it('reports the program alongside a day already decided', async () => {
-    // The plan block is recomputed rather than read off the stored row, so it
+    // The program block is recomputed rather than read off the stored row, so it
     // is there on the second visit of the day too.
     const user = await athlete();
-    const plan = await everyDayPlan('wod_generated', { allowNamed: true });
+    const program = await everyDayProgram('wod_generated', {
+      allowNamed: true,
+    });
     await createEnrollment(user.id, {
-      planId: plan.id,
+      programId: program.id,
       startDate: MONDAY,
       weeks: null,
     });
@@ -1432,7 +1440,7 @@ describe('SchedulerService.getToday, at the edges of a run', () => {
 
     const again = await programService().getToday(user.id, MONDAY);
 
-    expect(again.plan).toMatchObject({ name: plan.name, week: 1 });
+    expect(again.plan).toMatchObject({ name: program.name, week: 1 });
     expect(again.assignment).not.toBeNull();
   });
 });
@@ -1442,9 +1450,11 @@ describe('SchedulerService.skipToday', () => {
     // Skipping a day is not leaving the program, so the strip that says which
     // week they are in is still true afterwards.
     const user = await athlete();
-    const plan = await everyDayPlan('wod_generated', { allowNamed: true });
+    const program = await everyDayProgram('wod_generated', {
+      allowNamed: true,
+    });
     await createEnrollment(user.id, {
-      planId: plan.id,
+      programId: program.id,
       startDate: MONDAY,
       weeks: null,
     });
@@ -1452,7 +1462,7 @@ describe('SchedulerService.skipToday', () => {
     const skipped = await programService().skipToday(user.id, MONDAY);
 
     expect(skipped.isRestDay).toBe(true);
-    expect(skipped.plan).toMatchObject({ name: plan.name, week: 1 });
+    expect(skipped.plan).toMatchObject({ name: program.name, week: 1 });
   });
 
   it('reports no program for an athlete who has none', async () => {
@@ -1464,11 +1474,11 @@ describe('SchedulerService.skipToday', () => {
 
 /**
  * A fixed program, whose slot layout *is* the schedule (DN-16). The CHECK
- * `Plan_schedule_mode_bounds` refuses day bounds on one, so both are nulled
+ * `Program_schedule_mode_bounds` refuses day bounds on one, so both are nulled
  * here rather than inherited from the fixture's flexible defaults.
  */
-async function fixedPlan(kind = 'wod_generated') {
-  return everyDayPlan(
+async function fixedProgram(kind = 'wod_generated') {
+  return everyDayProgram(
     kind,
     { allowNamed: true },
     { scheduleMode: 'fixed', minDaysPerWeek: null, maxDaysPerWeek: null },
@@ -1556,9 +1566,9 @@ describe('SchedulerService makeup days (DN-17)', () => {
       // into the weekend would defeat the reason it was fixed.
       const user = await athlete();
       await createWod();
-      const plan = await fixedPlan('rest');
+      const program = await fixedProgram('rest');
       await createEnrollment(user.id, {
-        planId: plan.id,
+        programId: program.id,
         startDate: MONDAY,
         weeks: null,
       });
@@ -1572,9 +1582,11 @@ describe('SchedulerService makeup days (DN-17)', () => {
     it('still offers under a flexible program, which defers to the athlete', async () => {
       const user = await athlete();
       await createWod();
-      const plan = await everyDayPlan('wod_generated', { allowNamed: true });
+      const program = await everyDayProgram('wod_generated', {
+        allowNamed: true,
+      });
       await createEnrollment(user.id, {
-        planId: plan.id,
+        programId: program.id,
         startDate: MONDAY,
         weeks: null,
       });
@@ -1674,9 +1686,9 @@ describe('SchedulerService makeup days (DN-17)', () => {
       // day the program deliberately kept clear.
       const user = await athlete();
       await createWod();
-      const plan = await fixedPlan('rest');
+      const program = await fixedProgram('rest');
       await createEnrollment(user.id, {
-        planId: plan.id,
+        programId: program.id,
         startDate: MONDAY,
         weeks: null,
       });
@@ -1714,9 +1726,11 @@ describe('SchedulerService makeup days (DN-17)', () => {
       const user = await athlete();
       const authored = await createWod({ name: 'Authored Saturday' });
       const rolled = await createWod({ name: 'Something else entirely' });
-      const plan = await everyDayPlan('wod_pinned', { wodId: authored.id });
+      const program = await everyDayProgram('wod_pinned', {
+        wodId: authored.id,
+      });
       await createEnrollment(user.id, {
-        planId: plan.id,
+        programId: program.id,
         startDate: MONDAY,
         weeks: null,
       });
@@ -1728,15 +1742,17 @@ describe('SchedulerService makeup days (DN-17)', () => {
 
       expect(taken.assignment.wod!.id).toBe(authored.id);
       expect(taken.assignment.wod!.id).not.toBe(rolled.id);
-      expect(taken.plan).toMatchObject({ name: plan.name });
+      expect(taken.plan).toMatchObject({ name: program.name });
     });
 
     it('records which program day it was, the way a scheduled day does', async () => {
       const user = await athlete();
       await createWod();
-      const plan = await everyDayPlan('wod_generated', { allowNamed: true });
+      const program = await everyDayProgram('wod_generated', {
+        allowNamed: true,
+      });
       await createEnrollment(user.id, {
-        planId: plan.id,
+        programId: program.id,
         startDate: MONDAY,
         weeks: null,
       });
@@ -1746,9 +1762,9 @@ describe('SchedulerService makeup days (DN-17)', () => {
       const row = await testPrisma().dailyAssignment.findUnique({
         where: { id: taken.assignment.id },
       });
-      expect(row).toMatchObject({ planDayIndex: 5 });
+      expect(row).toMatchObject({ programDayIndex: 5 });
       expect(row?.enrollmentId).not.toBeNull();
-      expect(row?.planSlotId).not.toBeNull();
+      expect(row?.programSlotId).not.toBeNull();
     });
 
     describe('and the rest of the week (DN-123)', () => {
@@ -1766,7 +1782,7 @@ describe('SchedulerService makeup days (DN-17)', () => {
           squat: await createWod({ name: 'Squat day' }),
           vertical: await createWod({ name: 'Vertical day' }),
         };
-        const plan = await createPlan({
+        const program = await createProgram({
           weeks: {
             create: [
               {
@@ -1798,18 +1814,18 @@ describe('SchedulerService makeup days (DN-17)', () => {
             ],
           },
         });
-        return { plan, wods };
+        return { program, wods };
       }
 
       async function enrolled() {
         const user = await athlete([1, 3, 5]);
-        const { plan, wods } = await rankedWeek();
+        const { program, wods } = await rankedWeek();
         await createEnrollment(user.id, {
-          planId: plan.id,
+          programId: program.id,
           startDate: MONDAY,
           weeks: null,
         });
-        return { user, plan, wods };
+        return { user, program, wods };
       }
 
       it('hands over the session that was missed, not the next one along', async () => {
@@ -1848,7 +1864,7 @@ describe('SchedulerService makeup days (DN-17)', () => {
         expect(taken.assignment.wod!.id).toBe(wods.vertical.id);
       });
 
-      it('keeps planDayIndex on the calendar while planSlotId names the session', async () => {
+      it('keeps programDayIndex on the calendar while programSlotId names the session', async () => {
         // The two are different questions and DN-123 makes the difference
         // visible: Thursday is day 3 of the run whatever it delivers, and the
         // slot id is what says which authored session that was.
@@ -1863,10 +1879,10 @@ describe('SchedulerService makeup days (DN-17)', () => {
 
         const row = await testPrisma().dailyAssignment.findUnique({
           where: { id: taken.assignment.id },
-          include: { planSlot: true },
+          include: { programSlot: true },
         });
-        expect(row).toMatchObject({ planDayIndex: 3 });
-        expect(row?.planSlot?.dayOfWeek).toBe(3);
+        expect(row).toMatchObject({ programDayIndex: 3 });
+        expect(row?.programSlot?.dayOfWeek).toBe(3);
       });
 
       it('lets the rest of the week flow on past the makeup', async () => {
@@ -1896,9 +1912,9 @@ describe('SchedulerService makeup days (DN-17)', () => {
         // offer, so nothing here can move its week.
         const user = await athlete([1, 3, 5]);
         await createWod();
-        const plan = await fixedPlan('rest');
+        const program = await fixedProgram('rest');
         await createEnrollment(user.id, {
-          planId: plan.id,
+          programId: program.id,
           startDate: MONDAY,
           weeks: null,
         });
@@ -1957,17 +1973,17 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
   }
 
   /** A program that prescribes `pull, 5x3, rest 90s` every day of the week. */
-  async function prescribingPlan(
+  async function prescribingProgram(
     movements: Record<string, unknown>[] = [
       { order: 0, movementGroup: 'pull', sets: 5, reps: 3, restSeconds: 90 },
     ],
   ) {
-    return everyDayPlan('movements', { movements: { create: movements } });
+    return everyDayProgram('movements', { movements: { create: movements } });
   }
 
-  async function enrolled(user: { id: string }, planId: string) {
+  async function enrolled(user: { id: string }, programId: string) {
     return createEnrollment(user.id, {
-      planId,
+      programId,
       startDate: MONDAY,
       weeks: null,
     });
@@ -1976,7 +1992,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
   it('hands over the prescription instead of a WOD', async () => {
     const { ring } = await pullMembers();
     const user = await athlete();
-    await enrolled(user, (await prescribingPlan()).id);
+    await enrolled(user, (await prescribingProgram()).id);
 
     const today = await programService().getToday(user.id, TODAY);
 
@@ -2004,13 +2020,13 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
   it('keeps prescribing from a routine archived under a run', async () => {
     // ADR 0006, decision 5: archiving takes a routine out of the picker, not
     // out from under the athlete already running it. Every read that follows
-    // an enrollment has to reach an archived plan exactly as a live one.
+    // an enrollment has to reach an archived program exactly as a live one.
     const { ring } = await pullMembers();
     const user = await athlete();
-    const plan = await prescribingPlan();
-    await enrolled(user, plan.id);
-    await testPrisma().plan.update({
-      where: { id: plan.id },
+    const program = await prescribingProgram();
+    await enrolled(user, program.id);
+    await testPrisma().program.update({
+      where: { id: program.id },
       data: { archivedAt: new Date() },
     });
 
@@ -2026,9 +2042,9 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     // rest they will actually take, not the one they overrode.
     await pullMembers();
     const user = await athlete();
-    const plan = await prescribingPlan();
+    const program = await prescribingProgram();
     await createEnrollment(user.id, {
-      planId: plan.id,
+      programId: program.id,
       startDate: MONDAY,
       weeks: null,
       defaultRestSeconds: 45,
@@ -2045,7 +2061,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     await enrolled(
       user,
       (
-        await prescribingPlan([
+        await prescribingProgram([
           {
             order: 0,
             movementGroup: 'pull',
@@ -2072,7 +2088,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
       where: { userId: user.id },
       data: { equipment: ['pull_up_bar'] },
     });
-    await enrolled(user, (await prescribingPlan()).id);
+    await enrolled(user, (await prescribingProgram()).id);
 
     const today = await programService().getToday(user.id, TODAY);
 
@@ -2093,7 +2109,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     const { fallback, chinUp } = await pullMembers({ defaultTo: 'chinUp' });
     const user = await athlete();
     await createSkillLevel(user.id, 'pull', chinUp.id);
-    await enrolled(user, (await prescribingPlan()).id);
+    await enrolled(user, (await prescribingProgram()).id);
 
     const today = await programService().getToday(user.id, TODAY);
 
@@ -2111,7 +2127,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
   it('records the day as an assignment with no WOD on it', async () => {
     const { ring } = await pullMembers();
     const user = await athlete();
-    await enrolled(user, (await prescribingPlan()).id);
+    await enrolled(user, (await prescribingProgram()).id);
 
     const today = await programService().getToday(user.id, TODAY);
 
@@ -2119,7 +2135,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
       where: { id: today.assignment!.id },
     });
     expect(row).toMatchObject({ wodId: null, status: 'scheduled' });
-    expect(row?.planSlotId).not.toBeNull();
+    expect(row?.programSlotId).not.toBeNull();
     expect(row?.enrollmentId).not.toBeNull();
     expect(ring.id).toBeTruthy();
   });
@@ -2130,7 +2146,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     // on every reload.
     await pullMembers();
     const user = await athlete();
-    await enrolled(user, (await prescribingPlan()).id);
+    await enrolled(user, (await prescribingProgram()).id);
 
     const first = await programService().getToday(user.id, TODAY);
     const again = await programService().getToday(user.id, TODAY);
@@ -2155,7 +2171,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     await enrolled(
       user,
       (
-        await prescribingPlan([
+        await prescribingProgram([
           {
             order: 1,
             movementGroup: 'squat',
@@ -2187,7 +2203,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     // day.
     const wod = await createWod();
     const user = await athlete();
-    await enrolled(user, (await prescribingPlan()).id);
+    await enrolled(user, (await prescribingProgram()).id);
 
     const today = await programService().getToday(user.id, TODAY);
 
@@ -2199,11 +2215,11 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
   async function swap(
     userId: string,
     assignmentId: string,
-    planSlotMovementId: string,
+    programSlotMovementId: string,
     exerciseId: string,
   ) {
     await testPrisma().assignmentSubstitution.create({
-      data: { userId, assignmentId, planSlotMovementId, exerciseId },
+      data: { userId, assignmentId, programSlotMovementId, exerciseId },
     });
   }
 
@@ -2213,7 +2229,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     // so it goes on last.
     const { ring, chinUp } = await pullMembers();
     const user = await athlete();
-    await enrolled(user, (await prescribingPlan()).id);
+    await enrolled(user, (await prescribingProgram()).id);
 
     const first = await programService().getToday(user.id, TODAY);
     expect(first.assignment!.prescription!.movements[0].exercise.id).toBe(
@@ -2242,7 +2258,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     });
     const user = await athlete();
     await createSkillLevel(user.id, 'pull', chinUp.id);
-    await enrolled(user, (await prescribingPlan()).id);
+    await enrolled(user, (await prescribingProgram()).id);
 
     const first = await programService().getToday(user.id, TODAY);
     // No bar, so the chin-up they train at fell to its off-group alternative.
@@ -2276,7 +2292,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     // in between.
     const { chinUp } = await pullMembers();
     const user = await athlete();
-    await enrolled(user, (await prescribingPlan()).id);
+    await enrolled(user, (await prescribingProgram()).id);
 
     const taken = await programService().trainMakeup(user.id, SATURDAY);
     await swap(
@@ -2302,7 +2318,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     // sets.
     const { ring } = await pullMembers();
     const user = await athlete();
-    await enrolled(user, (await prescribingPlan()).id);
+    await enrolled(user, (await prescribingProgram()).id);
 
     const taken = await programService().trainMakeup(user.id, SATURDAY);
 

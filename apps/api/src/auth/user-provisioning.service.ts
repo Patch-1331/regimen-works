@@ -1,11 +1,11 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { todayIsoDate } from '../common/today';
 import {
-  JUST_WODS_PLAN,
-  JUST_WODS_PLAN_ID,
+  JUST_WODS_PROGRAM,
+  JUST_WODS_PROGRAM_ID,
   JUST_WODS_SLOTS,
   JUST_WODS_WEEK,
-} from '../plans/just-wods';
+} from '../programs/just-wods';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -76,12 +76,12 @@ export class UserProvisioningService {
     // Order matters inside the transaction, which is why this is a list and
     // not a set: every row here carries a foreign key to one above it.
     // ScheduleRule and the enrollment point at User, the enrollment also
-    // points at Plan, the week at the plan and the slots at the week.
+    // points at Program, the week at the program and the slots at the week.
     //
     // The Just WODs rows are created here rather than left to the deploy
     // seed, because provisioning cannot assume the seed has run: the db and
     // e2e suites truncate every table between tests, so a service that
-    // required a seeded plan would fail on a foreign key in every one of
+    // required a seeded program would fail on a foreign key in every one of
     // them -- and would do the same in any environment where the two got out
     // of order. Every id is written down (see `just-wods.ts`), so each of
     // these is the same no-op second insert the User row is.
@@ -94,15 +94,15 @@ export class UserProvisioningService {
         data: [{ userId }],
         skipDuplicates: true,
       }),
-      this.prisma.plan.createMany({
-        data: [JUST_WODS_PLAN],
+      this.prisma.program.createMany({
+        data: [JUST_WODS_PROGRAM],
         skipDuplicates: true,
       }),
-      this.prisma.planWeek.createMany({
+      this.prisma.programWeek.createMany({
         data: [JUST_WODS_WEEK],
         skipDuplicates: true,
       }),
-      this.prisma.planSlot.createMany({
+      this.prisma.programSlot.createMany({
         data: JUST_WODS_SLOTS,
         skipDuplicates: true,
       }),
@@ -115,11 +115,11 @@ export class UserProvisioningService {
       // index holding one *active* enrollment per athlete, and a bare
       // ON CONFLICT DO NOTHING -- which is what skipDuplicates compiles to --
       // catches a violation of any unique index, partial ones included.
-      this.prisma.planEnrollment.createMany({
+      this.prisma.programEnrollment.createMany({
         data: [
           {
             userId,
-            planId: JUST_WODS_PLAN_ID,
+            programId: JUST_WODS_PROGRAM_ID,
             startDate: this.today(),
             weeks: null,
           },

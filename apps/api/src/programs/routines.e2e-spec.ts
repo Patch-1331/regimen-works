@@ -109,12 +109,12 @@ async function picker(user: string) {
   return setupOptionsSchema.parse(res.body).programs.map((p) => p.id);
 }
 
-function start(user: string, planId: string) {
+function start(user: string, programId: string) {
   return http()
     .post('/setup')
     .set(...asUser(user))
     .send({
-      planId,
+      planId: programId,
       trainingDays: null,
       weeks: 8,
       startDate: new Date().toISOString().slice(0, 10),
@@ -305,8 +305,11 @@ describe('the global library (DN-148)', () => {
       await admin(method, path, ALICE).send(routine).expect(403);
     }
     expect(
-      (await testPrisma().plan.findUniqueOrThrow({ where: { id: created.id } }))
-        .ownerId,
+      (
+        await testPrisma().program.findUniqueOrThrow({
+          where: { id: created.id },
+        })
+      ).ownerId,
     ).toBe(ALICE);
   });
 
@@ -322,7 +325,7 @@ describe('the global library (DN-148)', () => {
       .send({ ...routine, global: true })
       .expect(400);
     expect(
-      await testPrisma().plan.count({ where: { name: routine.name } }),
+      await testPrisma().program.count({ where: { name: routine.name } }),
     ).toBe(0);
   });
 
@@ -416,7 +419,7 @@ describe('copying a global routine (DN-149)', () => {
 
     expect(copy.id).not.toBe(source.id);
     expect(await listed(ALICE)).toEqual([copy]);
-    const stored = await testPrisma().plan.findUniqueOrThrow({
+    const stored = await testPrisma().program.findUniqueOrThrow({
       where: { id: source.id },
     });
     expect([stored.ownerId, stored.name]).toEqual([null, routine.name]);

@@ -13,9 +13,9 @@ import type {
   UpdateSettings,
 } from '@regimen-works/shared';
 import type { ScheduleRule } from '@prisma/client';
-import { loadActiveProgram } from '../plans/active-program';
-import { restPaceOf } from '../plans/rest-pace';
-import { resolveScheduleLock } from '../plans/schedule-lock';
+import { loadActiveProgram } from '../programs/active-program';
+import { restPaceOf } from '../programs/rest-pace';
+import { resolveScheduleLock } from '../programs/schedule-lock';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**

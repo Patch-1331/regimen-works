@@ -1,10 +1,10 @@
 import {
   assignSlotsToTrainingDays,
-  expandPlanWeeks,
+  expandProgramWeeks,
   minimumViableWeeks,
   resolveSlotForDate,
   sessionDaysInWeek,
-} from './plan.logic';
+} from './program.logic';
 
 /**
  * DN-11. Both functions are pure, so these specs are the whole story -- there
@@ -30,9 +30,9 @@ const WAVING_BLOCK = [
 
 const labels = (weeks: { label: string }[]) => weeks.map((w) => w.label);
 
-describe('expandPlanWeeks', () => {
+describe('expandProgramWeeks', () => {
   it('plays every authored week once at its natural length', () => {
-    expect(labels(expandPlanWeeks(WAVING_BLOCK, 5))).toEqual([
+    expect(labels(expandProgramWeeks(WAVING_BLOCK, 5))).toEqual([
       'ramp',
       'A',
       'B',
@@ -46,7 +46,7 @@ describe('expandPlanWeeks', () => {
     // shuffled and never restarted from the wrong place: the program gets
     // harder because the block waves, and playing it out of sequence turns
     // the wave into noise.
-    expect(labels(expandPlanWeeks(WAVING_BLOCK, 11))).toEqual([
+    expect(labels(expandProgramWeeks(WAVING_BLOCK, 11))).toEqual([
       'ramp',
       'A',
       'B',
@@ -62,7 +62,7 @@ describe('expandPlanWeeks', () => {
   });
 
   it('cuts a cycle mid-block when the length does not divide evenly', () => {
-    expect(labels(expandPlanWeeks(WAVING_BLOCK, 7))).toEqual([
+    expect(labels(expandProgramWeeks(WAVING_BLOCK, 7))).toEqual([
       'ramp',
       'A',
       'B',
@@ -75,7 +75,7 @@ describe('expandPlanWeeks', () => {
 
   it('sorts by the authored order rather than trusting the array', () => {
     const shuffled = [...WAVING_BLOCK].reverse();
-    expect(labels(expandPlanWeeks(shuffled, 5))).toEqual([
+    expect(labels(expandProgramWeeks(shuffled, 5))).toEqual([
       'ramp',
       'A',
       'B',
@@ -94,7 +94,7 @@ describe('expandPlanWeeks', () => {
     ];
 
     it('drops intro before it touches peak', () => {
-      expect(labels(expandPlanWeeks(twoAndTwo, 3))).toEqual([
+      expect(labels(expandProgramWeeks(twoAndTwo, 3))).toEqual([
         'ramp-2',
         'peak-1',
         'peak-2',
@@ -104,40 +104,40 @@ describe('expandPlanWeeks', () => {
     it('keeps the intro week nearest the core block when only one fits', () => {
       // Both ramps cannot fit; the one that hands over to the core block is
       // the more useful of the two.
-      expect(labels(expandPlanWeeks(twoAndTwo, 3))).toContain('ramp-2');
-      expect(labels(expandPlanWeeks(twoAndTwo, 3))).not.toContain('ramp-1');
+      expect(labels(expandProgramWeeks(twoAndTwo, 3))).toContain('ramp-2');
+      expect(labels(expandProgramWeeks(twoAndTwo, 3))).not.toContain('ramp-1');
     });
 
     it('cuts into peak only once intro is gone, keeping the finish', () => {
-      expect(labels(expandPlanWeeks(twoAndTwo, 1))).toEqual(['peak-2']);
+      expect(labels(expandProgramWeeks(twoAndTwo, 1))).toEqual(['peak-2']);
     });
 
     it('leaves no room for core at all, rather than dropping a bookend for it', () => {
-      expect(labels(expandPlanWeeks(twoAndTwo, 2))).not.toContain('A');
+      expect(labels(expandProgramWeeks(twoAndTwo, 2))).not.toContain('A');
     });
   });
 
   describe('never throws', () => {
     it('returns nothing for a length of zero or less', () => {
-      expect(expandPlanWeeks(WAVING_BLOCK, 0)).toEqual([]);
-      expect(expandPlanWeeks(WAVING_BLOCK, -3)).toEqual([]);
+      expect(expandProgramWeeks(WAVING_BLOCK, 0)).toEqual([]);
+      expect(expandProgramWeeks(WAVING_BLOCK, -3)).toEqual([]);
     });
 
     it('returns nothing for a program with no weeks', () => {
-      expect(expandPlanWeeks([], 6)).toEqual([]);
+      expect(expandProgramWeeks([], 6)).toEqual([]);
     });
 
     it('stops short rather than inventing a core block that was never authored', () => {
       // Returns fewer than asked for, which is the one case where the exact
-      // length cannot be honoured. minimumViableWeeks is what stops a plan
+      // length cannot be honoured. minimumViableWeeks is what stops a program
       // being authored this way in the first place.
       const noCore = [week(0, 'intro', 'ramp'), week(1, 'peak', 'test')];
-      expect(labels(expandPlanWeeks(noCore, 6))).toEqual(['ramp', 'test']);
+      expect(labels(expandProgramWeeks(noCore, 6))).toEqual(['ramp', 'test']);
     });
 
     it('ignores a week whose phase is none of the three', () => {
       const odd = [...WAVING_BLOCK, week(5, 'deload', 'stray')];
-      expect(labels(expandPlanWeeks(odd, 5))).not.toContain('stray');
+      expect(labels(expandProgramWeeks(odd, 5))).not.toContain('stray');
     });
   });
 });
@@ -151,7 +151,7 @@ describe('minimumViableWeeks', () => {
     // The two functions have to agree about how long a program is, so this
     // asserts the relationship rather than the number.
     const shortest = minimumViableWeeks(WAVING_BLOCK);
-    expect(labels(expandPlanWeeks(WAVING_BLOCK, shortest)).sort()).toEqual(
+    expect(labels(expandProgramWeeks(WAVING_BLOCK, shortest)).sort()).toEqual(
       labels(WAVING_BLOCK).sort(),
     );
   });

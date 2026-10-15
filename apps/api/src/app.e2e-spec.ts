@@ -24,9 +24,9 @@ import { testPrisma } from './test-support/database';
 import {
   createAssignment,
   createExercise,
-  createFixedPlan,
+  createFixedProgram,
   createGroup,
-  createPlan,
+  createProgram,
   createWod,
 } from './test-support/fixtures';
 
@@ -817,7 +817,7 @@ async function prescribedDay(userId: string) {
     'Chin-up',
     'Pull-up',
   ]);
-  const plan = await createPlan({
+  const program = await createProgram({
     weeks: {
       create: [
         {
@@ -846,8 +846,8 @@ async function prescribedDay(userId: string) {
       ],
     },
   });
-  const slot = await testPrisma().planSlot.findFirstOrThrow({
-    where: { planWeek: { planId: plan.id } },
+  const slot = await testPrisma().programSlot.findFirstOrThrow({
+    where: { programWeek: { programId: program.id } },
     include: { movements: true },
   });
   const assignment = await testPrisma().dailyAssignment.create({
@@ -855,7 +855,7 @@ async function prescribedDay(userId: string) {
       userId,
       date: todayIsoDate(),
       status: 'scheduled',
-      planSlotId: slot.id,
+      programSlotId: slot.id,
     },
   });
   return { members, assignment, movement: slot.movements[0] };
@@ -885,7 +885,7 @@ describe('POST/DELETE /assignments/:id/substitutions, on a prescribed day', () =
       .expect(201);
     expect(
       await testPrisma().assignmentSubstitution.count({
-        where: { planSlotMovementId: movement.id },
+        where: { programSlotMovementId: movement.id },
       }),
     ).toBe(1);
 
@@ -1123,7 +1123,7 @@ describe('the straight-sets session, end to end', () => {
  */
 describe('first-run setup, end to end', () => {
   it('walks a new athlete from un-onboarded to training their own program', async () => {
-    const plan = await createPlan({
+    const program = await createProgram({
       name: 'Pull-Up Builder',
       minDaysPerWeek: 3,
       maxDaysPerWeek: 5,
@@ -1152,7 +1152,7 @@ describe('first-run setup, end to end', () => {
     // Just WODs is what provisioning already put them on, so it leads the
     // picker rather than appearing as an alternative to itself.
     expect(options.programs[0].id).toBe(DEFAULT_PLAN_ID);
-    expect(options.programs.map((p) => p.id)).toContain(plan.id);
+    expect(options.programs.map((p) => p.id)).toContain(program.id);
     // Nothing trained yet, so this morning is still available to start on.
     expect(options.earliestStartDate).toBe(todayIsoDate());
 
@@ -1165,7 +1165,7 @@ describe('first-run setup, end to end', () => {
         .post('/setup')
         .set(...asUser(ALICE))
         .send({
-          planId: plan.id,
+          planId: program.id,
           trainingDays: [1, 3],
           weeks: 6,
           startDate: todayIsoDate(),
@@ -1192,7 +1192,7 @@ describe('first-run setup, end to end', () => {
       .post('/setup')
       .set(...asUser(ALICE))
       .send({
-        planId: plan.id,
+        planId: program.id,
         trainingDays: [1, 3, 5],
         weeks: 6,
         startDate: todayIsoDate(),
@@ -1228,7 +1228,7 @@ describe('first-run setup, end to end', () => {
     // The other half of the cadence screen: no day picker at all, and the
     // program's days reported back as the reason (DN-118's lock, reached
     // through the wizard).
-    const fixed = await createFixedPlan([1, 2, 4, 5], {
+    const fixed = await createFixedProgram([1, 2, 4, 5], {
       name: 'Bar Muscle-Up',
       minWeeks: 6,
       maxWeeks: 6,
@@ -1280,15 +1280,15 @@ describe('a program ending, end to end', () => {
 
   /**
    * A program that trains every day, so "is today a program day?" is decided
-   * by the run's dates alone. A plan with no authored weeks resolves as
+   * by the run's dates alone. A program with no authored weeks resolves as
    * finished whatever the date, which would make every assertion below pass
    * for the wrong reason.
    */
-  async function everyDayPlan(overrides: Record<string, unknown> = {}) {
+  async function everyDayProgram(overrides: Record<string, unknown> = {}) {
     // Something for the Just WODs fallback to hand back once the program is
     // over -- the library is empty unless a test puts a WOD in it.
     await seedLibrary();
-    return createPlan({
+    return createProgram({
       weeks: {
         create: [
           {
@@ -1315,13 +1315,13 @@ describe('a program ending, end to end', () => {
    * mid-program in a test is to repoint the run they already have rather than
    * to add a second.
    */
-  async function ranOutLastWeek(userId: string, planId: string) {
+  async function ranOutLastWeek(userId: string, programId: string) {
     const startDate = addIsoDays(todayIsoDate(), -14);
-    await testPrisma().planEnrollment.updateMany({
+    await testPrisma().programEnrollment.updateMany({
       where: { userId, status: 'active' },
-      data: { planId, startDate, weeks: 1, startingMovements: {} },
+      data: { programId, startDate, weeks: 1, startingMovements: {} },
     });
-    const enrollment = await testPrisma().planEnrollment.findFirstOrThrow({
+    const enrollment = await testPrisma().programEnrollment.findFirstOrThrow({
       where: { userId, status: 'active' },
       select: { id: true },
     });
@@ -1335,8 +1335,8 @@ describe('a program ending, end to end', () => {
 
   it('hands back the card, a workout, and the finished run', async () => {
     // seedLibrary's pull group is the one the movement change is read off.
-    const plan = await everyDayPlan({ name: 'Pull-Up Builder' });
-    const enrollmentId = await ranOutLastWeek(ALICE, plan.id);
+    const program = await everyDayProgram({ name: 'Pull-Up Builder' });
+    const enrollmentId = await ranOutLastWeek(ALICE, program.id);
     const pullChoice = await testPrisma().exercise.findFirstOrThrow({
       where: { movementGroup: 'pull', isGroupDefault: false },
     });
@@ -1362,7 +1362,7 @@ describe('a program ending, end to end', () => {
     expect(today.plan).toBeNull();
     expect(today.completedProgram).toMatchObject({
       enrollmentId,
-      planId: plan.id,
+      planId: program.id,
       planName: 'Pull-Up Builder',
       summary: {
         weeks: 1,
@@ -1414,8 +1414,8 @@ describe('a program ending, end to end', () => {
   });
 
   it('runs the same program again from today', async () => {
-    const plan = await everyDayPlan({ name: 'Pull-Up Builder' });
-    const enrollmentId = await ranOutLastWeek(ALICE, plan.id);
+    const program = await everyDayProgram({ name: 'Pull-Up Builder' });
+    const enrollmentId = await ranOutLastWeek(ALICE, program.id);
     await http()
       .get('/today')
       .set(...asUser(ALICE))
@@ -1430,11 +1430,11 @@ describe('a program ending, end to end', () => {
     );
 
     expect(again).not.toBe(enrollmentId);
-    const started = await testPrisma().planEnrollment.findUniqueOrThrow({
+    const started = await testPrisma().programEnrollment.findUniqueOrThrow({
       where: { id: again },
     });
     expect(started).toMatchObject({
-      planId: plan.id,
+      programId: program.id,
       weeks: 1,
       status: 'active',
       startDate: todayIsoDate(),
@@ -1453,8 +1453,8 @@ describe('a program ending, end to end', () => {
   });
 
   it('will not dismiss or re-run a program that is not yours', async () => {
-    const plan = await everyDayPlan();
-    const enrollmentId = await ranOutLastWeek(ALICE, plan.id);
+    const program = await everyDayProgram();
+    const enrollmentId = await ranOutLastWeek(ALICE, program.id);
     await http()
       .get('/today')
       .set(...asUser(ALICE))

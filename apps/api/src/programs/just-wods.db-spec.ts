@@ -1,6 +1,6 @@
 import { testPrisma } from '../test-support/database';
 import {
-  JUST_WODS_PLAN_ID,
+  JUST_WODS_PROGRAM_ID,
   JUST_WODS_WEEK_ID,
   justWodsSlotId,
   upsertJustWods,
@@ -21,11 +21,13 @@ describe('upsertJustWods', () => {
     await upsertJustWods(testPrisma());
 
     expect(
-      await testPrisma().plan.findUnique({ where: { id: JUST_WODS_PLAN_ID } }),
+      await testPrisma().program.findUnique({
+        where: { id: JUST_WODS_PROGRAM_ID },
+      }),
     ).toMatchObject({ name: 'Just WODs', scheduleMode: 'flexible' });
     expect(
-      await testPrisma().planSlot.count({
-        where: { planWeekId: JUST_WODS_WEEK_ID },
+      await testPrisma().programSlot.count({
+        where: { programWeekId: JUST_WODS_WEEK_ID },
       }),
     ).toBe(7);
   });
@@ -35,9 +37,9 @@ describe('upsertJustWods', () => {
 
     await upsertJustWods(testPrisma());
 
-    expect(await testPrisma().plan.count()).toBe(1);
-    expect(await testPrisma().planWeek.count()).toBe(1);
-    expect(await testPrisma().planSlot.count()).toBe(7);
+    expect(await testPrisma().program.count()).toBe(1);
+    expect(await testPrisma().programWeek.count()).toBe(1);
+    expect(await testPrisma().programSlot.count()).toBe(7);
   });
 
   it('corrects a row that has drifted from the definition', async () => {
@@ -45,10 +47,10 @@ describe('upsertJustWods', () => {
     // An athlete enrolled last month must not be left on last month's
     // program: provisioning would see the rows present and change nothing.
     await upsertJustWods(testPrisma());
-    await testPrisma().plan.update({
-      where: { id: JUST_WODS_PLAN_ID },
+    await testPrisma().program.update({
+      where: { id: JUST_WODS_PROGRAM_ID },
       // Drifted to a *legal* row, all three fields together: the
-      // Plan_schedule_mode_bounds CHECK refuses a fixed plan that still
+      // Program_schedule_mode_bounds CHECK refuses a fixed program that still
       // carries day bounds, so a half-drift cannot be written in the first
       // place and would be testing the constraint rather than the upsert.
       data: {
@@ -58,11 +60,11 @@ describe('upsertJustWods', () => {
         maxDaysPerWeek: null,
       },
     });
-    await testPrisma().planWeek.update({
+    await testPrisma().programWeek.update({
       where: { id: JUST_WODS_WEEK_ID },
       data: { phase: 'intro', label: 'Stale label' },
     });
-    await testPrisma().planSlot.update({
+    await testPrisma().programSlot.update({
       where: { id: justWodsSlotId(6) },
       data: { allowNamed: false, kind: 'rest' },
     });
@@ -70,19 +72,21 @@ describe('upsertJustWods', () => {
     await upsertJustWods(testPrisma());
 
     expect(
-      await testPrisma().plan.findUnique({ where: { id: JUST_WODS_PLAN_ID } }),
+      await testPrisma().program.findUnique({
+        where: { id: JUST_WODS_PROGRAM_ID },
+      }),
     ).toMatchObject({
       name: 'Just WODs',
       scheduleMode: 'flexible',
       minDaysPerWeek: 1,
     });
     expect(
-      await testPrisma().planWeek.findUnique({
+      await testPrisma().programWeek.findUnique({
         where: { id: JUST_WODS_WEEK_ID },
       }),
     ).toMatchObject({ phase: 'core', label: null });
     expect(
-      await testPrisma().planSlot.findUnique({
+      await testPrisma().programSlot.findUnique({
         where: { id: justWodsSlotId(6) },
       }),
     ).toMatchObject({ allowNamed: true, kind: 'wod_generated' });
@@ -92,9 +96,9 @@ describe('upsertJustWods', () => {
     // The two writers share ids on purpose. Whichever reaches the database
     // first wins the create; this proves the second one is an update of that
     // same row and not a second program.
-    await testPrisma().plan.create({
+    await testPrisma().program.create({
       data: {
-        id: JUST_WODS_PLAN_ID,
+        id: JUST_WODS_PROGRAM_ID,
         name: 'Just WODs',
         summary: 'Whatever provisioning wrote first.',
         scheduleMode: 'fixed',
@@ -103,9 +107,11 @@ describe('upsertJustWods', () => {
 
     await upsertJustWods(testPrisma());
 
-    expect(await testPrisma().plan.count()).toBe(1);
+    expect(await testPrisma().program.count()).toBe(1);
     expect(
-      await testPrisma().plan.findUnique({ where: { id: JUST_WODS_PLAN_ID } }),
+      await testPrisma().program.findUnique({
+        where: { id: JUST_WODS_PROGRAM_ID },
+      }),
     ).toMatchObject({ scheduleMode: 'flexible' });
   });
 });
