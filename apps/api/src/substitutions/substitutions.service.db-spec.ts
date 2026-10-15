@@ -5,7 +5,7 @@ import {
   createAssignment,
   createExercise,
   createGroup,
-  createPlan,
+  createProgram,
   createSkillLevel,
   createUser,
   createWod,
@@ -33,7 +33,7 @@ import { SECTION_CAP, SubstitutionsService } from './substitutions.service';
  * because a day can be straight sets instead.
  */
 function wodKey(wodMovementId: string) {
-  return { wodMovementId, planSlotMovementId: null };
+  return { wodMovementId, programSlotMovementId: null };
 }
 
 function service(): SubstitutionsService {
@@ -700,7 +700,7 @@ describe('SubstitutionsService.proposedMovementChanges', () => {
  * assignment pointing at it, with no WOD anywhere in sight.
  *
  * `pinned` authors the specific-exercise form instead of the group form -- the
- * two halves of PlanSlotMovement's xor, and the legality rule reads them
+ * two halves of ProgramSlotMovement's xor, and the legality rule reads them
  * differently.
  */
 async function prescribedDay(options: { pinned?: string } = {}) {
@@ -710,7 +710,7 @@ async function prescribedDay(options: { pinned?: string } = {}) {
     ['Negative chin-up', 'Chin-up', 'Pull-up'],
     { fallbackFor: 1 },
   );
-  const plan = await createPlan({
+  const program = await createProgram({
     weeks: {
       create: [
         {
@@ -740,8 +740,8 @@ async function prescribedDay(options: { pinned?: string } = {}) {
       ],
     },
   });
-  const slot = await testPrisma().planSlot.findFirstOrThrow({
-    where: { planWeek: { planId: plan.id } },
+  const slot = await testPrisma().programSlot.findFirstOrThrow({
+    where: { programWeek: { programId: program.id } },
     include: { movements: true },
   });
   const assignment = await testPrisma().dailyAssignment.create({
@@ -749,7 +749,7 @@ async function prescribedDay(options: { pinned?: string } = {}) {
       userId: user.id,
       date: '2026-09-16',
       status: 'scheduled',
-      planSlotId: slot.id,
+      programSlotId: slot.id,
     },
   });
   return {
@@ -762,8 +762,8 @@ async function prescribedDay(options: { pinned?: string } = {}) {
 }
 
 /** The key the endpoint builds for a prescribed movement. */
-function prescribedKey(planSlotMovementId: string) {
-  return { wodMovementId: null, planSlotMovementId };
+function prescribedKey(programSlotMovementId: string) {
+  return { wodMovementId: null, programSlotMovementId };
 }
 
 /**
@@ -787,7 +787,7 @@ describe('SubstitutionsService, on a prescribed day', () => {
     expect(await storedSwaps(assignment.id)).toMatchObject([
       {
         wodMovementId: null,
-        planSlotMovementId: movement.id,
+        programSlotMovementId: movement.id,
         exerciseId: members[2].id,
       },
     ]);
@@ -882,7 +882,7 @@ describe('SubstitutionsService, on a prescribed day', () => {
   });
 
   it('holds an exercise-pinned row to that exercise own group', async () => {
-    // The other half of PlanSlotMovement's xor. A pinned row names an
+    // The other half of ProgramSlotMovement's xor. A pinned row names an
     // exercise, so the group is read from it exactly as a WOD movement's is.
     const { members } = await createGroup('squat', ['Box squat', 'Air squat']);
     const {
@@ -947,7 +947,7 @@ describe('SubstitutionsService, on a prescribed day', () => {
           userId: user.id,
           assignmentId: assignment.id,
           exerciseId: members[2].id,
-          planSlotMovementId: movement.id,
+          programSlotMovementId: movement.id,
           wodMovementId: wod.movements[0].id,
         },
       }),
@@ -964,7 +964,7 @@ describe('SubstitutionsService, on a prescribed day', () => {
       data: {
         userId: user.id,
         assignmentId: assignment.id,
-        planSlotMovementId: movement.id,
+        programSlotMovementId: movement.id,
         exerciseId: members[2].id,
       },
     });
@@ -974,11 +974,11 @@ describe('SubstitutionsService, on a prescribed day', () => {
         data: {
           userId: user.id,
           assignmentId: assignment.id,
-          planSlotMovementId: movement.id,
+          programSlotMovementId: movement.id,
           exerciseId: members[0].id,
         },
       }),
-    ).rejects.toThrow(/assignmentId_planSlotMovementId/);
+    ).rejects.toThrow(/assignmentId_programSlotMovementId/);
   });
 });
 

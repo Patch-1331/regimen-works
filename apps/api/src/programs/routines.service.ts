@@ -49,9 +49,9 @@ const ROUTINE_ROW = {
     archivedAt: true,
     weeks: { select: { slots: { select: { dayOfWeek: true } } } },
   },
-} satisfies Prisma.PlanDefaultArgs;
+} satisfies Prisma.ProgramDefaultArgs;
 
-type RoutineRow = Prisma.PlanGetPayload<typeof ROUTINE_ROW>;
+type RoutineRow = Prisma.ProgramGetPayload<typeof ROUTINE_ROW>;
 
 /** Everything the editor wrote, as stored: the one week, its days, their lines. */
 const ROUTINE_CONTENT = {
@@ -66,22 +66,22 @@ const ROUTINE_CONTENT = {
       },
     },
   },
-} satisfies Prisma.PlanDefaultArgs;
+} satisfies Prisma.ProgramDefaultArgs;
 
-type RoutineContent = Prisma.PlanGetPayload<typeof ROUTINE_CONTENT>;
+type RoutineContent = Prisma.ProgramGetPayload<typeof ROUTINE_CONTENT>;
 
 /** What "copy to my routines" offers: the live global library, Just WODs aside. */
 const COPYABLE = {
   ...GLOBAL_LIBRARY,
   archivedAt: null,
   id: { not: DEFAULT_PLAN_ID },
-} satisfies Prisma.PlanWhereInput;
+} satisfies Prisma.ProgramWhereInput;
 
 /** The client a write runs on: the service's own, or a transaction's. */
-type Db = Pick<PrismaService, 'plan' | 'exercise'>;
+type Db = Pick<PrismaService, 'program' | 'exercise'>;
 
 /**
- * Writing routines (ADR 0006). The first write path `Plan` has had: until
+ * Writing routines (ADR 0006). The first write path `Program` has had: until
  * now every program was seeded.
  */
 @Injectable()
@@ -113,13 +113,13 @@ export class RoutinesService {
     writer: LibraryWriter,
     id: string,
   ): Promise<EditableRoutine> {
-    const plan = await this.findOwned(writer, id);
-    const routine = toCreateRoutine(plan);
+    const program = await this.findOwned(writer, id);
+    const routine = toCreateRoutine(program);
     return {
-      id: plan.id,
+      id: program.id,
       routine,
-      hasRuns: await this.hasRuns(this.prisma, plan.id),
-      archived: plan.archivedAt !== null,
+      hasRuns: await this.hasRuns(this.prisma, program.id),
+      archived: program.archivedAt !== null,
     };
   }
 
@@ -147,8 +147,8 @@ export class RoutinesService {
       );
     }
     const routine = validateBody(createRoutineSchema, body);
-    const plan = await this.findOwned(writer, id);
-    if (plan.archivedAt !== null) {
+    const program = await this.findOwned(writer, id);
+    if (program.archivedAt !== null) {
       // Editing a retired version would fork it into a second live copy of a
       // routine that already has one. Bringing it back first is DN-147's.
       throw new ConflictException(
@@ -156,42 +156,45 @@ export class RoutinesService {
       );
     }
 
-    const structural = !sameStructure(toCreateRoutine(plan), routine);
+    const structural = !sameStructure(toCreateRoutine(program), routine);
 
     return this.prisma.$transaction(async (tx) => {
       // Asked inside the transaction, so it is the same answer the write
       // acts on rather than one taken a request earlier.
-      if (structural && (await this.hasRuns(tx, plan.id))) {
-        await tx.plan.update({
-          where: { id: plan.id },
+      if (structural && (await this.hasRuns(tx, program.id))) {
+        await tx.program.update({
+          where: { id: program.id },
           data: { archivedAt: new Date() },
         });
         const forked = await this.insert(tx, writer, routine);
         return { routine: forked, forked: true };
       }
 
-      await this.assertNameFree(tx, writer, routine.name, plan.id);
+      await this.assertNameFree(tx, writer, routine.name, program.id);
       if (structural) {
         await this.assertExercisesReferenceable(tx, writer, routine);
         // Nobody has run it, so no assignment points at these slots and the
         // week can simply be written again.
-        await tx.planWeek.deleteMany({ where: { planId: plan.id } });
+        await tx.programWeek.deleteMany({ where: { programId: program.id } });
       }
-      const fields = planFields(routine);
+      const fields = programFields(routine);
       if (!structural) {
         // The week stands, so its days keep their rows -- and the rows a
         // run's assignments point at. A day's name is wording (DN-155), so
         // it is written onto the slot where it is.
         for (const day of routine.days) {
-          await tx.planSlot.updateMany({
-            where: { planWeek: { planId: plan.id }, dayOfWeek: day.dayOfWeek },
+          await tx.programSlot.updateMany({
+            where: {
+              programWeek: { programId: program.id },
+              dayOfWeek: day.dayOfWeek,
+            },
             data: { label: day.label ?? null },
           });
         }
       }
       const row = await this.withNameGuard(writer, routine.name, () =>
-        tx.plan.update({
-          where: { id: plan.id },
+        tx.program.update({
+          where: { id: program.id },
           data: structural
             ? { ...fields, weeks: weeksData(routine) }
             : { name: fields.name, summary: fields.summary },
@@ -223,19 +226,19 @@ export class RoutinesService {
         'Just WODs is built in. It cannot be removed.',
       );
     }
-    const plan = await this.findOwnedRow(writer, id);
+    const program = await this.findOwnedRow(writer, id);
     const row =
-      plan.archivedAt !== null
-        ? plan
-        : await this.prisma.plan.update({
-            where: { id: plan.id },
+      program.archivedAt !== null
+        ? program
+        : await this.prisma.program.update({
+            where: { id: program.id },
             data: { archivedAt: new Date() },
             ...ROUTINE_ROW,
           });
     const running =
       runnerId !== null &&
-      (await this.prisma.planEnrollment.count({
-        where: { userId: runnerId, planId: plan.id, status: 'active' },
+      (await this.prisma.programEnrollment.count({
+        where: { userId: runnerId, programId: program.id, status: 'active' },
       })) > 0;
     return { routine: toSummary(row), running };
   }
@@ -246,13 +249,13 @@ export class RoutinesService {
    * the athlete renames one of them first. Idempotent.
    */
   async restore(writer: LibraryWriter, id: string): Promise<RoutineSummary> {
-    const plan = await this.findOwnedRow(writer, id);
-    if (plan.archivedAt === null) return toSummary(plan);
+    const program = await this.findOwnedRow(writer, id);
+    if (program.archivedAt === null) return toSummary(program);
 
-    await this.assertNameFree(this.prisma, writer, plan.name, plan.id);
-    const row = await this.withNameGuard(writer, plan.name, () =>
-      this.prisma.plan.update({
-        where: { id: plan.id },
+    await this.assertNameFree(this.prisma, writer, program.name, program.id);
+    const row = await this.withNameGuard(writer, program.name, () =>
+      this.prisma.program.update({
+        where: { id: program.id },
         data: { archivedAt: null },
         ...ROUTINE_ROW,
       }),
@@ -263,7 +266,7 @@ export class RoutinesService {
   /**
    * Publishes an admin's own routine to everyone (ADR 0006, decision 4): the
    * same row, its owner cleared. Every enrollment on it -- the admin's own
-   * run included -- names the plan, not the owner, so all of them carry on.
+   * run included -- names the program, not the owner, so all of them carry on.
    *
    * One-way. There is no demote: once other athletes have started it, taking
    * it back would pull a routine out from under their runs.
@@ -274,8 +277,8 @@ export class RoutinesService {
    * allows (DN-93), since one athlete's archive would break everyone's run.
    */
   async promote(adminId: string, id: string): Promise<RoutineSummary> {
-    const plan = await this.findOwned({ ownerId: adminId }, id);
-    if (plan.archivedAt !== null) {
+    const program = await this.findOwned({ ownerId: adminId }, id);
+    if (program.archivedAt !== null) {
       throw new ConflictException(
         'This routine is archived. Restore it before publishing it.',
       );
@@ -283,7 +286,7 @@ export class RoutinesService {
     const personal = await this.prisma.exercise.findMany({
       where: {
         id: {
-          in: plan.weeks.flatMap((w) =>
+          in: program.weeks.flatMap((w) =>
             w.slots.flatMap((s) =>
               s.movements.flatMap((m) => (m.exerciseId ? [m.exerciseId] : [])),
             ),
@@ -302,10 +305,10 @@ export class RoutinesService {
       );
     }
 
-    await this.assertNameFree(this.prisma, GLOBAL_LIBRARY, plan.name);
-    const row = await this.withNameGuard(GLOBAL_LIBRARY, plan.name, () =>
-      this.prisma.plan.update({
-        where: { id: plan.id },
+    await this.assertNameFree(this.prisma, GLOBAL_LIBRARY, program.name);
+    const row = await this.withNameGuard(GLOBAL_LIBRARY, program.name, () =>
+      this.prisma.program.update({
+        where: { id: program.id },
         data: { ownerId: null },
         ...ROUTINE_ROW,
       }),
@@ -318,7 +321,7 @@ export class RoutinesService {
    * live ones only, and not Just WODs, which has no week to copy.
    */
   async listCopyable(): Promise<RoutineSummary[]> {
-    const rows = await this.prisma.plan.findMany({
+    const rows = await this.prisma.program.findMany({
       where: COPYABLE,
       orderBy: { name: 'asc' },
       ...ROUTINE_ROW,
@@ -335,12 +338,12 @@ export class RoutinesService {
    * so this cannot be used to read another athlete's work.
    */
   async getForCopy(id: string): Promise<CreateRoutine> {
-    const plan = await this.prisma.plan.findFirst({
+    const program = await this.prisma.program.findFirst({
       where: { AND: [COPYABLE, { id }] },
       ...ROUTINE_CONTENT,
     });
-    if (!plan) throw new NotFoundException('No such routine.');
-    return toCreateRoutine(plan);
+    if (!program) throw new NotFoundException('No such routine.');
+    return toCreateRoutine(program);
   }
 
   /**
@@ -355,7 +358,7 @@ export class RoutinesService {
   async exportGlobal(body: unknown): Promise<RoutineExport> {
     const { ids } = validateBody(exportRoutinesSchema, body);
     const wanted = [...new Set(ids)];
-    const plans = await this.prisma.plan.findMany({
+    const programs = await this.prisma.program.findMany({
       where: {
         AND: [
           GLOBAL_LIBRARY,
@@ -366,7 +369,7 @@ export class RoutinesService {
       orderBy: { name: 'asc' },
       ...ROUTINE_CONTENT,
     });
-    if (plans.length !== wanted.length) {
+    if (programs.length !== wanted.length) {
       throw new NotFoundException(
         'Only global routines can be exported, and not Just WODs.',
       );
@@ -374,7 +377,7 @@ export class RoutinesService {
     return {
       format: ROUTINE_EXPORT_FORMAT,
       version: ROUTINE_EXPORT_VERSION,
-      routines: plans.map(toCreateRoutine),
+      routines: programs.map(toCreateRoutine),
     };
   }
 
@@ -423,7 +426,7 @@ export class RoutinesService {
    * first and marked built in so the screen offers it no actions.
    */
   async listGlobal(): Promise<GlobalRoutineSummary[]> {
-    const rows = await this.prisma.plan.findMany({
+    const rows = await this.prisma.program.findMany({
       where: GLOBAL_LIBRARY,
       orderBy: [
         { archivedAt: { sort: 'asc', nulls: 'first' } },
@@ -450,7 +453,7 @@ export class RoutinesService {
     await this.assertNameFree(db, writer, routine.name);
     await this.assertExercisesReferenceable(db, writer, routine);
     const row = await this.withNameGuard(writer, routine.name, () =>
-      db.plan.create({ data: planData(writer, routine), ...ROUTINE_ROW }),
+      db.program.create({ data: programData(writer, routine), ...ROUTINE_ROW }),
     );
     return toSummary(row);
   }
@@ -481,14 +484,14 @@ export class RoutinesService {
     writer: LibraryWriter,
     id: string,
   ): Promise<RoutineContent> {
-    const plan = await this.prisma.plan.findFirst({
+    const program = await this.prisma.program.findFirst({
       where: { id, ownerId: writer.ownerId },
       ...ROUTINE_CONTENT,
     });
-    if (!plan || plan.id === DEFAULT_PLAN_ID) {
+    if (!program || program.id === DEFAULT_PLAN_ID) {
       throw new NotFoundException('No such routine.');
     }
-    return plan;
+    return program;
   }
 
   /** `findOwned` without the week, for acts that only touch the row. */
@@ -496,22 +499,22 @@ export class RoutinesService {
     writer: LibraryWriter,
     id: string,
   ): Promise<RoutineRow> {
-    const plan = await this.prisma.plan.findFirst({
+    const program = await this.prisma.program.findFirst({
       where: { id, ownerId: writer.ownerId },
       ...ROUTINE_ROW,
     });
-    if (!plan || plan.id === DEFAULT_PLAN_ID) {
+    if (!program || program.id === DEFAULT_PLAN_ID) {
       throw new NotFoundException('No such routine.');
     }
-    return plan;
+    return program;
   }
 
   /** Anyone, ever, finished runs included (ADR 0006, decision 6). */
   private async hasRuns(
-    db: Pick<PrismaService, 'planEnrollment'>,
-    planId: string,
+    db: Pick<PrismaService, 'programEnrollment'>,
+    programId: string,
   ): Promise<boolean> {
-    return (await db.planEnrollment.count({ where: { planId } })) > 0;
+    return (await db.programEnrollment.count({ where: { programId } })) > 0;
   }
 
   /**
@@ -520,7 +523,7 @@ export class RoutinesService {
    * run, and the setup picker is the list of the second.
    */
   async listOwn(userId: string): Promise<RoutineSummary[]> {
-    const rows = await this.prisma.plan.findMany({
+    const rows = await this.prisma.program.findMany({
       where: { ownerId: userId },
       orderBy: [
         { archivedAt: { sort: 'asc', nulls: 'first' } },
@@ -541,7 +544,7 @@ export class RoutinesService {
     name: string,
     except?: string,
   ) {
-    const clash = await db.plan.findFirst({
+    const clash = await db.program.findFirst({
       where: {
         ownerId: writer.ownerId,
         name,
@@ -588,7 +591,7 @@ export class RoutinesService {
 
 /**
  * The authored shape onto the stored one: one `core` week, so
- * `expandPlanWeeks` repeats it for however long the athlete chose, and one
+ * `expandProgramWeeks` repeats it for however long the athlete chose, and one
  * `movements` slot per day trained.
  *
  * A flexible routine is "any N days a week" with N exactly the days written
@@ -596,19 +599,19 @@ export class RoutinesService {
  * has to choose -- every slot is 0. Its written weekdays become the picker's
  * starting days.
  */
-function planData(
+function programData(
   writer: LibraryWriter,
   routine: CreateRoutine,
-): Prisma.PlanCreateInput {
+): Prisma.ProgramCreateInput {
   return {
-    ...planFields(routine),
+    ...programFields(routine),
     owner: writer.ownerId ? { connect: { id: writer.ownerId } } : undefined,
     weeks: weeksData(routine),
   };
 }
 
-/** The plan's own columns: what the routine says, minus its week. */
-function planFields(routine: CreateRoutine) {
+/** The program's own columns: what the routine says, minus its week. */
+function programFields(routine: CreateRoutine) {
   const weekdays = routine.days.map((d) => d.dayOfWeek);
   const flexible = routine.scheduleMode === 'flexible';
   return {
@@ -622,7 +625,7 @@ function planFields(routine: CreateRoutine) {
     minWeeks: ROUTINE_WEEKS.min,
     maxWeeks: ROUTINE_WEEKS.max,
     defaultWeeks: ROUTINE_WEEKS.default,
-  } satisfies Prisma.PlanUpdateInput;
+  } satisfies Prisma.ProgramUpdateInput;
 }
 
 /** The one repeating week, its days and their lines, ready to create. */
@@ -656,17 +659,17 @@ function weeksData(routine: CreateRoutine) {
         },
       },
     ],
-  } satisfies Prisma.PlanWeekCreateNestedManyWithoutPlanInput;
+  } satisfies Prisma.ProgramWeekCreateNestedManyWithoutProgramInput;
 }
 
 /**
  * The stored routine as the body that would write it again -- the inverse of
- * `planData`, for the editor to load and for telling a structural edit from
+ * `programData`, for the editor to load and for telling a structural edit from
  * a wording one.
  */
-function toCreateRoutine(plan: RoutineContent): CreateRoutine {
-  const scheduleMode = plan.scheduleMode as CreateRoutine['scheduleMode'];
-  const days: RoutineDay[] = plan.weeks
+function toCreateRoutine(program: RoutineContent): CreateRoutine {
+  const scheduleMode = program.scheduleMode as CreateRoutine['scheduleMode'];
+  const days: RoutineDay[] = program.weeks
     .flatMap((w) => w.slots)
     .map((slot) => ({
       dayOfWeek: slot.dayOfWeek,
@@ -690,8 +693,8 @@ function toCreateRoutine(plan: RoutineContent): CreateRoutine {
     days.map((d) => d.dayOfWeek),
   );
   return {
-    name: plan.name,
-    summary: plan.summary === written ? null : plan.summary,
+    name: program.name,
+    summary: program.summary === written ? null : program.summary,
     scheduleMode,
     days,
   };

@@ -10,7 +10,7 @@ import type { CommitSetup } from '@regimen-works/shared';
  */
 
 /** The day bounds and length bounds a commit is judged against. */
-export type SetupPlanBounds = {
+export type SetupProgramBounds = {
   name: string;
   scheduleMode: string;
   minDaysPerWeek: number | null;
@@ -68,12 +68,12 @@ export function startDateRange(
  * Empty for a flexible program, which has no answer: its days are the
  * athlete's, and its `defaultDays` is where it suggests some.
  */
-export function fixedDaysOf(plan: {
+export function fixedDaysOf(program: {
   scheduleMode: string;
   weeks: { order: number; slots: { dayOfWeek: number; kind: string }[] }[];
 }): number[] {
-  if (plan.scheduleMode !== 'fixed') return [];
-  const first = [...plan.weeks].sort((a, b) => a.order - b.order)[0];
+  if (program.scheduleMode !== 'fixed') return [];
+  const first = [...program.weeks].sort((a, b) => a.order - b.order)[0];
   if (!first) return [];
   const days = new Set(
     first.slots.filter((s) => s.kind !== 'rest').map((s) => s.dayOfWeek),
@@ -91,15 +91,15 @@ export function fixedDaysOf(plan: {
  * two mistakes — the screens themselves cannot produce one.
  */
 export function setupRejection(
-  plan: SetupPlanBounds,
+  program: SetupProgramBounds,
   body: CommitSetup,
   range: StartDateRange,
 ): string | null {
   return (
-    trainingDaysRejection(plan, body.trainingDays) ??
-    weeksRejection(plan, body.weeks) ??
+    trainingDaysRejection(program, body.trainingDays) ??
+    weeksRejection(program, body.weeks) ??
     startDateRejection(body.startDate, range) ??
-    restPaceRejection(plan, body.defaultRestSeconds)
+    restPaceRejection(program, body.defaultRestSeconds)
   );
 }
 
@@ -110,25 +110,25 @@ export function setupRejection(
  * this exists to ask once, rather than 25 times.
  */
 function restPaceRejection(
-  plan: SetupPlanBounds,
+  program: SetupProgramBounds,
   defaultRestSeconds: number | null,
 ): string | null {
-  return plan.restPaceRequired && defaultRestSeconds === null
-    ? `${plan.name} does not say how long to rest after every movement, so choose a rest for this run.`
+  return program.restPaceRequired && defaultRestSeconds === null
+    ? `${program.name} does not say how long to rest after every movement, so choose a rest for this run.`
     : null;
 }
 
 function trainingDaysRejection(
-  plan: SetupPlanBounds,
+  program: SetupProgramBounds,
   trainingDays: number[] | null,
 ): string | null {
-  if (plan.scheduleMode === 'fixed') {
+  if (program.scheduleMode === 'fixed') {
     // Refused rather than ignored. A client sending days for a fixed program
     // believes it is setting them, and storing nothing while answering 200
     // would leave it right about the request and wrong about the week.
     return trainingDays === null
       ? null
-      : `${plan.name} sets its own training days, so there are none to choose.`;
+      : `${program.name} sets its own training days, so there are none to choose.`;
   }
 
   if (trainingDays === null) return 'Pick the days you train.';
@@ -136,33 +136,34 @@ function trainingDaysRejection(
   // Both bounds are present on every flexible program -- the CHECK added in
   // DN-9's migration refuses one without the other -- but they are nullable
   // columns, so the narrowing is real rather than ceremonial.
-  const { minDaysPerWeek: min, maxDaysPerWeek: max } = plan;
+  const { minDaysPerWeek: min, maxDaysPerWeek: max } = program;
   if (min !== null && trainingDays.length < min) {
-    return `${plan.name} needs at least ${min} ${dayWord(min)} a week.`;
+    return `${program.name} needs at least ${min} ${dayWord(min)} a week.`;
   }
   if (max !== null && trainingDays.length > max) {
-    return `${plan.name} runs at most ${max} ${dayWord(max)} a week.`;
+    return `${program.name} runs at most ${max} ${dayWord(max)} a week.`;
   }
   return null;
 }
 
 function weeksRejection(
-  plan: SetupPlanBounds,
+  program: SetupProgramBounds,
   weeks: number | null,
 ): string | null {
-  const { minWeeks: min, maxWeeks: max } = plan;
+  const { minWeeks: min, maxWeeks: max } = program;
 
   // Open-ended: no length to choose, and a number on it would be a completion
   // date for a program that never completes.
   if (min === null || max === null) {
     return weeks === null
       ? null
-      : `${plan.name} has no end, so there is no length to choose.`;
+      : `${program.name} has no end, so there is no length to choose.`;
   }
 
-  if (weeks === null) return `Choose how many weeks to run ${plan.name} for.`;
+  if (weeks === null)
+    return `Choose how many weeks to run ${program.name} for.`;
   if (weeks < min || weeks > max) {
-    return `${plan.name} runs for between ${min} and ${max} weeks.`;
+    return `${program.name} runs for between ${min} and ${max} weeks.`;
   }
   return null;
 }

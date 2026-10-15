@@ -1,12 +1,12 @@
 import {
   assignSlotsToTrainingDays,
-  expandPlanWeeks,
+  expandProgramWeeks,
   resolveSlotForDate,
   sessionDaysInWeek,
-} from './plan.logic';
+} from './program.logic';
 
 /**
- * What a program makes of one date (DN-16) — pure, like `plan.logic.ts` and
+ * What a program makes of one date (DN-16) — pure, like `program.logic.ts` and
  * `scheduler.logic.ts`. No DB, no clock, no randomness.
  *
  * This is the fork `getToday` used to not have. It exists as its own function
@@ -71,8 +71,8 @@ export type ProgramWeek = {
 /** The athlete's active enrollment, flattened to what deciding a day needs. */
 export type ActiveProgram = {
   enrollmentId: string;
-  planId: string;
-  planName: string;
+  programId: string;
+  programName: string;
   scheduleMode: string; // fixed | flexible
   startDate: string;
   /** The run's length. Null for an open-ended program, which never completes. */
@@ -95,13 +95,13 @@ export type SlotConstraints = {
 };
 
 /**
- * Where the athlete is, for the today response's `plan` block and for the
+ * Where the athlete is, for the today response's `program` block and for the
  * three columns the assignment records.
  */
 export type ProgramDayContext = {
   enrollmentId: string;
-  planId: string;
-  planName: string;
+  programId: string;
+  programName: string;
   /** 1-based — the number an athlete reads. `weekIndex` everywhere else is not. */
   week: number;
   totalWeeks: number | null;
@@ -119,9 +119,9 @@ export type ProgramDayContext = {
    * fact from an authored `rest`, and the rest-day copy says so.
    */
   slotKind: string | null;
-  planSlotId: string | null;
-  /** Days since the start date. This is what `DailyAssignment.planDayIndex` stores. */
-  planDayIndex: number;
+  programSlotId: string | null;
+  /** Days since the start date. This is what `DailyAssignment.programDayIndex` stores. */
+  programDayIndex: number;
 };
 
 export type ProgramDay =
@@ -178,7 +178,7 @@ export function resolveProgramDay(
   const expanded =
     program.weeks === null
       ? program.authoredWeeks
-      : expandPlanWeeks(program.authoredWeeks, program.weeks);
+      : expandProgramWeeks(program.authoredWeeks, program.weeks);
 
   const resolution = resolveSlotForDate(
     { startDate: program.startDate, weeks: program.weeks },
@@ -196,12 +196,12 @@ export function resolveProgramDay(
   const week = expanded[resolution.weekIndex % expanded.length];
   const base = {
     enrollmentId: program.enrollmentId,
-    planId: program.planId,
-    planName: program.planName,
+    programId: program.programId,
+    programName: program.programName,
     week: resolution.weekIndex + 1,
     totalWeeks: program.weeks,
     weekLabel: week.label,
-    planDayIndex: resolution.dayIndex,
+    programDayIndex: resolution.dayIndex,
   };
 
   // A flexible program has no opinion about *which* days are trained -- that
@@ -234,11 +234,11 @@ export function resolveProgramDay(
       // them "planned rest" over a day they chose off would be the app taking
       // credit for their decision.
       //
-      // No planSlotId either. Under the remap the session this week would
+      // No programSlotId either. Under the remap the session this week would
       // have authored here is being trained on another day, and recording it
       // against a rest day would have it counted twice.
       kind: 'rest',
-      day: { ...base, slotKind: null, planSlotId: null, dayLabel: null },
+      day: { ...base, slotKind: null, programSlotId: null, dayLabel: null },
     };
   }
 
@@ -251,7 +251,7 @@ export function resolveProgramDay(
     // program rather than a day of it.
     return {
       kind: 'generated',
-      day: { ...base, slotKind: null, planSlotId: null, dayLabel: null },
+      day: { ...base, slotKind: null, programSlotId: null, dayLabel: null },
       constraints: UNCONSTRAINED,
     };
   }
@@ -259,7 +259,7 @@ export function resolveProgramDay(
   const day = {
     ...base,
     slotKind: slot.kind,
-    planSlotId: slot.id,
+    programSlotId: slot.id,
     dayLabel: slot.label,
   };
 
@@ -400,7 +400,7 @@ export type NarrowedPool<C> = {
  * *surprise* rather than to express a preference. An author who turned
  * benchmarks off did it so Fran does not land in the middle of a progression
  * block, and an athlete who gets one anyway has been handed a maximal effort
- * they did not plan for. An off-pattern WOD, by contrast, is a normal
+ * they did not program for. An off-pattern WOD, by contrast, is a normal
  * training day that is not the one the program wanted — disappointing, not
  * disruptive. So the axis protecting against harm outranks the axis
  * protecting intent.

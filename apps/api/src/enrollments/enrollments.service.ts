@@ -15,8 +15,8 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { libraryVisibleTo } from '../library/visible-to';
-import { loadActiveProgram } from '../plans/active-program';
-import { restPaceOf } from '../plans/rest-pace';
+import { loadActiveProgram } from '../programs/active-program';
+import { restPaceOf } from '../programs/rest-pace';
 import { buildEnrollmentSummary } from './enrollment-summary.logic';
 import { snapshotMovements } from './starting-movements';
 
@@ -27,14 +27,16 @@ import { snapshotMovements } from './starting-movements';
 const COMPLETED_FOR_CARD = {
   select: {
     id: true,
-    planId: true,
+    programId: true,
     completedAt: true,
     summary: true,
-    plan: { select: { name: true, archivedAt: true } },
+    program: { select: { name: true, archivedAt: true } },
   },
-} satisfies Prisma.PlanEnrollmentDefaultArgs;
+} satisfies Prisma.ProgramEnrollmentDefaultArgs;
 
-type CompletedRow = Prisma.PlanEnrollmentGetPayload<typeof COMPLETED_FOR_CARD>;
+type CompletedRow = Prisma.ProgramEnrollmentGetPayload<
+  typeof COMPLETED_FOR_CARD
+>;
 
 @Injectable()
 export class EnrollmentsService {
@@ -55,7 +57,7 @@ export class EnrollmentsService {
    * and simply does not store it.
    */
   async completeRun(userId: string, enrollmentId: string): Promise<void> {
-    const enrollment = await this.prisma.planEnrollment.findFirst({
+    const enrollment = await this.prisma.programEnrollment.findFirst({
       where: { id: enrollmentId, userId, status: 'active' },
       select: { id: true, weeks: true, startingMovements: true },
     });
@@ -70,7 +72,7 @@ export class EnrollmentsService {
       movementSnapshotOf(enrollment.startingMovements),
     );
 
-    await this.prisma.planEnrollment.updateMany({
+    await this.prisma.programEnrollment.updateMany({
       where: { id: enrollment.id, status: 'active' },
       data: {
         status: 'completed',
@@ -82,7 +84,7 @@ export class EnrollmentsService {
 
   /** Every program this athlete has finished, most recent first. */
   async listCompleted(userId: string): Promise<CompletedProgram[]> {
-    const rows = await this.prisma.planEnrollment.findMany({
+    const rows = await this.prisma.programEnrollment.findMany({
       where: { userId, status: 'completed', summary: { not: Prisma.DbNull } },
       orderBy: { completedAt: 'desc' },
       ...COMPLETED_FOR_CARD,
@@ -101,7 +103,7 @@ export class EnrollmentsService {
    * training, not working through a queue of congratulations.
    */
   async cardFor(userId: string): Promise<CompletedProgram | null> {
-    const row = await this.prisma.planEnrollment.findFirst({
+    const row = await this.prisma.programEnrollment.findFirst({
       where: {
         userId,
         status: 'completed',
@@ -116,7 +118,7 @@ export class EnrollmentsService {
 
   /** Puts the card away. Idempotent: dismissing twice is dismissing once. */
   async dismiss(userId: string, enrollmentId: string): Promise<void> {
-    const { count } = await this.prisma.planEnrollment.updateMany({
+    const { count } = await this.prisma.programEnrollment.updateMany({
       where: { id: enrollmentId, userId, status: 'completed' },
       data: { summaryDismissedAt: new Date() },
     });
@@ -126,8 +128,8 @@ export class EnrollmentsService {
   }
 
   /**
-   * Starts the same program over: same plan, same length, from today --
-   * unless that plan has been archived since.
+   * Starts the same program over: same program, same length, from today --
+   * unless that program has been archived since.
    *
    * No questions, because none of them have new answers -- the athlete has
    * just run this program and is saying they want it again. Choosing a
@@ -143,14 +145,14 @@ export class EnrollmentsService {
     enrollmentId: string,
     today: string,
   ): Promise<{ enrollmentId: string }> {
-    const previous = await this.prisma.planEnrollment.findFirst({
+    const previous = await this.prisma.programEnrollment.findFirst({
       where: { id: enrollmentId, userId, status: 'completed' },
       select: {
         id: true,
-        planId: true,
+        programId: true,
         weeks: true,
         defaultRestSeconds: true,
-        plan: { select: { archivedAt: true } },
+        program: { select: { archivedAt: true } },
       },
     });
     if (!previous) {
@@ -159,14 +161,14 @@ export class EnrollmentsService {
     // A new run is a start, and an archived routine cannot be started (ADR
     // 0006, decision 5) -- after a fork it is the version the author replaced.
     // The card stays up: the athlete has not answered it.
-    if (previous.plan.archivedAt) {
+    if (previous.program.archivedAt) {
       throw new NotFoundException(
         'That program has been archived and cannot be run again.',
       );
     }
 
     return this.prisma.$transaction(async (tx) => {
-      await tx.planEnrollment.updateMany({
+      await tx.programEnrollment.updateMany({
         where: { id: previous.id, summaryDismissedAt: null },
         data: { summaryDismissedAt: new Date() },
       });
@@ -177,16 +179,16 @@ export class EnrollmentsService {
       // fallback, so a run already under way simply wins and this becomes a
       // no-op -- two taps on "Run it again" cannot enrol twice, and the
       // partial unique index would refuse the second row regardless.
-      const active = await tx.planEnrollment.findFirst({
+      const active = await tx.programEnrollment.findFirst({
         where: { userId, status: 'active' },
         select: { id: true },
       });
       if (active) return { enrollmentId: active.id };
 
-      const created = await tx.planEnrollment.create({
+      const created = await tx.programEnrollment.create({
         data: {
           userId,
-          planId: previous.planId,
+          programId: previous.programId,
           startDate: today,
           weeks: previous.weeks,
           // The pace too (ADR 0005): the same program again is the same
@@ -232,7 +234,7 @@ export class EnrollmentsService {
 
     // `status: 'active'` on the write as well as the read: a run that
     // completed in between is history, and history does not take edits.
-    const { count } = await this.prisma.planEnrollment.updateMany({
+    const { count } = await this.prisma.programEnrollment.updateMany({
       where: { id: pace.enrollmentId, userId, status: 'active' },
       data: { defaultRestSeconds: body.defaultRestSeconds },
     });
@@ -321,11 +323,11 @@ function toCompletedProgram(row: CompletedRow): CompletedProgram | null {
   if (!summary.success || row.completedAt === null) return null;
   return {
     enrollmentId: row.id,
-    planId: row.planId,
-    planName: row.plan.name,
+    planId: row.programId,
+    planName: row.program.name,
     completedAt: row.completedAt.toISOString(),
-    // runAgain refuses an archived plan (DN-144); the card asks first (DN-153).
-    canRunAgain: row.plan.archivedAt === null,
+    // runAgain refuses an archived program (DN-144); the card asks first (DN-153).
+    canRunAgain: row.program.archivedAt === null,
     summary: summary.data,
   };
 }

@@ -7,14 +7,14 @@ import {
   createAssignment,
   createEnrollment,
   createExercise,
-  createFixedPlan,
+  createFixedProgram,
   createLog,
-  createPlan,
+  createProgram,
   createSession,
   createSkillLevel,
   createUser,
 } from '../test-support/fixtures';
-import { upsertJustWods } from '../plans/just-wods';
+import { upsertJustWods } from '../programs/just-wods';
 import type { PrismaService } from '../prisma/prisma.service';
 import { SetupService } from './setup.service';
 
@@ -37,7 +37,7 @@ function service(client: PrismaClient = testPrisma()): SetupService {
 
 function answers(overrides: Partial<CommitSetup> = {}): CommitSetup {
   return {
-    planId: 'plan-1',
+    planId: 'program-1',
     trainingDays: [1, 3, 5],
     weeks: 6,
     startDate: TODAY,
@@ -58,7 +58,7 @@ async function provisionedAthlete(trainingDays = [1, 2, 3, 4, 5]) {
     data: { userId: user.id, trainingDays },
   });
   const enrollment = await createEnrollment(user.id, {
-    planId: DEFAULT_PLAN_ID,
+    programId: DEFAULT_PLAN_ID,
     startDate: TODAY,
     weeks: null,
   });
@@ -66,7 +66,7 @@ async function provisionedAthlete(trainingDays = [1, 2, 3, 4, 5]) {
 }
 
 function activeEnrollment(userId: string) {
-  return testPrisma().planEnrollment.findFirstOrThrow({
+  return testPrisma().programEnrollment.findFirstOrThrow({
     where: { userId, status: 'active' },
   });
 }
@@ -74,8 +74,8 @@ function activeEnrollment(userId: string) {
 describe('SetupService.options', () => {
   it('offers the curated programs, with Just WODs first', async () => {
     const { userId } = await provisionedAthlete();
-    await createPlan({ name: 'Zebra Program' });
-    await createPlan({ name: 'Ankle Program' });
+    await createProgram({ name: 'Zebra Program' });
+    await createProgram({ name: 'Ankle Program' });
 
     const options = await service().options(userId, TODAY);
 
@@ -89,7 +89,7 @@ describe('SetupService.options', () => {
 
   it('offers the athlete their own program', async () => {
     const { userId } = await provisionedAthlete();
-    const mine = await createPlan({ name: 'My Own Thing', ownerId: userId });
+    const mine = await createProgram({ name: 'My Own Thing', ownerId: userId });
 
     const options = await service().options(userId, TODAY);
 
@@ -98,8 +98,11 @@ describe('SetupService.options', () => {
 
   it('does not offer an archived program, global or owned', async () => {
     const { userId } = await provisionedAthlete();
-    const global = await createPlan({ archivedAt: new Date() });
-    const mine = await createPlan({ ownerId: userId, archivedAt: new Date() });
+    const global = await createProgram({ archivedAt: new Date() });
+    const mine = await createProgram({
+      ownerId: userId,
+      archivedAt: new Date(),
+    });
 
     const options = await service().options(userId, TODAY);
 
@@ -109,11 +112,14 @@ describe('SetupService.options', () => {
   });
 
   it('does not offer somebody else programs', async () => {
-    // The tier rule from DN-93, as it applies to plans. A picker that listed
+    // The tier rule from DN-93, as it applies to programs. A picker that listed
     // every athlete's private program would be a directory of them.
     const { userId } = await provisionedAthlete();
     const stranger = await createUser();
-    const theirs = await createPlan({ name: 'Theirs', ownerId: stranger.id });
+    const theirs = await createProgram({
+      name: 'Theirs',
+      ownerId: stranger.id,
+    });
 
     const options = await service().options(userId, TODAY);
 
@@ -124,7 +130,7 @@ describe('SetupService.options', () => {
     // Without this the cadence screen could say "Fixed schedule" and not
     // what it fixed them to, which is the half the athlete wants to know.
     const { userId } = await provisionedAthlete();
-    const fixed = await createFixedPlan([1, 2, 4, 5]);
+    const fixed = await createFixedProgram([1, 2, 4, 5]);
 
     const options = await service().options(userId, TODAY);
 
@@ -139,7 +145,7 @@ describe('SetupService.options', () => {
     // rather than restriction without the author's own sentence beside it,
     // so the column has to survive the trip to the wizard.
     const { userId } = await provisionedAthlete();
-    const fixed = await createFixedPlan([1, 2, 4, 5], {
+    const fixed = await createFixedProgram([1, 2, 4, 5], {
       scheduleNote: 'Two heavy pull days, 48 hours apart.',
     });
 
@@ -245,22 +251,22 @@ describe('SetupService.commit', () => {
     // FK error as soon as a training day points at it, and completing it
     // would write a never-trained program into the finished list.
     const { userId, enrollmentId } = await provisionedAthlete();
-    const plan = await createPlan();
+    const program = await createProgram();
 
     await service().commit(
       userId,
-      answers({ planId: plan.id, weeks: 6, startDate: '2026-09-21' }),
+      answers({ planId: program.id, weeks: 6, startDate: '2026-09-21' }),
       TODAY,
     );
 
     const enrollment = await activeEnrollment(userId);
     expect(enrollment.id).toBe(enrollmentId);
-    expect(enrollment.planId).toBe(plan.id);
+    expect(enrollment.programId).toBe(program.id);
     expect(enrollment.startDate).toBe('2026-09-21');
     expect(enrollment.weeks).toBe(6);
-    expect(await testPrisma().planEnrollment.count({ where: { userId } })).toBe(
-      1,
-    );
+    expect(
+      await testPrisma().programEnrollment.count({ where: { userId } }),
+    ).toBe(1);
   });
 
   it('snapshots what every group stands at as the run begins', async () => {
@@ -272,9 +278,9 @@ describe('SetupService.commit', () => {
     const goblet = await createExercise({ movementGroup: 'squat' });
     await createSkillLevel(userId, 'pull', chinUp.id);
     await createSkillLevel(userId, 'squat', goblet.id);
-    const plan = await createPlan();
+    const program = await createProgram();
 
-    await service().commit(userId, answers({ planId: plan.id }), TODAY);
+    await service().commit(userId, answers({ planId: program.id }), TODAY);
 
     expect((await activeEnrollment(userId)).startingMovements).toEqual({
       pull: chinUp.id,
@@ -286,9 +292,9 @@ describe('SetupService.commit', () => {
     // The ordinary first run: DN-86 provisions no SkillLevel rows, so every
     // group starts absent and diffs from null (DN-139).
     const { userId } = await provisionedAthlete();
-    const plan = await createPlan();
+    const program = await createProgram();
 
-    await service().commit(userId, answers({ planId: plan.id }), TODAY);
+    await service().commit(userId, answers({ planId: program.id }), TODAY);
 
     expect((await activeEnrollment(userId)).startingMovements).toEqual({});
   });
@@ -303,11 +309,11 @@ describe('SetupService.commit', () => {
       completedAt: new Date('2026-09-15T09:00:00.000Z'),
       summary: { weeks: 6, sessions: 24, movementChanges: [] },
     });
-    const plan = await createPlan();
+    const program = await createProgram();
 
-    await service().commit(userId, answers({ planId: plan.id }), TODAY);
+    await service().commit(userId, answers({ planId: program.id }), TODAY);
 
-    const after = await testPrisma().planEnrollment.findUniqueOrThrow({
+    const after = await testPrisma().programEnrollment.findUniqueOrThrow({
       where: { id: finished.id },
     });
     expect(after.summaryDismissedAt).not.toBeNull();
@@ -318,24 +324,24 @@ describe('SetupService.commit', () => {
   it('enrolls an athlete who has no active program', async () => {
     // Where a finished program leaves them, until something re-enrolls them.
     const { userId, enrollmentId } = await provisionedAthlete();
-    await testPrisma().planEnrollment.update({
+    await testPrisma().programEnrollment.update({
       where: { id: enrollmentId },
       data: { status: 'completed', completedAt: new Date() },
     });
-    const plan = await createPlan();
+    const program = await createProgram();
 
-    await service().commit(userId, answers({ planId: plan.id }), TODAY);
+    await service().commit(userId, answers({ planId: program.id }), TODAY);
 
-    expect((await activeEnrollment(userId)).planId).toBe(plan.id);
+    expect((await activeEnrollment(userId)).programId).toBe(program.id);
   });
 
   it('writes the days the athlete picked', async () => {
     const { userId } = await provisionedAthlete();
-    const plan = await createPlan();
+    const program = await createProgram();
 
     await service().commit(
       userId,
-      answers({ planId: plan.id, trainingDays: [2, 4, 6], weeks: 4 }),
+      answers({ planId: program.id, trainingDays: [2, 4, 6], weeks: 4 }),
       TODAY,
     );
 
@@ -349,7 +355,7 @@ describe('SetupService.commit', () => {
     // DN-118: the athlete's own days stay true and merely asleep for the run,
     // so overwriting them here would destroy the value the lock hands back.
     const { userId } = await provisionedAthlete([2, 4, 6]);
-    const fixed = await createFixedPlan([1, 2, 4, 5]);
+    const fixed = await createFixedProgram([1, 2, 4, 5]);
 
     await service().commit(
       userId,
@@ -365,11 +371,11 @@ describe('SetupService.commit', () => {
 
   it('stamps the athlete as onboarded', async () => {
     const { userId } = await provisionedAthlete();
-    const plan = await createPlan();
+    const program = await createProgram();
 
     const result = await service().commit(
       userId,
-      answers({ planId: plan.id }),
+      answers({ planId: program.id }),
       TODAY,
     );
 
@@ -384,12 +390,12 @@ describe('SetupService.commit', () => {
     // `getToday` hands back the assignment it already made, so without this
     // the app would offer "start today" and then train the old program on it.
     const { userId } = await provisionedAthlete();
-    const plan = await createPlan();
+    const program = await createProgram();
     const stale = await createAssignment(userId, { date: TODAY });
 
     await service().commit(
       userId,
-      answers({ planId: plan.id, startDate: TODAY }),
+      answers({ planId: program.id, startDate: TODAY }),
       TODAY,
     );
 
@@ -404,12 +410,12 @@ describe('SetupService.commit', () => {
     // The days before a future start fall back to Just WODs, and today is one
     // of them -- deleting it would throw away a day the athlete may train.
     const { userId } = await provisionedAthlete();
-    const plan = await createPlan();
+    const program = await createProgram();
     const today = await createAssignment(userId, { date: TODAY });
 
     await service().commit(
       userId,
-      answers({ planId: plan.id, startDate: '2026-09-21' }),
+      answers({ planId: program.id, startDate: '2026-09-21' }),
       TODAY,
     );
 
@@ -422,13 +428,13 @@ describe('SetupService.commit', () => {
 
   it('does not discard anybody else day', async () => {
     const { userId } = await provisionedAthlete();
-    const plan = await createPlan();
+    const program = await createProgram();
     const stranger = await createUser();
     const theirs = await createAssignment(stranger.id, { date: TODAY });
 
     await service().commit(
       userId,
-      answers({ planId: plan.id, startDate: TODAY }),
+      answers({ planId: program.id, startDate: TODAY }),
       TODAY,
     );
 
@@ -444,7 +450,7 @@ describe('SetupService.commit', () => {
     // not this athlete business.
     const { userId } = await provisionedAthlete();
     const stranger = await createUser();
-    const theirs = await createPlan({ ownerId: stranger.id });
+    const theirs = await createProgram({ ownerId: stranger.id });
 
     await expect(
       service().commit(userId, answers({ planId: theirs.id }), TODAY),
@@ -456,7 +462,7 @@ describe('SetupService.commit', () => {
     // new can start it. Hiding it from `options` alone would leave the door
     // open to anyone who kept the id.
     const { userId } = await provisionedAthlete();
-    const archived = await createPlan({
+    const archived = await createProgram({
       ownerId: userId,
       archivedAt: new Date(),
     });
@@ -470,7 +476,7 @@ describe('SetupService.commit', () => {
     const { userId } = await provisionedAthlete();
 
     await expect(
-      service().commit(userId, answers({ planId: 'plan_nope' }), TODAY),
+      service().commit(userId, answers({ planId: 'program_nope' }), TODAY),
     ).rejects.toThrow(NotFoundException);
   });
 
@@ -479,19 +485,19 @@ describe('SetupService.commit', () => {
     // un-onboarded, so they come back to the wizard rather than to a program
     // they half-chose.
     const { userId, enrollmentId } = await provisionedAthlete();
-    const plan = await createPlan();
+    const program = await createProgram();
 
     await expect(
       service().commit(
         userId,
-        answers({ planId: plan.id, trainingDays: [2] }),
+        answers({ planId: program.id, trainingDays: [2] }),
         TODAY,
       ),
     ).rejects.toThrow(BadRequestException);
 
     const enrollment = await activeEnrollment(userId);
     expect(enrollment.id).toBe(enrollmentId);
-    expect(enrollment.planId).toBe(DEFAULT_PLAN_ID);
+    expect(enrollment.programId).toBe(DEFAULT_PLAN_ID);
     const user = await testPrisma().user.findUniqueOrThrow({
       where: { id: userId },
     });
@@ -500,7 +506,7 @@ describe('SetupService.commit', () => {
 
   it('refuses a start date the athlete was never offered', async () => {
     const { userId } = await provisionedAthlete();
-    const plan = await createPlan();
+    const program = await createProgram();
     const assignment = await createAssignment(userId, { date: TODAY });
     await createSession(userId, assignment.id);
 
@@ -509,7 +515,7 @@ describe('SetupService.commit', () => {
     await expect(
       service().commit(
         userId,
-        answers({ planId: plan.id, startDate: TODAY }),
+        answers({ planId: program.id, startDate: TODAY }),
         TODAY,
       ),
     ).rejects.toThrow(BadRequestException);
@@ -527,11 +533,11 @@ describe('SetupService, the rest pace', () => {
    * unstated rests in the last of `weeks` -- every week is read, not only
    * the first the picker looks at.
    */
-  async function restingPlan(
+  async function restingProgram(
     rests: (number | null)[],
     { weeks = 1 }: { weeks?: number } = {},
   ) {
-    return createPlan({
+    return createProgram({
       weeks: {
         create: Array.from({ length: weeks }, (_, order) => ({
           order,
@@ -562,11 +568,11 @@ describe('SetupService, the rest pace', () => {
 
   it('asks nothing of a program that states rest everywhere', async () => {
     const { userId } = await provisionedAthlete();
-    const plan = await restingPlan([90, 0]);
+    const program = await restingProgram([90, 0]);
 
     const options = await service().options(userId, TODAY);
 
-    expect(options.programs.find((p) => p.id === plan.id)).toMatchObject({
+    expect(options.programs.find((p) => p.id === program.id)).toMatchObject({
       hasStraightSets: true,
       restPaceRequired: false,
     });
@@ -579,27 +585,27 @@ describe('SetupService, the rest pace', () => {
 
   it('requires a pace of a program with a hole in any week, not just the first', async () => {
     const { userId } = await provisionedAthlete();
-    const plan = await restingPlan([90, null], { weeks: 3 });
+    const program = await restingProgram([90, null], { weeks: 3 });
 
     const options = await service().options(userId, TODAY);
 
     expect(
-      options.programs.find((p) => p.id === plan.id)!.restPaceRequired,
+      options.programs.find((p) => p.id === program.id)!.restPaceRequired,
     ).toBe(true);
   });
 
   it('prefills with the last pace the athlete set, skipping runs that set none', async () => {
     const { userId } = await provisionedAthlete();
-    const plan = await createPlan();
+    const program = await createProgram();
     await createEnrollment(userId, {
-      planId: plan.id,
+      programId: program.id,
       status: 'completed',
       defaultRestSeconds: 75,
     });
     // A later run on a program with its own rest set no pace, and says
     // nothing about how this athlete likes to rest.
     await createEnrollment(userId, {
-      planId: plan.id,
+      programId: program.id,
       status: 'completed',
       defaultRestSeconds: null,
     });
@@ -615,11 +621,11 @@ describe('SetupService, the rest pace', () => {
 
   it('writes the pace onto the run', async () => {
     const { userId } = await provisionedAthlete();
-    const plan = await restingPlan([90]);
+    const program = await restingProgram([90]);
 
     await service().commit(
       userId,
-      answers({ planId: plan.id, defaultRestSeconds: 120 }),
+      answers({ planId: program.id, defaultRestSeconds: 120 }),
       TODAY,
     );
 
@@ -628,32 +634,32 @@ describe('SetupService, the rest pace', () => {
 
   it('refuses a blank pace for a program that leaves rest unstated, writing nothing', async () => {
     const { userId, enrollmentId } = await provisionedAthlete();
-    const plan = await restingPlan([90, null]);
+    const program = await restingProgram([90, null]);
 
     await expect(
       service().commit(
         userId,
-        answers({ planId: plan.id, defaultRestSeconds: null }),
+        answers({ planId: program.id, defaultRestSeconds: null }),
         TODAY,
       ),
     ).rejects.toThrow(BadRequestException);
     const enrollment = await activeEnrollment(userId);
     expect(enrollment.id).toBe(enrollmentId);
-    expect(enrollment.planId).toBe(DEFAULT_PLAN_ID);
+    expect(enrollment.programId).toBe(DEFAULT_PLAN_ID);
   });
 
   it('takes a pace for a program that leaves rest unstated', async () => {
     const { userId } = await provisionedAthlete();
-    const plan = await restingPlan([null]);
+    const program = await restingProgram([null]);
 
     await service().commit(
       userId,
-      answers({ planId: plan.id, defaultRestSeconds: 60 }),
+      answers({ planId: program.id, defaultRestSeconds: 60 }),
       TODAY,
     );
 
     expect(await activeEnrollment(userId)).toMatchObject({
-      planId: plan.id,
+      programId: program.id,
       defaultRestSeconds: 60,
     });
   });

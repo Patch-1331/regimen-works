@@ -5,7 +5,7 @@ import { DEFAULT_PLAN_ID, DEFAULT_TRAINING_DAYS } from '@regimen-works/shared';
  * Just WODs as a real program (DN-13).
  *
  * The load-bearing decision of the whole Programs design: today's behaviour
- * is seeded as a `Plan` and every athlete is enrolled in it, so `getToday`
+ * is seeded as a `Program` and every athlete is enrolled in it, so `getToday`
  * keeps **one path** instead of growing an `if (enrolled) … else …` that
  * would spread into the scheduler, the today response, History and Stats.
  *
@@ -14,12 +14,12 @@ import { DEFAULT_PLAN_ID, DEFAULT_TRAINING_DAYS } from '@regimen-works/shared';
  * an athlete's first authenticated request. With the ids written down, both
  * are `INSERT … ON CONFLICT DO NOTHING` against a known key and the second
  * one is simply a no-op. They also let provisioning enroll an athlete
- * without first reading the plan back to learn what it is called.
+ * without first reading the program back to learn what it is called.
  */
 // Re-exported from the shared package rather than declared here: the web app
 // has to recognise this id too (DN-16), and an id written down twice is an id
 // that can differ.
-export const JUST_WODS_PLAN_ID = DEFAULT_PLAN_ID;
+export const JUST_WODS_PROGRAM_ID = DEFAULT_PLAN_ID;
 export const JUST_WODS_WEEK_ID = 'plan_week_just_wods';
 
 /** Its slot for a given weekday. 0 = Sunday … 6 = Saturday, as everywhere else. */
@@ -28,7 +28,7 @@ export function justWodsSlotId(dayOfWeek: number): string {
 }
 
 /**
- * The plan row.
+ * The program row.
  *
  * `flexible`, so the athlete's own `trainingDays` decide which days they
  * train — the program has no opinion, which is what makes it Just WODs. The
@@ -43,8 +43,8 @@ export function justWodsSlotId(dayOfWeek: number): string {
  *
  * `ownerId` is null: this is global library content, like the seeded WODs.
  */
-export const JUST_WODS_PLAN = {
-  id: JUST_WODS_PLAN_ID,
+export const JUST_WODS_PROGRAM = {
+  id: JUST_WODS_PROGRAM_ID,
   name: 'Just WODs',
   summary: 'A workout a day, chosen for you from the whole library.',
   // Null on purpose. A goal is what *finishing* gets you, and this is a way
@@ -70,12 +70,12 @@ export const JUST_WODS_PLAN = {
  *
  * `core` rather than `intro` or `peak` because those are the phases that play
  * once: a program made only of them would stop. The core block is the part
- * `expandPlanWeeks` cycles, and a block of one week cycled forever is
+ * `expandProgramWeeks` cycles, and a block of one week cycled forever is
  * precisely what Just WODs is.
  */
 export const JUST_WODS_WEEK = {
   id: JUST_WODS_WEEK_ID,
-  planId: JUST_WODS_PLAN_ID,
+  programId: JUST_WODS_PROGRAM_ID,
   order: 0,
   phase: 'core',
   // No label. "Week 1" is all there is to say about a week that is every week.
@@ -85,7 +85,7 @@ export const JUST_WODS_WEEK = {
 /**
  * A generated slot on every weekday, with nothing constrained.
  *
- * All seven, not the five of the default training days: the plan is flexible,
+ * All seven, not the five of the default training days: the program is flexible,
  * so *which* days are trained is the athlete's `trainingDays` and not the
  * program's business. Authoring only Mon–Fri would hand an athlete who trains
  * on Saturday a day the program says nothing about, which is a worse answer
@@ -105,7 +105,7 @@ export const JUST_WODS_WEEK = {
  */
 export const JUST_WODS_SLOTS = [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
   id: justWodsSlotId(dayOfWeek),
-  planWeekId: JUST_WODS_WEEK_ID,
+  programWeekId: JUST_WODS_WEEK_ID,
   dayOfWeek,
   kind: 'wod_generated',
   priority: 0,
@@ -133,17 +133,17 @@ export const JUST_WODS_SLOTS = [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
 export async function upsertJustWods(
   // The real client type rather than a hand-written shape, so a field renamed
   // on the model is a compile error here instead of a silent no-op update.
-  prisma: Pick<PrismaClient, 'plan' | 'planWeek' | 'planSlot'>,
+  prisma: Pick<PrismaClient, 'program' | 'programWeek' | 'programSlot'>,
 ): Promise<void> {
-  const { id: planId, ...planFields } = JUST_WODS_PLAN;
-  await prisma.plan.upsert({
-    where: { id: planId },
-    update: planFields,
-    create: JUST_WODS_PLAN,
+  const { id: programId, ...programFields } = JUST_WODS_PROGRAM;
+  await prisma.program.upsert({
+    where: { id: programId },
+    update: programFields,
+    create: JUST_WODS_PROGRAM,
   });
 
   const { id: weekId, ...weekFields } = JUST_WODS_WEEK;
-  await prisma.planWeek.upsert({
+  await prisma.programWeek.upsert({
     where: { id: weekId },
     update: weekFields,
     create: JUST_WODS_WEEK,
@@ -151,7 +151,7 @@ export async function upsertJustWods(
 
   for (const slot of JUST_WODS_SLOTS) {
     const { id: slotId, ...slotFields } = slot;
-    await prisma.planSlot.upsert({
+    await prisma.programSlot.upsert({
       where: { id: slotId },
       update: slotFields,
       create: slot,

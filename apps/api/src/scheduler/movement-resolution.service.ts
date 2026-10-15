@@ -4,9 +4,9 @@ import type { SubstitutionReason } from '@regimen-works/shared';
 import type { Exercise } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { libraryVisibleTo } from '../library/visible-to';
-import { attachPrescribedExercises } from '../plans/prescription';
-import { defaultsByGroup } from '../plans/group-choice';
-import type { ProgramSlotMovement } from '../plans/program-day';
+import { attachPrescribedExercises } from '../programs/prescription';
+import { defaultsByGroup } from '../programs/group-choice';
+import type { ProgramSlotMovement } from '../programs/program-day';
 import {
   applyEquipmentAvailability,
   applyRememberedChoice,
@@ -207,12 +207,16 @@ export class MovementResolutionService {
     // Typed rather than inferred, because the empty case is a literal and the
     // query's own row type is what the map below reads.
     const swapsQuery: Promise<
-      { planSlotMovementId: string | null; exercise: Exercise }[]
+      { programSlotMovementId: string | null; exercise: Exercise }[]
     > =
       assignmentId === null
         ? Promise.resolve([])
         : this.prisma.assignmentSubstitution.findMany({
-            where: { userId, assignmentId, planSlotMovementId: { not: null } },
+            where: {
+              userId,
+              assignmentId,
+              programSlotMovementId: { not: null },
+            },
             include: { exercise: true },
           });
 
@@ -261,7 +265,7 @@ export class MovementResolutionService {
     // this morning.
     const swaps = new Map(
       substitutions.map((s): [string, Exercise] => [
-        s.planSlotMovementId!,
+        s.programSlotMovementId!,
         s.exercise,
       ]),
     );

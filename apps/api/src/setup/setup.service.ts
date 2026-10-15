@@ -23,7 +23,7 @@ import { fixedDaysOf, setupRejection, startDateRange } from './setup.logic';
  * authored week of every listed program would be fetching a calendar nobody
  * is looking at yet.
  */
-const PLAN_FOR_PICKER = {
+const PROGRAM_FOR_PICKER = {
   include: {
     weeks: {
       orderBy: { order: 'asc' },
@@ -34,9 +34,9 @@ const PLAN_FOR_PICKER = {
       },
     },
   },
-} satisfies Prisma.PlanDefaultArgs;
+} satisfies Prisma.ProgramDefaultArgs;
 
-type PlanForPicker = Prisma.PlanGetPayload<typeof PLAN_FOR_PICKER>;
+type ProgramForPicker = Prisma.ProgramGetPayload<typeof PROGRAM_FOR_PICKER>;
 
 /** Which programs have straight sets to pace, and which of those leave a rest unstated. */
 interface RestShape {
@@ -44,25 +44,28 @@ interface RestShape {
   unstated: Set<string>;
 }
 
-function toSetupProgram(plan: PlanForPicker, rest: RestShape): SetupProgram {
+function toSetupProgram(
+  program: ProgramForPicker,
+  rest: RestShape,
+): SetupProgram {
   return {
-    id: plan.id,
-    name: plan.name,
-    summary: plan.summary,
-    goal: plan.goal,
-    scheduleNote: plan.scheduleNote,
+    id: program.id,
+    name: program.name,
+    summary: program.summary,
+    goal: program.goal,
+    scheduleNote: program.scheduleNote,
     // A plain string column, narrowed at the read site the way `unit` is --
     // the CHECK in DN-9's migration is what keeps it to the two values.
-    scheduleMode: plan.scheduleMode as SetupProgram['scheduleMode'],
-    minDaysPerWeek: plan.minDaysPerWeek,
-    maxDaysPerWeek: plan.maxDaysPerWeek,
-    defaultDays: plan.defaultDays,
-    minWeeks: plan.minWeeks,
-    maxWeeks: plan.maxWeeks,
-    defaultWeeks: plan.defaultWeeks,
-    fixedDays: fixedDaysOf(plan),
-    hasStraightSets: rest.paced.has(plan.id),
-    restPaceRequired: rest.unstated.has(plan.id),
+    scheduleMode: program.scheduleMode as SetupProgram['scheduleMode'],
+    minDaysPerWeek: program.minDaysPerWeek,
+    maxDaysPerWeek: program.maxDaysPerWeek,
+    defaultDays: program.defaultDays,
+    minWeeks: program.minWeeks,
+    maxWeeks: program.maxWeeks,
+    defaultWeeks: program.defaultWeeks,
+    fixedDays: fixedDaysOf(program),
+    hasStraightSets: rest.paced.has(program.id),
+    restPaceRequired: rest.unstated.has(program.id),
   };
 }
 
@@ -77,8 +80,8 @@ export class SetupService {
    * itself could not be tested on the boundary the whole rule turns on.
    */
   async options(userId: string, today: string): Promise<SetupOptions> {
-    const [plans, rule, touched, lastRestSeconds] = await Promise.all([
-      this.selectablePlans(userId),
+    const [programs, rule, touched, lastRestSeconds] = await Promise.all([
+      this.selectablePrograms(userId),
       this.prisma.scheduleRule.findUnique({
         where: { userId },
         select: { trainingDays: true },
@@ -86,10 +89,10 @@ export class SetupService {
       this.todayIsTouched(userId, today),
       this.lastRestSeconds(userId),
     ]);
-    const rest = await this.restShapeOf(plans.map((p) => p.id));
+    const rest = await this.restShapeOf(programs.map((p) => p.id));
 
     return {
-      programs: plans.map((p) => toSetupProgram(p, rest)),
+      programs: programs.map((p) => toSetupProgram(p, rest)),
       // Provisioning writes a ScheduleRule on first sign-in, so the fallback
       // is for an athlete whose row is somehow absent rather than for the
       // ordinary case. The wizard is the worst screen in the app to 500 on.
@@ -116,14 +119,14 @@ export class SetupService {
     body: CommitSetup,
     today: string,
   ): Promise<{ onboardedAt: string }> {
-    const plan = await this.prisma.plan.findFirst({
+    const program = await this.prisma.program.findFirst({
       where: { id: body.planId, ...selectableBy(userId) },
-      ...PLAN_FOR_PICKER,
+      ...PROGRAM_FOR_PICKER,
     });
     // 404 rather than 403 for a program owned by somebody else: whether
     // another athlete's private program exists is not this athlete's
     // business, and "no such program" is true from where they are standing.
-    if (!plan) {
+    if (!program) {
       throw new NotFoundException('That is not a program you can start.');
     }
 
@@ -131,9 +134,9 @@ export class SetupService {
       today,
       await this.todayIsTouched(userId, today),
     );
-    const { unstated } = await this.restShapeOf([plan.id]);
+    const { unstated } = await this.restShapeOf([program.id]);
     const rejection = setupRejection(
-      { ...plan, restPaceRequired: unstated.has(plan.id) },
+      { ...program, restPaceRequired: unstated.has(program.id) },
       body,
       range,
     );
@@ -158,7 +161,7 @@ export class SetupService {
       // different program -- deleting the old row would raise an FK error the
       // moment a training day pointed at it, and completing it would write a
       // never-trained program into the finished list.
-      const active = await tx.planEnrollment.findFirst({
+      const active = await tx.programEnrollment.findFirst({
         where: { userId, status: 'active' },
         select: { id: true },
       });
@@ -167,7 +170,7 @@ export class SetupService {
       // (DN-18). Taken inside the transaction, against the same instant the
       // enrollment is written.
       const enrollment = {
-        planId: body.planId,
+        programId: body.planId,
         startDate: body.startDate,
         weeks: body.weeks,
         // Written on update too: pointing the run at a different program is
@@ -176,7 +179,7 @@ export class SetupService {
         startingMovements: await snapshotMovements(tx, userId),
       };
       if (active) {
-        await tx.planEnrollment.update({
+        await tx.programEnrollment.update({
           where: { id: active.id },
           data: enrollment,
         });
@@ -184,7 +187,7 @@ export class SetupService {
         // An athlete who finished a program has no active enrollment until
         // something re-enrolls them, and the wizard is reachable from that
         // state too.
-        await tx.planEnrollment.create({ data: { userId, ...enrollment } });
+        await tx.programEnrollment.create({ data: { userId, ...enrollment } });
       }
 
       // `getToday` creates one assignment per date and hands back the same
@@ -201,7 +204,7 @@ export class SetupService {
 
       // A card still sitting above Today after the athlete has started
       // something new would be offering a choice they have just made (DN-18).
-      await tx.planEnrollment.updateMany({
+      await tx.programEnrollment.updateMany({
         where: { userId, status: 'completed', summaryDismissedAt: null },
         data: { summaryDismissedAt: new Date() },
       });
@@ -219,22 +222,24 @@ export class SetupService {
 
   /**
    * The programs this athlete may start: the curated library, plus anything
-   * they authored themselves (DN-93's tiers, as they apply to plans).
+   * they authored themselves (DN-93's tiers, as they apply to programs).
    *
    * Just WODs first and the rest by name. First because it is what every
    * athlete is already on and what the picker recommends to anyone unsure --
    * and because "no programming, just workouts" is the honest default for a
    * first-run screen, not a consolation prize sorted to the bottom.
    */
-  private async selectablePlans(userId: string): Promise<PlanForPicker[]> {
-    const plans = await this.prisma.plan.findMany({
+  private async selectablePrograms(
+    userId: string,
+  ): Promise<ProgramForPicker[]> {
+    const programs = await this.prisma.program.findMany({
       where: selectableBy(userId),
       orderBy: { name: 'asc' },
-      ...PLAN_FOR_PICKER,
+      ...PROGRAM_FOR_PICKER,
     });
     return [
-      ...plans.filter((p) => p.id === DEFAULT_PLAN_ID),
-      ...plans.filter((p) => p.id !== DEFAULT_PLAN_ID),
+      ...programs.filter((p) => p.id === DEFAULT_PLAN_ID),
+      ...programs.filter((p) => p.id !== DEFAULT_PLAN_ID),
     ];
   }
 
@@ -249,21 +254,23 @@ export class SetupService {
    * the answer is two bits per program and the rows behind it are the whole
    * calendar.
    */
-  private async restShapeOf(planIds: string[]): Promise<RestShape> {
-    const plansWith = async (movement: Prisma.PlanSlotMovementWhereInput) => {
-      const weeks = await this.prisma.planWeek.findMany({
+  private async restShapeOf(programIds: string[]): Promise<RestShape> {
+    const programsWith = async (
+      movement: Prisma.ProgramSlotMovementWhereInput,
+    ) => {
+      const weeks = await this.prisma.programWeek.findMany({
         where: {
-          planId: { in: planIds },
+          programId: { in: programIds },
           slots: { some: { movements: { some: movement } } },
         },
-        select: { planId: true },
-        distinct: ['planId'],
+        select: { programId: true },
+        distinct: ['programId'],
       });
-      return new Set(weeks.map((w) => w.planId));
+      return new Set(weeks.map((w) => w.programId));
     };
     const [paced, unstated] = await Promise.all([
-      plansWith({}),
-      plansWith({ restSeconds: null }),
+      programsWith({}),
+      programsWith({ restSeconds: null }),
     ]);
     return { paced, unstated };
   }
@@ -280,7 +287,7 @@ export class SetupService {
    * again.
    */
   private async lastRestSeconds(userId: string): Promise<number | null> {
-    const last = await this.prisma.planEnrollment.findFirst({
+    const last = await this.prisma.programEnrollment.findFirst({
       where: { userId, defaultRestSeconds: { not: null } },
       orderBy: { createdAt: 'desc' },
       select: { defaultRestSeconds: true },
@@ -318,7 +325,7 @@ export class SetupService {
  * place. Archived routines leave the picker (ADR 0006, decision 5); reads that
  * follow an enrollment already under way must not use this.
  */
-function selectableBy(userId: string): Prisma.PlanWhereInput {
+function selectableBy(userId: string): Prisma.ProgramWhereInput {
   return {
     archivedAt: null,
     OR: [{ ownerId: null }, { ownerId: userId }],

@@ -76,7 +76,7 @@ export function movementChangesOver(
 }
 
 /**
- * The figures snapshotted onto `PlanEnrollment.summary` at completion.
+ * The figures snapshotted onto `ProgramEnrollment.summary` at completion.
  *
  * Every field is allowed to be empty, and an empty one is a real answer: a
  * program run for its whole length with nothing logged reads "0 sessions",

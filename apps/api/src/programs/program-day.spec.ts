@@ -53,8 +53,8 @@ function prescribed(
 function program(overrides: Partial<ActiveProgram> = {}): ActiveProgram {
   return {
     enrollmentId: 'enr_1',
-    planId: 'plan_1',
-    planName: 'Pull-Up Builder',
+    programId: 'program_1',
+    programName: 'Pull-Up Builder',
     scheduleMode: 'flexible',
     startDate: MONDAY,
     weeks: null,
@@ -169,7 +169,7 @@ describe('resolveProgramDay', () => {
   /**
    * Laying a flexible week onto the days the athlete actually trains (DN-128).
    *
-   * `assignSlotsToTrainingDays` owns the rules and `plan.logic.spec` covers
+   * `assignSlotsToTrainingDays` owns the rules and `program.logic.spec` covers
    * them; what is checked here is the resolver's half -- which day the remap
    * is asked about, and what the two day-shaped answers with no session on
    * them record.
@@ -202,7 +202,7 @@ describe('resolveProgramDay', () => {
       // to write on Tuesday, which for Foundations was the conditioning day.
       const day = resolveProgramDay(ranked(), [2, 4, 6], TUESDAY, []);
 
-      expect(day).toMatchObject({ day: { planSlotId: 'press' } });
+      expect(day).toMatchObject({ day: { programSlotId: 'press' } });
     });
 
     it('keeps the authored order across the athlete’s week', () => {
@@ -210,7 +210,7 @@ describe('resolveProgramDay', () => {
       // Thursday is the second session rather than the first (DN-123).
       const day = resolveProgramDay(ranked(), [2, 4, 6], THURSDAY, [2]);
 
-      expect(day).toMatchObject({ day: { planSlotId: 'squat' } });
+      expect(day).toMatchObject({ day: { programSlotId: 'squat' } });
     });
 
     it('records no slot against a day the athlete chose off', () => {
@@ -220,7 +220,7 @@ describe('resolveProgramDay', () => {
 
       expect(day).toMatchObject({
         kind: 'rest',
-        day: { slotKind: null, planSlotId: null },
+        day: { slotKind: null, programSlotId: null },
       });
     });
 
@@ -238,7 +238,7 @@ describe('resolveProgramDay', () => {
 
       expect(day).toMatchObject({
         kind: 'generated',
-        day: { slotKind: null, planSlotId: null },
+        day: { slotKind: null, programSlotId: null },
         constraints: {
           pattern: null,
           wodType: null,
@@ -261,7 +261,7 @@ describe('resolveProgramDay', () => {
 
       expect(day).toMatchObject({
         kind: 'rest',
-        day: { slotKind: null, planSlotId: null },
+        day: { slotKind: null, programSlotId: null },
       });
     });
 
@@ -279,7 +279,7 @@ describe('resolveProgramDay', () => {
         const day = resolveProgramDay(ranked(), days, date, completed);
         return day.kind === 'fallback' || day.kind === 'completed'
           ? null
-          : day.day.planSlotId;
+          : day.day.programSlotId;
       };
 
       it('carries a missed session forward to the next day they train', () => {
@@ -316,7 +316,7 @@ describe('resolveProgramDay', () => {
 
         expect(friday).toMatchObject({
           kind: 'generated',
-          day: { slotKind: null, planSlotId: null },
+          day: { slotKind: null, programSlotId: null },
         });
       });
 
@@ -338,7 +338,7 @@ describe('resolveProgramDay', () => {
           'rest',
         );
         expect(resolveProgramDay(fixed, MWF, WEDNESDAY, [])).toMatchObject({
-          day: { planSlotId: 'squat' },
+          day: { programSlotId: 'squat' },
         });
       });
     });
@@ -366,7 +366,7 @@ describe('resolveProgramDay', () => {
     it('rests on an authored rest day, and says the program planned it', () => {
       expect(dayOfKind('rest')).toMatchObject({
         kind: 'rest',
-        day: { slotKind: 'rest', planSlotId: 'slot_1' },
+        day: { slotKind: 'rest', programSlotId: 'slot_1' },
       });
     });
 
@@ -402,7 +402,7 @@ describe('resolveProgramDay', () => {
         dayOfKind('movements', { movements: [prescribed()] }),
       ).toMatchObject({
         kind: 'prescribed',
-        day: { slotKind: 'movements', planSlotId: 'slot_1' },
+        day: { slotKind: 'movements', programSlotId: 'slot_1' },
         movements: [
           { movementGroup: 'pull', sets: 5, reps: 3, restSeconds: 90 },
         ],
@@ -483,19 +483,19 @@ describe('resolveProgramDay', () => {
 
       expect(day).toMatchObject({
         kind: 'rest',
-        day: { slotKind: null, planSlotId: null },
+        day: { slotKind: null, programSlotId: null },
       });
     });
   });
 
   describe('where the athlete is', () => {
     it('counts weeks from one, and days from zero', () => {
-      // The week is the one number an athlete reads; planDayIndex is what
+      // The week is the one number an athlete reads; programDayIndex is what
       // DailyAssignment stores and what "day 17 of 24" counts.
       const day = resolveProgramDay(program(), EVERY_DAY, '2026-09-23', []);
 
       expect(day).toMatchObject({
-        day: { week: 2, planDayIndex: 9, totalWeeks: null },
+        day: { week: 2, programDayIndex: 9, totalWeeks: null },
       });
     });
 

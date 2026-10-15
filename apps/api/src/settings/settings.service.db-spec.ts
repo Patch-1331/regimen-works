@@ -1,7 +1,7 @@
 import { testPrisma, withSeparateConnections } from '../test-support/database';
 import {
   createEnrollment,
-  createPlan,
+  createProgram,
   createUser,
 } from '../test-support/fixtures';
 import { DEFAULT_EQUIPMENT, equipment } from '@regimen-works/shared';
@@ -493,27 +493,27 @@ describe('SettingsService.update under concurrency', () => {
 });
 
 /**
- * A plan whose one authored week trains on `days` and rests on the others,
+ * A program whose one authored week trains on `days` and rests on the others,
  * with the athlete already enrolled in it and started.
  *
- * The plan is `fixed` unless a test says otherwise, because that is the only
- * mode this block is about -- a flexible plan has no opinion about which days
+ * The program is `fixed` unless a test says otherwise, because that is the only
+ * mode this block is about -- a flexible program has no opinion about which days
  * the athlete trains, which is the whole reason Just WODs is one.
  */
 async function enrolledIn(
   userId: string,
   days: number[],
-  planOverrides: Record<string, unknown> = {},
+  programOverrides: Record<string, unknown> = {},
 ) {
-  const plan = await createPlan({
+  const program = await createProgram({
     name: 'Pull-Up Builder',
-    // A fixed plan may not carry day bounds -- `Plan_schedule_mode_bounds`
+    // A fixed program may not carry day bounds -- `Program_schedule_mode_bounds`
     // refuses the row outright. Its slots are the schedule, so "three to five
     // days a week" would be a second, weaker statement of the same fact.
     scheduleMode: 'fixed',
     minDaysPerWeek: null,
     maxDaysPerWeek: null,
-    ...planOverrides,
+    ...programOverrides,
     weeks: {
       create: [
         {
@@ -530,20 +530,20 @@ async function enrolledIn(
     },
   });
   await createEnrollment(userId, {
-    planId: plan.id,
+    programId: program.id,
     startDate: '2026-09-14',
     weeks: null,
   });
-  return plan;
+  return program;
 }
 
 describe('SettingsService under a fixed program', () => {
   it('reports the program that is driving the week, and its days', async () => {
     const user = await createUser();
-    const plan = await enrolledIn(user.id, [1, 3, 5]);
+    const program = await enrolledIn(user.id, [1, 3, 5]);
 
     expect((await service().get(user.id)).scheduleLock).toEqual({
-      planId: plan.id,
+      planId: program.id,
       planName: 'Pull-Up Builder',
       days: [1, 3, 5],
     });
@@ -583,9 +583,9 @@ describe('SettingsService under a fixed program', () => {
     // on next week. Locking the picker to it would leave an athlete between
     // programs unable to change their own days at all.
     const user = await createUser();
-    const plan = await enrolledIn(user.id, [1, 3, 5]);
-    await testPrisma().planEnrollment.updateMany({
-      where: { userId: user.id, planId: plan.id },
+    const program = await enrolledIn(user.id, [1, 3, 5]);
+    await testPrisma().programEnrollment.updateMany({
+      where: { userId: user.id, programId: program.id },
       data: { status: 'completed', completedAt: new Date() },
     });
 

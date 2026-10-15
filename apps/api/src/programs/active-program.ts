@@ -19,13 +19,13 @@ import type { ActiveProgram } from './program-day';
 export async function loadActiveProgram(
   // The real client type rather than a hand-written shape, so a field renamed
   // on the model is a compile error here instead of a silently missing one.
-  prisma: Pick<PrismaClient, 'planEnrollment'>,
+  prisma: Pick<PrismaClient, 'programEnrollment'>,
   userId: string,
 ): Promise<ActiveProgram | null> {
-  const enrollment = await prisma.planEnrollment.findFirst({
+  const enrollment = await prisma.programEnrollment.findFirst({
     where: { userId, status: 'active' },
     include: {
-      plan: {
+      program: {
         include: {
           weeks: {
             orderBy: { order: 'asc' },
@@ -49,12 +49,12 @@ export async function loadActiveProgram(
 
   return {
     enrollmentId: enrollment.id,
-    planId: enrollment.planId,
-    planName: enrollment.plan.name,
-    scheduleMode: enrollment.plan.scheduleMode,
+    programId: enrollment.programId,
+    programName: enrollment.program.name,
+    scheduleMode: enrollment.program.scheduleMode,
     startDate: enrollment.startDate,
     weeks: enrollment.weeks,
     defaultRestSeconds: enrollment.defaultRestSeconds,
-    authoredWeeks: enrollment.plan.weeks,
+    authoredWeeks: enrollment.program.weeks,
   };
 }

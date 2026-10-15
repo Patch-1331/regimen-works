@@ -4,7 +4,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
 import { GLOBAL_LIBRARY } from '../src/library/visible-to';
-import { upsertJustWods } from '../src/plans/just-wods';
+import { upsertJustWods } from '../src/programs/just-wods';
 import { importLibrary } from '../src/seed/import-library';
 import { importWods } from '../src/seed/import-wods';
 import {

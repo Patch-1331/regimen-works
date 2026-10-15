@@ -1,6 +1,6 @@
 import { planDetailSchema } from '@regimen-works/shared';
 import {
-  JUST_WODS_PLAN,
+  JUST_WODS_PROGRAM,
   JUST_WODS_SLOTS,
   JUST_WODS_WEEK,
   justWodsSlotId,
@@ -14,7 +14,7 @@ import {
  */
 describe('the Just WODs program definition', () => {
   const asDetail = () => ({
-    ...JUST_WODS_PLAN,
+    ...JUST_WODS_PROGRAM,
     weeks: [{ ...JUST_WODS_WEEK, slots: JUST_WODS_SLOTS }],
   });
 
@@ -27,27 +27,27 @@ describe('the Just WODs program definition', () => {
   });
 
   it('is flexible, so the athlete’s own training days decide which days they train', () => {
-    expect(JUST_WODS_PLAN.scheduleMode).toBe('flexible');
-    expect(JUST_WODS_PLAN.minDaysPerWeek).toBe(1);
-    expect(JUST_WODS_PLAN.maxDaysPerWeek).toBe(7);
+    expect(JUST_WODS_PROGRAM.scheduleMode).toBe('flexible');
+    expect(JUST_WODS_PROGRAM.minDaysPerWeek).toBe(1);
+    expect(JUST_WODS_PROGRAM.maxDaysPerWeek).toBe(7);
   });
 
   it('has nothing to explain about its week, because it takes none of it', () => {
     // DN-124's note is a fixed program justifying the days it takes over.
     // Just WODs takes none, offers the rest-day makeup like any flexible
     // program, and would be talking about a restriction it does not impose.
-    expect(JUST_WODS_PLAN.scheduleNote).toBeNull();
+    expect(JUST_WODS_PROGRAM.scheduleNote).toBeNull();
   });
 
   it('is open-ended, with no length to choose and no last day', () => {
     // All three, not one: a half-open-ended program cannot bound a picker.
-    expect(JUST_WODS_PLAN.minWeeks).toBeNull();
-    expect(JUST_WODS_PLAN.maxWeeks).toBeNull();
-    expect(JUST_WODS_PLAN.defaultWeeks).toBeNull();
+    expect(JUST_WODS_PROGRAM.minWeeks).toBeNull();
+    expect(JUST_WODS_PROGRAM.maxWeeks).toBeNull();
+    expect(JUST_WODS_PROGRAM.defaultWeeks).toBeNull();
   });
 
   it('is global library content, owned by nobody', () => {
-    expect(JUST_WODS_PLAN.ownerId).toBeNull();
+    expect(JUST_WODS_PROGRAM.ownerId).toBeNull();
   });
 
   it('is one core week, which is the phase that repeats', () => {
@@ -57,7 +57,7 @@ describe('the Just WODs program definition', () => {
   });
 
   it('authors all seven weekdays, not just the default five', () => {
-    // The plan is flexible, so which days are trained is the athlete's
+    // The program is flexible, so which days are trained is the athlete's
     // trainingDays. Authoring Mon-Fri would hand someone who trains on
     // Saturday a day the program says nothing about.
     expect(JUST_WODS_SLOTS.map((s) => s.dayOfWeek)).toEqual([
@@ -101,8 +101,8 @@ describe('the Just WODs program definition', () => {
     );
     expect(new Set(JUST_WODS_SLOTS.map((s) => s.id)).size).toBe(7);
     expect(
-      JUST_WODS_SLOTS.every((s) => s.planWeekId === JUST_WODS_WEEK.id),
+      JUST_WODS_SLOTS.every((s) => s.programWeekId === JUST_WODS_WEEK.id),
     ).toBe(true);
-    expect(JUST_WODS_WEEK.planId).toBe(JUST_WODS_PLAN.id);
+    expect(JUST_WODS_WEEK.programId).toBe(JUST_WODS_PROGRAM.id);
   });
 });

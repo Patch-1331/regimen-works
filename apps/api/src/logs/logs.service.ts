@@ -12,7 +12,7 @@ import { PRESCRIBED_DAY_NAME, parseSetsResult } from '@regimen-works/shared';
 import {
   loadPrescribedSlot,
   prescribedSetCount,
-} from '../plans/prescribed-slot';
+} from '../programs/prescribed-slot';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -50,7 +50,7 @@ export class LogsService {
     const prescribed =
       assignment.wodId && assignment.wod
         ? null
-        : await loadPrescribedSlot(this.prisma, assignment.planSlotId);
+        : await loadPrescribedSlot(this.prisma, assignment.programSlotId);
     if (!assignment.wod && !prescribed)
       throw new BadRequestException('Rest days have nothing to log');
 

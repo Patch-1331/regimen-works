@@ -5,7 +5,7 @@ import {
 } from '@regimen-works/shared';
 import { loadLibrary } from '../../prisma/library';
 import { wods } from '../../prisma/wod-seed';
-import { narrowToSlot } from '../plans/program-day';
+import { narrowToSlot } from '../programs/program-day';
 
 /**
  * What the WOD library owes the athlete standing in front of it (DN-34).

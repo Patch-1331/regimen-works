@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
-import { JUST_WODS_PLAN_ID, JUST_WODS_WEEK_ID } from '../plans/just-wods';
+import { JUST_WODS_PROGRAM_ID, JUST_WODS_WEEK_ID } from '../programs/just-wods';
 import type { PrismaService } from '../prisma/prisma.service';
 import { testPrisma, withSeparateConnections } from '../test-support/database';
 import { UserProvisioningService } from './user-provisioning.service';
@@ -145,15 +145,17 @@ describe('UserProvisioningService.ensure', () => {
  * behaves exactly as an unenrolled one did.
  */
 describe('UserProvisioningService.ensure, the Just WODs program', () => {
-  it('creates the plan, its week and a slot for every weekday', async () => {
+  it('creates the program, its week and a slot for every weekday', async () => {
     // Created here rather than left to the deploy seed, because provisioning
     // cannot assume the seed has run -- these suites truncate every table
-    // between tests, so a service that required a seeded plan would fail on a
+    // between tests, so a service that required a seeded program would fail on a
     // foreign key in all of them.
     await service().ensure(newUserId());
 
     expect(
-      await testPrisma().plan.findUnique({ where: { id: JUST_WODS_PLAN_ID } }),
+      await testPrisma().program.findUnique({
+        where: { id: JUST_WODS_PROGRAM_ID },
+      }),
     ).toMatchObject({
       name: 'Just WODs',
       scheduleMode: 'flexible',
@@ -163,13 +165,13 @@ describe('UserProvisioningService.ensure, the Just WODs program', () => {
       defaultWeeks: null,
     });
     expect(
-      await testPrisma().planWeek.findUnique({
+      await testPrisma().programWeek.findUnique({
         where: { id: JUST_WODS_WEEK_ID },
       }),
     ).toMatchObject({ order: 0, phase: 'core' });
 
-    const slots = await testPrisma().planSlot.findMany({
-      where: { planWeekId: JUST_WODS_WEEK_ID },
+    const slots = await testPrisma().programSlot.findMany({
+      where: { programWeekId: JUST_WODS_WEEK_ID },
       orderBy: { dayOfWeek: 'asc' },
     });
     expect(slots.map((s) => s.dayOfWeek)).toEqual([0, 1, 2, 3, 4, 5, 6]);
@@ -183,9 +185,9 @@ describe('UserProvisioningService.ensure, the Just WODs program', () => {
     await service().ensure(userId);
 
     expect(
-      await testPrisma().planEnrollment.findFirst({ where: { userId } }),
+      await testPrisma().programEnrollment.findFirst({ where: { userId } }),
     ).toMatchObject({
-      planId: JUST_WODS_PLAN_ID,
+      programId: JUST_WODS_PROGRAM_ID,
       startDate: TODAY,
       // Null is what stops resolveSlotForDate ever reporting past-end for
       // it: an open-ended program cycles its weeks instead of running out.
@@ -202,7 +204,7 @@ describe('UserProvisioningService.ensure, the Just WODs program', () => {
 
     await service().ensure(userId);
 
-    const enrollment = await testPrisma().planEnrollment.findFirstOrThrow({
+    const enrollment = await testPrisma().programEnrollment.findFirstOrThrow({
       where: { userId },
     });
     expect(enrollment.startingMovements).toEqual({});
@@ -220,22 +222,22 @@ describe('UserProvisioningService.ensure, the Just WODs program', () => {
 
     await service().ensure(userId);
 
-    expect(await testPrisma().planEnrollment.count({ where: { userId } })).toBe(
-      1,
-    );
+    expect(
+      await testPrisma().programEnrollment.count({ where: { userId } }),
+    ).toBe(1);
     expect(await testPrisma().user.count()).toBe(1);
   });
 
-  it('enrolls a second athlete in the same plan, not a second copy of it', async () => {
+  it('enrolls a second athlete in the same program, not a second copy of it', async () => {
     const provisioning = service();
 
     await provisioning.ensure(newUserId());
     await provisioning.ensure(newUserId());
 
-    expect(await testPrisma().plan.count()).toBe(1);
-    expect(await testPrisma().planWeek.count()).toBe(1);
-    expect(await testPrisma().planSlot.count()).toBe(7);
-    expect(await testPrisma().planEnrollment.count()).toBe(2);
+    expect(await testPrisma().program.count()).toBe(1);
+    expect(await testPrisma().programWeek.count()).toBe(1);
+    expect(await testPrisma().programSlot.count()).toBe(7);
+    expect(await testPrisma().programEnrollment.count()).toBe(2);
   });
 
   it('does not enroll twice when a cold cache meets a warm database', async () => {
@@ -244,10 +246,10 @@ describe('UserProvisioningService.ensure, the Just WODs program', () => {
 
     await service().ensure(userId);
 
-    expect(await testPrisma().planEnrollment.count({ where: { userId } })).toBe(
-      1,
-    );
-    expect(await testPrisma().planSlot.count()).toBe(7);
+    expect(
+      await testPrisma().programEnrollment.count({ where: { userId } }),
+    ).toBe(1);
+    expect(await testPrisma().programSlot.count()).toBe(7);
   });
 
   it('survives concurrent first requests without a duplicate enrollment', async () => {
@@ -266,9 +268,9 @@ describe('UserProvisioningService.ensure, the Just WODs program', () => {
 
     const rejected = outcomes.filter((o) => o.status === 'rejected');
     expect(rejected.map((o) => String(o.reason))).toEqual([]);
-    expect(await testPrisma().planEnrollment.count()).toBe(1);
-    expect(await testPrisma().plan.count()).toBe(1);
-    expect(await testPrisma().planSlot.count()).toBe(7);
+    expect(await testPrisma().programEnrollment.count()).toBe(1);
+    expect(await testPrisma().program.count()).toBe(1);
+    expect(await testPrisma().programSlot.count()).toBe(7);
   });
 
   it('leaves an athlete already running another program alone', async () => {
@@ -278,24 +280,24 @@ describe('UserProvisioningService.ensure, the Just WODs program', () => {
     // not only the first.
     const userId = newUserId();
     await service().ensure(userId);
-    const other = await testPrisma().plan.create({
+    const other = await testPrisma().program.create({
       data: {
         name: 'Pull-Up Builder',
         summary: 'Six weeks to your first unassisted chin-up.',
         scheduleMode: 'fixed',
       },
     });
-    await testPrisma().planEnrollment.deleteMany({ where: { userId } });
-    await testPrisma().planEnrollment.create({
-      data: { userId, planId: other.id, startDate: '2026-09-07', weeks: 6 },
+    await testPrisma().programEnrollment.deleteMany({ where: { userId } });
+    await testPrisma().programEnrollment.create({
+      data: { userId, programId: other.id, startDate: '2026-09-07', weeks: 6 },
     });
 
     await service().ensure(userId);
 
-    const enrollments = await testPrisma().planEnrollment.findMany({
+    const enrollments = await testPrisma().programEnrollment.findMany({
       where: { userId },
     });
     expect(enrollments).toHaveLength(1);
-    expect(enrollments[0].planId).toBe(other.id);
+    expect(enrollments[0].programId).toBe(other.id);
   });
 });

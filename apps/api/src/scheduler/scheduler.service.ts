@@ -17,8 +17,8 @@ import {
   type ResolvedMovement,
 } from './movement-resolution.service';
 import { EnrollmentsService } from '../enrollments/enrollments.service';
-import { loadActiveProgram } from '../plans/active-program';
-import { resolveScheduleLock } from '../plans/schedule-lock';
+import { loadActiveProgram } from '../programs/active-program';
+import { resolveScheduleLock } from '../programs/schedule-lock';
 import { alsoTraining, resolveMakeup } from './makeup';
 import {
   narrowToSlot,
@@ -26,7 +26,7 @@ import {
   type ActiveProgram,
   type ConstrainableWod,
   type ProgramDay,
-} from '../plans/program-day';
+} from '../programs/program-day';
 import {
   applyEquipmentFloor,
   applyRememberedChoice,
@@ -75,7 +75,7 @@ export class SchedulerService {
    * Warn rather than log: the relaxation ladder firing is not normal. It means the
    * library cannot satisfy a slot somebody authored, which is a content bug
    * with a fix (seed the missing WODs -- DN-23) rather than a fact of life.
-   * The line names the plan, the week and the axes given up, because the
+   * The line names the program, the week and the axes given up, because the
    * question it has to answer is "which slot, and what is missing".
    */
   private narrowed<C extends ConstrainableWod>(
@@ -88,8 +88,8 @@ export class SchedulerService {
     );
     if (relaxed.length > 0) {
       this.logger.warn(
-        `Slot relaxed for "${slot.day.planName}" week ${slot.day.week} ` +
-          `(plan ${slot.day.planId}): nothing in the library satisfies ` +
+        `Slot relaxed for "${slot.day.programName}" week ${slot.day.week} ` +
+          `(program ${slot.day.programId}): nothing in the library satisfies ` +
           `${relaxed.join(', ')}, so ${relaxed.length === 1 ? 'it was' : 'they were'} ` +
           `given up to find ${pool.length} candidate${pool.length === 1 ? '' : 's'}.`,
       );
@@ -125,13 +125,13 @@ export class SchedulerService {
       resolveProgramDay(program, trainingDays, today, completed),
       userId,
     );
-    const plan = planBlock(day);
+    const strip = programBlock(day);
 
     if (existing) {
       // A WOD-less row is either today's prescription (DN-19) or the older
       // case the column was nullable for: a rest day recorded before anything
       // was generated. The program day tells them apart, and it is asked
-      // rather than the row, for the same reason `plan` is recomputed -- the
+      // rather than the row, for the same reason `strip` is recomputed -- the
       // row records what happened, this answers what today is.
       const prescription = existing.wod
         ? null
@@ -156,10 +156,10 @@ export class SchedulerService {
 
       return {
         date: today,
-        // Recomputed rather than read back off the row's plan columns. Those
+        // Recomputed rather than read back off the row's program columns. Those
         // record what produced the day and are history; this answers "where am
         // I today", which is a question about the enrollment as it stands now.
-        plan,
+        plan: strip,
         completedProgram: await this.enrollments.cardFor(userId),
         isRestDay: existing.status === 'skipped',
         assignment,
@@ -191,7 +191,7 @@ export class SchedulerService {
     // `isRestDay` is still the whole rule when no program is deciding, which
     // is what keeps an athlete who has never touched a program on exactly the
     // behaviour they had before. Under a program the calendar question has
-    // already been asked -- a flexible plan defers to these same training
+    // already been asked -- a flexible program defers to these same training
     // days, a fixed one overrides them on purpose.
     const resting =
       day.kind === 'fallback'
@@ -201,7 +201,7 @@ export class SchedulerService {
     if (resting) {
       return {
         date: today,
-        plan,
+        plan: strip,
         completedProgram: await this.enrollments.cardFor(userId),
         isRestDay: true,
         assignment: null,
@@ -227,14 +227,15 @@ export class SchedulerService {
           date: today,
           status: 'scheduled',
           enrollmentId: day.kind === 'fallback' ? null : day.day.enrollmentId,
-          planSlotId: day.kind === 'fallback' ? null : day.day.planSlotId,
-          planDayIndex: day.kind === 'fallback' ? null : day.day.planDayIndex,
+          programSlotId: day.kind === 'fallback' ? null : day.day.programSlotId,
+          programDayIndex:
+            day.kind === 'fallback' ? null : day.day.programDayIndex,
         },
       });
 
       return {
         date: today,
-        plan,
+        plan: strip,
         completedProgram: await this.enrollments.cardFor(userId),
         isRestDay: false,
         makeup: null,
@@ -276,8 +277,9 @@ export class SchedulerService {
         // columns mean -- see the schema. Written together because they are
         // one fact: this day came from that slot of that run.
         enrollmentId: day.kind === 'fallback' ? null : day.day.enrollmentId,
-        planSlotId: day.kind === 'fallback' ? null : day.day.planSlotId,
-        planDayIndex: day.kind === 'fallback' ? null : day.day.planDayIndex,
+        programSlotId: day.kind === 'fallback' ? null : day.day.programSlotId,
+        programDayIndex:
+          day.kind === 'fallback' ? null : day.day.programDayIndex,
       },
       include: { wod: { include: wodInclude } },
     });
@@ -290,7 +292,7 @@ export class SchedulerService {
 
     return {
       date: today,
-      plan,
+      plan: strip,
       completedProgram: await this.enrollments.cardFor(userId),
       isRestDay: false,
       // Nothing to make up on a day that already has a session.
@@ -598,8 +600,9 @@ export class SchedulerService {
         // day cannot be both.
         wodId: wod?.id ?? null,
         enrollmentId: day.kind === 'fallback' ? null : day.day.enrollmentId,
-        planSlotId: day.kind === 'fallback' ? null : day.day.planSlotId,
-        planDayIndex: day.kind === 'fallback' ? null : day.day.planDayIndex,
+        programSlotId: day.kind === 'fallback' ? null : day.day.programSlotId,
+        programDayIndex:
+          day.kind === 'fallback' ? null : day.day.programDayIndex,
       },
       create: {
         userId,
@@ -607,8 +610,9 @@ export class SchedulerService {
         wodId: wod?.id ?? null,
         status: 'scheduled',
         enrollmentId: day.kind === 'fallback' ? null : day.day.enrollmentId,
-        planSlotId: day.kind === 'fallback' ? null : day.day.planSlotId,
-        planDayIndex: day.kind === 'fallback' ? null : day.day.planDayIndex,
+        programSlotId: day.kind === 'fallback' ? null : day.day.programSlotId,
+        programDayIndex:
+          day.kind === 'fallback' ? null : day.day.programDayIndex,
       },
       include: { wod: { include: wodInclude } },
     });
@@ -616,7 +620,7 @@ export class SchedulerService {
     const warmupCooldownEnabled = rule?.warmupCooldownEnabled ?? false;
     return {
       date: today,
-      plan: planBlock(day),
+      plan: programBlock(day),
       completedProgram: await this.enrollments.cardFor(userId),
       isRestDay: false,
       // Taken, so there is nothing left to offer.
@@ -673,7 +677,7 @@ export class SchedulerService {
     // program, so the strip that says which week the athlete is in is still
     // true afterwards. Nothing is settled here -- an enrollment past its last
     // day completes on the next `getToday`, not on a skip.
-    const plan = planBlock(
+    const strip = programBlock(
       resolveProgramDay(
         program,
         rule?.trainingDays ?? [...DEFAULT_TRAINING_DAYS],
@@ -683,7 +687,7 @@ export class SchedulerService {
     );
     return {
       date: today,
-      plan,
+      plan: strip,
       completedProgram: await this.enrollments.cardFor(userId),
       isRestDay: true,
       assignment: null,
@@ -828,14 +832,14 @@ export class SchedulerService {
  * answer, because from the screen's point of view they are the same: there is
  * no program context to show above today's plate.
  */
-function planBlock(day: ProgramDay) {
+function programBlock(day: ProgramDay) {
   // `completed` answers null alongside `fallback` because it is the same fact
   // for the screen: the run that just ended is no longer context for today.
   if (day.kind === 'fallback' || day.kind === 'completed') return null;
   return {
     enrollmentId: day.day.enrollmentId,
-    planId: day.day.planId,
-    name: day.day.planName,
+    planId: day.day.programId,
+    name: day.day.programName,
     week: day.day.week,
     totalWeeks: day.day.totalWeeks,
     weekLabel: day.day.weekLabel,

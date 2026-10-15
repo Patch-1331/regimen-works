@@ -1,6 +1,6 @@
 import type { CommitSetup } from '@regimen-works/shared';
 import { fixedDaysOf, setupRejection, startDateRange } from './setup.logic';
-import type { SetupPlanBounds, StartDateRange } from './setup.logic';
+import type { SetupProgramBounds, StartDateRange } from './setup.logic';
 
 /**
  * The wizard's rules (DN-15).
@@ -10,7 +10,7 @@ import type { SetupPlanBounds, StartDateRange } from './setup.logic';
  * "invalid" is a rule that has told the athlete nothing they can act on.
  */
 
-const FLEXIBLE: SetupPlanBounds = {
+const FLEXIBLE: SetupProgramBounds = {
   name: 'Pull-Up Builder',
   scheduleMode: 'flexible',
   minDaysPerWeek: 3,
@@ -20,7 +20,7 @@ const FLEXIBLE: SetupPlanBounds = {
   restPaceRequired: false,
 };
 
-const FIXED: SetupPlanBounds = {
+const FIXED: SetupProgramBounds = {
   name: 'Bar Muscle-Up',
   scheduleMode: 'fixed',
   minDaysPerWeek: null,
@@ -30,7 +30,7 @@ const FIXED: SetupPlanBounds = {
   restPaceRequired: false,
 };
 
-const OPEN_ENDED: SetupPlanBounds = {
+const OPEN_ENDED: SetupProgramBounds = {
   name: 'Just WODs',
   scheduleMode: 'flexible',
   minDaysPerWeek: 1,
@@ -45,7 +45,7 @@ const RANGE = startDateRange('2026-09-19', false);
 
 function answers(overrides: Partial<CommitSetup> = {}): CommitSetup {
   return {
-    planId: 'plan-1',
+    planId: 'program-1',
     trainingDays: [1, 3, 5],
     weeks: 6,
     startDate: '2026-09-19',
@@ -337,7 +337,7 @@ describe('setupRejection: start date', () => {
 describe('setupRejection: rest pace', () => {
   // ADR 0005. The field may be left blank only where every movement in the
   // program already states a rest; a program with holes asks once, here.
-  const WITH_HOLES: SetupPlanBounds = { ...FIXED, restPaceRequired: true };
+  const WITH_HOLES: SetupProgramBounds = { ...FIXED, restPaceRequired: true };
   const fixedAnswers = (overrides: Partial<CommitSetup> = {}) =>
     answers({ trainingDays: null, weeks: 6, ...overrides });
 

@@ -203,17 +203,17 @@ export async function createGroup(
 
 /**
  * A program with no weeks on it. Flexible by default, with both day bounds
- * set, because the CHECK added in DN-9's migration refuses a flexible plan
+ * set, because the CHECK added in DN-9's migration refuses a flexible program
  * missing either -- a fixture that could not be written is no use to a test
  * about something else.
  *
  * Pass `weeks` to build the whole tree in one call:
  *
- *   createPlan({ weeks: { create: [{ order: 0, phase: 'core',
+ *   createProgram({ weeks: { create: [{ order: 0, phase: 'core',
  *     slots: { create: [{ dayOfWeek: 1, kind: 'rest' }] } }] } })
  */
-export async function createPlan(overrides: Record<string, unknown> = {}) {
-  return testPrisma().plan.create({
+export async function createProgram(overrides: Record<string, unknown> = {}) {
+  return testPrisma().program.create({
     data: {
       name: unique('Pull-Up Builder'),
       summary: 'Your first chin-up, six weeks.',
@@ -233,16 +233,16 @@ export async function createPlan(overrides: Record<string, unknown> = {}) {
  * A program whose slots are its schedule (DN-15's wizard has a readout for
  * exactly this, and DN-24 has yet to author a real one).
  *
- * The shape `createPlan` cannot make: the CHECK from DN-9's migration refuses
- * a fixed plan that carries either day bound, so the three fields have to be
+ * The shape `createProgram` cannot make: the CHECK from DN-9's migration refuses
+ * a fixed program that carries either day bound, so the three fields have to be
  * unset together. The days land in one authored week, because "which days
  * does it train" is a question about week one.
  */
-export async function createFixedPlan(
+export async function createFixedProgram(
   days: number[] = [1, 2, 4, 5],
   overrides: Record<string, unknown> = {},
 ) {
-  return createPlan({
+  return createProgram({
     name: unique('Bar Muscle-Up'),
     scheduleMode: 'fixed',
     minDaysPerWeek: null,
@@ -271,16 +271,16 @@ export async function createEnrollment(
   userId: string,
   overrides: Record<string, unknown> = {},
 ) {
-  const planId =
-    (overrides.planId as string | undefined) ?? (await createPlan()).id;
-  return testPrisma().planEnrollment.create({
+  const programId =
+    (overrides.programId as string | undefined) ?? (await createProgram()).id;
+  return testPrisma().programEnrollment.create({
     data: {
       userId,
       startDate: '2026-09-16',
       weeks: 6,
       status: 'active',
       ...overrides,
-      planId,
+      programId,
     },
   });
 }
@@ -297,7 +297,7 @@ export async function createPrescribedDay(
   userId: string,
   { date = '2026-09-16', sets = [5] }: { date?: string; sets?: number[] } = {},
 ) {
-  const plan = await createPlan({
+  const program = await createProgram({
     weeks: {
       create: [
         {
@@ -324,12 +324,12 @@ export async function createPrescribedDay(
       ],
     },
   });
-  const slot = await testPrisma().planSlot.findFirstOrThrow({
-    where: { planWeek: { planId: plan.id } },
+  const slot = await testPrisma().programSlot.findFirstOrThrow({
+    where: { programWeek: { programId: program.id } },
     include: { movements: { orderBy: { order: 'asc' } } },
   });
   const assignment = await testPrisma().dailyAssignment.create({
-    data: { userId, date, status: 'scheduled', planSlotId: slot.id },
+    data: { userId, date, status: 'scheduled', programSlotId: slot.id },
   });
-  return { plan, slot, assignment, movements: slot.movements };
+  return { program, slot, assignment, movements: slot.movements };
 }

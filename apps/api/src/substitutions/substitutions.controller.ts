@@ -48,8 +48,14 @@ export class SubstitutionsController {
   ) {
     // The same validator as a body: a query string is an object of strings
     // too, and the either-or is the schema's to state.
-    const key = validateBody(swapOptionsQuerySchema, query);
-    return this.substitutionsService.options(userId, assignmentId, key);
+    const { wodMovementId, planSlotMovementId } = validateBody(
+      swapOptionsQuerySchema,
+      query,
+    );
+    return this.substitutionsService.options(userId, assignmentId, {
+      wodMovementId,
+      programSlotMovementId: planSlotMovementId,
+    });
   }
 
   @Post()
@@ -65,7 +71,7 @@ export class SubstitutionsController {
     return this.substitutionsService.set(
       userId,
       assignmentId,
-      { wodMovementId, planSlotMovementId },
+      { wodMovementId, programSlotMovementId: planSlotMovementId },
       exerciseId,
     );
   }
@@ -76,16 +82,16 @@ export class SubstitutionsController {
    * which table it came from — and declared above it for the same reason
    * "movement-changes" is, so the prefix is never taken for a movement id.
    */
-  @Delete('prescribed/:planSlotMovementId')
+  @Delete('prescribed/:programSlotMovementId')
   @HttpCode(204)
   clearPrescribed(
     @CurrentUser() userId: string,
     @Param('assignmentId') assignmentId: string,
-    @Param('planSlotMovementId') planSlotMovementId: string,
+    @Param('programSlotMovementId') programSlotMovementId: string,
   ) {
     return this.substitutionsService.clear(userId, assignmentId, {
       wodMovementId: null,
-      planSlotMovementId,
+      programSlotMovementId,
     });
   }
 
@@ -98,7 +104,7 @@ export class SubstitutionsController {
   ) {
     return this.substitutionsService.clear(userId, assignmentId, {
       wodMovementId,
-      planSlotMovementId: null,
+      programSlotMovementId: null,
     });
   }
 }

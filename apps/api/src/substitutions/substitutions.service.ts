@@ -15,7 +15,7 @@ import {
   defaultsByGroup,
   resolveGroupChoice,
   usableChoice,
-} from '../plans/group-choice';
+} from '../programs/group-choice';
 import {
   swapCandidatesWhere,
   swapSections,
@@ -49,14 +49,17 @@ export class SubstitutionsService {
 
     // Two upserts rather than one write with a variable key, because the two
     // composite uniques are genuinely different indexes and Prisma names them.
-    if (key.planSlotMovementId !== null) {
-      const planSlotMovementId = key.planSlotMovementId;
+    if (key.programSlotMovementId !== null) {
+      const programSlotMovementId = key.programSlotMovementId;
       return this.prisma.assignmentSubstitution.upsert({
         where: {
-          assignmentId_planSlotMovementId: { assignmentId, planSlotMovementId },
+          assignmentId_programSlotMovementId: {
+            assignmentId,
+            programSlotMovementId,
+          },
         },
         update: { exerciseId },
-        create: { userId, assignmentId, planSlotMovementId, exerciseId },
+        create: { userId, assignmentId, programSlotMovementId, exerciseId },
       });
     }
 
@@ -178,7 +181,7 @@ export class SubstitutionsService {
    *
    * Both kinds of day answer the third question the same way, against
    * different columns (DN-125): a WOD movement belongs to the day's `wodId`,
-   * and a prescribed movement belongs to the day's `planSlotId`. Either way
+   * and a prescribed movement belongs to the day's `programSlotId`. Either way
    * the row the athlete tapped has to be one this assignment actually holds,
    * or a swap could be written against somebody else's session entirely.
    */
@@ -189,7 +192,7 @@ export class SubstitutionsService {
   ): Promise<SwappableMovement> {
     const assignment = await this.prisma.dailyAssignment.findFirst({
       where: { id: assignmentId, userId },
-      select: { id: true, status: true, wodId: true, planSlotId: true },
+      select: { id: true, status: true, wodId: true, programSlotId: true },
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
 
@@ -199,11 +202,11 @@ export class SubstitutionsService {
       );
     }
 
-    if (key.planSlotMovementId !== null) {
-      const movement = await this.prisma.planSlotMovement.findFirst({
+    if (key.programSlotMovementId !== null) {
+      const movement = await this.prisma.programSlotMovement.findFirst({
         where: {
-          id: key.planSlotMovementId,
-          planSlotId: assignment.planSlotId ?? undefined,
+          id: key.programSlotMovementId,
+          programSlotId: assignment.programSlotId ?? undefined,
         },
         include: { exercise: true },
       });
@@ -427,7 +430,7 @@ export const SECTION_CAP = 8;
  */
 export type SwapKey = {
   wodMovementId: string | null;
-  planSlotMovementId: string | null;
+  programSlotMovementId: string | null;
 };
 
 /**
