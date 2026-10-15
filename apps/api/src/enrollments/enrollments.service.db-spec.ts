@@ -226,6 +226,21 @@ describe('EnrollmentsService.cardFor', () => {
     });
   });
 
+  it('offers nothing for a run the athlete left for another program', async () => {
+    // Ended is not finished (ADR 0009, DN-178). A summary is never written on
+    // one, but the status is what the card asks for, so it is given one here
+    // to prove the status alone keeps it out.
+    const user = await createUser();
+    await createEnrollment(user.id, {
+      status: 'ended',
+      endedAt: new Date(),
+      summary: { weeks: 2, sessions: 5, movementChanges: [] },
+    });
+
+    await expect(service().cardFor(user.id)).resolves.toBeNull();
+    await expect(service().listCompleted(user.id)).resolves.toEqual([]);
+  });
+
   it('offers nothing while the program is still running', async () => {
     const user = await createUser();
     await createEnrollment(user.id);

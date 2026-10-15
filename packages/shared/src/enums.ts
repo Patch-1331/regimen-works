@@ -286,10 +286,11 @@ export type ScheduleMode = z.infer<typeof scheduleMode>;
  * Where an athlete's run at a program has got to.
  *
  * Only `active` is constrained: a partial unique index holds one active
- * enrollment per athlete, so `completed` is both the end state and the reason
- * a finished run stops occupying that slot. There is no `cancelled` — leaving
- * a program early is completing it early, and the completion card can still
- * say what changed.
+ * enrollment per athlete, and either end state frees that slot. `completed`
+ * reached its last day and earns the completion card; `ended` was left
+ * part-way when the athlete started another program, keeps the days trained
+ * on it, and earns no card (ADR 0009, DN-178). There is no `cancelled` —
+ * leaving a program is starting another one.
  */
-export const enrollmentStatus = z.enum(["active", "completed"]);
+export const enrollmentStatus = z.enum(["active", "completed", "ended"]);
 export type EnrollmentStatus = z.infer<typeof enrollmentStatus>;

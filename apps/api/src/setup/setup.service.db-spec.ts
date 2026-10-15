@@ -22,10 +22,10 @@ import { SetupService } from './setup.service';
  * The first-run wizard against a real database (DN-15).
  *
  * The rules themselves are unit-tested in `setup.logic.spec.ts`. What needs
- * Postgres is the commit: one active enrollment pointed at a different
- * program rather than replaced, today's assignment discarded only when
- * discarding it is safe, and `onboardedAt` stamped last inside the same
- * transaction as all of it.
+ * Postgres is the commit: the run being left ended and a new one begun (or,
+ * for a run nobody trained, replaced in place), today's assignment discarded
+ * only when discarding it is safe, and `onboardedAt` stamped last inside the
+ * same transaction as all of it.
  */
 
 // A Wednesday, so a week either side of it stays inside the same month.
@@ -246,10 +246,10 @@ describe('SetupService.options', () => {
 });
 
 describe('SetupService.commit', () => {
-  it('points the athlete existing enrollment at the chosen program', async () => {
-    // Updated in place, not replaced: deleting the auto enrollment raises an
-    // FK error as soon as a training day points at it, and completing it
-    // would write a never-trained program into the finished list.
+  it('points an untrained enrollment at the chosen program', async () => {
+    // The first-run wizard's case: provisioning's Just WODs run has no days
+    // on it, so there is nothing to relabel, and ending it would leave an
+    // empty run in the past-runs list beside the one the athlete chose.
     const { userId, enrollmentId } = await provisionedAthlete();
     const program = await createProgram();
 
@@ -519,6 +519,194 @@ describe('SetupService.commit', () => {
         TODAY,
       ),
     ).rejects.toThrow(BadRequestException);
+  });
+});
+
+/**
+ * Starting a program while a run is under way (ADR 0009, decisions 1, 6 and
+ * 7; DN-178). The run being left ends with its days still on it, and the new
+ * program is a new run.
+ */
+describe('SetupService.commit, leaving a run part-way', () => {
+  /** A day trained on `enrollmentId`, with a result logged against it. */
+  async function trainedDay(
+    userId: string,
+    enrollmentId: string,
+    date: string,
+  ) {
+    const assignment = await createAssignment(userId, { date, enrollmentId });
+    await createLog(userId, assignment.id);
+    return assignment;
+  }
+
+  function enrollmentsOf(userId: string) {
+    return testPrisma().programEnrollment.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  it('ends the run being left and starts the chosen program as a new one', async () => {
+    const { userId, enrollmentId } = await provisionedAthlete();
+    const program = await createProgram();
+    const monday = await trainedDay(userId, enrollmentId, '2026-09-14');
+    const tuesday = await trainedDay(userId, enrollmentId, '2026-09-15');
+
+    await service().commit(
+      userId,
+      answers({ programId: program.id, startDate: '2026-09-21' }),
+      TODAY,
+    );
+
+    const [left, started] = await enrollmentsOf(userId);
+    expect(left).toMatchObject({
+      id: enrollmentId,
+      programId: DEFAULT_PROGRAM_ID,
+      status: 'ended',
+      startDate: TODAY,
+    });
+    expect(left.endedAt).not.toBeNull();
+    // Ended, not finished: no card is owed for it.
+    expect(left.completedAt).toBeNull();
+    expect(left.summary).toBeNull();
+    expect(started).toMatchObject({
+      programId: program.id,
+      status: 'active',
+      startDate: '2026-09-21',
+      endedAt: null,
+    });
+
+    // The days trained stay with the run they were trained on.
+    const days = await testPrisma().dailyAssignment.findMany({
+      where: { id: { in: [monday.id, tuesday.id] } },
+      select: { enrollmentId: true },
+    });
+    expect(days).toEqual([{ enrollmentId }, { enrollmentId }]);
+  });
+
+  it('leaves Just WODs by the same rule, ending a program part-way', async () => {
+    // Decision 6: Just WODs is a program like any other, in both directions.
+    const { userId } = await provisionedAthlete();
+    const program = await createProgram();
+    await service().commit(userId, answers({ programId: program.id }), TODAY);
+    const onProgram = await activeEnrollment(userId);
+    await trainedDay(userId, onProgram.id, TODAY);
+
+    await service().commit(
+      userId,
+      answers({
+        programId: DEFAULT_PROGRAM_ID,
+        weeks: null,
+        startDate: '2026-09-17',
+      }),
+      TODAY,
+    );
+
+    const left = await testPrisma().programEnrollment.findUniqueOrThrow({
+      where: { id: onProgram.id },
+    });
+    expect(left).toMatchObject({ programId: program.id, status: 'ended' });
+    expect((await activeEnrollment(userId)).programId).toBe(DEFAULT_PROGRAM_ID);
+  });
+
+  it('keeps a logged today on the run being left, and starts the new one tomorrow', async () => {
+    // Decision 7. Today was trained, so it is a day of the old run; the new
+    // run cannot claim it, and the only start the wizard offers is tomorrow.
+    const { userId, enrollmentId } = await provisionedAthlete();
+    const program = await createProgram();
+    const today = await trainedDay(userId, enrollmentId, TODAY);
+
+    await expect(
+      service().commit(
+        userId,
+        answers({ programId: program.id, startDate: TODAY }),
+        TODAY,
+      ),
+    ).rejects.toThrow(
+      "Today's workout is already under way, so the earliest you can start is tomorrow.",
+    );
+    expect((await service().options(userId, TODAY)).earliestStartDate).toBe(
+      '2026-09-17',
+    );
+
+    await service().commit(
+      userId,
+      answers({ programId: program.id, startDate: '2026-09-17' }),
+      TODAY,
+    );
+
+    const kept = await testPrisma().dailyAssignment.findUniqueOrThrow({
+      where: { id: today.id },
+      include: { log: true },
+    });
+    expect(kept.enrollmentId).toBe(enrollmentId);
+    expect(kept.log).not.toBeNull();
+    expect(
+      (
+        await testPrisma().programEnrollment.findUniqueOrThrow({
+          where: { id: enrollmentId },
+        })
+      ).status,
+    ).toBe('ended');
+    expect(await activeEnrollment(userId)).toMatchObject({
+      programId: program.id,
+      startDate: '2026-09-17',
+    });
+  });
+
+  it('replaces in place a run whose only day was an untouched today', async () => {
+    // Starting today discards that day (it belongs to the new run), and
+    // what is left is a run nobody trained -- nothing to end.
+    const { userId, enrollmentId } = await provisionedAthlete();
+    const program = await createProgram();
+    await createAssignment(userId, { date: TODAY, enrollmentId });
+
+    await service().commit(
+      userId,
+      answers({ programId: program.id, startDate: TODAY }),
+      TODAY,
+    );
+
+    const all = await enrollmentsOf(userId);
+    expect(all).toHaveLength(1);
+    expect(all[0]).toMatchObject({
+      id: enrollmentId,
+      programId: program.id,
+      status: 'active',
+    });
+  });
+
+  it('writes nothing when the switch is refused', async () => {
+    // One transaction: a refused answer must not have ended the run first.
+    const { userId, enrollmentId } = await provisionedAthlete();
+    const program = await createProgram();
+    await trainedDay(userId, enrollmentId, '2026-09-14');
+
+    await expect(
+      service().commit(
+        userId,
+        answers({ programId: program.id, weeks: 999 }),
+        TODAY,
+      ),
+    ).rejects.toThrow(BadRequestException);
+
+    const all = await enrollmentsOf(userId);
+    expect(all).toHaveLength(1);
+    expect(all[0]).toMatchObject({ id: enrollmentId, status: 'active' });
+  });
+
+  it('leaves somebody else run alone', async () => {
+    const { userId, enrollmentId } = await provisionedAthlete();
+    const program = await createProgram();
+    await trainedDay(userId, enrollmentId, '2026-09-14');
+    const stranger = await provisionedAthlete();
+    await trainedDay(stranger.userId, stranger.enrollmentId, '2026-09-14');
+
+    await service().commit(userId, answers({ programId: program.id }), TODAY);
+
+    expect(await enrollmentsOf(stranger.userId)).toEqual([
+      expect.objectContaining({ id: stranger.enrollmentId, status: 'active' }),
+    ]);
   });
 });
 

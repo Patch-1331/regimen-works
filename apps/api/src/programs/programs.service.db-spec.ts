@@ -370,6 +370,27 @@ describe('ProgramsService.update', () => {
   });
 
   describe('once someone has started it', () => {
+    it('forks once a run of it has ended, as it does for one still going', async () => {
+      // An ended run keeps its days pointing at these slots (DN-178), so the
+      // edit cannot rewrite them in place any more than a live run's.
+      const alice = await createUser();
+      const program = await written(alice.id);
+      await createEnrollment(alice.id, {
+        programId: program.id,
+        status: 'ended',
+        endedAt: new Date(),
+      });
+
+      const saved = await programs().update(
+        { ownerId: alice.id },
+        program.id,
+        longerMonday(),
+      );
+
+      expect(saved.forked).toBe(true);
+      expect((await stored(program.id)).archivedAt).not.toBeNull();
+    });
+
     it('forks a change to the week, archiving the version being run', async () => {
       const alice = await createUser();
       const program = await written(alice.id);

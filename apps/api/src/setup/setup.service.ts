@@ -158,16 +158,43 @@ export class SetupService {
         });
       }
 
-      // Updated in place rather than replaced. Every athlete is already
-      // enrolled in Just WODs by provisioning (DN-13) and at most one
-      // enrollment may be active, so this is the same run pointed at a
-      // different program -- deleting the old row would raise an FK error the
-      // moment a training day pointed at it, and completing it would write a
-      // never-trained program into the finished list.
+      // `getToday` creates one assignment per date and hands back the same
+      // row on every later read, so starting today would otherwise leave
+      // today on the program the athlete just replaced -- the app offering a
+      // choice it does not honour. Discarding it makes day one really day
+      // one, and the filter makes that safe: a session started in the seconds
+      // since the check above leaves the day alone rather than deleting work.
+      //
+      // First, so an untouched today does not count as a day of the run
+      // being left, below.
+      if (body.startDate === range.today) {
+        await tx.dailyAssignment.deleteMany({
+          where: { userId, date: range.today, session: null, log: null },
+        });
+      }
+
+      // The run being left ends, and the new program is a new run (ADR 0009,
+      // decision 1). Rewriting the row instead would relabel every day
+      // already trained as the new program, and the run left would vanish
+      // from history. Ended before the new one is written, so the one-active
+      // partial unique index holds throughout.
+      //
+      // Except a run with no days on it at all, which is replaced in place:
+      // there is nothing to relabel, and ending it would write a run nobody
+      // trained into the past-runs list. That is the Just WODs run
+      // provisioning makes before the wizard (DN-13), so onboarding leaves
+      // one enrollment rather than an empty ended one beside it.
       const active = await tx.programEnrollment.findFirst({
         where: { userId, status: 'active' },
-        select: { id: true },
+        select: { id: true, _count: { select: { assignments: true } } },
       });
+      const replaceInPlace = active !== null && active._count.assignments === 0;
+      if (active && !replaceInPlace) {
+        await tx.programEnrollment.update({
+          where: { id: active.id },
+          data: { status: 'ended', endedAt: new Date() },
+        });
+      }
       // What every group stands at as the run begins, so the completion card
       // can say what moved rather than only how many sessions were trained
       // (DN-18). Taken inside the transaction, against the same instant the
@@ -181,28 +208,16 @@ export class SetupService {
         defaultRestSeconds: body.defaultRestSeconds,
         startingMovements: await snapshotMovements(tx, userId),
       };
-      if (active) {
+      if (replaceInPlace) {
         await tx.programEnrollment.update({
           where: { id: active.id },
           data: enrollment,
         });
       } else {
-        // An athlete who finished a program has no active enrollment until
-        // something re-enrolls them, and the wizard is reachable from that
-        // state too.
+        // Also where an athlete who finished a program lands: they have no
+        // active enrollment until something re-enrolls them, and the wizard
+        // is reachable from that state too.
         await tx.programEnrollment.create({ data: { userId, ...enrollment } });
-      }
-
-      // `getToday` creates one assignment per date and hands back the same
-      // row on every later read, so starting today would otherwise leave
-      // today on the program the athlete just replaced -- the app offering a
-      // choice it does not honour. Discarding it makes day one really day
-      // one, and the filter makes that safe: a session started in the seconds
-      // since the check above leaves the day alone rather than deleting work.
-      if (body.startDate === range.today) {
-        await tx.dailyAssignment.deleteMany({
-          where: { userId, date: range.today, session: null, log: null },
-        });
       }
 
       // A card still sitting above Today after the athlete has started
