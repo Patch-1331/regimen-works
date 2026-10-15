@@ -21,10 +21,18 @@ each training day is. The athlete picks one at signup and can change it later.
 *"Just WODs" is itself a program, not the absence of one* — it is seeded as a real
 row so there is one code path, not an `if (enrolled)` branch.
 
-> **Program vs `Plan`.** The persisted model is called `Plan` (with `PlanWeek`,
-> `PlanSlot`, `PlanEnrollment`). **Program** is the domain and user-facing term.
-> Prefer *program* in prose, issue titles, and test names; use `Plan` only when
-> naming the actual model or table. Do not "fix" one into the other.
+> **One word: program.** ADR 0009 retires the two other names the code has used for
+> the same row. `Plan` (with `PlanWeek`, `PlanSlot`, `PlanSlotMovement`,
+> `PlanEnrollment`) is the old name of the tables, renamed by DN-176. **Routine** is
+> the old name of a program written in the editor, removed by DN-177. Until both
+> land, read either as *program*, never as a separate concept, and write *program* in
+> every new name, prose, issue title and test name.
+
+**Run** — one enrollment in a program, from its start date to its end. A run is
+`active` (at most one per athlete), `completed` (it reached its last day, and earns
+the completion card), or `ended` (the athlete started another program part-way; no
+card, ADR 0009). Starting a program while a run is active ends that run and begins a
+new one. Days trained stay with the run they were trained on.
 
 **Movement pattern** — the coarse axis a WOD loads: `push`, `pull`, `squat`,
 `hinge`, `core`, `cardio`. Drives cooldown scheduling.
