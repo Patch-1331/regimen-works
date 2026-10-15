@@ -206,7 +206,7 @@ describe("the completion card", () => {
     );
   });
 
-  it("does not offer to run again a routine that has been archived", async () => {
+  it("does not offer to run again a program that has been archived", async () => {
     // The API refuses it (DN-144), so the button would only be a failing tap
     // (DN-153). The wizard and dismiss stay, so there is still a way forward.
     todayIs({
@@ -216,7 +216,7 @@ describe("the completion card", () => {
     renderRoute("/");
 
     expect(
-      await screen.findByText("This routine has been retired."),
+      await screen.findByText("This program has been retired."),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /run it again/i }),

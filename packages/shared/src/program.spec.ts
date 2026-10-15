@@ -1,19 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
-  createRoutineSchema,
-  defaultRoutineSummary,
-  type CreateRoutine,
-} from "./routine.js";
+  createProgramSchema,
+  defaultProgramSummary,
+  LEGACY_PROGRAM_EXPORT_FORMAT,
+  PROGRAM_EXPORT_FORMAT,
+  programExportEnvelopeSchema,
+  type CreateProgram,
+} from "./program.js";
 
 /**
  * The editor's rules, at the edge (DN-145, ADR 0005).
  *
- * The columns accept a half-written routine; this is what refuses one. A
+ * The columns accept a half-written program; this is what refuses one. A
  * regression here fails silently -- the row stores, the athlete gets a day
  * that means nothing -- so each rule has a test of its own.
  */
 
-type Line = CreateRoutine["days"][number]["lines"][number];
+type Line = CreateProgram["days"][number]["lines"][number];
 
 const line = (overrides: Partial<Line> & Record<string, unknown> = {}) => ({
   movementGroup: "pull",
@@ -26,7 +29,7 @@ const line = (overrides: Partial<Line> & Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const routine = (overrides: Record<string, unknown> = {}) => ({
+const program = (overrides: Record<string, unknown> = {}) => ({
   name: "Upper / Lower",
   summary: null,
   scheduleMode: "fixed",
@@ -38,16 +41,16 @@ const routine = (overrides: Record<string, unknown> = {}) => ({
 });
 
 const withLine = (overrides: Record<string, unknown>) =>
-  routine({ days: [{ dayOfWeek: 1, lines: [line(overrides)] }] });
+  program({ days: [{ dayOfWeek: 1, lines: [line(overrides)] }] });
 
 const messages = (body: unknown) => {
-  const result = createRoutineSchema.safeParse(body);
+  const result = createProgramSchema.safeParse(body);
   return result.success ? [] : result.error.issues.map((i) => i.message);
 };
 
-describe("createRoutineSchema", () => {
-  it("accepts a routine", () => {
-    expect(createRoutineSchema.safeParse(routine()).success).toBe(true);
+describe("createProgramSchema", () => {
+  it("accepts a program", () => {
+    expect(createProgramSchema.safeParse(program()).success).toBe(true);
   });
 
   describe("every row names a group or an exercise", () => {
@@ -109,27 +112,27 @@ describe("createRoutineSchema", () => {
 
     it("refuses any other unknown key rather than dropping it", () => {
       expect(messages(withLine({ tempo: "3010" }))).toHaveLength(1);
-      expect(messages(routine({ weeks: 8 }))).toHaveLength(1);
+      expect(messages(program({ weeks: 8 }))).toHaveLength(1);
     });
   });
 
   describe("the week", () => {
-    it("refuses a routine with no training days", () => {
-      expect(messages(routine({ days: [] }))).toEqual([
-        "a routine trains at least one day",
+    it("refuses a program with no training days", () => {
+      expect(messages(program({ days: [] }))).toEqual([
+        "a program trains at least one day",
       ]);
     });
 
     it("refuses a day with no lines, because rest is the absence of a day", () => {
       expect(
-        messages(routine({ days: [{ dayOfWeek: 1, lines: [] }] })),
+        messages(program({ days: [{ dayOfWeek: 1, lines: [] }] })),
       ).toEqual(["a training day needs at least one line"]);
     });
 
     it("refuses the same weekday twice", () => {
       expect(
         messages(
-          routine({
+          program({
             days: [
               { dayOfWeek: 1, lines: [line()] },
               { dayOfWeek: 1, lines: [line()] },
@@ -140,53 +143,108 @@ describe("createRoutineSchema", () => {
     });
 
     it("refuses a blank name", () => {
-      expect(messages(routine({ name: "   " }))).toEqual(["name the routine"]);
+      expect(messages(program({ name: "   " }))).toEqual(["name the program"]);
     });
 
     it("reads a blank summary as no summary", () => {
-      const parsed = createRoutineSchema.parse(routine({ summary: "  " }));
+      const parsed = createProgramSchema.parse(program({ summary: "  " }));
       expect(parsed.summary).toBeNull();
     });
   });
 
   describe("a day may be named (DN-155)", () => {
     const named = (label: unknown) =>
-      routine({ days: [{ dayOfWeek: 1, label, lines: [line()] }] });
+      program({ days: [{ dayOfWeek: 1, label, lines: [line()] }] });
 
     it("keeps a name, trimmed", () => {
-      const parsed = createRoutineSchema.parse(named("  Chest and Triceps "));
+      const parsed = createProgramSchema.parse(named("  Chest and Triceps "));
       expect(parsed.days[0].label).toBe("Chest and Triceps");
     });
 
     it("reads a blank name as no name", () => {
-      expect(createRoutineSchema.parse(named("   ")).days[0].label).toBeNull();
+      expect(createProgramSchema.parse(named("   ")).days[0].label).toBeNull();
     });
 
     it("still reads a day with no name at all, as older files have", () => {
-      const parsed = createRoutineSchema.parse(routine());
+      const parsed = createProgramSchema.parse(program());
       expect(parsed.days[0].label ?? null).toBeNull();
     });
 
     it("refuses a name over 40 characters", () => {
-      expect(createRoutineSchema.safeParse(named("x".repeat(41))).success).toBe(false);
-      expect(createRoutineSchema.safeParse(named("x".repeat(40))).success).toBe(true);
+      expect(createProgramSchema.safeParse(named("x".repeat(41))).success).toBe(false);
+      expect(createProgramSchema.safeParse(named("x".repeat(40))).success).toBe(true);
     });
   });
 });
 
-describe("defaultRoutineSummary", () => {
-  it("counts the days of a flexible routine", () => {
-    expect(defaultRoutineSummary("flexible", [1, 3, 5])).toBe(
-      "Your routine, 3 days a week",
+describe("defaultProgramSummary", () => {
+  it("counts the days of a flexible program", () => {
+    expect(defaultProgramSummary("flexible", [1, 3, 5])).toBe(
+      "Your program, 3 days a week",
     );
-    expect(defaultRoutineSummary("flexible", [6])).toBe(
-      "Your routine, 1 day a week",
+    expect(defaultProgramSummary("flexible", [6])).toBe(
+      "Your program, 1 day a week",
     );
   });
 
-  it("names the weekdays of a fixed routine, Monday first", () => {
-    expect(defaultRoutineSummary("fixed", [0, 5, 1])).toBe(
-      "Your routine, Mon · Fri · Sun",
+  it("names the weekdays of a fixed program, Monday first", () => {
+    expect(defaultProgramSummary("fixed", [0, 5, 1])).toBe(
+      "Your program, Mon · Fri · Sun",
     );
+  });
+});
+
+/**
+ * An export file says what it is (DN-150). DN-177 renamed what it says, and a
+ * file written before that is still a file somebody kept: both strings load,
+ * and both come out the same shape.
+ */
+describe("programExportEnvelopeSchema", () => {
+  it("reads a file written today", () => {
+    expect(
+      programExportEnvelopeSchema.parse({
+        format: "regimen-works/programs",
+        version: 1,
+        programs: [{ name: "Pull days" }],
+      }),
+    ).toEqual({
+      format: PROGRAM_EXPORT_FORMAT,
+      version: 1,
+      programs: [{ name: "Pull days" }],
+    });
+  });
+
+  it("reads a file written before DN-177 as the same file", () => {
+    expect(LEGACY_PROGRAM_EXPORT_FORMAT).toBe("regimen-works/routines");
+    expect(
+      programExportEnvelopeSchema.parse({
+        format: "regimen-works/routines",
+        version: 1,
+        routines: [{ name: "Pull days" }],
+      }),
+    ).toEqual({
+      format: PROGRAM_EXPORT_FORMAT,
+      version: 1,
+      programs: [{ name: "Pull days" }],
+    });
+  });
+
+  it("holds an old file to the same rules", () => {
+    const result = programExportEnvelopeSchema.safeParse({
+      format: "regimen-works/routines",
+      version: 2,
+      routines: [],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((i) => i.path[0])).toEqual([
+      "version",
+      "programs",
+    ]);
+  });
+
+  it("refuses what is not an export at all", () => {
+    for (const file of [null, "regimen-works/routines", [], { format: "something/else" }]) {
+      expect(programExportEnvelopeSchema.safeParse(file).success).toBe(false);
+    }
   });
 });

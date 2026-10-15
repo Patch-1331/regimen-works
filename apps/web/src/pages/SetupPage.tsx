@@ -63,15 +63,15 @@ function Wizard({ options }: { options: SetupOptions }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // Back from "Build your own" (DN-145): the editor hands over the routine it
+  // Back from "Build your own" (DN-145): the editor hands over the program it
   // just saved, and the wizard picks up at the picker with it chosen.
-  const handedBack = (useLocation().state as { planId?: string } | null)
-    ?.planId;
+  const handedBack = (useLocation().state as { programId?: string } | null)
+    ?.programId;
   const authored = options.programs.find((p) => p.id === handedBack);
   const first = authored ?? options.programs[0];
 
   const [step, setStep] = useState<Step>(authored ? "program" : "welcome");
-  const [planId, setPlanId] = useState(first.id);
+  const [programId, setProgramId] = useState(first.id);
   const [days, setDays] = useState<number[]>(() =>
     initialDays(first, options.trainingDays),
   );
@@ -84,7 +84,7 @@ function Wizard({ options }: { options: SetupOptions }) {
   const [restEdit, setRestEdit] = useState<string | null>(null);
 
   const program =
-    options.programs.find((p) => p.id === planId) ?? options.programs[0];
+    options.programs.find((p) => p.id === programId) ?? options.programs[0];
   const isFixed = program.scheduleMode === "fixed";
   const restDraft = restEdit ?? restPrefill(program, options.lastRestSeconds);
   const rest = parseRestDraft(restDraft);
@@ -93,7 +93,7 @@ function Wizard({ options }: { options: SetupOptions }) {
   const commit = useMutation({
     mutationFn: () =>
       api.commitSetup({
-        planId: program.id,
+        programId: program.id,
         // Null for a fixed program, whose days are not the athlete's to
         // choose — the API refuses days here rather than ignoring them.
         trainingDays: isFixed ? null : days,
@@ -127,8 +127,8 @@ function Wizard({ options }: { options: SetupOptions }) {
    * stepping back to look at the list does not undo the days just chosen.
    */
   function chooseProgram(next: SetupProgram) {
-    if (next.id !== planId) {
-      setPlanId(next.id);
+    if (next.id !== programId) {
+      setProgramId(next.id);
       setDays(initialDays(next, options.trainingDays));
       setWeeks(weeksChoice(next)?.start ?? null);
     }
@@ -144,7 +144,7 @@ function Wizard({ options }: { options: SetupOptions }) {
       {step === "program" && (
         <ProgramStep
           programs={options.programs}
-          chosenId={planId}
+          chosenId={programId}
           onChoose={chooseProgram}
           onBack={() => setStep("welcome")}
         />
@@ -369,10 +369,10 @@ function ProgramStep({
           </li>
         ))}
         <li>
-          {/* Opens the routine editor (DN-145), which comes back here with
+          {/* Opens the program editor (DN-145), which comes back here with
               what was written already chosen. */}
           <Link
-            to="/library/routines/new?from=setup"
+            to="/library/programs/new?from=setup"
             className="block w-full p-4"
             style={{
               background: "var(--panel)",
@@ -413,7 +413,7 @@ function programMeta(program: SetupProgram): string {
   return `${length} · ${cadence}`;
 }
 
-// An authored routine can train a single day (DN-145); the seeded ones never did.
+// An authored program can train a single day (DN-145); the seeded ones never did.
 const daysLabel = (n: number | null) => `${n} day${n === 1 ? "" : "s"}`;
 
 function CadenceStep({
@@ -805,7 +805,7 @@ function WhileItRuns({ program }: { program: SetupProgram }) {
  * DN-143).
  *
  * Here rather than on a step of its own: it is a fact about how the athlete
- * trains, not about the program, and for every built-in routine it is
+ * trains, not about the program, and for every built-in program it is
  * optional -- a whole screen for an optional question is a speed bump.
  */
 function RestPaceField({

@@ -184,7 +184,7 @@ describe("the three questions", () => {
 
     await waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0]).toEqual({
-      planId: "plan-pull-up-builder",
+      programId: "program-pull-up-builder",
       trainingDays: [1, 3, 5],
       weeks: 6,
       startDate: TODAY,

@@ -218,7 +218,7 @@ describe("a pick from the movements that need unlisted equipment", () => {
     expect(swaps).toEqual([
       {
         wodMovementId: "wod-movement-1",
-        planSlotMovementId: null,
+        programSlotMovementId: null,
         exerciseId: "box-step-up",
       },
     ]);
@@ -293,7 +293,7 @@ describe("the prescribed movement after an equipment fallback", () => {
     expect(swaps).toEqual([
       {
         wodMovementId: "wod-movement-1",
-        planSlotMovementId: null,
+        programSlotMovementId: null,
         exerciseId: "double-unders",
       },
     ]);

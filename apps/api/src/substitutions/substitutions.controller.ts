@@ -48,13 +48,13 @@ export class SubstitutionsController {
   ) {
     // The same validator as a body: a query string is an object of strings
     // too, and the either-or is the schema's to state.
-    const { wodMovementId, planSlotMovementId } = validateBody(
+    const { wodMovementId, programSlotMovementId } = validateBody(
       swapOptionsQuerySchema,
       query,
     );
     return this.substitutionsService.options(userId, assignmentId, {
       wodMovementId,
-      programSlotMovementId: planSlotMovementId,
+      programSlotMovementId: programSlotMovementId,
     });
   }
 
@@ -64,14 +64,14 @@ export class SubstitutionsController {
     @Param('assignmentId') assignmentId: string,
     @Body() body: unknown,
   ) {
-    const { wodMovementId, planSlotMovementId, exerciseId } = validateBody(
+    const { wodMovementId, programSlotMovementId, exerciseId } = validateBody(
       setSubstitutionRequestSchema,
       body,
     );
     return this.substitutionsService.set(
       userId,
       assignmentId,
-      { wodMovementId, programSlotMovementId: planSlotMovementId },
+      { wodMovementId, programSlotMovementId: programSlotMovementId },
       exerciseId,
     );
   }

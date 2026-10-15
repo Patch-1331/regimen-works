@@ -1,6 +1,6 @@
 # Regimen Works
 
-A program-based training app. Set up your own plan, pick one from the
+A program-based training app. Write your own program, pick one from the
 library, or just take the day's WOD — the app decides what each session is,
 runs a live tracker through it, logs what actually happened, and reflects
 progress back over time.

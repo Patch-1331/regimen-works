@@ -1,10 +1,10 @@
-import { matchPastedMovement, parsePastedRoutine } from '@regimen-works/shared';
+import { matchPastedMovement, parsePastedProgram } from '@regimen-works/shared';
 import { loadLibrary } from '../../prisma/library';
 
 /**
  * The paste box's matcher against the library that actually ships (DN-152).
  *
- * The worked example is DN-131's transcription of a real routine, and the
+ * The worked example is DN-131's transcription of a real program, and the
  * table is DN-152's acceptance, reviewed line by line on 2026-10-14. It sits
  * here rather than beside the matcher because the library is built here: a
  * curation change that renames or adds an exercise can change a line's
@@ -81,13 +81,13 @@ const EXPECTED: [string, string | null][] = [
 ];
 
 const { exercises } = loadLibrary();
-const routine = parsePastedRoutine(WORKED_EXAMPLE);
-const lines = routine.days.flatMap((d) => d.lines);
+const program = parsePastedProgram(WORKED_EXAMPLE);
+const lines = program.days.flatMap((d) => d.lines);
 
 describe('pasting the worked example against the shipped library', () => {
   it('reads five weekdays, Monday to Friday', () => {
-    expect(routine.scheduleMode).toBe('fixed');
-    expect(routine.days.map((d) => d.dayOfWeek)).toEqual([1, 2, 3, 4, 5]);
+    expect(program.scheduleMode).toBe('fixed');
+    expect(program.days.map((d) => d.dayOfWeek)).toEqual([1, 2, 3, 4, 5]);
     expect(lines.map((l) => l.name)).toEqual(EXPECTED.map(([name]) => name));
   });
 

@@ -7,12 +7,12 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { defaultRoutineSummary } from "@regimen-works/shared";
+import { defaultProgramSummary } from "@regimen-works/shared";
 import { ApiError, api, type ApiExercise, type LibraryTier } from "../lib/api";
 import { MovementPicker } from "../components/MovementPicker";
 import { WEEKDAYS } from "../lib/weekdays";
 import {
-  EMPTY_ROUTINE,
+  EMPTY_PROGRAM,
   blankLine,
   changesWeek,
   copyDay,
@@ -20,17 +20,17 @@ import {
   duplicateLine,
   formatRest,
   formatScheme,
-  fromRoutine,
+  fromProgram,
   lineMovementName,
   lineProblems,
-  toCreateRoutine,
+  toCreateProgram,
   trainingDays,
   type DraftLine,
-  type RoutineDraft,
-} from "../lib/routineDraft";
+  type ProgramDraft,
+} from "../lib/programDraft";
 
 /**
- * Writing a routine (DN-145): the week sheet DN-137 settled on.
+ * Writing a program (DN-145): the week sheet DN-137 settled on.
  *
  * All seven weekdays on one sheet. A day with nothing on it reads "Rest" and
  * is saved as no day at all. There is no length here -- the week repeats, and
@@ -38,24 +38,24 @@ import {
  *
  * Reached from the Library and from the setup wizard's "Build your own".
  * `?from=setup` is the second, and saving goes back to the picker with the
- * new routine chosen rather than to the list.
+ * new program chosen rather than to the list.
  *
- * With an `:id` it edits a saved routine instead (DN-146). Once anyone has
- * started that routine, a change to its week is saved as a new version and
+ * With an `:id` it edits a saved program instead (DN-146). Once anyone has
+ * started that program, a change to its week is saved as a new version and
  * the old one is archived -- and the sheet says so before the save, not after.
  *
- * `tier="global"` is the admin's route to a global routine (DN-148). A new
- * routine is the athlete's own unless an admin ticks "publish to everyone",
+ * `tier="global"` is the admin's route to a global program (DN-148). A new
+ * program is the athlete's own unless an admin ticks "publish to everyone",
  * which sends it to the admin route instead -- the tier is always which route
- * is called, never a field of the body. A global routine may only name
+ * is called, never a field of the body. A global program may only name
  * global movements, so the picker offers only those.
  *
- * `?copy=<id>` starts a new routine from a global one (DN-149): the sheet is
+ * `?copy=<id>` starts a new program from a global one (DN-149): the sheet is
  * filled from it and saved as the athlete's own through the ordinary create
  * route, with no link back. It is always the athlete's own -- an admin
- * publishes the copy afterwards, like any routine of theirs.
+ * publishes the copy afterwards, like any program of theirs.
  *
- * A routine pasted in (DN-152) arrives as router state, `{ pasted }`: the
+ * A program pasted in (DN-152) arrives as router state, `{ pasted }`: the
  * lines the paste box accepted, as an unsaved draft. The sheet holds them to
  * its own rules from there, as if they had been typed.
  */
@@ -63,23 +63,23 @@ import {
 const mono = { fontFamily: "var(--font-mono)" } as const;
 const display = { fontFamily: "var(--font-display)" } as const;
 
-export function RoutineEditorPage({ tier: routeTier = "own" }: { tier?: LibraryTier }) {
+export function ProgramEditorPage({ tier: routeTier = "own" }: { tier?: LibraryTier }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [params] = useSearchParams();
   const { id } = useParams();
   const fromSetup = params.get("from") === "setup";
-  const back = fromSetup ? "/setup" : "/library/routines";
+  const back = fromSetup ? "/setup" : "/library/programs";
   const copyId = id === undefined ? params.get("copy") : null;
 
   const saved = useQuery({
-    queryKey: ["routine", routeTier, id],
-    queryFn: () => api.routine(routeTier, id!),
+    queryKey: ["program", routeTier, id],
+    queryFn: () => api.program(routeTier, id!),
     enabled: id !== undefined,
   });
   const source = useQuery({
-    queryKey: ["copyableRoutine", copyId],
-    queryFn: () => api.copyableRoutine(copyId!),
+    queryKey: ["copyableProgram", copyId],
+    queryFn: () => api.copyableProgram(copyId!),
     enabled: copyId !== null,
   });
 
@@ -99,21 +99,21 @@ export function RoutineEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
   const library =
     tier === "global" ? everything.filter((e) => e.ownerId === null) : everything;
 
-  const pasted = (useLocation().state as { pasted?: RoutineDraft } | null)
+  const pasted = (useLocation().state as { pasted?: ProgramDraft } | null)
     ?.pasted;
-  const [draft, setDraft] = useState<RoutineDraft>(pasted ?? EMPTY_ROUTINE);
-  // Filled once from the saved routine, then the athlete's: a refetch must
+  const [draft, setDraft] = useState<ProgramDraft>(pasted ?? EMPTY_PROGRAM);
+  // Filled once from the saved program, then the athlete's: a refetch must
   // not overwrite what they have typed since.
   const [loadedId, setLoadedId] = useState<string | null>(null);
   if (saved.data && loadedId !== saved.data.id) {
-    setDraft(fromRoutine(saved.data.routine));
+    setDraft(fromProgram(saved.data.program));
     setLoadedId(saved.data.id);
   }
   // A copy shares the source's name until the athlete changes it; the
   // suggestion keeps the two apart in the picker, and lets an admin publish
   // the copy without clashing with the original.
   if (source.data && copyId !== null && loadedId !== copyId) {
-    setDraft({ ...fromRoutine(source.data), name: `${source.data.name} (copy)` });
+    setDraft({ ...fromProgram(source.data), name: `${source.data.name} (copy)` });
     setLoadedId(copyId);
   }
   const [open, setOpen] = useState<string | null>(null);
@@ -122,7 +122,7 @@ export function RoutineEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
 
   const days = trainingDays(draft);
   // A movement picked from the athlete's own library before "publish" was
-  // ticked: a global routine cannot name it, so it is one more thing to fix.
+  // ticked: a global program cannot name it, so it is one more thing to fix.
   const personal =
     tier === "global"
       ? [
@@ -147,31 +147,31 @@ export function RoutineEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
 
   const editing = saved.data;
   const willFork =
-    editing !== undefined && editing.hasRuns && changesWeek(draft, editing.routine);
+    editing !== undefined && editing.hasRuns && changesWeek(draft, editing.program);
 
   const save = useMutation({
     mutationFn: async () => {
-      const body = toCreateRoutine(draft);
-      if (!id) return api.createRoutine(tier, body);
-      return (await api.updateRoutine(tier, id, body)).routine;
+      const body = toCreateProgram(draft);
+      if (!id) return api.createProgram(tier, body);
+      return (await api.updateProgram(tier, id, body)).program;
     },
     onSuccess: async (created) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["routines"] }),
-        queryClient.invalidateQueries({ queryKey: ["globalRoutines"] }),
-        queryClient.invalidateQueries({ queryKey: ["routine"] }),
+        queryClient.invalidateQueries({ queryKey: ["programs"] }),
+        queryClient.invalidateQueries({ queryKey: ["globalPrograms"] }),
+        queryClient.invalidateQueries({ queryKey: ["program"] }),
         // Refetched now, not on the wizard's next mount: the wizard seeds its
         // answers from the first options it renders, and those have to
-        // include the routine it is being handed back.
+        // include the program it is being handed back.
         queryClient.invalidateQueries({
           queryKey: ["setup"],
           refetchType: "all",
         }),
       ]);
       if (fromSetup) {
-        navigate("/setup", { state: { planId: created.id } });
+        navigate("/setup", { state: { programId: created.id } });
       } else {
-        navigate("/library/routines");
+        navigate("/library/programs");
       }
     },
   });
@@ -186,10 +186,10 @@ export function RoutineEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
           className={`mt-4 text-sm ${source.error ? "text-[var(--danger)]" : "text-[var(--ink-faint)]"}`}
         >
           {source.error instanceof ApiError && source.error.status === 404
-            ? "That routine isn't in the library any more."
+            ? "That program isn't in the library any more."
             : source.error
-              ? "Couldn't load the routine."
-              : "Loading routine…"}
+              ? "Couldn't load the program."
+              : "Loading program…"}
         </p>
       </div>
     );
@@ -206,11 +206,11 @@ export function RoutineEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
         >
           {saved.error instanceof ApiError && saved.error.status === 404
             ? routeTier === "global"
-              ? "There's no global routine here."
-              : "There's no routine of yours here."
+              ? "There's no global program here."
+              : "There's no program of yours here."
             : saved.error
-              ? "Couldn't load the routine."
-              : "Loading routine…"}
+              ? "Couldn't load the program."
+              : "Loading program…"}
         </p>
       </div>
     );
@@ -233,8 +233,8 @@ export function RoutineEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
       <input
         value={draft.name}
         onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-        placeholder="Name this routine"
-        aria-label="Routine name"
+        placeholder="Name this program"
+        aria-label="Program name"
         className="mt-4 w-full border-b border-[var(--border)] bg-transparent pb-1 text-2xl font-bold text-[var(--ink)] outline-none"
         style={display}
       />
@@ -243,7 +243,7 @@ export function RoutineEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
         onChange={(e) => setDraft({ ...draft, summary: e.target.value })}
         placeholder={
           days.length > 0
-            ? defaultRoutineSummary(draft.scheduleMode, days)
+            ? defaultProgramSummary(draft.scheduleMode, days)
             : "One line about it (optional)"
         }
         aria-label="Summary"
@@ -279,7 +279,7 @@ export function RoutineEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
             Publish to the global library
             <span className="block text-[11px] text-[var(--ink-faint)]">
               Every athlete is offered it, and only library movements can go in
-              it. It won't be in your own routines.
+              it. It won't be in your own programs.
             </span>
           </span>
         </label>
@@ -464,19 +464,19 @@ export function RoutineEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
             <p className="mb-2 text-sm text-[var(--danger)]" role="alert">
               {save.error instanceof ApiError
                 ? save.error.message
-                : "Couldn't save the routine."}
+                : "Couldn't save the program."}
             </p>
           )}
           {editing?.archived && (
             <p className="mb-2 text-sm text-[var(--ink-soft)]">
-              This routine is archived. Restore it before changing it.
+              This program is archived. Restore it before changing it.
             </p>
           )}
           {editing?.hasRuns && !editing.archived && (
             <p className="mb-2 text-sm text-[var(--ink-soft)]" role="status">
               {willFork
-                ? "Someone has started this routine, so changing its week saves a new version. Runs already under way finish on this one."
-                : "Someone has started this routine. Renaming it or its days changes it for them too; changing its week will save a new version."}
+                ? "Someone has started this program, so changing its week saves a new version. Runs already under way finish on this one."
+                : "Someone has started this program. Renaming it or its days changes it for them too; changing its week will save a new version."}
             </p>
           )}
           {problems.length > 0 && (
@@ -497,7 +497,7 @@ export function RoutineEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
               ? "Saving…"
               : willFork
                 ? "Save as new version"
-                : "Save routine"}
+                : "Save program"}
           </button>
         </div>
       </footer>
@@ -520,7 +520,7 @@ function LineRow({
   line: DraftLine;
   /** Every movement the athlete can see, for naming what a line holds. */
   library: ApiExercise[];
-  /** What this routine's tier may name, for choosing a new one. */
+  /** What this program's tier may name, for choosing a new one. */
   pickable: ApiExercise[];
   open: boolean;
   picking: boolean;

@@ -38,13 +38,13 @@ import type {
   WorkoutLogListItem,
   WorkoutSession,
   WorkoutSetLog,
-  CreateRoutine,
-  EditableRoutine,
-  GlobalRoutineSummary,
-  RoutineArchiveResult,
-  RoutineSaveResult,
-  RoutineExport,
-  RoutineSummary,
+  CreateProgram,
+  EditableProgram,
+  GlobalProgramSummary,
+  ProgramArchiveResult,
+  ProgramSaveResult,
+  ProgramExport,
+  ProgramSummary,
 } from "@regimen-works/shared";
 
 // Defaults to the "/api" prefix that vite.config.ts proxies to the local API,
@@ -217,11 +217,11 @@ const exercisesBase = (tier: LibraryTier) =>
 const wodsBase = (tier: LibraryTier) =>
   tier === "global" ? "/admin/wods" : "/wods";
 
-const routinesBase = (tier: LibraryTier) =>
-  tier === "global" ? "/admin/routines" : "/routines";
+const programsBase = (tier: LibraryTier) =>
+  tier === "global" ? "/admin/programs" : "/programs";
 
-const routinePath = (tier: LibraryTier, id: string) =>
-  `${routinesBase(tier)}/${encodeURIComponent(id)}`;
+const programPath = (tier: LibraryTier, id: string) =>
+  `${programsBase(tier)}/${encodeURIComponent(id)}`;
 
 /**
  * A WOD as `GET /wods` returns it (DN-29).
@@ -351,7 +351,7 @@ export const api = {
   swapOptions: (assignmentId: string, key: SwapOptionsQuery) => {
     const query = key.wodMovementId
       ? `wodMovementId=${encodeURIComponent(key.wodMovementId)}`
-      : `planSlotMovementId=${encodeURIComponent(key.planSlotMovementId ?? "")}`;
+      : `programSlotMovementId=${encodeURIComponent(key.programSlotMovementId ?? "")}`;
     return request<SwapOptionsResponse>(
       `/assignments/${assignmentId}/substitutions/options?${query}`,
     );
@@ -370,10 +370,10 @@ export const api = {
    */
   clearPrescribedSubstitution: (
     assignmentId: string,
-    planSlotMovementId: string,
+    programSlotMovementId: string,
   ) =>
     request<void>(
-      `/assignments/${assignmentId}/substitutions/prescribed/${planSlotMovementId}`,
+      `/assignments/${assignmentId}/substitutions/prescribed/${programSlotMovementId}`,
       { method: "DELETE" },
     ),
 
@@ -417,54 +417,54 @@ export const api = {
   commitSetup: (body: CommitSetup) =>
     postJson<{ onboardedAt: string }>("/setup", body),
 
-  /** The routines this athlete wrote (DN-145), live first, archived marked. */
-  routines: () => request<RoutineSummary[]>("/routines"),
+  /** The programs this athlete wrote (DN-145), live first, archived marked. */
+  programs: () => request<ProgramSummary[]>("/programs"),
   /**
    * The global library as an admin manages it (DN-148): live and archived,
    * Just WODs first and marked built in. Refused to anyone else.
    */
-  globalRoutines: () => request<GlobalRoutineSummary[]>("/admin/routines"),
+  globalPrograms: () => request<GlobalProgramSummary[]>("/admin/programs"),
   /**
-   * The global routines any athlete may copy into their own (DN-149): live
+   * The global programs any athlete may copy into their own (DN-149): live
    * ones only, Just WODs aside.
    */
-  copyableRoutines: () => request<RoutineSummary[]>("/routines/library"),
+  copyablePrograms: () => request<ProgramSummary[]>("/programs/library"),
   /** One of those, as the editor prefills a copy from it. */
-  copyableRoutine: (id: string) =>
-    request<CreateRoutine>(`/routines/library/${encodeURIComponent(id)}`),
+  copyableProgram: (id: string) =>
+    request<CreateProgram>(`/programs/library/${encodeURIComponent(id)}`),
   /** The tier is the route's, never the body's: `global` is admin-only. */
-  createRoutine: (tier: LibraryTier, body: CreateRoutine) =>
-    postJson<RoutineSummary>(routinesBase(tier), body),
-  /** A routine as the editor loads it (DN-146). */
-  routine: (tier: LibraryTier, id: string) =>
-    request<EditableRoutine>(routinePath(tier, id)),
+  createProgram: (tier: LibraryTier, body: CreateProgram) =>
+    postJson<ProgramSummary>(programsBase(tier), body),
+  /** A program as the editor loads it (DN-146). */
+  program: (tier: LibraryTier, id: string) =>
+    request<EditableProgram>(programPath(tier, id)),
   /**
-   * Saves the whole routine. `forked` in the result means the edit became a
-   * new routine under a new id, because someone had already started this one.
+   * Saves the whole program. `forked` in the result means the edit became a
+   * new program under a new id, because someone had already started this one.
    */
-  updateRoutine: (tier: LibraryTier, id: string, body: CreateRoutine) =>
-    putJson<RoutineSaveResult>(routinePath(tier, id), body),
+  updateProgram: (tier: LibraryTier, id: string, body: CreateProgram) =>
+    putJson<ProgramSaveResult>(programPath(tier, id), body),
   /**
    * "Remove" (DN-147): archives, never deletes. `running` in the result means
    * the caller's own run is on it and carries on to its end.
    */
-  archiveRoutine: (tier: LibraryTier, id: string) =>
-    postJson<RoutineArchiveResult>(`${routinePath(tier, id)}/archive`),
-  /** Refused with the editor's "name taken" if a live routine holds the name. */
-  restoreRoutine: (tier: LibraryTier, id: string) =>
-    postJson<RoutineSummary>(`${routinePath(tier, id)}/unarchive`),
+  archiveProgram: (tier: LibraryTier, id: string) =>
+    postJson<ProgramArchiveResult>(`${programPath(tier, id)}/archive`),
+  /** Refused with the editor's "name taken" if a live program holds the name. */
+  restoreProgram: (tier: LibraryTier, id: string) =>
+    postJson<ProgramSummary>(`${programPath(tier, id)}/unarchive`),
   /**
-   * Publishes one of the admin's own routines to everyone (DN-148), in place
+   * Publishes one of the admin's own programs to everyone (DN-148), in place
    * and for good: there is no way back to personal.
    */
   /**
-   * The ticked global routines as one export file (DN-150). Admin-only; a
+   * The ticked global programs as one export file (DN-150). Admin-only; a
    * POST because the ticks are its body, though it changes nothing.
    */
-  exportRoutines: (ids: string[]) =>
-    postJson<RoutineExport>("/admin/routines/export", { ids }),
-  promoteRoutine: (id: string) =>
-    postJson<RoutineSummary>(`${routinePath("global", id)}/promote`),
+  exportPrograms: (ids: string[]) =>
+    postJson<ProgramExport>("/admin/programs/export", { ids }),
+  promoteProgram: (id: string) =>
+    postJson<ProgramSummary>(`${programPath("global", id)}/promote`),
 
   /**
    * Every program the athlete has finished (DN-18), most recent first.
@@ -478,7 +478,7 @@ export const api = {
   /** Puts the completion card away. Idempotent. */
   dismissCompletedProgram: (enrollmentId: string) =>
     postJson<{ dismissed: true }>(`/programs/${enrollmentId}/dismiss`),
-  /** Starts the same program over: same plan, same length, from today. */
+  /** Starts the same program over: same program, same length, from today. */
   runProgramAgain: (enrollmentId: string) =>
     postJson<{ enrollmentId: string }>(`/programs/${enrollmentId}/run-again`),
 

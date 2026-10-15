@@ -5,7 +5,7 @@ import {
   groupMates,
   searchExercises,
   type DraftLine,
-} from "../lib/routineDraft";
+} from "../lib/programDraft";
 
 const mono = { fontFamily: "var(--font-mono)" } as const;
 

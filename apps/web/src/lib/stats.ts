@@ -72,7 +72,7 @@ export type Streaks = { current: number; longest: number };
 /**
  * Consecutive-calendar-day streaks over logged workout dates. Rest days aren't
  * logged, so a gap of more than one day breaks the streak by design — this
- * measures "days in a row you actually trained," not weekly-plan adherence.
+ * measures "days in a row you actually trained," not weekly-program adherence.
  */
 export function computeStreaks(dates: string[], today: string): Streaks {
   const uniqueSorted = Array.from(new Set(dates)).sort();

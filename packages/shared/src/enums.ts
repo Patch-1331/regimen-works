@@ -237,14 +237,14 @@ export type ResultType = z.infer<typeof resultType>;
 /**
  * Where an authored week sits in a program's arc (DN-9).
  *
- * The three are not decoration: `expandPlanWeeks` (DN-11) plays intro once,
+ * The three are not decoration: `expandProgramWeeks` (DN-11) plays intro once,
  * cycles `core` in order to reach the length the athlete chose, then plays
  * peak. A week carrying anything else is a week that function will not play,
- * which is why this is an enum rather than a free label. `PlanWeek.label` is
+ * which is why this is an enum rather than a free label. `ProgramWeek.label` is
  * where "Deload" and the like belong.
  */
-export const planPhase = z.enum(["intro", "core", "peak"]);
-export type PlanPhase = z.infer<typeof planPhase>;
+export const programPhase = z.enum(["intro", "core", "peak"]);
+export type ProgramPhase = z.infer<typeof programPhase>;
 
 /**
  * What a program makes of one day.
@@ -257,24 +257,24 @@ export type PlanPhase = z.infer<typeof planPhase>;
  * carries constraints the existing picker resolves against the library.
  *
  * `movements` is prescribed sets and reps, and is the shape that does not
- * exist yet: `PlanSlot` carries no prescription columns, and the session and
+ * exist yet: `ProgramSlot` carries no prescription columns, and the session and
  * log models have nowhere to put a straight-sets result (docs/design/programs.md
  * §3). It is a member here because the vocabulary is decided even though the
  * machinery is not — a slot of this kind cannot be authored until DN-19.
  */
-export const planSlotKind = z.enum([
+export const programSlotKind = z.enum([
   "rest",
   "wod_pinned",
   "wod_generated",
   "movements",
 ]);
-export type PlanSlotKind = z.infer<typeof planSlotKind>;
+export type ProgramSlotKind = z.infer<typeof programSlotKind>;
 
 /**
  * Whether the cadence screen is an input or a readout.
  *
  * `flexible` lets the athlete tap which weekdays they train, bounded by the
- * plan's day counts. `fixed` means the slot layout *is* the schedule, which
+ * program's day counts. `fixed` means the slot layout *is* the schedule, which
  * is what lets a program insist on spacing rather than mere frequency: 48
  * hours between heavy pull days is Mon/Tue/Thu/Fri, which "4 days a week"
  * cannot say.

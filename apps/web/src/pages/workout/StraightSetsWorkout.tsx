@@ -323,7 +323,7 @@ function SessionList({
 
           return (
             <div
-              key={m.planSlotMovementId ?? m.order}
+              key={m.programSlotMovementId ?? m.order}
               // Colour alone would say which row is live to everybody except
               // the readers who need telling.
               aria-current={isActive ? "step" : undefined}

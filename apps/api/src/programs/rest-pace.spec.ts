@@ -68,7 +68,7 @@ describe('restPaceOf', () => {
     expect(restPaceOf(program([[90, 0]], { defaultRestSeconds: 120 }))).toEqual(
       {
         enrollmentId: 'enr_1',
-        planName: 'Strength Base',
+        programName: 'Strength Base',
         defaultRestSeconds: 120,
         required: false,
       },

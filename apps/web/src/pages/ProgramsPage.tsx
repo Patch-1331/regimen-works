@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import type { GlobalRoutineSummary, RoutineSummary } from "@regimen-works/shared";
+import type { GlobalProgramSummary, ProgramSummary } from "@regimen-works/shared";
 import { ApiError, api, type LibraryTier } from "../lib/api";
 import { LibraryNav } from "../components/LibraryNav";
 import { SectionLabel } from "../components/Panel";
@@ -9,38 +9,38 @@ import { WEEKDAYS } from "../lib/weekdays";
 import { saveJson } from "../lib/download";
 
 /**
- * "My routines" (DN-145): what this athlete has written, live first and
+ * "Your programs" (DN-145): what this athlete has written, live first and
  * archived after. The curated programs are not listed -- they are not yours
  * -- and the setup picker is where every program you can run is offered.
  *
  * "Remove" archives and "Restore" brings back (DN-147). Nothing is deleted:
- * a removed routine keeps every run on it, including one under way.
+ * a removed program keeps every run on it, including one under way.
  *
  * An admin also sees the global library below their own, with the same
- * actions, and can publish one of their own routines into it (DN-148).
+ * actions, and can publish one of their own programs into it (DN-148).
  * `isAdmin` decides only what is rendered; every admin route refuses
  * anyone else on its own.
  *
- * Everyone else sees the live global routines as "From the library", each
- * with "Copy" -- a new routine of their own, filled from it (DN-149). An
+ * Everyone else sees the live global programs as "From the library", each
+ * with "Copy" -- a new program of their own, filled from it (DN-149). An
  * admin copies from their global list instead of a second one.
  */
-export function RoutinesPage() {
+export function ProgramsPage() {
   const queryClient = useQueryClient();
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: api.me });
   const isAdmin = me?.isAdmin === true;
-  const { data: routines, isLoading, error } = useQuery({
-    queryKey: ["routines"],
-    queryFn: api.routines,
+  const { data: programs, isLoading, error } = useQuery({
+    queryKey: ["programs"],
+    queryFn: api.programs,
   });
   const { data: global, error: globalError } = useQuery({
-    queryKey: ["globalRoutines"],
-    queryFn: api.globalRoutines,
+    queryKey: ["globalPrograms"],
+    queryFn: api.globalPrograms,
     enabled: isAdmin,
   });
   const { data: copyable, error: copyableError } = useQuery({
-    queryKey: ["copyableRoutines"],
-    queryFn: api.copyableRoutines,
+    queryKey: ["copyablePrograms"],
+    queryFn: api.copyablePrograms,
     enabled: me !== undefined && !isAdmin,
   });
   // What the last action did, said once beneath the button.
@@ -55,35 +55,35 @@ export function RoutinesPage() {
   };
   const settled = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["routines"] }),
-      queryClient.invalidateQueries({ queryKey: ["globalRoutines"] }),
-      queryClient.invalidateQueries({ queryKey: ["routine"] }),
+      queryClient.invalidateQueries({ queryKey: ["programs"] }),
+      queryClient.invalidateQueries({ queryKey: ["globalPrograms"] }),
+      queryClient.invalidateQueries({ queryKey: ["program"] }),
       queryClient.invalidateQueries({ queryKey: ["setup"] }),
     ]);
   };
   const nameOf = (id: string) =>
-    [...(routines ?? []), ...(global ?? [])].find((r) => r.id === id)?.name;
+    [...(programs ?? []), ...(global ?? [])].find((r) => r.id === id)?.name;
 
   const remove = useMutation({
     mutationFn: ({ tier, id }: { tier: LibraryTier; id: string }) =>
-      api.archiveRoutine(tier, id),
+      api.archiveProgram(tier, id),
     onMutate: starting,
-    onSuccess: async ({ routine, running }) => {
+    onSuccess: async ({ program, running }) => {
       setNotice(
         running
-          ? `Removed ${routine.name}. Your run of it carries on to its end; it just won't be offered again.`
-          : `Removed ${routine.name}. Restore it below if you want it back.`,
+          ? `Removed ${program.name}. Your run of it carries on to its end; it just won't be offered again.`
+          : `Removed ${program.name}. Restore it below if you want it back.`,
       );
       await settled();
     },
-    onError: (e) => setFailure(messageOf(e, "Couldn't remove the routine.")),
+    onError: (e) => setFailure(messageOf(e, "Couldn't remove the program.")),
   });
   const restore = useMutation({
     mutationFn: ({ tier, id }: { tier: LibraryTier; id: string }) =>
-      api.restoreRoutine(tier, id),
+      api.restoreProgram(tier, id),
     onMutate: starting,
-    onSuccess: async (routine) => {
-      setNotice(`Restored ${routine.name}.`);
+    onSuccess: async (program) => {
+      setNotice(`Restored ${program.name}.`);
       await settled();
     },
     onError: (e, { tier, id }) => {
@@ -91,29 +91,29 @@ export function RoutinesPage() {
       setFailure(
         e instanceof ApiError && e.status === 409 && name
           ? tier === "global"
-            ? `Another global routine is called ${name} now. Rename that one first, then restore this.`
-            : `Another of your routines is called ${name} now. Rename that one first, then restore this.`
-          : messageOf(e, "Couldn't restore the routine."),
+            ? `Another global program is called ${name} now. Rename that one first, then restore this.`
+            : `Another of your programs is called ${name} now. Rename that one first, then restore this.`
+          : messageOf(e, "Couldn't restore the program."),
       );
     },
   });
   const promote = useMutation({
-    mutationFn: api.promoteRoutine,
+    mutationFn: api.promoteProgram,
     onMutate: starting,
-    onSuccess: async (routine) => {
+    onSuccess: async (program) => {
       setConfirming(null);
-      setNotice(`Published ${routine.name}. Every athlete is offered it now.`);
+      setNotice(`Published ${program.name}. Every athlete is offered it now.`);
       await settled();
     },
     onError: (e) => {
       setConfirming(null);
-      setFailure(messageOf(e, "Couldn't publish the routine."));
+      setFailure(messageOf(e, "Couldn't publish the program."));
     },
   });
   const busy = remove.isPending || restore.isPending || promote.isPending;
 
-  const live = routines?.filter((r) => !r.archived) ?? [];
-  const archived = routines?.filter((r) => r.archived) ?? [];
+  const live = programs?.filter((r) => !r.archived) ?? [];
+  const archived = programs?.filter((r) => r.archived) ?? [];
 
   return (
     <div className="p-6">
@@ -126,7 +126,7 @@ export function RoutinesPage() {
       <LibraryNav />
 
       <Link
-        to="/library/routines/new"
+        to="/library/programs/new"
         className="mt-5 block w-full py-3 text-center text-sm font-semibold uppercase tracking-[0.1em]"
         style={{
           fontFamily: "var(--font-mono)",
@@ -134,10 +134,10 @@ export function RoutinesPage() {
           color: "var(--glow)",
         }}
       >
-        + New routine
+        + New program
       </Link>
       <Link
-        to="/library/routines/paste"
+        to="/library/programs/paste"
         className="mt-2 block text-center text-xs text-[var(--ink-soft)] underline"
       >
         Or paste one in from elsewhere
@@ -145,7 +145,7 @@ export function RoutinesPage() {
 
       {error && (
         <p className="mt-4 text-sm text-[var(--danger)]">
-          Couldn't load your routines.
+          Couldn't load your programs.
         </p>
       )}
       {notice && (
@@ -158,25 +158,25 @@ export function RoutinesPage() {
           {failure}
         </p>
       )}
-      {!isLoading && routines?.length === 0 && (
+      {!isLoading && programs?.length === 0 && (
         <p className="mt-6 text-sm text-[var(--ink-soft)]">
-          Nothing yet. A routine is one week of training that repeats — write
+          Nothing yet. A program is one week of training that repeats — write
           the days you train and what you do on them.
         </p>
       )}
       {live.length > 0 && (
-        <RoutineList>
-          {live.map((routine) => (
-            <RoutineRow key={routine.id} routine={routine}>
-              {confirming === routine.id ? (
+        <ProgramList>
+          {live.map((program) => (
+            <ProgramRow key={program.id} program={program}>
+              {confirming === program.id ? (
                 <>
                   <span className="normal-case tracking-normal text-[var(--ink-soft)]">
                     Publish for every athlete? There's no taking it back.
                   </span>
                   <Action
-                    label={`Confirm publishing ${routine.name}`}
+                    label={`Confirm publishing ${program.name}`}
                     disabled={busy}
-                    onClick={() => promote.mutate(routine.id)}
+                    onClick={() => promote.mutate(program.id)}
                   >
                     Publish
                   </Action>
@@ -191,53 +191,53 @@ export function RoutinesPage() {
               ) : (
                 <>
                   <Link
-                    to={`/library/routines/${routine.id}/edit`}
-                    aria-label={`Edit ${routine.name}`}
+                    to={`/library/programs/${program.id}/edit`}
+                    aria-label={`Edit ${program.name}`}
                   >
                     Edit
                   </Link>
                   {isAdmin && (
                     <Action
-                      label={`Publish ${routine.name}`}
+                      label={`Publish ${program.name}`}
                       disabled={busy}
                       onClick={() => {
                         starting();
-                        setConfirming(routine.id);
+                        setConfirming(program.id);
                       }}
                     >
                       Publish
                     </Action>
                   )}
                   <Action
-                    label={`Remove ${routine.name}`}
+                    label={`Remove ${program.name}`}
                     disabled={busy}
-                    onClick={() => remove.mutate({ tier: "own", id: routine.id })}
+                    onClick={() => remove.mutate({ tier: "own", id: program.id })}
                   >
                     Remove
                   </Action>
                 </>
               )}
-            </RoutineRow>
+            </ProgramRow>
           ))}
-        </RoutineList>
+        </ProgramList>
       )}
 
       {archived.length > 0 && (
         <>
           <SectionLabel>ARCHIVED</SectionLabel>
-          <RoutineList>
-            {archived.map((routine) => (
-              <RoutineRow key={routine.id} routine={routine}>
+          <ProgramList>
+            {archived.map((program) => (
+              <ProgramRow key={program.id} program={program}>
                 <Action
-                  label={`Restore ${routine.name}`}
+                  label={`Restore ${program.name}`}
                   disabled={busy}
-                  onClick={() => restore.mutate({ tier: "own", id: routine.id })}
+                  onClick={() => restore.mutate({ tier: "own", id: program.id })}
                 >
                   Restore
                 </Action>
-              </RoutineRow>
+              </ProgramRow>
             ))}
-          </RoutineList>
+          </ProgramList>
         </>
       )}
 
@@ -254,20 +254,20 @@ export function RoutinesPage() {
             </p>
           )}
           {copyable && (
-            <RoutineList>
-              {copyable.map((routine) => (
-                <RoutineRow key={routine.id} routine={routine}>
-                  <CopyLink routine={routine} />
-                </RoutineRow>
+            <ProgramList>
+              {copyable.map((program) => (
+                <ProgramRow key={program.id} program={program}>
+                  <CopyLink program={program} />
+                </ProgramRow>
               ))}
-            </RoutineList>
+            </ProgramList>
           )}
         </section>
       )}
 
       {isAdmin && (
         <GlobalLibrary
-          routines={global}
+          programs={global}
           failed={globalError !== null}
           busy={busy}
           onRemove={(id) => remove.mutate({ tier: "global", id })}
@@ -279,35 +279,35 @@ export function RoutinesPage() {
 }
 
 /**
- * The admin's half (DN-148): every global routine, live then archived. Just
+ * The admin's half (DN-148): every global program, live then archived. Just
  * WODs is listed so the library reads whole, marked built in and offered
  * nothing -- every route refuses it anyway.
  *
- * Ticking routines and exporting them saves one file (DN-150), which
- * `npm run routines:import` in the API loads back into an empty library.
+ * Ticking programs and exporting them saves one file (DN-150), which
+ * `npm run programs:import` in the API loads back into an empty library.
  */
 function GlobalLibrary({
-  routines,
+  programs,
   failed,
   busy,
   onRemove,
   onRestore,
 }: {
-  routines: GlobalRoutineSummary[] | undefined;
+  programs: GlobalProgramSummary[] | undefined;
   failed: boolean;
   busy: boolean;
   onRemove: (id: string) => void;
   onRestore: (id: string) => void;
 }) {
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
-  const exportable = routines?.filter((r) => !r.builtIn) ?? [];
-  // A routine that has left the list since it was ticked is not exported.
+  const exportable = programs?.filter((r) => !r.builtIn) ?? [];
+  // A program that has left the list since it was ticked is not exported.
   const chosen = exportable.filter((r) => ticked.has(r.id)).map((r) => r.id);
   const exporting = useMutation({
-    mutationFn: () => api.exportRoutines(chosen),
+    mutationFn: () => api.exportPrograms(chosen),
     onSuccess: (file) => {
       saveJson(
-        `regimen-works-routines-${new Date().toISOString().slice(0, 10)}.json`,
+        `regimen-works-programs-${new Date().toISOString().slice(0, 10)}.json`,
         file,
       );
       setTicked(new Set());
@@ -343,69 +343,69 @@ function GlobalLibrary({
             style={{ fontFamily: "var(--font-mono)" }}
           >
             {chosen.length === 0
-              ? "Tick routines to export"
-              : `Export ${chosen.length} routine${chosen.length === 1 ? "" : "s"}`}
+              ? "Tick programs to export"
+              : `Export ${chosen.length} program${chosen.length === 1 ? "" : "s"}`}
           </button>
           {exporting.error && (
             <span className="text-sm text-[var(--danger)]" role="alert">
-              {messageOf(exporting.error, "Couldn't export the routines.")}
+              {messageOf(exporting.error, "Couldn't export the programs.")}
             </span>
           )}
         </div>
       )}
-      {routines && (
-        <RoutineList>
-          {routines.map((routine) => (
-            <RoutineRow key={routine.id} routine={routine}>
-              {!routine.builtIn && (
+      {programs && (
+        <ProgramList>
+          {programs.map((program) => (
+            <ProgramRow key={program.id} program={program}>
+              {!program.builtIn && (
                 <input
                   type="checkbox"
-                  aria-label={`Include ${routine.name} in the export`}
-                  checked={ticked.has(routine.id)}
-                  onChange={(e) => tick(routine.id, e.target.checked)}
+                  aria-label={`Include ${program.name} in the export`}
+                  checked={ticked.has(program.id)}
+                  onChange={(e) => tick(program.id, e.target.checked)}
                 />
               )}
-              {routine.builtIn ? (
+              {program.builtIn ? (
                 <span>Built in</span>
-              ) : routine.archived ? (
+              ) : program.archived ? (
                 <Action
-                  label={`Restore ${routine.name}`}
+                  label={`Restore ${program.name}`}
                   disabled={busy}
-                  onClick={() => onRestore(routine.id)}
+                  onClick={() => onRestore(program.id)}
                 >
                   Restore
                 </Action>
               ) : (
                 <>
-                  <CopyLink routine={routine} />
+                  <CopyLink program={program} />
                   <Link
-                    to={`/library/routines/global/${routine.id}/edit`}
-                    aria-label={`Edit ${routine.name}`}
+                    to={`/library/programs/global/${program.id}/edit`}
+                    aria-label={`Edit ${program.name}`}
                   >
                     Edit
                   </Link>
                   <Action
-                    label={`Remove ${routine.name}`}
+                    label={`Remove ${program.name}`}
                     disabled={busy}
-                    onClick={() => onRemove(routine.id)}
+                    onClick={() => onRemove(program.id)}
                   >
                     Remove
                   </Action>
                 </>
               )}
-            </RoutineRow>
+            </ProgramRow>
           ))}
-        </RoutineList>
+        </ProgramList>
       )}
     </section>
   );
 }
 
-function CopyLink({ routine }: { routine: RoutineSummary }) {
+function CopyLink({ program }: { program: ProgramSummary }) {
   return (
     <Link
-      to={`/library/routines/new?copy=${encodeURIComponent(routine.id)}`}
-      aria-label={`Copy ${routine.name} to my routines`}
+      to={`/library/programs/new?copy=${encodeURIComponent(program.id)}`}
+      aria-label={`Copy ${program.name} to your programs`}
     >
       Copy
     </Link>
@@ -440,7 +440,7 @@ function Action({
   );
 }
 
-function RoutineList({ children }: { children: ReactNode }) {
+function ProgramList({ children }: { children: ReactNode }) {
   return (
     <ul
       className="mt-3"
@@ -451,17 +451,17 @@ function RoutineList({ children }: { children: ReactNode }) {
   );
 }
 
-function RoutineRow({
-  routine,
+function ProgramRow({
+  program,
   children,
 }: {
-  routine: RoutineSummary;
+  program: ProgramSummary;
   children: ReactNode;
 }) {
   const days =
-    routine.scheduleMode === "flexible"
-      ? `Any ${routine.days.length} day${routine.days.length === 1 ? "" : "s"} a week`
-      : WEEKDAYS.filter((d) => routine.days.includes(d.value))
+    program.scheduleMode === "flexible"
+      ? `Any ${program.days.length} day${program.days.length === 1 ? "" : "s"} a week`
+      : WEEKDAYS.filter((d) => program.days.includes(d.value))
           .map((d) => d.short)
           .join(" · ");
   return (
@@ -469,17 +469,17 @@ function RoutineRow({
       className="px-4 py-3"
       style={{
         borderTop: "1px solid var(--border)",
-        opacity: routine.archived ? 0.7 : 1,
+        opacity: program.archived ? 0.7 : 1,
       }}
     >
       <span
         className="block font-semibold uppercase"
         style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}
       >
-        {routine.name}
+        {program.name}
       </span>
       <span className="mt-1 block text-sm text-[var(--ink-soft)]">
-        {routine.summary}
+        {program.summary}
       </span>
       <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <span

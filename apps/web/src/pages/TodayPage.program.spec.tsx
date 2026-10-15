@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  DEFAULT_PLAN_ID,
-  type TodayPlan,
+  DEFAULT_PROGRAM_ID,
+  type TodayProgram,
   type TodayResponse,
 } from "@regimen-works/shared";
 import { screen } from "@testing-library/react";
@@ -37,7 +37,7 @@ function todayIs(overrides: Partial<TodayResponse>) {
 
 describe("the program strip", () => {
   it("names the program, the week and the day", async () => {
-    todayIs({ plan: fixtures.todayPlan() });
+    todayIs({ program: fixtures.todayProgram() });
 
     renderRoute("/");
 
@@ -50,7 +50,7 @@ describe("the program strip", () => {
     // 2026-09-20 is a Sunday: day 7 of the program week, not day 0. The
     // weekday numbering the API works in is Sunday-first, and a Wednesday
     // cannot tell the two apart -- this is the day that can.
-    todayIs({ date: "2026-09-20", plan: fixtures.todayPlan() });
+    todayIs({ date: "2026-09-20", program: fixtures.todayProgram() });
 
     renderRoute("/");
 
@@ -58,7 +58,7 @@ describe("the program strip", () => {
   });
 
   it("drops the total on an open-ended program, which has no second half", async () => {
-    todayIs({ plan: fixtures.todayPlan({ totalWeeks: null }) });
+    todayIs({ program: fixtures.todayProgram({ totalWeeks: null }) });
 
     renderRoute("/");
 
@@ -66,16 +66,16 @@ describe("the program strip", () => {
   });
 
   it("adds the authored week's label, which is the part worth knowing early", async () => {
-    todayIs({ plan: fixtures.todayPlan({ weekLabel: "Deload" }) });
+    todayIs({ program: fixtures.todayProgram({ weekLabel: "Deload" }) });
 
     renderRoute("/");
 
     expect(await screen.findByText(/· DELOAD/)).toBeInTheDocument();
   });
 
-  it("adds the day's own name, when the routine gave it one (DN-155)", async () => {
+  it("adds the day's own name, when the program gave it one (DN-155)", async () => {
     todayIs({
-      plan: fixtures.todayPlan({ weekLabel: "Deload", dayLabel: "Chest and Triceps" }),
+      program: fixtures.todayProgram({ weekLabel: "Deload", dayLabel: "Chest and Triceps" }),
     });
 
     renderRoute("/");
@@ -90,7 +90,7 @@ describe("the program strip", () => {
     // programming, so a strip naming it would be describing a choice the
     // athlete never made.
     todayIs({
-      plan: fixtures.todayPlan({ planId: DEFAULT_PLAN_ID, name: "Just WODs" }),
+      program: fixtures.todayProgram({ programId: DEFAULT_PROGRAM_ID, name: "Just WODs" }),
     });
 
     renderRoute("/");
@@ -103,7 +103,7 @@ describe("the program strip", () => {
   });
 
   it("says nothing for an athlete on no program at all", async () => {
-    todayIs({ plan: null });
+    todayIs({ program: null });
 
     renderRoute("/");
 
@@ -115,18 +115,18 @@ describe("the program strip", () => {
 });
 
 describe("the rest-day copy", () => {
-  function restingWith(plan: TodayPlan | null) {
+  function restingWith(program: TodayProgram | null) {
     todayIs({
       isRestDay: true,
       assignment: null,
       warmup: null,
       cooldown: null,
-      plan,
+      program,
     });
   }
 
   it("says the program planned it, when the program planned it", async () => {
-    restingWith(fixtures.todayPlan({ slotKind: "rest" }));
+    restingWith(fixtures.todayProgram({ slotKind: "rest" }));
 
     renderRoute("/");
 
@@ -141,7 +141,7 @@ describe("the rest-day copy", () => {
     // A flexible program defers to the athlete's training days, and reports a
     // null slot kind on a day they did not pick. The program is still shown
     // above the plate; it just is not credited with the rest.
-    restingWith(fixtures.todayPlan({ slotKind: null }));
+    restingWith(fixtures.todayProgram({ slotKind: null }));
 
     renderRoute("/");
 

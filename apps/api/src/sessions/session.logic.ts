@@ -41,7 +41,7 @@ export function snapshotMovements(
     .sort((a, b) => a.order - b.order)
     .map((m) => ({
       wodMovementId: m.id,
-      planSlotMovementId: null,
+      programSlotMovementId: null,
       // A WOD movement has rounds, not sets. Null rather than zero, which
       // would read as a movement nobody was asked to do.
       sets: null,
@@ -167,7 +167,7 @@ export function snapshotPrescribedMovements(
     .sort((a, b) => a.order - b.order)
     .map((m) => ({
       wodMovementId: null,
-      planSlotMovementId: m.id,
+      programSlotMovementId: m.id,
       sets: m.sets,
       restSeconds: m.restSeconds,
       order: m.order,

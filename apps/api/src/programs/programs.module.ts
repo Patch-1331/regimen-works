@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { AdminRoutinesController } from './admin-routines.controller';
-import { RoutinesController } from './routines.controller';
-import { RoutinesService } from './routines.service';
+import { AdminProgramsController } from './admin-programs.controller';
+import { ProgramsController } from './programs.controller';
+import { ProgramsService } from './programs.service';
 
 @Module({
-  controllers: [RoutinesController, AdminRoutinesController],
-  providers: [RoutinesService],
+  controllers: [ProgramsController, AdminProgramsController],
+  providers: [ProgramsService],
 })
 export class ProgramsModule {}

@@ -27,7 +27,7 @@ const ID = fixtures.ASSIGNMENT_ID;
 /** Chin-up 5×3 rest 90, then push-up 3×8 rest 60 — eight sets in all. */
 const CHIN_UP = fixtures.sessionMovement();
 const PUSH_UP = fixtures.sessionMovement({
-  planSlotMovementId: "plan-slot-movement-2",
+  programSlotMovementId: "program-slot-movement-2",
   order: 1,
   sets: 3,
   reps: 8,
@@ -45,7 +45,7 @@ const PUSH_UP = fixtures.sessionMovement({
 const PRESCRIBED = [
   fixtures.prescribedMovement(),
   fixtures.prescribedMovement({
-    id: "plan-slot-movement-2",
+    id: "program-slot-movement-2",
     order: 1,
     sets: 3,
     reps: 8,

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { CreateRoutine, RoutineSummary } from "@regimen-works/shared";
+import type { CreateProgram, ProgramSummary } from "@regimen-works/shared";
 import { renderRoute } from "../test/renderRoute";
 import { server, http, HttpResponse } from "../test/server";
 import * as fixtures from "../test/fixtures";
@@ -12,9 +12,9 @@ vi.mock("@clerk/clerk-react", async () => {
 });
 
 /**
- * Pasting a routine in (DN-152): the read-back, answering its refusals, and
+ * Pasting a program in (DN-152): the read-back, answering its refusals, and
  * the hand-off to the week sheet -- which is where it is saved, like any
- * routine typed there.
+ * program typed there.
  */
 
 const SQUAT = fixtures.apiExercise({
@@ -36,17 +36,17 @@ const CROSSOVER = fixtures.apiExercise({
   movementGroup: null,
 });
 
-const SAVED: RoutineSummary = {
-  id: "routine-1",
+const SAVED: ProgramSummary = {
+  id: "program-1",
   name: "Pasted",
-  summary: "Your routine, Mon and Wed",
+  summary: "Your program, Mon and Wed",
   scheduleMode: "fixed",
   days: [1, 3],
   archived: false,
 };
 
 function api() {
-  const sent: CreateRoutine[] = [];
+  const sent: CreateProgram[] = [];
   server.use(
     http.get("/api/me", () =>
       HttpResponse.json({
@@ -56,10 +56,10 @@ function api() {
       }),
     ),
     http.get("/api/exercises", () => HttpResponse.json([SQUAT, FLOOR, CROSSOVER])),
-    http.get("/api/routines/library", () => HttpResponse.json([])),
-    http.get("/api/routines", () => HttpResponse.json([])),
-    http.post("/api/routines", async ({ request }) => {
-      sent.push((await request.json()) as CreateRoutine);
+    http.get("/api/programs/library", () => HttpResponse.json([])),
+    http.get("/api/programs", () => HttpResponse.json([])),
+    http.post("/api/programs", async ({ request }) => {
+      sent.push((await request.json()) as CreateProgram);
       return HttpResponse.json(SAVED, { status: 201 });
     }),
   );
@@ -74,25 +74,25 @@ Floor Press 2x10-15 & 2x5-8
 Dips 3x8`;
 
 async function pasteAndRead() {
-  const box = await screen.findByLabelText("Pasted routine");
+  const box = await screen.findByLabelText("Pasted program");
   await userEvent.click(box);
   await userEvent.paste(PASTED);
   await userEvent.click(screen.getByRole("button", { name: "Read it" }));
 }
 
-describe("pasting a routine", () => {
-  it("is offered from My routines", async () => {
+describe("pasting a program", () => {
+  it("is offered from Your programs", async () => {
     api();
-    renderRoute("/library/routines");
+    renderRoute("/library/programs");
     await userEvent.click(
       await screen.findByRole("link", { name: /paste one in/i }),
     );
-    expect(await screen.findByLabelText("Pasted routine")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Pasted program")).toBeInTheDocument();
   });
 
   it("reads every line back, refusing what it cannot match", async () => {
     api();
-    renderRoute("/library/routines/paste");
+    renderRoute("/library/programs/paste");
     await pasteAndRead();
 
     const monday = screen.getByRole("region", { name: "Mon" });
@@ -117,8 +117,8 @@ describe("pasting a routine", () => {
 
   it("shows a guess as a guess", async () => {
     api();
-    renderRoute("/library/routines/paste");
-    const box = await screen.findByLabelText("Pasted routine");
+    renderRoute("/library/programs/paste");
+    const box = await screen.findByLabelText("Pasted program");
     await userEvent.click(box);
     await userEvent.paste("Barbell Squats 5x5");
     await userEvent.click(screen.getByRole("button", { name: "Read it" }));
@@ -129,7 +129,7 @@ describe("pasting a routine", () => {
 
   it("leaves a line out, and puts it back", async () => {
     api();
-    renderRoute("/library/routines/paste");
+    renderRoute("/library/programs/paste");
     await pasteAndRead();
 
     const wednesday = screen.getByRole("region", { name: "Wed" });
@@ -145,7 +145,7 @@ describe("pasting a routine", () => {
 
   it("hands the answered lines to the week sheet, and saves from there", async () => {
     const sent = api();
-    renderRoute("/library/routines/paste");
+    renderRoute("/library/programs/paste");
     await pasteAndRead();
 
     const monday = screen.getByRole("region", { name: "Mon" });
@@ -172,8 +172,8 @@ describe("pasting a routine", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Name for Mon")).toHaveValue("Legs");
     expect(screen.getByLabelText("Name for Wed")).toHaveValue("");
-    await userEvent.type(screen.getByLabelText("Routine name"), "Pasted");
-    await userEvent.click(screen.getByRole("button", { name: "Save routine" }));
+    await userEvent.type(screen.getByLabelText("Program name"), "Pasted");
+    await userEvent.click(screen.getByRole("button", { name: "Save program" }));
 
     await vi.waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0]).toMatchObject({

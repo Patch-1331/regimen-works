@@ -15,7 +15,7 @@ import {
   setupOptionsSchema,
   completedProgramSchema,
   addIsoDays,
-  DEFAULT_PLAN_ID,
+  DEFAULT_PROGRAM_ID,
 } from '@regimen-works/shared';
 import { z } from 'zod';
 import { asUser, createE2eApp } from './test-support/e2e-app';
@@ -881,7 +881,7 @@ describe('POST/DELETE /assignments/:id/substitutions, on a prescribed day', () =
     await http()
       .post(`/assignments/${assignment.id}/substitutions`)
       .set(...asUser(ALICE))
-      .send({ planSlotMovementId: movement.id, exerciseId: members[2].id })
+      .send({ programSlotMovementId: movement.id, exerciseId: members[2].id })
       .expect(201);
     expect(
       await testPrisma().assignmentSubstitution.count({
@@ -952,7 +952,7 @@ describe('the straight-sets session, end to end', () => {
     expect(started.movements).toHaveLength(1);
     expect(started.movements[0]).toMatchObject({
       wodMovementId: null,
-      planSlotMovementId: movement.id,
+      programSlotMovementId: movement.id,
       sets: 5,
       restSeconds: 90,
       // One set's count, not the day's fifteen reps.
@@ -1151,7 +1151,7 @@ describe('first-run setup, end to end', () => {
     );
     // Just WODs is what provisioning already put them on, so it leads the
     // picker rather than appearing as an alternative to itself.
-    expect(options.programs[0].id).toBe(DEFAULT_PLAN_ID);
+    expect(options.programs[0].id).toBe(DEFAULT_PROGRAM_ID);
     expect(options.programs.map((p) => p.id)).toContain(program.id);
     // Nothing trained yet, so this morning is still available to start on.
     expect(options.earliestStartDate).toBe(todayIsoDate());
@@ -1165,7 +1165,7 @@ describe('first-run setup, end to end', () => {
         .post('/setup')
         .set(...asUser(ALICE))
         .send({
-          planId: program.id,
+          programId: program.id,
           trainingDays: [1, 3],
           weeks: 6,
           startDate: todayIsoDate(),
@@ -1192,7 +1192,7 @@ describe('first-run setup, end to end', () => {
       .post('/setup')
       .set(...asUser(ALICE))
       .send({
-        planId: program.id,
+        programId: program.id,
         trainingDays: [1, 3, 5],
         weeks: 6,
         startDate: todayIsoDate(),
@@ -1249,7 +1249,7 @@ describe('first-run setup, end to end', () => {
       .post('/setup')
       .set(...asUser(ALICE))
       .send({
-        planId: fixed.id,
+        programId: fixed.id,
         trainingDays: null,
         weeks: 6,
         startDate: todayIsoDate(),
@@ -1264,8 +1264,8 @@ describe('first-run setup, end to end', () => {
         .expect(200),
     );
     expect(settings.scheduleLock).toEqual({
-      planId: fixed.id,
-      planName: 'Bar Muscle-Up',
+      programId: fixed.id,
+      programName: 'Bar Muscle-Up',
       days: [1, 2, 4, 5],
     });
     // Asleep, not overwritten -- this is what comes back when the run ends.
@@ -1359,11 +1359,11 @@ describe('a program ending, end to end', () => {
     // The whole point of DN-18: a prompt never blocks a workout. The program
     // is over, the card is owed, and there is still something to train.
     expect(today.assignment).not.toBeNull();
-    expect(today.plan).toBeNull();
+    expect(today.program).toBeNull();
     expect(today.completedProgram).toMatchObject({
       enrollmentId,
-      planId: program.id,
-      planName: 'Pull-Up Builder',
+      programId: program.id,
+      programName: 'Pull-Up Builder',
       summary: {
         weeks: 1,
         sessions: 1,

@@ -112,7 +112,7 @@ describe("the prescribed plate", () => {
 
   it("says nothing about rest where nobody stated one, which is not straight through", async () => {
     // DN-143: null and 0 are different facts. Reading the first as the second
-    // would hand the athlete a prescription their routine never made.
+    // would hand the athlete a prescription their program never made.
     prescribing([fixtures.prescribedMovement({ restSeconds: null })]);
     renderRoute("/");
 
@@ -128,7 +128,7 @@ describe("the prescribed plate", () => {
     prescribing([
       fixtures.prescribedMovement({ sets: 5 }),
       fixtures.prescribedMovement({
-        id: "plan-slot-movement-2",
+        id: "program-slot-movement-2",
         order: 1,
         sets: 3,
         exercise: { id: ringRow.id, name: "Ring row", sortOrder: 0 },
@@ -189,12 +189,12 @@ describe("the prescribed plate", () => {
     );
     await userEvent.click(await screen.findByRole("button", { name: /^ring row$/i }));
 
-    // Keyed off the PlanSlotMovement, because a prescribed day has no
+    // Keyed off the ProgramSlotMovement, because a prescribed day has no
     // WodMovement anywhere in it.
     expect(bodies).toEqual([
       {
         wodMovementId: null,
-        planSlotMovementId: "plan-slot-movement-1",
+        programSlotMovementId: "program-slot-movement-1",
         exerciseId: "exercise-ring-row",
       },
     ]);
@@ -219,7 +219,7 @@ describe("the prescribed plate", () => {
     );
 
     expect(urls).toEqual([
-      `/api/assignments/${fixtures.ASSIGNMENT_ID}/substitutions/prescribed/plan-slot-movement-1`,
+      `/api/assignments/${fixtures.ASSIGNMENT_ID}/substitutions/prescribed/program-slot-movement-1`,
     ]);
   });
 

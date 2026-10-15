@@ -59,7 +59,7 @@ async function finishesSetup(page: Page, apiOrigin: string): Promise<void> {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization },
       body: JSON.stringify({
-        planId: options.programs[0].id,
+        programId: options.programs[0].id,
         trainingDays: [0, 1, 2, 3, 4, 5, 6],
         weeks: null,
         startDate: options.earliestStartDate,

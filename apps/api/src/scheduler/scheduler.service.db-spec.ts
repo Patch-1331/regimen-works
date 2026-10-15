@@ -1015,7 +1015,7 @@ describe('SchedulerService.getToday, under a program', () => {
 
     const today = await programService().getToday(user.id, MONDAY);
 
-    expect(today.plan).toBeNull();
+    expect(today.program).toBeNull();
     expect(today.isRestDay).toBe(false);
     expect(today.assignment).not.toBeNull();
   });
@@ -1028,7 +1028,7 @@ describe('SchedulerService.getToday, under a program', () => {
     expect(today).toMatchObject({
       isRestDay: true,
       assignment: null,
-      plan: null,
+      program: null,
     });
   });
 
@@ -1053,10 +1053,10 @@ describe('SchedulerService.getToday, under a program', () => {
     expect(saturday.isRestDay).toBe(true);
     // The program is still context even on a day it is not running: the
     // athlete is in week 1 of it whether or not they train on Saturday.
-    expect(saturday.plan).toMatchObject({ name: program.name, week: 1 });
+    expect(saturday.program).toMatchObject({ name: program.name, week: 1 });
     // Null rather than the slot's own kind -- the day is off because the
     // athlete said so, not because the program planned a rest.
-    expect(saturday.plan?.slotKind).toBeNull();
+    expect(saturday.program?.slotKind).toBeNull();
   });
 
   it('overrides them on a fixed program, whose slots are the schedule', async () => {
@@ -1091,7 +1091,7 @@ describe('SchedulerService.getToday, under a program', () => {
     const today = await programService().getToday(user.id, MONDAY);
 
     expect(today.isRestDay).toBe(true);
-    expect(today.plan?.slotKind).toBe('rest');
+    expect(today.program?.slotKind).toBe('rest');
   });
 
   it('trains the WOD the program pinned', async () => {
@@ -1110,7 +1110,7 @@ describe('SchedulerService.getToday, under a program', () => {
     const today = await programService().getToday(user.id, MONDAY);
 
     expect(today.assignment?.wod!.id).toBe(pinned.id);
-    expect(today.plan?.slotKind).toBe('wod_pinned');
+    expect(today.program?.slotKind).toBe('wod_pinned');
   });
 
   it('honours a generated slot’s pattern', async () => {
@@ -1323,7 +1323,7 @@ describe('SchedulerService.getToday, under a program', () => {
 
     const today = await programService().getToday(user.id, NEXT_MONDAY);
 
-    expect(today.plan).toMatchObject({ week: 2, totalWeeks: null });
+    expect(today.program).toMatchObject({ week: 2, totalWeeks: null });
   });
 });
 
@@ -1342,7 +1342,7 @@ describe('SchedulerService.getToday, at the edges of a run', () => {
 
     const today = await programService().getToday(user.id, MONDAY);
 
-    expect(today.plan).toBeNull();
+    expect(today.program).toBeNull();
     // A rest-authored program did not make today a rest day, because it has
     // not started: the athlete trains.
     expect(today.assignment).not.toBeNull();
@@ -1373,7 +1373,7 @@ describe('SchedulerService.getToday, at the edges of a run', () => {
         where: { id: enrollment.id },
       }),
     ).toMatchObject({ status: 'completed' });
-    expect(today.plan).toBeNull();
+    expect(today.program).toBeNull();
     // The rest-authored program no longer decides the day, so the athlete's
     // own training days do: Monday is one.
     expect(today.assignment).not.toBeNull();
@@ -1419,7 +1419,7 @@ describe('SchedulerService.getToday, at the edges of a run', () => {
 
     const today = await programService().getToday(user.id, MONDAY);
 
-    expect(today.plan).toBeNull();
+    expect(today.program).toBeNull();
     expect(today.assignment).not.toBeNull();
   });
 
@@ -1440,7 +1440,7 @@ describe('SchedulerService.getToday, at the edges of a run', () => {
 
     const again = await programService().getToday(user.id, MONDAY);
 
-    expect(again.plan).toMatchObject({ name: program.name, week: 1 });
+    expect(again.program).toMatchObject({ name: program.name, week: 1 });
     expect(again.assignment).not.toBeNull();
   });
 });
@@ -1462,13 +1462,15 @@ describe('SchedulerService.skipToday', () => {
     const skipped = await programService().skipToday(user.id, MONDAY);
 
     expect(skipped.isRestDay).toBe(true);
-    expect(skipped.plan).toMatchObject({ name: program.name, week: 1 });
+    expect(skipped.program).toMatchObject({ name: program.name, week: 1 });
   });
 
   it('reports no program for an athlete who has none', async () => {
     const user = await athlete();
 
-    expect((await programService().skipToday(user.id, MONDAY)).plan).toBeNull();
+    expect(
+      (await programService().skipToday(user.id, MONDAY)).program,
+    ).toBeNull();
   });
 });
 
@@ -1742,7 +1744,7 @@ describe('SchedulerService makeup days (DN-17)', () => {
 
       expect(taken.assignment.wod!.id).toBe(authored.id);
       expect(taken.assignment.wod!.id).not.toBe(rolled.id);
-      expect(taken.plan).toMatchObject({ name: program.name });
+      expect(taken.program).toMatchObject({ name: program.name });
     });
 
     it('records which program day it was, the way a scheduled day does', async () => {
@@ -2017,8 +2019,8 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     });
   });
 
-  it('keeps prescribing from a routine archived under a run', async () => {
-    // ADR 0006, decision 5: archiving takes a routine out of the picker, not
+  it('keeps prescribing from a program archived under a run', async () => {
+    // ADR 0006, decision 5: archiving takes a program out of the picker, not
     // out from under the athlete already running it. Every read that follows
     // an enrollment has to reach an archived program exactly as a live one.
     const { ring } = await pullMembers();

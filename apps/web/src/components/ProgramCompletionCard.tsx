@@ -13,7 +13,7 @@
  *
  * Two offers and no default. "Run it again" is the same program at the same
  * length from today, which needs no questions because none of them have new
- * answers -- and is left out once the routine has been archived, which the
+ * answers -- and is left out once the program has been archived, which the
  * API will not start again (DN-153). "See what's next" is the wizard, which is
  * the program picker. And
  * dismissing is a third real answer: an athlete who wants neither should be
@@ -53,7 +53,7 @@ export function ProgramCompletionCard({ program }: { program: CompletedProgram }
 
   return (
     <section
-      aria-label={`${program.planName} complete`}
+      aria-label={`${program.programName} complete`}
       className="mb-5 rounded-sm p-4"
       style={{
         background: "var(--panel)",
@@ -66,7 +66,7 @@ export function ProgramCompletionCard({ program }: { program: CompletedProgram }
           className="text-sm font-bold uppercase tracking-[0.18em] text-[var(--glow)]"
           style={{ fontFamily: "var(--font-mono)" }}
         >
-          {program.planName} complete
+          {program.programName} complete
         </h2>
         <button
           onClick={() => dismiss.mutate()}
@@ -84,7 +84,7 @@ export function ProgramCompletionCard({ program }: { program: CompletedProgram }
 
       {!program.canRunAgain && (
         <p className="mt-2 text-sm text-[var(--ink-faint)]">
-          This routine has been retired.
+          This program has been retired.
         </p>
       )}
 

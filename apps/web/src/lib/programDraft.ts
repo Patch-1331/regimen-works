@@ -1,13 +1,13 @@
-import type { CreateRoutine, MovementGroup } from "@regimen-works/shared";
+import type { CreateProgram, MovementGroup } from "@regimen-works/shared";
 import type { ApiExercise } from "./api";
 import { lineLabel } from "./progressions";
 
 /**
- * The routine editor's working copy (DN-145).
+ * The program editor's working copy (DN-145).
  *
- * Looser than `CreateRoutine` on purpose: a line the athlete is halfway
+ * Looser than `CreateProgram` on purpose: a line the athlete is halfway
  * through has no movement yet, or a blank rep count, and the editor has to be
- * able to hold that and say what is missing. `toCreateRoutine` is the one
+ * able to hold that and say what is missing. `toCreateProgram` is the one
  * place it is tightened into what the API accepts, and `lineProblems` is what
  * the screen shows for every line that cannot be tightened yet.
  */
@@ -23,11 +23,11 @@ export type DraftLine = {
   restSeconds: number | null;
 };
 
-export type RoutineDraft = {
+export type ProgramDraft = {
   name: string;
   summary: string;
   /** "On these weekdays" (fixed) or "any N days a week, in this order" (flexible). */
-  scheduleMode: CreateRoutine["scheduleMode"];
+  scheduleMode: CreateProgram["scheduleMode"];
   /** Weekday → its lines. A weekday with no lines is a rest day. */
   days: Partial<Record<number, DraftLine[]>>;
   /**
@@ -40,7 +40,7 @@ export type RoutineDraft = {
 let seq = 0;
 export const lineId = () => `line-${++seq}`;
 
-export const EMPTY_ROUTINE: RoutineDraft = {
+export const EMPTY_PROGRAM: ProgramDraft = {
   name: "",
   summary: "",
   scheduleMode: "flexible",
@@ -62,7 +62,7 @@ export function blankLine(): DraftLine {
 }
 
 /** The weekdays that carry at least one line, 0 = Sunday, ascending. */
-export function trainingDays(draft: RoutineDraft): number[] {
+export function trainingDays(draft: ProgramDraft): number[] {
   return Object.entries(draft.days)
     .filter(([, lines]) => (lines?.length ?? 0) > 0)
     .map(([day]) => Number(day))
@@ -93,9 +93,9 @@ export function lineProblems(line: DraftLine): string[] {
 }
 
 /** Everything stopping a save: the name, an empty week, and every line. */
-export function draftProblems(draft: RoutineDraft): string[] {
+export function draftProblems(draft: ProgramDraft): string[] {
   const out: string[] = [];
-  if (draft.name.trim() === "") out.push("Name the routine.");
+  if (draft.name.trim() === "") out.push("Name the program.");
   if (trainingDays(draft).length === 0) out.push("Add a movement to at least one day.");
   for (const lines of Object.values(draft.days)) {
     for (const line of lines ?? []) out.push(...lineProblems(line));
@@ -109,7 +109,7 @@ export function draftProblems(draft: RoutineDraft): string[] {
  * A range whose top was left blank is a fixed count; a failure line carries
  * no count at all, whatever the reps box still held before it was ticked.
  */
-export function toCreateRoutine(draft: RoutineDraft): CreateRoutine {
+export function toCreateProgram(draft: ProgramDraft): CreateProgram {
   const summary = draft.summary.trim();
   return {
     name: draft.name.trim(),
@@ -132,23 +132,23 @@ export function toCreateRoutine(draft: RoutineDraft): CreateRoutine {
 }
 
 /** A day's name for the body, left out where it has none. */
-function dayLabel(draft: RoutineDraft, day: number): { label?: string } {
+function dayLabel(draft: ProgramDraft, day: number): { label?: string } {
   const label = draft.labels[day]?.trim();
   return label ? { label } : {};
 }
 
 /**
- * A saved routine back into a working copy, for editing it (DN-146). The
- * inverse of `toCreateRoutine`: a summary the service wrote from the
+ * A saved program back into a working copy, for editing it (DN-146). The
+ * inverse of `toCreateProgram`: a summary the service wrote from the
  * schedule arrives as null and opens blank, showing as the placeholder.
  */
-export function fromRoutine(routine: CreateRoutine): RoutineDraft {
+export function fromProgram(program: CreateProgram): ProgramDraft {
   return {
-    name: routine.name,
-    summary: routine.summary ?? "",
-    scheduleMode: routine.scheduleMode,
+    name: program.name,
+    summary: program.summary ?? "",
+    scheduleMode: program.scheduleMode,
     days: Object.fromEntries(
-      routine.days.map((day) => [
+      program.days.map((day) => [
         day.dayOfWeek,
         day.lines.map((line) => ({
           id: lineId(),
@@ -163,7 +163,7 @@ export function fromRoutine(routine: CreateRoutine): RoutineDraft {
       ]),
     ),
     labels: Object.fromEntries(
-      routine.days.flatMap((day) => (day.label ? [[day.dayOfWeek, day.label]] : [])),
+      program.days.flatMap((day) => (day.label ? [[day.dayOfWeek, day.label]] : [])),
     ),
   };
 }
@@ -174,13 +174,13 @@ export function fromRoutine(routine: CreateRoutine): RoutineDraft {
  * not the week (ADR 0006, decision 6; DN-155), and never make a save a new
  * version.
  */
-export function changesWeek(draft: RoutineDraft, saved: CreateRoutine): boolean {
-  const week = (r: CreateRoutine) =>
+export function changesWeek(draft: ProgramDraft, saved: CreateProgram): boolean {
+  const week = (r: CreateProgram) =>
     JSON.stringify({
       scheduleMode: r.scheduleMode,
       days: r.days.map(({ dayOfWeek, lines }) => ({ dayOfWeek, lines })),
     });
-  return week(toCreateRoutine(draft)) !== week(saved);
+  return week(toCreateProgram(draft)) !== week(saved);
 }
 
 /**
@@ -188,10 +188,10 @@ export function changesWeek(draft: RoutineDraft, saved: CreateRoutine): boolean 
  * name: Monday's "Push" copied to Thursday is still Thursday.
  */
 export function copyDay(
-  draft: RoutineDraft,
+  draft: ProgramDraft,
   from: number,
   to: number[],
-): RoutineDraft {
+): ProgramDraft {
   const lines = draft.days[from] ?? [];
   const days = { ...draft.days };
   for (const target of to) {
@@ -202,10 +202,10 @@ export function copyDay(
 
 /** Puts a copy of the line straight after it. */
 export function duplicateLine(
-  draft: RoutineDraft,
+  draft: ProgramDraft,
   day: number,
   id: string,
-): RoutineDraft {
+): ProgramDraft {
   const lines = [...(draft.days[day] ?? [])];
   const at = lines.findIndex((l) => l.id === id);
   if (at < 0) return draft;

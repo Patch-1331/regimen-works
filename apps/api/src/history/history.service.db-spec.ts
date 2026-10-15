@@ -30,7 +30,7 @@ function service(): HistoryService {
 function snapshot(overrides: Partial<SessionMovement> = {}): SessionMovement {
   return {
     wodMovementId: 'wm-1',
-    planSlotMovementId: null,
+    programSlotMovementId: null,
     sets: null,
     restSeconds: null,
     order: 0,
@@ -184,7 +184,7 @@ describe('HistoryService.movements', () => {
       movements: [
         snapshot({
           wodMovementId: null,
-          planSlotMovementId: 'psm-1',
+          programSlotMovementId: 'psm-1',
           sets: 5,
           restSeconds: 90,
           reps: 3,

@@ -42,7 +42,7 @@ describe("programs completed", () => {
     completedAre([
       fixtures.completedProgram({
         enrollmentId: "e2",
-        planName: "Bar Muscle-Up",
+        programName: "Bar Muscle-Up",
       }),
       fixtures.completedProgram({ enrollmentId: "e1" }),
     ]);

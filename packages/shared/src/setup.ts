@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { planSchema } from "./plan.js";
+import { programSchema } from "./program.js";
 import { restSecondsSchema } from "./rest.js";
 import { SATURDAY, SUNDAY, trainingDaysSchema } from "./schedule.js";
 
@@ -27,14 +27,14 @@ export const SETUP_START_DATE_DAYS = 21;
 /**
  * A program as the picker shows it.
  *
- * `planSchema` plus the one thing the picker needs that a plan's own fields
+ * `programSchema` plus the one thing the picker needs that a program's own fields
  * cannot answer: which weekdays a *fixed* program trains. A fixed program
  * carries no `defaultDays` -- its slots are the schedule -- so without this
  * the cadence screen could say "Fixed schedule" and not what it fixed them
  * to, which is the half the athlete actually wants to know.
  */
 export const setupProgramSchema = z.intersection(
-  planSchema,
+  programSchema,
   z.object({
     /**
      * The weekdays this program trains in its first week, 0 = Sunday,
@@ -116,7 +116,7 @@ export type SetupOptions = z.infer<typeof setupOptionsSchema>;
  * program ends at all, and `startDate` needs a clock.
  */
 export const commitSetupSchema = z.object({
-  planId: z.string().min(1),
+  programId: z.string().min(1),
   /**
    * Null for a `fixed` program, whose days are not the athlete's to choose
    * -- and null rather than "sent and ignored", so a client that thinks it

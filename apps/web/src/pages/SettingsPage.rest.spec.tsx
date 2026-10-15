@@ -22,7 +22,7 @@ vi.mock("@clerk/clerk-react", async () => {
 function pace(overrides: Partial<RestPace> = {}): RestPace {
   return {
     enrollmentId: "enrollment-1",
-    planName: "Pull-Up Builder",
+    programName: "Pull-Up Builder",
     defaultRestSeconds: 90,
     required: false,
     ...overrides,

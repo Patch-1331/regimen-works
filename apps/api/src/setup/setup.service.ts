@@ -3,7 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { DEFAULT_PLAN_ID, DEFAULT_TRAINING_DAYS } from '@regimen-works/shared';
+import {
+  DEFAULT_PROGRAM_ID,
+  DEFAULT_TRAINING_DAYS,
+} from '@regimen-works/shared';
 import type {
   CommitSetup,
   SetupOptions,
@@ -120,7 +123,7 @@ export class SetupService {
     today: string,
   ): Promise<{ onboardedAt: string }> {
     const program = await this.prisma.program.findFirst({
-      where: { id: body.planId, ...selectableBy(userId) },
+      where: { id: body.programId, ...selectableBy(userId) },
       ...PROGRAM_FOR_PICKER,
     });
     // 404 rather than 403 for a program owned by somebody else: whether
@@ -170,7 +173,7 @@ export class SetupService {
       // (DN-18). Taken inside the transaction, against the same instant the
       // enrollment is written.
       const enrollment = {
-        programId: body.planId,
+        programId: body.programId,
         startDate: body.startDate,
         weeks: body.weeks,
         // Written on update too: pointing the run at a different program is
@@ -238,8 +241,8 @@ export class SetupService {
       ...PROGRAM_FOR_PICKER,
     });
     return [
-      ...programs.filter((p) => p.id === DEFAULT_PLAN_ID),
-      ...programs.filter((p) => p.id !== DEFAULT_PLAN_ID),
+      ...programs.filter((p) => p.id === DEFAULT_PROGRAM_ID),
+      ...programs.filter((p) => p.id !== DEFAULT_PROGRAM_ID),
     ];
   }
 
@@ -322,7 +325,7 @@ export class SetupService {
 
 /**
  * Global rows plus this athlete's own, live ones only — the tier rule, in one
- * place. Archived routines leave the picker (ADR 0006, decision 5); reads that
+ * place. Archived programs leave the picker (ADR 0006, decision 5); reads that
  * follow an enrollment already under way must not use this.
  */
 function selectableBy(userId: string): Prisma.ProgramWhereInput {

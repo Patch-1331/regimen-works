@@ -37,14 +37,14 @@ import {
  * This object is what says the field is asleep.
  */
 export const scheduleLockSchema = z.object({
-  planId: z.string(),
+  programId: z.string(),
   /**
    * The program's name, and not optional. "Your schedule is locked" without
    * saying what locked it is not an answer the athlete can act on -- the
    * action available to them is ending the program, which they cannot take
    * if they are not told which one it is.
    */
-  planName: z.string(),
+  programName: z.string(),
   /**
    * The weekdays this program trains in the week the athlete is currently in,
    * 0 = Sunday, ascending.

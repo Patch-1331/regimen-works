@@ -116,7 +116,7 @@ function CompletedPrograms({ programs }: { programs: CompletedProgram[] }) {
               })}
             </p>
             <p className="truncate font-semibold uppercase" style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}>
-              {program.planName}
+              {program.programName}
             </p>
             <p className="mt-0.5 text-sm text-[var(--ink-soft)]">{summaryText(program)}</p>
           </div>

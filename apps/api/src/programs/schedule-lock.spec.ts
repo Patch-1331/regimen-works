@@ -65,8 +65,8 @@ function program(overrides: Partial<ActiveProgram> = {}): ActiveProgram {
 describe('resolveScheduleLock', () => {
   it('locks the week to a fixed program that is running', () => {
     expect(resolveScheduleLock(program(), MONDAY)).toEqual({
-      planId: 'program_pull_up_builder',
-      planName: 'Pull-Up Builder',
+      programId: 'program_pull_up_builder',
+      programName: 'Pull-Up Builder',
       days: [1, 3, 5],
     });
   });
@@ -204,8 +204,8 @@ describe('resolveScheduleLock', () => {
     expect(
       resolveScheduleLock(program({ authoredWeeks: [week([])] }), MONDAY),
     ).toEqual({
-      planId: 'program_pull_up_builder',
-      planName: 'Pull-Up Builder',
+      programId: 'program_pull_up_builder',
+      programName: 'Pull-Up Builder',
       days: [],
     });
   });

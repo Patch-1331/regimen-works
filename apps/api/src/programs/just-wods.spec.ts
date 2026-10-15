@@ -1,4 +1,4 @@
-import { planDetailSchema } from '@regimen-works/shared';
+import { programDetailSchema } from '@regimen-works/shared';
 import {
   JUST_WODS_PROGRAM,
   JUST_WODS_SLOTS,
@@ -18,10 +18,10 @@ describe('the Just WODs program definition', () => {
     weeks: [{ ...JUST_WODS_WEEK, slots: JUST_WODS_SLOTS }],
   });
 
-  it('satisfies planDetailSchema, and so both database CHECKs', () => {
+  it('satisfies programDetailSchema, and so both database CHECKs', () => {
     // The refinements mirror the constraints, so parsing here is the cheap
     // half of the same proof the db spec makes expensively.
-    const result = planDetailSchema.safeParse(asDetail());
+    const result = programDetailSchema.safeParse(asDetail());
     expect(result.error?.issues ?? []).toEqual([]);
     expect(result.success).toBe(true);
   });

@@ -5,7 +5,7 @@ import type {
   PrescribedMovement,
   SwapOption,
   SessionMovement,
-  TodayPlan,
+  TodayProgram,
   TodayResponse,
   Wod,
   WodMovement,
@@ -18,7 +18,7 @@ import type {
   CompletedProgram,
   MovementChange,
 } from "@regimen-works/shared";
-import { DEFAULT_PLAN_ID } from "@regimen-works/shared";
+import { DEFAULT_PROGRAM_ID } from "@regimen-works/shared";
 import type { ApiExercise, ApiWod } from "../lib/api";
 
 /**
@@ -61,7 +61,7 @@ export function movement(overrides: Partial<WodMovement> = {}): WodMovement {
 
 /**
  * One movement of a prescribed day (DN-125) — the resolved shape the athlete
- * is handed, not the authored one. `id` is a PlanSlotMovement's.
+ * is handed, not the authored one. `id` is a ProgramSlotMovement's.
  */
 export function prescribedMovement(
   // `exercise` partial rather than whole, because the body below spreads it
@@ -72,7 +72,7 @@ export function prescribedMovement(
   } = {},
 ): PrescribedMovement {
   return {
-    id: "plan-slot-movement-1",
+    id: "program-slot-movement-1",
     order: 0,
     sets: 5,
     reps: 3,
@@ -103,7 +103,7 @@ export function prescribedMovement(
 
 /**
  * One movement as a session snapshotted it (DN-90) — here, the prescribed
- * kind: it joins back to a PlanSlotMovement rather than a WodMovement, and
+ * kind: it joins back to a ProgramSlotMovement rather than a WodMovement, and
  * carries the sets and rest a straight-sets day is run from (DN-20). `reps` is
  * one set's count, not the day's total.
  */
@@ -114,7 +114,7 @@ export function sessionMovement(
 ): SessionMovement {
   return {
     wodMovementId: null,
-    planSlotMovementId: "plan-slot-movement-1",
+    programSlotMovementId: "program-slot-movement-1",
     sets: 5,
     restSeconds: 90,
     order: 0,
@@ -239,7 +239,7 @@ export function today(overrides: Partial<TodayResponse> = {}): TodayResponse {
     warmup: [checklistItem()],
     cooldown: [checklistItem({ id: "checklist-2", name: "Hamstring stretch" })],
     // Not on a program. Overridden by the tests that are (DN-10).
-    plan: null,
+    program: null,
     // No program has just ended, which is almost always true (DN-18).
     completedProgram: null,
     // No makeup offered: a training day has a session already (DN-17).
@@ -261,8 +261,8 @@ export function completedProgram(
 ): CompletedProgram {
   return {
     enrollmentId: "enrollment-done-1",
-    planId: "plan-1",
-    planName: "Pull-Up Builder",
+    programId: "program-1",
+    programName: "Pull-Up Builder",
     completedAt: "2026-09-15T09:00:00.000Z",
     canRunAgain: true,
     ...overrides,
@@ -301,13 +301,13 @@ export function restDay(): TodayResponse {
 /**
  * The program block for an athlete part-way through a real program (DN-16).
  *
- * Deliberately not Just WODs: that plan is the absence of programming, and
+ * Deliberately not Just WODs: that program is the absence of programming, and
  * every screen that reads this block treats it as "no program to name".
  */
-export function todayPlan(overrides: Partial<TodayPlan> = {}): TodayPlan {
+export function todayProgram(overrides: Partial<TodayProgram> = {}): TodayProgram {
   return {
     enrollmentId: "enrollment-1",
-    planId: "plan-pull-up-builder",
+    programId: "program-pull-up-builder",
     name: "Pull-Up Builder",
     week: 2,
     totalWeeks: 6,
@@ -432,7 +432,7 @@ export function setupProgram(
   overrides: Partial<SetupProgram> = {},
 ): SetupProgram {
   return {
-    id: DEFAULT_PLAN_ID,
+    id: DEFAULT_PROGRAM_ID,
     name: "Just WODs",
     summary: "A workout a day, picked for you.",
     goal: null,
@@ -460,7 +460,7 @@ export function boundedProgram(
   overrides: Partial<SetupProgram> = {},
 ): SetupProgram {
   return setupProgram({
-    id: "plan-pull-up-builder",
+    id: "program-pull-up-builder",
     name: "Pull-Up Builder",
     summary: "Your first chin-up, six weeks.",
     goal: "Your first unassisted chin-up",
@@ -481,7 +481,7 @@ export function fixedProgram(
   overrides: Partial<SetupProgram> = {},
 ): SetupProgram {
   return setupProgram({
-    id: "plan-bar-muscle-up",
+    id: "program-bar-muscle-up",
     name: "Bar Muscle-Up",
     summary: "Four days a week, spaced on purpose.",
     goal: "A bar muscle-up",

@@ -21,12 +21,14 @@ each training day is. The athlete picks one at signup and can change it later.
 *"Just WODs" is itself a program, not the absence of one* — it is seeded as a real
 row so there is one code path, not an `if (enrolled)` branch.
 
-> **One word: program.** ADR 0009 retires the two other names the code has used for
-> the same row. `Plan` (with `PlanWeek`, `PlanSlot`, `PlanSlotMovement`,
-> `PlanEnrollment`) is the old name of the tables, renamed by DN-176. **Routine** is
-> the old name of a program written in the editor, removed by DN-177. Until both
-> land, read either as *program*, never as a separate concept, and write *program* in
-> every new name, prose, issue title and test name.
+> **One word: program.** ADR 0009 retired the two other names the code used for the
+> same row. `Plan` (with `PlanWeek`, `PlanSlot`, `PlanSlotMovement`,
+> `PlanEnrollment`) was the name of the tables until DN-176. **Routine** was the name
+> of a program written in the editor until DN-177. Both survive only where renaming
+> would break something already written: old ADRs and migrations, stored ids such as
+> `plan_just_wods`, and export files in the `regimen-works/routines` format, which
+> still load. Read either as *program*, never as a separate concept, and write
+> *program* in every new name, prose, issue title and test name.
 
 **Run** — one enrollment in a program, from its start date to its end. A run is
 `active` (at most one per athlete), `completed` (it reached its last day, and earns

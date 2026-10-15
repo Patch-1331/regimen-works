@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 
 /**
- * The views of the library (DN-29): movements, workouts, and the routines
+ * The views of the library (DN-29): movements, workouts, and the programs
  * built from them (DN-145).
  *
  * A sub-nav rather than more bottom tabs: these are one library seen several
@@ -12,7 +12,7 @@ import { NavLink } from "react-router-dom";
 const views = [
   { to: "/library", label: "Movements", end: true },
   { to: "/library/wods", label: "Workouts", end: false },
-  { to: "/library/routines", label: "Routines", end: false },
+  { to: "/library/programs", label: "Programs", end: false },
 ];
 
 export function LibraryNav() {

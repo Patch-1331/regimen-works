@@ -222,7 +222,7 @@ describe('program names', () => {
     ).rejects.toThrow(UNIQUE_VIOLATION);
   });
 
-  // Archiving frees the name (ADR 0006): a structural edit forks a routine
+  // Archiving frees the name (ADR 0006): a structural edit forks a program
   // into a new row that keeps the name while the old one is archived. The
   // opposite of Exercise and Wod, so both tiers are pinned here.
   const archived = { archivedAt: new Date('2026-09-01T00:00:00Z') };

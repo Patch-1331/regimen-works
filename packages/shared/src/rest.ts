@@ -5,13 +5,13 @@ import { z } from "zod";
  *
  * Two sources can speak to it, and they are different kinds of fact:
  *
- * - `PlanSlotMovement.restSeconds` is what the routine's *source* said. Null
- *   means the source was silent -- the routine DN-131 measured states rest 0
+ * - `ProgramSlotMovement.restSeconds` is what the program's *source* said. Null
+ *   means the source was silent -- the program DN-131 measured states rest 0
  *   times in 25 movements -- and 0 means "straight through", which is a
  *   prescription. The two are never converted into each other.
- * - `PlanEnrollment.defaultRestSeconds` is the pace the *athlete* chose for
- *   this run, when they committed to the routine. Null means "use the
- *   routine's own".
+ * - `ProgramEnrollment.defaultRestSeconds` is the pace the *athlete* chose for
+ *   this run, when they committed to the program. Null means "use the
+ *   program's own".
  */
 
 /**
@@ -57,11 +57,11 @@ export function restClockSeconds(restSeconds: number | null): number | null {
 }
 
 /**
- * Whether starting this routine must ask the athlete for a pace.
+ * Whether starting this program must ask the athlete for a pace.
  *
- * Only where some movement leaves rest unstated. A routine with holes asks
+ * Only where some movement leaves rest unstated. A program with holes asks
  * the one question once rather than 25 times; a fully specified one -- every
- * built-in routine -- asks nothing, because it already knows.
+ * built-in program -- asks nothing, because it already knows.
  */
 export function restPaceRequired(
   movements: readonly { restSeconds: number | null }[],
@@ -77,14 +77,14 @@ export function restPaceRequired(
  */
 export const restPaceSchema = z.object({
   enrollmentId: z.string(),
-  planName: z.string(),
+  programName: z.string(),
   defaultRestSeconds: restSecondsSchema,
-  /** True where the routine leaves some rest unstated, so blank is not an answer. */
+  /** True where the program leaves some rest unstated, so blank is not an answer. */
   required: z.boolean(),
 });
 export type RestPace = z.infer<typeof restPaceSchema>;
 
-/** What changing the pace mid-run sends. Null hands the run back to the routine's own values. */
+/** What changing the pace mid-run sends. Null hands the run back to the program's own values. */
 export const updateRestPaceSchema = z.object({
   defaultRestSeconds: restSecondsSchema,
 });

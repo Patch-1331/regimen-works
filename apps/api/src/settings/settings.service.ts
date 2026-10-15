@@ -133,7 +133,7 @@ export class SettingsService {
     // at all about what they own or how their timer behaves.
     if (lock !== null && patch.trainingDays !== undefined) {
       throw new ConflictException(
-        `${lock.planName} sets your training days while it is running. End the program to choose your own again.`,
+        `${lock.programName} sets your training days while it is running. End the program to choose your own again.`,
       );
     }
 

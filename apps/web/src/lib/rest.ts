@@ -1,7 +1,7 @@
 /**
  * The rest-pace field, as the wizard and Settings both read it (DN-143).
  *
- * Seconds in a text box. Blank is an answer -- "use the routine's own" -- and
+ * Seconds in a text box. Blank is an answer -- "use the program's own" -- and
  * so is 0, which is "straight through": the two are the null and the zero the
  * whole issue exists to keep apart, so blank never parses as 0.
  */

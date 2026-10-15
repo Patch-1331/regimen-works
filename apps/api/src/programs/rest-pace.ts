@@ -21,7 +21,7 @@ export function restPaceOf(program: ActiveProgram | null): RestPace | null {
   if (movements.length === 0) return null;
   return {
     enrollmentId: program.enrollmentId,
-    planName: program.programName,
+    programName: program.programName,
     defaultRestSeconds: program.defaultRestSeconds,
     required: restPaceRequired(movements),
   };
