@@ -1,8 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import type { Me, SetupOptions, SetupProgram } from "@regimen-works/shared";
+import {
+  Link,
+  Navigate,
+  useLocation,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
+import type {
+  Me,
+  ProgramRun,
+  SetupOptions,
+  SetupProgram,
+} from "@regimen-works/shared";
 import { api } from "../lib/api";
+import { endsLine } from "../lib/programRuns";
 import {
   dayCountWarning,
   formatStartDate,
@@ -27,12 +39,20 @@ import { WEEKDAYS, localIsoDate } from "../lib/weekdays";
  * Everyone is handed each group's default movement and changes it in one tap
  * on their first workout, which is a better first impression than a form
  * asking how many pull-ups you can do before you have done one here.
+ *
+ * The same steps start a program from the Programs tab (DN-180, ADR 0009
+ * decision 8), at `/programs/:id/start`: the program is already chosen, so it
+ * opens on the days, and welcome is for someone who has never been here.
+ * Cancelling goes back to Programs having written nothing, and the confirm
+ * step says what the start ends.
  */
 
 const STEPS = ["welcome", "program", "cadence", "start", "ready"] as const;
 type Step = (typeof STEPS)[number];
 
 export function SetupPage() {
+  // Only on `/programs/:id/start`; the first-run wizard has no id.
+  const { id: startId } = useParams();
   const {
     data: options,
     isLoading,
@@ -41,8 +61,15 @@ export function SetupPage() {
     queryKey: ["setup"],
     queryFn: api.setup,
   });
+  // What a start from Programs would end. Not needed before onboarding,
+  // where the only run is the Just WODs one provisioning made.
+  const { data: runs, isLoading: runsLoading } = useQuery({
+    queryKey: ["programRuns"],
+    queryFn: api.programRuns,
+    enabled: startId !== undefined,
+  });
 
-  if (isLoading) {
+  if (isLoading || (startId !== undefined && runsLoading)) {
     return <Frame>{null}</Frame>;
   }
   if (error || !options) {
@@ -54,12 +81,37 @@ export function SetupPage() {
       </Frame>
     );
   }
+  if (startId !== undefined) {
+    // Archived, someone else's, or never there: nothing this athlete can
+    // start, and the list it came from is the place to say so.
+    if (!options.programs.some((p) => p.id === startId)) {
+      return <Navigate to="/programs" replace />;
+    }
+    return (
+      <Wizard
+        options={options}
+        start={{ programId: startId, current: runs?.current ?? null }}
+      />
+    );
+  }
   // Keyed remount is unnecessary — the query settles once — but the answers
   // below are seeded from `options`, so they are only sound once it is here.
   return <Wizard options={options} />;
 }
 
-function Wizard({ options }: { options: SetupOptions }) {
+/** A start from the Programs tab: the program chosen, and the run it leaves. */
+interface StartFromPrograms {
+  programId: string;
+  current: ProgramRun | null;
+}
+
+function Wizard({
+  options,
+  start,
+}: {
+  options: SetupOptions;
+  start?: StartFromPrograms;
+}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -67,10 +119,14 @@ function Wizard({ options }: { options: SetupOptions }) {
   // just saved, and the wizard picks up at the picker with it chosen.
   const handedBack = (useLocation().state as { programId?: string } | null)
     ?.programId;
-  const authored = options.programs.find((p) => p.id === handedBack);
+  const authored = options.programs.find(
+    (p) => p.id === (start?.programId ?? handedBack),
+  );
   const first = authored ?? options.programs[0];
 
-  const [step, setStep] = useState<Step>(authored ? "program" : "welcome");
+  const [step, setStep] = useState<Step>(
+    start ? "cadence" : authored ? "program" : "welcome",
+  );
   const [programId, setProgramId] = useState(first.id);
   const [days, setDays] = useState<number[]>(() =>
     initialDays(first, options.trainingDays),
@@ -136,6 +192,7 @@ function Wizard({ options }: { options: SetupOptions }) {
   }
 
   const warning = dayCountWarning(program, days);
+  const cancel = () => navigate("/programs");
 
   return (
     <Frame>
@@ -164,7 +221,9 @@ function Wizard({ options }: { options: SetupOptions }) {
             )
           }
           onWeeks={setWeeks}
-          onBack={() => setStep("program")}
+          // From Programs there is no picker behind this step: the program
+          // was chosen there, and Cancel below goes back to it.
+          onBack={start ? undefined : () => setStep("program")}
           onNext={() => setStep("start")}
         />
       )}
@@ -181,6 +240,7 @@ function Wizard({ options }: { options: SetupOptions }) {
 
       {step === "ready" && (
         <ReadyStep
+          ends={start ? { line: endsLine(start.current) } : undefined}
           program={program}
           days={isFixed ? program.fixedDays : days}
           weeks={weeks}
@@ -193,6 +253,17 @@ function Wizard({ options }: { options: SetupOptions }) {
           onBack={() => setStep("start")}
           onGo={() => commit.mutate()}
         />
+      )}
+
+      {start && (
+        <button
+          type="button"
+          onClick={cancel}
+          className="mt-1 w-full px-4 py-2 text-xs uppercase tracking-[0.1em] text-[var(--ink-faint)]"
+          style={{ fontFamily: "var(--font-display)" }}
+        >
+          Cancel
+        </button>
       )}
     </Frame>
   );
@@ -432,7 +503,7 @@ function CadenceStep({
   warning: string | null;
   onToggleDay: (day: number) => void;
   onWeeks: (weeks: number) => void;
-  onBack: () => void;
+  onBack?: () => void;
   onNext: () => void;
 }) {
   const isFixed = program.scheduleMode === "fixed";
@@ -574,7 +645,7 @@ function CadenceStep({
       <PrimaryButton onClick={onNext} disabled={warning !== null}>
         Continue
       </PrimaryButton>
-      <BackButton onClick={onBack} />
+      {onBack && <BackButton onClick={onBack} />}
     </div>
   );
 }
@@ -686,6 +757,7 @@ function StartDateStep({
 }
 
 function ReadyStep({
+  ends,
   program,
   days,
   weeks,
@@ -698,6 +770,8 @@ function ReadyStep({
   onBack,
   onGo,
 }: {
+  /** Set on a start from Programs, with what that start ends, if anything. */
+  ends?: { line: string | null };
   program: SetupProgram;
   days: number[];
   weeks: number | null;
@@ -712,11 +786,23 @@ function ReadyStep({
 }) {
   return (
     <div>
-      <Title>You're ready</Title>
-      <Lede>
-        Every movement starts on a default. Change any of them with one tap on
-        your first workout.
-      </Lede>
+      {ends ? (
+        <>
+          <Title>Start {program.name}</Title>
+          {/* The athlete's movements carry over, so the first-run line about
+              defaults would be untrue here. What is worth saying is what
+              they are leaving. */}
+          {ends.line && <Lede>{ends.line}</Lede>}
+        </>
+      ) : (
+        <>
+          <Title>You're ready</Title>
+          <Lede>
+            Every movement starts on a default. Change any of them with one tap
+            on your first workout.
+          </Lede>
+        </>
+      )}
 
       <dl
         className="mt-5 flex flex-col gap-2 p-4 text-sm"
@@ -752,7 +838,7 @@ function ReadyStep({
       )}
 
       <PrimaryButton onClick={onGo} disabled={pending || restWarning !== null}>
-        {pending ? "Saving…" : "Go to today"}
+        {pending ? "Saving…" : ends ? `Start ${program.name}` : "Go to today"}
       </PrimaryButton>
       <BackButton onClick={onBack} />
     </div>

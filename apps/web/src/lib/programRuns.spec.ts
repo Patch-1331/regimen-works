@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_PROGRAM_ID } from "@regimen-works/shared";
 import * as fixtures from "../test/fixtures";
-import { currentRunLine, pastRunLine } from "./programRuns";
+import { currentRunLine, endsLine, pastRunLine } from "./programRuns";
 
 describe("currentRunLine", () => {
   it("says the week and the length", () => {
@@ -43,5 +44,32 @@ describe("pastRunLine", () => {
         fixtures.programRun({ status: "ended", totalWeeks: null, week: 9 }),
       ),
     ).toBe("ended at week 9");
+  });
+});
+
+describe("endsLine", () => {
+  it("names the run being ended and where it stands", () => {
+    expect(endsLine(fixtures.programRun({ week: 2 }))).toBe(
+      "This ends Foundations at week 2 of 6. What you've trained stays in your history.",
+    );
+  });
+
+  it("leaves the length off an open-ended run", () => {
+    expect(
+      endsLine(fixtures.programRun({ totalWeeks: null, week: 9 })),
+    ).toMatch(/^This ends Foundations at week 9\. /);
+  });
+
+  it("says a run not yet begun is replaced rather than ended", () => {
+    expect(endsLine(fixtures.programRun({ week: null }))).toBe(
+      "This replaces Foundations, which hasn't started yet.",
+    );
+  });
+
+  it("says nothing when leaving Just WODs or nothing at all", () => {
+    expect(
+      endsLine(fixtures.programRun({ programId: DEFAULT_PROGRAM_ID })),
+    ).toBeNull();
+    expect(endsLine(null)).toBeNull();
   });
 });

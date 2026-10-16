@@ -227,9 +227,14 @@ export class SetupService {
         data: { summaryDismissedAt: new Date() },
       });
 
-      const user = await tx.user.update({
-        where: { id: userId },
+      // The first commit only. Starting a program from the Programs tab
+      // (DN-180) goes through here too, and onboarding happened once.
+      await tx.user.updateMany({
+        where: { id: userId, onboardedAt: null },
         data: { onboardedAt: new Date() },
+      });
+      const user = await tx.user.findUniqueOrThrow({
+        where: { id: userId },
         select: { onboardedAt: true },
       });
       return user.onboardedAt!;
