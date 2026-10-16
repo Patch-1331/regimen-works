@@ -372,7 +372,7 @@ function ProgramStep({
           {/* Opens the program editor (DN-145), which comes back here with
               what was written already chosen. */}
           <Link
-            to="/library/programs/new?from=setup"
+            to="/programs/new?from=setup"
             className="block w-full p-4"
             style={{
               background: "var(--panel)",

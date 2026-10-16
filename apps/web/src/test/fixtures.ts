@@ -17,6 +17,7 @@ import type {
   WorkoutSetLog,
   CompletedProgram,
   MovementChange,
+  ProgramRun,
 } from "@regimen-works/shared";
 import { DEFAULT_PROGRAM_ID } from "@regimen-works/shared";
 import type { ApiExercise, ApiWod } from "../lib/api";
@@ -272,6 +273,26 @@ export function completedProgram(
       movementChanges: [movementChange()],
       ...overrides.summary,
     },
+  };
+}
+
+/**
+ * A run as the Programs tab lists it (DN-179): Foundations, under way and in
+ * its third week of six. A past run says so through `status` and
+ * `finishedAt`.
+ */
+export function programRun(overrides: Partial<ProgramRun> = {}): ProgramRun {
+  return {
+    enrollmentId: "enrollment-1",
+    programId: "program-foundations",
+    programName: "Foundations",
+    programSummary: "Six weeks of the basics.",
+    status: "active",
+    startDate: "2026-09-01",
+    totalWeeks: 6,
+    week: 3,
+    finishedAt: null,
+    ...overrides,
   };
 }
 

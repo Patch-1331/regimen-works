@@ -1,34 +1,50 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import type { GlobalProgramSummary, ProgramSummary } from "@regimen-works/shared";
+import {
+  DEFAULT_PROGRAM_ID,
+  type GlobalProgramSummary,
+  type ProgramRun,
+  type ProgramSummary,
+} from "@regimen-works/shared";
 import { ApiError, api, type LibraryTier } from "../lib/api";
-import { LibraryNav } from "../components/LibraryNav";
 import { SectionLabel } from "../components/Panel";
 import { WEEKDAYS } from "../lib/weekdays";
 import { saveJson } from "../lib/download";
+import { shortDate } from "../lib/movementHistory";
+import { currentRunLine, pastRunLine } from "../lib/programRuns";
 
 /**
- * "Your programs" (DN-145): what this athlete has written, live first and
- * archived after. The curated programs are not listed -- they are not yours
- * -- and the setup picker is where every program you can run is offered.
+ * The Programs tab (DN-179, ADR 0009 decisions 2 and 5): what is driving the
+ * week, everything there is to start, and what came before. Top to bottom:
  *
- * "Remove" archives and "Restore" brings back (DN-147). Nothing is deleted:
- * a removed program keeps every run on it, including one under way.
+ * - The run under way, and for Just WODs, plainly that no program is.
+ * - Just WODs, pinned, as the "no program" choice.
+ * - "Your programs" (DN-145): what this athlete has written, live first and
+ *   archived after. "Remove" archives and "Restore" brings back (DN-147);
+ *   nothing is deleted, and a removed program keeps every run on it.
+ * - The library. Everyone but an admin sees the live global programs as
+ *   "From the library", each with "Copy" -- a new program of their own,
+ *   filled from it (DN-149). An admin sees the whole global library instead,
+ *   with the same actions, and can publish one of their own into it (DN-148).
+ *   `isAdmin` decides only what is rendered; every admin route refuses anyone
+ *   else on its own.
+ * - Writing or pasting a new one.
+ * - Past runs, finished and ended, newest first. Never Just WODs.
  *
- * An admin also sees the global library below their own, with the same
- * actions, and can publish one of their own programs into it (DN-148).
- * `isAdmin` decides only what is rendered; every admin route refuses
- * anyone else on its own.
- *
- * Everyone else sees the live global programs as "From the library", each
- * with "Copy" -- a new program of their own, filled from it (DN-149). An
- * admin copies from their global list instead of a second one.
+ * Starting a program from here is DN-180's; this screen only lists.
  */
 export function ProgramsPage() {
   const queryClient = useQueryClient();
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: api.me });
   const isAdmin = me?.isAdmin === true;
+  const { data: runs, error: runsError } = useQuery({
+    queryKey: ["programRuns"],
+    queryFn: api.programRuns,
+  });
+  // Just WODs' own name and summary, as the wizard offers it.
+  const { data: setup } = useQuery({ queryKey: ["setup"], queryFn: api.setup });
+  const justWods = setup?.programs.find((p) => p.id === DEFAULT_PROGRAM_ID);
   const { data: programs, isLoading, error } = useQuery({
     queryKey: ["programs"],
     queryFn: api.programs,
@@ -114,6 +130,7 @@ export function ProgramsPage() {
 
   const live = programs?.filter((r) => !r.archived) ?? [];
   const archived = programs?.filter((r) => r.archived) ?? [];
+  const onJustWods = runs?.current?.programId === DEFAULT_PROGRAM_ID;
 
   return (
     <div className="p-6">
@@ -121,33 +138,9 @@ export function ProgramsPage() {
         className="text-3xl font-extrabold uppercase"
         style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}
       >
-        Library
+        Programs
       </h1>
-      <LibraryNav />
 
-      <Link
-        to="/library/programs/new"
-        className="mt-5 block w-full py-3 text-center text-sm font-semibold uppercase tracking-[0.1em]"
-        style={{
-          fontFamily: "var(--font-mono)",
-          border: "1px solid var(--glow)",
-          color: "var(--glow)",
-        }}
-      >
-        + New program
-      </Link>
-      <Link
-        to="/library/programs/paste"
-        className="mt-2 block text-center text-xs text-[var(--ink-soft)] underline"
-      >
-        Or paste one in from elsewhere
-      </Link>
-
-      {error && (
-        <p className="mt-4 text-sm text-[var(--danger)]">
-          Couldn't load your programs.
-        </p>
-      )}
       {notice && (
         <p className="mt-4 text-sm text-[var(--ink-soft)]" role="status">
           {notice}
@@ -158,88 +151,137 @@ export function ProgramsPage() {
           {failure}
         </p>
       )}
-      {!isLoading && programs?.length === 0 && (
-        <p className="mt-6 text-sm text-[var(--ink-soft)]">
-          Nothing yet. A program is one week of training that repeats — write
-          the days you train and what you do on them.
-        </p>
+
+      <section aria-label="Current run">
+        <SectionLabel>NOW RUNNING</SectionLabel>
+        {runsError && (
+          <p className="mt-3 text-sm text-[var(--danger)]">
+            Couldn't load your runs.
+          </p>
+        )}
+        {runs && <CurrentRun run={runs.current} />}
+      </section>
+
+      {justWods && (
+        <section aria-label="No program">
+          <SectionLabel>NO PROGRAM</SectionLabel>
+          <ul
+            className="mt-3"
+            style={{ border: "1px solid var(--border)", background: "var(--panel)" }}
+          >
+            <li className="px-4 py-3">
+              <span
+                className="block font-semibold uppercase"
+                style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}
+              >
+                {justWods.name}
+              </span>
+              <span className="mt-1 block text-sm text-[var(--ink-soft)]">
+                {justWods.summary}
+              </span>
+              {onJustWods && (
+                <span
+                  className="mt-1 block text-[11px] uppercase tracking-[0.14em] text-[var(--glow)]"
+                  style={{ fontFamily: "var(--font-mono)" }}
+                >
+                  What you're on now
+                </span>
+              )}
+            </li>
+          </ul>
+        </section>
       )}
-      {live.length > 0 && (
-        <ProgramList>
-          {live.map((program) => (
-            <ProgramRow key={program.id} program={program}>
-              {confirming === program.id ? (
-                <>
-                  <span className="normal-case tracking-normal text-[var(--ink-soft)]">
-                    Publish for every athlete? There's no taking it back.
-                  </span>
-                  <Action
-                    label={`Confirm publishing ${program.name}`}
-                    disabled={busy}
-                    onClick={() => promote.mutate(program.id)}
-                  >
-                    Publish
-                  </Action>
-                  <Action
-                    label="Keep it mine"
-                    disabled={busy}
-                    onClick={() => setConfirming(null)}
-                  >
-                    Cancel
-                  </Action>
-                </>
-              ) : (
-                <>
-                  <Link
-                    to={`/library/programs/${program.id}/edit`}
-                    aria-label={`Edit ${program.name}`}
-                  >
-                    Edit
-                  </Link>
-                  {isAdmin && (
+
+      <section aria-label="Your programs">
+        <SectionLabel>YOUR PROGRAMS</SectionLabel>
+        {error && (
+          <p className="mt-3 text-sm text-[var(--danger)]">
+            Couldn't load your programs.
+          </p>
+        )}
+        {!isLoading && programs?.length === 0 && (
+          <p className="mt-3 text-sm text-[var(--ink-soft)]">
+            Nothing yet. A program is one week of training that repeats — write
+            the days you train and what you do on them.
+          </p>
+        )}
+        {live.length > 0 && (
+          <ProgramList>
+            {live.map((program) => (
+              <ProgramRow key={program.id} program={program}>
+                {confirming === program.id ? (
+                  <>
+                    <span className="normal-case tracking-normal text-[var(--ink-soft)]">
+                      Publish for every athlete? There's no taking it back.
+                    </span>
                     <Action
-                      label={`Publish ${program.name}`}
+                      label={`Confirm publishing ${program.name}`}
                       disabled={busy}
-                      onClick={() => {
-                        starting();
-                        setConfirming(program.id);
-                      }}
+                      onClick={() => promote.mutate(program.id)}
                     >
                       Publish
                     </Action>
-                  )}
-                  <Action
-                    label={`Remove ${program.name}`}
-                    disabled={busy}
-                    onClick={() => remove.mutate({ tier: "own", id: program.id })}
-                  >
-                    Remove
-                  </Action>
-                </>
-              )}
-            </ProgramRow>
-          ))}
-        </ProgramList>
-      )}
-
-      {archived.length > 0 && (
-        <>
-          <SectionLabel>ARCHIVED</SectionLabel>
-          <ProgramList>
-            {archived.map((program) => (
-              <ProgramRow key={program.id} program={program}>
-                <Action
-                  label={`Restore ${program.name}`}
-                  disabled={busy}
-                  onClick={() => restore.mutate({ tier: "own", id: program.id })}
-                >
-                  Restore
-                </Action>
+                    <Action
+                      label="Keep it mine"
+                      disabled={busy}
+                      onClick={() => setConfirming(null)}
+                    >
+                      Cancel
+                    </Action>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      to={`/programs/${program.id}/edit`}
+                      aria-label={`Edit ${program.name}`}
+                    >
+                      Edit
+                    </Link>
+                    {isAdmin && (
+                      <Action
+                        label={`Publish ${program.name}`}
+                        disabled={busy}
+                        onClick={() => {
+                          starting();
+                          setConfirming(program.id);
+                        }}
+                      >
+                        Publish
+                      </Action>
+                    )}
+                    <Action
+                      label={`Remove ${program.name}`}
+                      disabled={busy}
+                      onClick={() => remove.mutate({ tier: "own", id: program.id })}
+                    >
+                      Remove
+                    </Action>
+                  </>
+                )}
               </ProgramRow>
             ))}
           </ProgramList>
-        </>
-      )}
+        )}
+
+        {archived.length > 0 && (
+          <>
+            <SectionLabel>ARCHIVED</SectionLabel>
+            <ProgramList>
+              {archived.map((program) => (
+                <ProgramRow key={program.id} program={program}>
+                  <Action
+                    label={`Restore ${program.name}`}
+                    disabled={busy}
+                    onClick={() => restore.mutate({ tier: "own", id: program.id })}
+                  >
+                    Restore
+                  </Action>
+                </ProgramRow>
+              ))}
+            </ProgramList>
+          </>
+        )}
+      </section>
 
       {!isAdmin && (copyableError || (copyable?.length ?? 0) > 0) && (
         <section aria-label="From the library">
@@ -274,7 +316,107 @@ export function ProgramsPage() {
           onRestore={(id) => restore.mutate({ tier: "global", id })}
         />
       )}
+
+      <Link
+        to="/programs/new"
+        className="mt-8 block w-full py-3 text-center text-sm font-semibold uppercase tracking-[0.1em]"
+        style={{
+          fontFamily: "var(--font-mono)",
+          border: "1px solid var(--glow)",
+          color: "var(--glow)",
+        }}
+      >
+        + New program
+      </Link>
+      <Link
+        to="/programs/paste"
+        className="mt-2 block text-center text-xs text-[var(--ink-soft)] underline"
+      >
+        Or paste a program in
+      </Link>
+
+      {runs && (
+        <section aria-label="Past runs">
+          <SectionLabel>PAST RUNS</SectionLabel>
+          {runs.past.length === 0 ? (
+            <p className="mt-3 text-sm text-[var(--ink-soft)]">
+              Nothing finished or ended yet.
+            </p>
+          ) : (
+            <ProgramList>
+              {runs.past.map((run) => (
+                <PastRun key={run.enrollmentId} run={run} />
+              ))}
+            </ProgramList>
+          )}
+        </section>
+      )}
     </div>
+  );
+}
+
+/**
+ * The run under way. Just WODs is said for what it is -- no program -- rather
+ * than dressed up with a week count that means nothing for it.
+ */
+function CurrentRun({ run }: { run: ProgramRun | null }) {
+  if (run === null) {
+    return (
+      <p className="mt-3 text-sm text-[var(--ink-soft)]">
+        Nothing is running. Pick something below to start the next run.
+      </p>
+    );
+  }
+  const justWods = run.programId === DEFAULT_PROGRAM_ID;
+  return (
+    <div
+      className="mt-3 px-4 py-3"
+      style={{ border: "1px solid var(--glow)", background: "var(--panel)" }}
+    >
+      <span
+        className="block font-semibold uppercase"
+        style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}
+      >
+        {run.programName}
+      </span>
+      {justWods ? (
+        <span className="mt-1 block text-sm text-[var(--ink-soft)]">
+          No program is driving your week — Today picks a workout a day.
+        </span>
+      ) : (
+        <>
+          <span
+            className="mt-1 block text-[11px] uppercase tracking-[0.14em] text-[var(--glow)]"
+            style={{ fontFamily: "var(--font-mono)" }}
+          >
+            {currentRunLine(run)}
+          </span>
+          <span className="mt-1 block text-sm text-[var(--ink-soft)]">
+            {run.programSummary}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+function PastRun({ run }: { run: ProgramRun }) {
+  return (
+    <li className="px-4 py-3" style={{ borderTop: "1px solid var(--border)" }}>
+      <span
+        className="block font-semibold uppercase"
+        style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}
+      >
+        {run.programName}
+      </span>
+      <span
+        className="mt-1 block text-[11px] text-[var(--ink-faint)]"
+        style={{ fontFamily: "var(--font-mono)" }}
+      >
+        {pastRunLine(run)}
+        {run.finishedAt && ` · ${shortDate(run.finishedAt.slice(0, 10))}`}
+      </span>
+    </li>
   );
 }
 
@@ -379,7 +521,7 @@ function GlobalLibrary({
                 <>
                   <CopyLink program={program} />
                   <Link
-                    to={`/library/programs/global/${program.id}/edit`}
+                    to={`/programs/global/${program.id}/edit`}
                     aria-label={`Edit ${program.name}`}
                   >
                     Edit
@@ -404,7 +546,7 @@ function GlobalLibrary({
 function CopyLink({ program }: { program: ProgramSummary }) {
   return (
     <Link
-      to={`/library/programs/new?copy=${encodeURIComponent(program.id)}`}
+      to={`/programs/new?copy=${encodeURIComponent(program.id)}`}
       aria-label={`Copy ${program.name} to your programs`}
     >
       Copy

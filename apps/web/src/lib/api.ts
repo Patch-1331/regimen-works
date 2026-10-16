@@ -13,6 +13,7 @@ import type {
   LogSet,
   CommitSetup,
   CompletedProgram,
+  ProgramRuns,
   Me,
   MovementHistory,
   MovementVolume,
@@ -417,6 +418,11 @@ export const api = {
   commitSetup: (body: CommitSetup) =>
     postJson<{ onboardedAt: string }>("/setup", body),
 
+  /**
+   * The Programs tab's runs (DN-179): the one under way, if any, and every
+   * one finished or ended, newest first. Just WODs is never a past run.
+   */
+  programRuns: () => request<ProgramRuns>("/programs/runs"),
   /** The programs this athlete wrote (DN-145), live first, archived marked. */
   programs: () => request<ProgramSummary[]>("/programs"),
   /**

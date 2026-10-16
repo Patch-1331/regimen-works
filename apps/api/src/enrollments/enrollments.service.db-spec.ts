@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
+import { DEFAULT_PROGRAM_ID } from '@regimen-works/shared';
 import type { PrismaService } from '../prisma/prisma.service';
 import { testPrisma } from '../test-support/database';
 import {
@@ -10,6 +11,7 @@ import {
   createSkillLevel,
   createUser,
 } from '../test-support/fixtures';
+import { upsertJustWods } from '../programs/just-wods';
 import { EnrollmentsService } from './enrollments.service';
 
 /**
@@ -336,6 +338,95 @@ describe('EnrollmentsService.listCompleted', () => {
     await completedRun(owner.id);
 
     await expect(service().listCompleted(stranger.id)).resolves.toEqual([]);
+  });
+});
+
+describe('EnrollmentsService.runs', () => {
+  it('reads the run under way with the week today falls in', async () => {
+    const user = await createUser();
+    const program = await createProgram({ name: 'Foundations' });
+    // A Monday, so 2026-10-26 opens the run's fourth calendar week.
+    const run = await createEnrollment(user.id, {
+      programId: program.id,
+      startDate: '2026-10-05',
+    });
+
+    const { current } = await service().runs(user.id, TODAY);
+
+    expect(current).toMatchObject({
+      enrollmentId: run.id,
+      programName: 'Foundations',
+      programSummary: program.summary,
+      status: 'active',
+      totalWeeks: 6,
+      week: 4,
+      finishedAt: null,
+    });
+  });
+
+  it('puts a run waiting for its start date in no week yet', async () => {
+    const user = await createUser();
+    await createEnrollment(user.id, { startDate: '2026-11-02' });
+
+    const { current } = await service().runs(user.id, TODAY);
+
+    expect(current?.week).toBeNull();
+  });
+
+  it('lists finished and ended runs together, newest first', async () => {
+    const user = await createUser();
+    const finished = await completedRun(user.id, {
+      completedAt: new Date('2026-08-01T10:00:00.000Z'),
+    });
+    const ended = await createEnrollment(user.id, {
+      status: 'ended',
+      startDate: '2026-09-14',
+      endedAt: new Date('2026-09-23T10:00:00.000Z'),
+    });
+
+    const { current, past } = await service().runs(user.id, TODAY);
+
+    expect(current).toBeNull();
+    expect(past.map((r) => [r.enrollmentId, r.status, r.week])).toEqual([
+      [ended.id, 'ended', 2],
+      [finished.id, 'completed', 6],
+    ]);
+  });
+
+  it('never lists a run of Just WODs as past, but reads one as current', async () => {
+    await upsertJustWods(testPrisma());
+    const user = await createUser();
+    await createEnrollment(user.id, {
+      programId: DEFAULT_PROGRAM_ID,
+      status: 'ended',
+      weeks: null,
+      endedAt: new Date('2026-09-20T10:00:00.000Z'),
+    });
+    await createEnrollment(user.id, {
+      programId: DEFAULT_PROGRAM_ID,
+      weeks: null,
+    });
+
+    const { current, past } = await service().runs(user.id, TODAY);
+
+    expect(current?.programId).toBe(DEFAULT_PROGRAM_ID);
+    expect(past).toEqual([]);
+  });
+
+  it("never reads another athlete's runs", async () => {
+    const owner = await createUser();
+    const stranger = await createUser();
+    await createEnrollment(owner.id);
+    await completedRun(owner.id);
+    await createEnrollment(owner.id, {
+      status: 'ended',
+      endedAt: new Date('2026-09-23T10:00:00.000Z'),
+    });
+
+    await expect(service().runs(stranger.id, TODAY)).resolves.toEqual({
+      current: null,
+      past: [],
+    });
   });
 });
 

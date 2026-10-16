@@ -155,3 +155,43 @@ export const completedProgramSchema = z.object({
   summary: enrollmentSummarySchema,
 });
 export type CompletedProgram = z.infer<typeof completedProgramSchema>;
+
+/**
+ * One run as the Programs tab lists it (DN-179): the current run at the top,
+ * and every finished or ended one under "Past runs".
+ *
+ * Carries the program's name and summary rather than the program, the way
+ * `completedProgramSchema` does, so a program edited or archived since still
+ * reads as what the athlete ran.
+ */
+export const programRunSchema = z.object({
+  enrollmentId: z.string(),
+  programId: z.string(),
+  programName: z.string(),
+  programSummary: z.string(),
+  status: enrollmentStatus,
+  startDate: z.string().date(),
+  /** How many weeks the run was chosen to last. Null for an open-ended program. */
+  totalWeeks: z.number().int().positive().nullable(),
+  /**
+   * The week the run is in, or reached before it finished or ended --
+   * 1-based, counted by calendar week the way Today's `week` is. Null only
+   * for a current run whose start date has not arrived yet.
+   */
+  week: z.number().int().positive().nullable(),
+  /** When a past run finished or ended. Null for the current run. */
+  finishedAt: z.string().datetime().nullable(),
+});
+export type ProgramRun = z.infer<typeof programRunSchema>;
+
+/**
+ * `GET /programs/runs`. `current` is null only for an athlete between runs --
+ * one who finished a program and has started nothing since. `past` is newest
+ * first and never holds a Just WODs run: it is the "no program" choice, and a
+ * list of the stretches somebody trained without one would be noise.
+ */
+export const programRunsSchema = z.object({
+  current: programRunSchema.nullable(),
+  past: z.array(programRunSchema),
+});
+export type ProgramRuns = z.infer<typeof programRunsSchema>;

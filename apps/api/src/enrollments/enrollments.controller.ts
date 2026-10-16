@@ -26,6 +26,12 @@ export class EnrollmentsController {
     return this.enrollments.listCompleted(userId);
   }
 
+  /** The Programs tab's current run and past runs (DN-179). */
+  @Get('runs')
+  runs(@CurrentUser() userId: string) {
+    return this.enrollments.runs(userId, todayIsoDate());
+  }
+
   /**
    * The rest pace of the program being run (ADR 0005). `active` rather than an
    * id, because there is exactly one run it can mean and a client holding a
