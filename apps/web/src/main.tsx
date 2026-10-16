@@ -7,9 +7,13 @@ import "./index.css";
 import App from "./App.tsx";
 import { ApiAuthBridge } from "./ApiAuthBridge";
 
+// Mock mode (DN-181): Clerk and the API are stand-ins, so no key is needed.
+// Statically false in every other mode, so the build drops what it guards.
+const mock = import.meta.env.MODE === "mock";
+
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as
   string | undefined;
-if (!publishableKey) {
+if (!publishableKey && !mock) {
   // Failing loudly beats a blank screen and a console warning: without this
   // key Clerk renders nothing and every API call would 401.
   throw new Error(
@@ -30,16 +34,25 @@ const queryClient = new QueryClient({
   },
 });
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <ClerkProvider publishableKey={publishableKey}>
-      <ApiAuthBridge>
-        <QueryClientProvider client={queryClient}>
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
-        </QueryClientProvider>
-      </ApiAuthBridge>
-    </ClerkProvider>
-  </StrictMode>,
-);
+async function boot() {
+  // The worker has to be answering before the first query goes out.
+  if (mock) {
+    const { startMockApi } = await import("./mock/browser");
+    await startMockApi();
+  }
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <ClerkProvider publishableKey={publishableKey ?? ""}>
+        <ApiAuthBridge>
+          <QueryClientProvider client={queryClient}>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+          </QueryClientProvider>
+        </ApiAuthBridge>
+      </ClerkProvider>
+    </StrictMode>,
+  );
+}
+
+void boot();

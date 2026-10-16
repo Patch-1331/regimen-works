@@ -18,6 +18,15 @@
         "dev:web"
       ],
       "port": 5173
+    },
+    {
+      "name": "web-mock",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev:web:mock"
+      ],
+      "port": 5174
     }
   ]
 }

@@ -41,11 +41,25 @@ npm run lint          # eslint in api, oxlint in web + shared
 npm run build
 npm run dev:api
 npm run dev:web
+npm run dev:web:mock  # the web app on :5174 with no API, database or Clerk
 ```
 
 Narrow to one workspace with `--workspace apps/api`. The API has three separate
 jest configs — `test` (unit), `test:db` (Postgres-backed `*.db-spec.ts`),
 `test:e2e`.
+
+### Checking the web app in a browser
+
+Use **mock mode** to look at UI: `preview_start web-mock`. It needs no `.env`,
+API or database, so it works in any worktree or cloud session. Clerk is replaced
+by a signed-in stand-in, and msw answers `/api` from the same handlers and
+fixtures the vitest suite uses (`src/test/handlers.ts`, plus extras in
+`src/mock/browser.ts`). It is stateless: a write answers, then the next read is
+unchanged. If a screen has nothing to show, add a handler to `src/mock/browser.ts`.
+
+Use **real mode** (`api` + `web`) only when the change needs the API itself.
+`.worktreeinclude` copies both `.env` files into new worktrees. Clerk's sign-in
+is on Clerk's own domain, so the athlete signs in by hand in the browser pane.
 
 ## Landmines
 
@@ -57,8 +71,8 @@ somewhere other than the cause.
   still passes. After any schema change:
   `npm run prisma:generate --workspace apps/api`.
 - **A missing `VITE_*` var doesn't fail the web build** — it tree-shakes the code
-  that reads it and succeeds, smaller and broken. Judge by bundle size: ~644 kB is
-  complete; ~405 kB means `VITE_CLERK_PUBLISHABLE_KEY` was missing — `main.tsx`
+  that reads it and succeeds, smaller and broken. Judge by bundle size against
+  `main` built the same way (~705 kB complete on 2026-10-16); ~405 kB means `VITE_CLERK_PUBLISHABLE_KEY` was missing — `main.tsx`
   throws on load, the app is tree-shaken out, and the deploy serves a blank page.
 - **Every query must be scoped by `userId`.** Auth is Clerk and the app is
   multi-tenant; an unscoped read compiles fine and returns other athletes' rows.
