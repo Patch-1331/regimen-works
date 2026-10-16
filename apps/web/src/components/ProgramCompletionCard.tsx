@@ -14,8 +14,8 @@
  * Two offers and no default. "Run it again" is the same program at the same
  * length from today, which needs no questions because none of them have new
  * answers -- and is left out once the program has been archived, which the
- * API will not start again (DN-153). "See what's next" is the wizard, which is
- * the program picker. And
+ * API will not start again (DN-153). "See what's next" is the Programs tab
+ * (DN-179), where every program there is to start is listed. And
  * dismissing is a third real answer: an athlete who wants neither should be
  * able to say so once and have the screen stay said.
  */
@@ -38,6 +38,8 @@ export function ProgramCompletionCard({ program }: { program: CompletedProgram }
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["today"] }),
       queryClient.invalidateQueries({ queryKey: ["completed-programs"] }),
+      // Running it again starts a new run, which Programs lists (DN-179).
+      queryClient.invalidateQueries({ queryKey: ["programRuns"] }),
     ]);
   }
 
@@ -104,7 +106,7 @@ export function ProgramCompletionCard({ program }: { program: CompletedProgram }
           </button>
         )}
         <button
-          onClick={() => navigate("/setup")}
+          onClick={() => navigate("/programs")}
           disabled={busy}
           className="flex-1 rounded-sm border border-[var(--ink-faint)] py-2.5 text-center text-xs font-semibold tracking-[0.14em] text-[var(--ink)]"
           style={{ fontFamily: "var(--font-mono)" }}

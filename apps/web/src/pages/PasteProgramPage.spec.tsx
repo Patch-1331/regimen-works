@@ -83,16 +83,16 @@ async function pasteAndRead() {
 describe("pasting a program", () => {
   it("is offered from Your programs", async () => {
     api();
-    renderRoute("/library/programs");
+    renderRoute("/programs");
     await userEvent.click(
-      await screen.findByRole("link", { name: /paste one in/i }),
+      await screen.findByRole("link", { name: /paste a program in/i }),
     );
     expect(await screen.findByLabelText("Pasted program")).toBeInTheDocument();
   });
 
   it("reads every line back, refusing what it cannot match", async () => {
     api();
-    renderRoute("/library/programs/paste");
+    renderRoute("/programs/paste");
     await pasteAndRead();
 
     const monday = screen.getByRole("region", { name: "Mon" });
@@ -117,7 +117,7 @@ describe("pasting a program", () => {
 
   it("shows a guess as a guess", async () => {
     api();
-    renderRoute("/library/programs/paste");
+    renderRoute("/programs/paste");
     const box = await screen.findByLabelText("Pasted program");
     await userEvent.click(box);
     await userEvent.paste("Barbell Squats 5x5");
@@ -129,7 +129,7 @@ describe("pasting a program", () => {
 
   it("leaves a line out, and puts it back", async () => {
     api();
-    renderRoute("/library/programs/paste");
+    renderRoute("/programs/paste");
     await pasteAndRead();
 
     const wednesday = screen.getByRole("region", { name: "Wed" });
@@ -145,7 +145,7 @@ describe("pasting a program", () => {
 
   it("hands the answered lines to the week sheet, and saves from there", async () => {
     const sent = api();
-    renderRoute("/library/programs/paste");
+    renderRoute("/programs/paste");
     await pasteAndRead();
 
     const monday = screen.getByRole("region", { name: "Mon" });

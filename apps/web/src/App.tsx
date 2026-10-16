@@ -1,4 +1,11 @@
-import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
+import {
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+  useParams,
+} from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./lib/api";
 import { SignedIn, SignedOut, SignIn, UserButton } from "@clerk/clerk-react";
@@ -71,7 +78,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
  * Where an athlete who has not finished setup may be: the wizard, and the
  * program editor its "Build your own" card opens (DN-145).
  */
-const SETUP_PATHS = new Set(["/setup", "/library/programs/new"]);
+const SETUP_PATHS = new Set(["/setup", "/programs/new"]);
 
 function SetupGate({ children }: { children: React.ReactNode }) {
   const { data: me, isPending } = useQuery({
@@ -85,6 +92,18 @@ function SetupGate({ children }: { children: React.ReactNode }) {
     return <Navigate to="/setup" replace />;
   }
   return <>{children}</>;
+}
+
+/**
+ * Programs had a home under Library before they had a tab of their own
+ * (DN-179), and routines were what they were called before that (DN-177).
+ * Both old paths land on the same screen under `/programs`, query string
+ * kept, so a bookmark or a `?copy=` link still opens what it meant to.
+ */
+function MovedToPrograms() {
+  const { "*": rest } = useParams();
+  const { search } = useLocation();
+  return <Navigate to={`/programs${rest ? `/${rest}` : ""}${search}`} replace />;
 }
 
 function App() {
@@ -101,9 +120,11 @@ function App() {
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/library/movements/:id" element={<ExerciseDetailPage />} />
             <Route path="/library/wods" element={<WodLibraryPage />} />
-            <Route path="/library/programs" element={<ProgramsPage />} />
+            <Route path="/programs" element={<ProgramsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
+          <Route path="/library/programs/*" element={<MovedToPrograms />} />
+          <Route path="/library/routines/*" element={<MovedToPrograms />} />
           <Route
             path="/workout/:assignmentId"
             element={
@@ -121,21 +142,21 @@ function App() {
           {/* Full-screen, and reachable before setup is finished: the
             wizard's "Build your own" opens it (DN-145). */}
           <Route
-            path="/library/programs/new"
+            path="/programs/new"
             element={<ProgramEditorPage />}
           />
           {/* Pasting one in (DN-152) hands its draft to the sheet above. */}
           <Route
-            path="/library/programs/paste"
+            path="/programs/paste"
             element={<PasteProgramPage />}
           />
           <Route
-            path="/library/programs/:id/edit"
+            path="/programs/:id/edit"
             element={<ProgramEditorPage />}
           />
           {/* An admin's edit of a global program (DN-148); the API refuses anyone else. */}
           <Route
-            path="/library/programs/global/:id/edit"
+            path="/programs/global/:id/edit"
             element={<ProgramEditorPage tier="global" />}
           />
         </Routes>

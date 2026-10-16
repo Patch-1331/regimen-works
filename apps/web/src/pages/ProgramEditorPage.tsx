@@ -69,7 +69,7 @@ export function ProgramEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
   const [params] = useSearchParams();
   const { id } = useParams();
   const fromSetup = params.get("from") === "setup";
-  const back = fromSetup ? "/setup" : "/library/programs";
+  const back = fromSetup ? "/setup" : "/programs";
   const copyId = id === undefined ? params.get("copy") : null;
 
   const saved = useQuery({
@@ -171,7 +171,7 @@ export function ProgramEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
       if (fromSetup) {
         navigate("/setup", { state: { programId: created.id } });
       } else {
-        navigate("/library/programs");
+        navigate("/programs");
       }
     },
   });

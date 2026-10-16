@@ -229,7 +229,7 @@ describe("the completion card", () => {
     ).toBeInTheDocument();
   });
 
-  it("sends the athlete to the wizard to choose something else", async () => {
+  it("sends the athlete to Programs to choose something else", async () => {
     const writes = recordingWrites();
     todayIs({ completedProgram: fixtures.completedProgram() });
 
@@ -239,12 +239,10 @@ describe("the completion card", () => {
     );
 
     expect(
-      await screen.findByRole("heading", {
-        name: "Let's set up your training",
-      }),
+      await screen.findByRole("heading", { name: "Programs" }),
     ).toBeInTheDocument();
     // Browsing is not answering. The card is still owed until the athlete
-    // actually starts something, and the wizard is re-runnable by design.
+    // actually starts something.
     expect(writes).toEqual([]);
   });
 

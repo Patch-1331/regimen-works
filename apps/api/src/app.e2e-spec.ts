@@ -14,6 +14,7 @@ import {
   meSchema,
   setupOptionsSchema,
   completedProgramSchema,
+  programRunsSchema,
   addIsoDays,
   DEFAULT_PROGRAM_ID,
 } from '@regimen-works/shared';
@@ -1222,6 +1223,25 @@ describe('first-run setup, end to end', () => {
     expect(settings.trainingDays).toEqual([1, 3, 5]);
     // Flexible, so the athlete's own days are in effect rather than locked.
     expect(settings.scheduleLock).toBeNull();
+
+    // The Programs tab reads the new run as current (DN-179). `/programs/runs`
+    // could also match ProgramsController's `GET :id`; this is what pins that
+    // it reaches the runs. And nothing past: the Just WODs run provisioning
+    // made was never trained, so it was replaced rather than ended.
+    const runs = parsed(
+      programRunsSchema,
+      await http()
+        .get('/programs/runs')
+        .set(...asUser(ALICE))
+        .expect(200),
+    );
+    expect(runs.current).toMatchObject({
+      programId: program.id,
+      programName: 'Pull-Up Builder',
+      totalWeeks: 6,
+      week: 1,
+    });
+    expect(runs.past).toEqual([]);
   });
 
   it('locks the week to a fixed program the athlete chose', async () => {

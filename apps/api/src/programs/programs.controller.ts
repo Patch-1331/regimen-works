@@ -13,9 +13,10 @@ import { ProgramsService } from './programs.service';
  * method is the one every future path (copy, import) goes through.
  *
  * `/programs` is shared with EnrollmentsController's runs (`completed`,
- * `active/rest`, `:enrollmentId/…`). Only `GET completed` could also match
- * `GET :id`; the `/programs/completed` e2e tests in app.e2e-spec.ts pin that
- * it reaches the runs, and are what notice if a change here ever takes it.
+ * `runs`, `active/rest`, `:enrollmentId/…`). `GET completed` and `GET runs`
+ * could also match `GET :id`; the e2e tests of both in app.e2e-spec.ts pin
+ * that they reach the runs, and are what notice if a change here ever takes
+ * them.
  */
 @Controller('programs')
 export class ProgramsController {

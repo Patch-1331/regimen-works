@@ -4,11 +4,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  DEFAULT_PROGRAM_ID,
   enrollmentSummarySchema,
   movementSnapshotSchema,
   type CompletedProgram,
   type EnrollmentSummary,
   type MovementSnapshot,
+  type ProgramRuns,
   type RestPace,
   type UpdateRestPace,
 } from '@regimen-works/shared';
@@ -18,6 +20,7 @@ import { libraryVisibleTo } from '../library/visible-to';
 import { loadActiveProgram } from '../programs/active-program';
 import { restPaceOf } from '../programs/rest-pace';
 import { buildEnrollmentSummary } from './enrollment-summary.logic';
+import { newestFirst, toProgramRun } from './program-runs.logic';
 import { snapshotMovements } from './starting-movements';
 
 /**
@@ -80,6 +83,46 @@ export class EnrollmentsService {
         summary,
       },
     });
+  }
+
+  /**
+   * The Programs tab's two lists of runs (DN-179): the one under way, and
+   * every one finished or ended, newest first.
+   *
+   * Just WODs is the current run often, and a past run never. It is the "no
+   * program" choice, and every switch away from it ends a run of it (DN-178),
+   * so listing those would fill the history with stretches of nothing in
+   * particular.
+   */
+  async runs(userId: string, today: string): Promise<ProgramRuns> {
+    const select = {
+      id: true,
+      programId: true,
+      status: true,
+      startDate: true,
+      weeks: true,
+      completedAt: true,
+      endedAt: true,
+      program: { select: { name: true, summary: true } },
+    } satisfies Prisma.ProgramEnrollmentSelect;
+    const [current, past] = await Promise.all([
+      this.prisma.programEnrollment.findFirst({
+        where: { userId, status: 'active' },
+        select,
+      }),
+      this.prisma.programEnrollment.findMany({
+        where: {
+          userId,
+          status: { in: ['completed', 'ended'] },
+          programId: { not: DEFAULT_PROGRAM_ID },
+        },
+        select,
+      }),
+    ]);
+    return {
+      current: current ? toProgramRun(current, today) : null,
+      past: newestFirst(past.map((row) => toProgramRun(row, today))),
+    };
   }
 
   /** Every program this athlete has finished, most recent first. */

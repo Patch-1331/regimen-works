@@ -66,7 +66,7 @@ export function PasteProgramPage() {
   return (
     <div className="mx-auto max-w-md p-6 pb-32">
       <Link
-        to="/library/programs"
+        to="/programs"
         className="text-xs text-[var(--ink-faint)]"
         style={mono}
       >
@@ -159,7 +159,7 @@ export function PasteProgramPage() {
               type="button"
               disabled={problems.length > 0}
               onClick={() =>
-                navigate("/library/programs/new", {
+                navigate("/programs/new", {
                   state: { pasted: toPastedDraft(read.program, read.lines) },
                 })
               }

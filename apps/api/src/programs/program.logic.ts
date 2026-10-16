@@ -185,6 +185,15 @@ export function resolveSlotForDate<S extends AuthoredSlot>(
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+/**
+ * The 1-based week of a run that `date` falls in, counted the way
+ * `resolveSlotForDate` counts it -- by calendar week, so a mid-week start has
+ * a short week 1. Below 1 for a date before the start.
+ */
+export function weekOfRun(startDate: string, date: string): number {
+  return weeksBetween(startDate, date) + 1;
+}
+
 /** Whole calendar weeks between the two dates' Mondays. */
 function weeksBetween(from: string, to: string): number {
   const fromMonday = Date.parse(`${getWeekRange(from).start}T00:00:00Z`);

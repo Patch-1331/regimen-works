@@ -26,6 +26,11 @@ export const handlers = [
   // null card, so a spec that is not about program completion never has to
   // say so.
   http.get(api("/programs/completed"), () => HttpResponse.json([])),
+  // No run under way and none behind by default (DN-179): a spec about the
+  // Programs tab's runs serves the ones it means to show.
+  http.get(api("/programs/runs"), () =>
+    HttpResponse.json({ current: null, past: [] }),
+  ),
   http.post(api("/programs/:enrollmentId/dismiss"), () =>
     HttpResponse.json({ dismissed: true }),
   ),

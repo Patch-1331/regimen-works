@@ -115,7 +115,7 @@ async function writeMondayPull() {
 describe("the week sheet", () => {
   it("refuses to save until the program is named and has a day", async () => {
     api();
-    renderRoute("/library/programs/new");
+    renderRoute("/programs/new");
 
     const save = await screen.findByRole("button", { name: "Save program" });
     expect(save).toBeDisabled();
@@ -124,7 +124,7 @@ describe("the week sheet", () => {
 
   it("shows every weekday, empty ones as rest", async () => {
     api();
-    renderRoute("/library/programs/new");
+    renderRoute("/programs/new");
 
     for (const day of ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]) {
       expect(await screen.findByRole("region", { name: day })).toBeInTheDocument();
@@ -134,7 +134,7 @@ describe("the week sheet", () => {
 
   it("saves a program and lists it", async () => {
     const sent = api();
-    renderRoute("/library/programs/new");
+    renderRoute("/programs/new");
 
     await userEvent.type(await screen.findByLabelText("Program name"), "Pull days");
     await writeMondayPull();
@@ -168,7 +168,7 @@ describe("the week sheet", () => {
 
   it("names a specific exercise when one is picked", async () => {
     const sent = api();
-    renderRoute("/library/programs/new");
+    renderRoute("/programs/new");
 
     await userEvent.type(await screen.findByLabelText("Program name"), "Rows");
     const monday = await screen.findByRole("region", { name: "Mon" });
@@ -188,7 +188,7 @@ describe("the week sheet", () => {
 
   it("copies a day to another weekday", async () => {
     api();
-    renderRoute("/library/programs/new");
+    renderRoute("/programs/new");
 
     await writeMondayPull();
     const monday = screen.getByRole("region", { name: "Mon" });
@@ -254,7 +254,7 @@ function editing(overrides: Partial<EditableProgram> = {}) {
 describe("editing a program (DN-146)", () => {
   it("loads the saved program into the sheet and saves it back", async () => {
     const sent = editing();
-    renderRoute(`/library/programs/${SAVED.id}/edit`);
+    renderRoute(`/programs/${SAVED.id}/edit`);
 
     const name = await screen.findByLabelText("Program name");
     expect(name).toHaveValue("Pull days");
@@ -273,7 +273,7 @@ describe("editing a program (DN-146)", () => {
 
   it("says a rename reaches the people running it", async () => {
     editing({ hasRuns: true });
-    renderRoute(`/library/programs/${SAVED.id}/edit`);
+    renderRoute(`/programs/${SAVED.id}/edit`);
 
     expect(await screen.findByRole("status")).toHaveTextContent(
       /Renaming it or its days changes it for them too/,
@@ -283,7 +283,7 @@ describe("editing a program (DN-146)", () => {
 
   it("warns before a change to the week saves a new version", async () => {
     const sent = editing({ hasRuns: true });
-    renderRoute(`/library/programs/${SAVED.id}/edit`);
+    renderRoute(`/programs/${SAVED.id}/edit`);
 
     await writeMondayPull();
 
@@ -304,7 +304,7 @@ describe("editing a program (DN-146)", () => {
         days: [{ ...PULL_DAYS.days[0], label: "Pull" }],
       },
     });
-    renderRoute(`/library/programs/${SAVED.id}/edit`);
+    renderRoute(`/programs/${SAVED.id}/edit`);
 
     const name = await screen.findByLabelText("Name for Mon");
     expect(name).toHaveValue("Pull");
@@ -324,7 +324,7 @@ describe("editing a program (DN-146)", () => {
 
   it("will not save an archived program", async () => {
     editing({ archived: true });
-    renderRoute(`/library/programs/${SAVED.id}/edit`);
+    renderRoute(`/programs/${SAVED.id}/edit`);
 
     expect(
       await screen.findByText("This program is archived. Restore it before changing it."),
@@ -334,7 +334,7 @@ describe("editing a program (DN-146)", () => {
 
   it("says so when the program is not the athlete's", async () => {
     editing();
-    renderRoute("/library/programs/someone-elses/edit");
+    renderRoute("/programs/someone-elses/edit");
 
     expect(await screen.findByText("There's no program of yours here.")).toBeInTheDocument();
     expect(screen.queryByLabelText("Program name")).not.toBeInTheDocument();
@@ -346,13 +346,13 @@ describe("Your programs", () => {
     api({
       programs: [SAVED, { ...SAVED, id: "old", name: "Old days", archived: true }],
     });
-    renderRoute("/library/programs");
+    renderRoute("/programs");
 
     expect(await screen.findByText("Pull days")).toBeInTheDocument();
     expect(screen.getByText("ARCHIVED")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "+ New program" })).toHaveAttribute(
       "href",
-      "/library/programs/new",
+      "/programs/new",
     );
   });
 
@@ -360,11 +360,11 @@ describe("Your programs", () => {
     api({
       programs: [SAVED, { ...SAVED, id: "old", name: "Old days", archived: true }],
     });
-    renderRoute("/library/programs");
+    renderRoute("/programs");
 
     expect(await screen.findByRole("link", { name: "Edit Pull days" })).toHaveAttribute(
       "href",
-      "/library/programs/program-1/edit",
+      "/programs/program-1/edit",
     );
     expect(screen.queryByRole("link", { name: "Edit Old days" })).not.toBeInTheDocument();
   });
@@ -400,7 +400,7 @@ describe("removing and restoring (DN-147)", () => {
 
   it("offers Remove on live programs and Restore on archived ones", async () => {
     shelf();
-    renderRoute("/library/programs");
+    renderRoute("/programs");
 
     expect(await screen.findByRole("button", { name: "Remove Pull days" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Restore Old days" })).toBeEnabled();
@@ -410,7 +410,7 @@ describe("removing and restoring (DN-147)", () => {
 
   it("moves a removed program to the archived section", async () => {
     shelf();
-    renderRoute("/library/programs");
+    renderRoute("/programs");
 
     await userEvent.click(await screen.findByRole("button", { name: "Remove Pull days" }));
 
@@ -422,7 +422,7 @@ describe("removing and restoring (DN-147)", () => {
 
   it("says a run under way on it carries on", async () => {
     shelf({ running: true });
-    renderRoute("/library/programs");
+    renderRoute("/programs");
 
     await userEvent.click(await screen.findByRole("button", { name: "Remove Pull days" }));
 
@@ -433,7 +433,7 @@ describe("removing and restoring (DN-147)", () => {
 
   it("restores an archived program", async () => {
     shelf();
-    renderRoute("/library/programs");
+    renderRoute("/programs");
 
     await userEvent.click(await screen.findByRole("button", { name: "Restore Old days" }));
 
@@ -443,7 +443,7 @@ describe("removing and restoring (DN-147)", () => {
 
   it("says why a restore into a taken name is refused", async () => {
     shelf({ restoreRefused: true });
-    renderRoute("/library/programs");
+    renderRoute("/programs");
 
     await userEvent.click(await screen.findByRole("button", { name: "Restore Old days" }));
 
@@ -523,7 +523,7 @@ describe("the global library (DN-148)", () => {
 
   it("shows an athlete neither the global library nor a way to publish", async () => {
     api({ programs: [SAVED] });
-    renderRoute("/library/programs");
+    renderRoute("/programs");
 
     await screen.findByText("Pull days");
     expect(screen.queryByRole("region", { name: "Global library" })).not.toBeInTheDocument();
@@ -532,12 +532,12 @@ describe("the global library (DN-148)", () => {
 
   it("lets an admin copy a live global program from the global list", async () => {
     admin();
-    renderRoute("/library/programs");
+    renderRoute("/programs");
 
     const library = await screen.findByRole("region", { name: "Global library" });
     expect(
       await within(library).findByRole("link", { name: "Copy Starter strength to your programs" }),
-    ).toHaveAttribute("href", "/library/programs/new?copy=global-1");
+    ).toHaveAttribute("href", "/programs/new?copy=global-1");
     expect(within(library).queryByRole("link", { name: /Copy Just WODs/ })).toBeNull();
     expect(within(library).queryByRole("link", { name: /Copy Old strength/ })).toBeNull();
     expect(screen.queryByRole("region", { name: "From the library" })).toBeNull();
@@ -545,7 +545,7 @@ describe("the global library (DN-148)", () => {
 
   it("lists the global library for an admin, Just WODs built in and untouchable", async () => {
     admin();
-    renderRoute("/library/programs");
+    renderRoute("/programs");
 
     const library = await screen.findByRole("region", { name: "Global library" });
     const rows = await within(library).findAllByRole("listitem");
@@ -559,7 +559,7 @@ describe("the global library (DN-148)", () => {
     expect(within(rows[0]).queryByRole("link")).not.toBeInTheDocument();
     expect(within(rows[1]).getByRole("link", { name: "Edit Starter strength" })).toHaveAttribute(
       "href",
-      "/library/programs/global/global-1/edit",
+      "/programs/global/global-1/edit",
     );
     expect(within(rows[1]).getByRole("button", { name: "Remove Starter strength" })).toBeEnabled();
     expect(within(rows[2]).getByRole("button", { name: "Restore Old strength" })).toBeEnabled();
@@ -567,7 +567,7 @@ describe("the global library (DN-148)", () => {
 
   it("publishes one of the admin's own programs only once they confirm", async () => {
     const calls = admin();
-    renderRoute("/library/programs");
+    renderRoute("/programs");
 
     await userEvent.click(await screen.findByRole("button", { name: "Publish Pull days" }));
     expect(screen.getByText(/There's no taking it back/)).toBeInTheDocument();
@@ -587,7 +587,7 @@ describe("the global library (DN-148)", () => {
 
   it("writes a new program to the global library when the admin ticks publish", async () => {
     const calls = admin();
-    renderRoute("/library/programs/new");
+    renderRoute("/programs/new");
 
     await userEvent.type(await screen.findByLabelText("Program name"), "Starter strength");
     await userEvent.click(screen.getByRole("checkbox", { name: /Publish to the global library/ }));
@@ -600,7 +600,7 @@ describe("the global library (DN-148)", () => {
 
   it("offers a global program only library movements, and flags one picked before", async () => {
     admin();
-    renderRoute("/library/programs/new");
+    renderRoute("/programs/new");
 
     await userEvent.type(await screen.findByLabelText("Program name"), "Rows");
     const monday = await screen.findByRole("region", { name: "Mon" });
@@ -624,14 +624,14 @@ describe("the global library (DN-148)", () => {
 
   it("does not offer publishing to an athlete", async () => {
     api();
-    renderRoute("/library/programs/new");
+    renderRoute("/programs/new");
     await screen.findByLabelText("Program name");
     expect(screen.queryByRole("checkbox", { name: /Publish/ })).not.toBeInTheDocument();
   });
 
   it("edits a global program through the admin route", async () => {
     const calls = admin();
-    renderRoute("/library/programs/global/global-1/edit");
+    renderRoute("/programs/global/global-1/edit");
 
     const name = await screen.findByLabelText("Program name");
     expect(screen.getByText(/EVERY ATHLETE IS OFFERED THIS/)).toBeInTheDocument();
@@ -674,7 +674,7 @@ describe("the global library (DN-148)", () => {
 
     it("offers a tick on every global program but Just WODs", async () => {
       exporting();
-      renderRoute("/library/programs");
+      renderRoute("/programs");
 
       const library = await screen.findByRole("region", { name: "Global library" });
       expect(
@@ -694,7 +694,7 @@ describe("the global library (DN-148)", () => {
     it("exports the ticked programs, archived included, as one saved file", async () => {
       const calls = exporting();
       vi.mocked(saveJson).mockClear();
-      renderRoute("/library/programs");
+      renderRoute("/programs");
 
       const library = await screen.findByRole("region", { name: "Global library" });
       await userEvent.click(
@@ -721,7 +721,7 @@ describe("the global library (DN-148)", () => {
 
     it("shows no export to an athlete", async () => {
       api({ programs: [SAVED] });
-      renderRoute("/library/programs");
+      renderRoute("/programs");
 
       await screen.findByText("Pull days");
       expect(screen.queryByRole("checkbox")).toBeNull();
@@ -752,18 +752,18 @@ describe("copying a global program (DN-149)", () => {
 
   it("offers an athlete the library's programs to copy", async () => {
     library();
-    renderRoute("/library/programs");
+    renderRoute("/programs");
 
     const offered = await screen.findByRole("region", { name: "From the library" });
     expect(within(offered).getByText("Starter strength")).toBeInTheDocument();
     expect(
       within(offered).getByRole("link", { name: "Copy Starter strength to your programs" }),
-    ).toHaveAttribute("href", "/library/programs/new?copy=global-1");
+    ).toHaveAttribute("href", "/programs/new?copy=global-1");
   });
 
   it("fills the sheet from the original and saves it as the athlete's own", async () => {
     const sent = library();
-    renderRoute("/library/programs/new?copy=global-1");
+    renderRoute("/programs/new?copy=global-1");
 
     expect(await screen.findByLabelText("Program name")).toHaveValue(
       "Starter strength (copy)",
@@ -791,7 +791,7 @@ describe("copying a global program (DN-149)", () => {
         }),
       ),
     );
-    renderRoute("/library/programs/new?copy=global-1");
+    renderRoute("/programs/new?copy=global-1");
 
     await screen.findByLabelText("Program name");
     expect(
@@ -801,7 +801,7 @@ describe("copying a global program (DN-149)", () => {
 
   it("says so when the program is no longer in the library", async () => {
     library();
-    renderRoute("/library/programs/new?copy=gone");
+    renderRoute("/programs/new?copy=gone");
 
     expect(
       await screen.findByText("That program isn't in the library any more."),

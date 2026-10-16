@@ -41,6 +41,8 @@ import {
   completedProgramSchema,
   createEnrollmentSchema,
   programEnrollmentSchema,
+  programRunSchema,
+  programRunsSchema,
 } from "./program-enrollment.js";
 import { todayResponseSchema } from "./today.js";
 import { wodMovementSchema, wodSchema } from "./wod.js";
@@ -2118,6 +2120,44 @@ describe("programEnrollmentSchema", () => {
         enrollment({ program: program({ scheduleMode: "fixed" }) }),
       ).success,
     ).toBe(false);
+  });
+});
+
+describe("programRunsSchema", () => {
+  const run = (overrides: Record<string, unknown> = {}) => ({
+    enrollmentId: "enrollment-1",
+    programId: "program-1",
+    programName: "Foundations",
+    programSummary: "Six weeks of the basics.",
+    status: "active",
+    startDate: "2026-09-14",
+    totalWeeks: 6,
+    week: 2,
+    finishedAt: null,
+    ...overrides,
+  });
+
+  it("parses a current run and the runs before it", () => {
+    expect(
+      programRunsSchema.safeParse({
+        current: run(),
+        past: [
+          run({ status: "ended", finishedAt: "2026-09-01T09:00:00.000Z" }),
+          run({ status: "completed", totalWeeks: null, week: 9 }),
+        ],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("parses no current run, and one not yet in a week", () => {
+    expect(programRunsSchema.safeParse({ current: null, past: [] }).success).toBe(
+      true,
+    );
+    expect(programRunSchema.safeParse(run({ week: null })).success).toBe(true);
+  });
+
+  it("refuses a week before the first", () => {
+    expect(programRunSchema.safeParse(run({ week: 0 })).success).toBe(false);
   });
 });
 
