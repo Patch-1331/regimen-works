@@ -1,0 +1,4 @@
+# Gitignored files Claude Code copies into each new worktree (DN-181).
+# Plain paths only: `**/` patterns are reported to match nothing.
+apps/web/.env
+apps/api/.env
