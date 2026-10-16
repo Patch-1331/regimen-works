@@ -12,6 +12,7 @@
     "security:audit": "npm audit --omit=dev --audit-level=moderate",
     "dev:api": "npm run start:dev --workspace apps/api",
     "dev:web": "npm run dev --workspace apps/web",
+    "dev:web:mock": "npm run dev:mock --workspace apps/web",
     "build": "npm run build --workspace packages/shared && npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces",
     "lint:fix": "npm run lint:fix --workspaces",

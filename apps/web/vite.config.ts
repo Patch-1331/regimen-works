@@ -1,10 +1,50 @@
+import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
+import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+/**
+ * msw's service worker, served by the dev server in mock mode only (DN-181).
+ * Not copied into `public/`, where every production build would ship it.
+ */
+function mockServiceWorker(): Plugin {
+  const script = createRequire(import.meta.url).resolve(
+    'msw/mockServiceWorker.js',
+  )
+  return {
+    name: 'mock-service-worker',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/mockServiceWorker.js', (_req, res) => {
+        res.setHeader('Content-Type', 'text/javascript')
+        res.end(readFileSync(script))
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
+export default defineConfig(({ mode }) => ({
+  // `vite --mode mock` (`npm run dev:mock`, DN-181): the app with Clerk and
+  // the API stood in for, for a browser with neither a key nor a sign-in.
+  // Nothing below reaches any other mode.
+  ...(mode === 'mock' && {
+    resolve: {
+      alias: {
+        '@clerk/clerk-react': fileURLToPath(
+          new URL('./src/mock/clerk.tsx', import.meta.url),
+        ),
+      },
+    },
+  }),
+  plugins: [
+    react(),
+    tailwindcss(),
+    ...(mode === 'mock' ? [mockServiceWorker()] : []),
+  ],
   // packages/shared compiles to CommonJS (apps/api needs it that way), and a
   // linked workspace package is otherwise served straight to the browser as
   // source — so its runtime exports have to be pre-bundled into ESM first.
@@ -31,6 +71,8 @@ export default defineConfig({
         'src/**/*.spec.{ts,tsx}',
         // Test scaffolding, and the entry point, which only mounts the tree.
         'src/test/**',
+        // Mock mode's stand-ins (DN-181), which only a browser runs.
+        'src/mock/**',
         'src/main.tsx',
       ],
       reporter: ['text', 'text-summary', 'json-summary'],
@@ -61,4 +103,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))
