@@ -145,6 +145,9 @@ function App() {
             path="/programs/new"
             element={<ProgramEditorPage />}
           />
+          {/* Starting a program after onboarding (DN-180): the wizard's own
+            steps, with the program already chosen. */}
+          <Route path="/programs/:id/start" element={<SetupPage />} />
           {/* Pasting one in (DN-152) hands its draft to the sheet above. */}
           <Route
             path="/programs/paste"

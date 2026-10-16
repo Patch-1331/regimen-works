@@ -32,7 +32,10 @@ import { currentRunLine, pastRunLine } from "../lib/programRuns";
  * - Writing or pasting a new one.
  * - Past runs, finished and ended, newest first. Never Just WODs.
  *
- * Starting a program from here is DN-180's; this screen only lists.
+ * Everything startable carries a Start (DN-180): Just WODs, the athlete's
+ * live programs, and the live library. Never the current run, which is
+ * already started, and never anything archived, which is not offered.
+ * Start opens the wizard's own steps at `/programs/:id/start`.
  */
 export function ProgramsPage() {
   const queryClient = useQueryClient();
@@ -131,6 +134,9 @@ export function ProgramsPage() {
   const live = programs?.filter((r) => !r.archived) ?? [];
   const archived = programs?.filter((r) => r.archived) ?? [];
   const onJustWods = runs?.current?.programId === DEFAULT_PROGRAM_ID;
+  // Held back until the runs are in, so the current run never flashes one.
+  const startable = (id: string) =>
+    runs !== undefined && runs.current?.programId !== id;
 
   return (
     <div className="p-6">
@@ -187,6 +193,14 @@ export function ProgramsPage() {
                   What you're on now
                 </span>
               )}
+              {startable(justWods.id) && (
+                <span
+                  className="mt-1 block text-[11px] uppercase tracking-[0.14em] text-[var(--ink-faint)]"
+                  style={{ fontFamily: "var(--font-mono)" }}
+                >
+                  <StartLink id={justWods.id} name={justWods.name} />
+                </span>
+              )}
             </li>
           </ul>
         </section>
@@ -231,6 +245,9 @@ export function ProgramsPage() {
                   </>
                 ) : (
                   <>
+                    {startable(program.id) && (
+                      <StartLink id={program.id} name={program.name} />
+                    )}
                     <Link
                       to={`/programs/${program.id}/edit`}
                       aria-label={`Edit ${program.name}`}
@@ -299,6 +316,9 @@ export function ProgramsPage() {
             <ProgramList>
               {copyable.map((program) => (
                 <ProgramRow key={program.id} program={program}>
+                  {startable(program.id) && (
+                    <StartLink id={program.id} name={program.name} />
+                  )}
                   <CopyLink program={program} />
                 </ProgramRow>
               ))}
@@ -312,6 +332,7 @@ export function ProgramsPage() {
           programs={global}
           failed={globalError !== null}
           busy={busy}
+          startable={startable}
           onRemove={(id) => remove.mutate({ tier: "global", id })}
           onRestore={(id) => restore.mutate({ tier: "global", id })}
         />
@@ -432,12 +453,14 @@ function GlobalLibrary({
   programs,
   failed,
   busy,
+  startable,
   onRemove,
   onRestore,
 }: {
   programs: GlobalProgramSummary[] | undefined;
   failed: boolean;
   busy: boolean;
+  startable: (id: string) => boolean;
   onRemove: (id: string) => void;
   onRestore: (id: string) => void;
 }) {
@@ -519,6 +542,9 @@ function GlobalLibrary({
                 </Action>
               ) : (
                 <>
+                  {startable(program.id) && (
+                    <StartLink id={program.id} name={program.name} />
+                  )}
                   <CopyLink program={program} />
                   <Link
                     to={`/programs/global/${program.id}/edit`}
@@ -540,6 +566,18 @@ function GlobalLibrary({
         </ProgramList>
       )}
     </section>
+  );
+}
+
+function StartLink({ id, name }: { id: string; name: string }) {
+  return (
+    <Link
+      to={`/programs/${encodeURIComponent(id)}/start`}
+      aria-label={`Start ${name}`}
+      className="text-[var(--glow)]"
+    >
+      Start
+    </Link>
   );
 }
 

@@ -386,6 +386,29 @@ describe('SetupService.commit', () => {
     expect(result.onboardedAt).toBe(user.onboardedAt!.toISOString());
   });
 
+  it('keeps the first onboarding stamp when a later program is started', async () => {
+    // The Programs tab starts programs through this same commit (DN-180).
+    const { userId } = await provisionedAthlete();
+    const program = await createProgram();
+    const first = await service().commit(
+      userId,
+      answers({ programId: program.id }),
+      TODAY,
+    );
+
+    const again = await service().commit(
+      userId,
+      answers({
+        programId: DEFAULT_PROGRAM_ID,
+        weeks: null,
+        startDate: '2026-09-17',
+      }),
+      TODAY,
+    );
+
+    expect(again.onboardedAt).toBe(first.onboardedAt);
+  });
+
   it('discards today untouched assignment when the program starts today', async () => {
     // `getToday` hands back the assignment it already made, so without this
     // the app would offer "start today" and then train the old program on it.
