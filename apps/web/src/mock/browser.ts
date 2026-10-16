@@ -81,8 +81,12 @@ export async function startMockApi() {
     quiet: true,
     // A request nothing here answers is a gap in the mocks, and saying so
     // beats a proxy error to an API that is not running.
-    onUnhandledRequest: ({ url }, print) => {
-      if (new URL(url).pathname.startsWith("/api/")) print.warning();
+    // Typed loosely because a frame may be a WebSocket one, with no request.
+    onUnhandledFrame: ({ frame, defaults }) => {
+      const request = (frame.data as { request?: Request }).request;
+      if (request && new URL(request.url).pathname.startsWith("/api/")) {
+        defaults.warn();
+      }
     },
   });
 }
