@@ -186,6 +186,34 @@ describe("the movement library", () => {
     ).toBeInTheDocument();
   });
 
+  // DN-151, ADR 0010: every deploy writes a seeded movement from the library
+  // files, so the API refuses to change one and the row says where to
+  // instead. Push-up, with no key, is one an admin wrote.
+  it("shows an admin a seeded movement read-only, with the file to change", async () => {
+    const PULLUPS = fixtures.apiExercise({
+      id: "g2",
+      name: "Pullups",
+      ownerId: null,
+      key: "Pullups",
+    });
+    library([PUSHUP, PULLUPS], { isAdmin: true });
+    renderRoute("/library");
+
+    await screen.findByText("Pullups");
+    expect(
+      screen.queryByRole("button", { name: /edit pullups/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /retire pullups/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("apps/api/prisma/library/curation.ts"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /edit push-up/i }),
+    ).toBeInTheDocument();
+  });
+
   it("retires the athlete's own movement on their own route", async () => {
     const writes = library();
     renderRoute("/library");

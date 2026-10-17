@@ -10,6 +10,8 @@ export type ImportReport = {
   renamed: string[];
   /** Rows that already had their key and name. */
   unchanged: number;
+  /** Rows archived because their key has left the files (DN-151). */
+  retired: string[];
   /** Every exercise's row id, by key, for whatever is seeded next. */
   idByKey: Map<string, string>;
 };
@@ -29,6 +31,11 @@ export type ImportReport = {
  * resolve a name to an athlete's own exercise and overwrite it, or wire a
  * global fallback to it.
  *
+ * A global row whose key the files no longer name is archived (DN-151, ADR
+ * 0010): leaving the files -- or being listed as left out in `curation.ts` --
+ * is how a seeded movement retires. A row with no key is an admin's, and is
+ * never touched.
+ *
  * Idempotent: a second run finds every row by key and writes the same values.
  */
 export async function importLibrary(
@@ -39,6 +46,7 @@ export async function importLibrary(
     created: [],
     renamed: [],
     unchanged: 0,
+    retired: [],
     idByKey: new Map(),
   };
 
@@ -61,9 +69,10 @@ export async function importLibrary(
       level: e.level,
       category: e.category,
       curated: e.curated,
-      // Re-seeding a retired movement brings it back (DN-25). Neither lookup
-      // filters on `archivedAt`: a retired row still holds its key and its
-      // name, so skipping it would mean creating a second one.
+      // The files own this row (ADR 0010), so a movement they name is live
+      // whatever was done to it since. Neither lookup filters on
+      // `archivedAt`: a retired row still holds its key and its name, so
+      // skipping it would mean creating a second one.
       archivedAt: null,
     };
 
@@ -102,5 +111,36 @@ export async function importLibrary(
     });
   }
 
+  report.retired = await retireUnnamed(
+    prisma,
+    exercises.map((e) => e.key),
+  );
+
   return report;
+}
+
+/**
+ * Archives the live global exercises holding a key not in `keys`, and says
+ * which. Archived rather than deleted, because a retired movement still has
+ * logged sets, remembered choices and WOD history pointing at it.
+ */
+async function retireUnnamed(
+  prisma: PrismaClient,
+  keys: readonly string[],
+): Promise<string[]> {
+  const where = {
+    ...GLOBAL_LIBRARY,
+    key: { not: null, notIn: [...keys] },
+    archivedAt: null,
+  };
+  const leaving = await prisma.exercise.findMany({
+    where,
+    select: { name: true },
+    orderBy: { name: 'asc' },
+  });
+  await prisma.exercise.updateMany({
+    where,
+    data: { archivedAt: new Date() },
+  });
+  return leaving.map((e) => e.name);
 }

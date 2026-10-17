@@ -9,6 +9,7 @@ import {
   DEFAULT_EQUIPMENT,
   LIBRARY_PAGE_SIZE,
   equipment as equipmentEnum,
+  seededRefusal,
   type CreateExercise,
   type ExerciseSearchPage,
   type ExerciseSearchQuery,
@@ -250,6 +251,11 @@ export class ExercisesService {
           ? 'That exercise belongs to an athlete, not to the shared library'
           : 'Global library content is edited by an admin',
       );
+    }
+    // The files own a seeded row (ADR 0010): an edit here would be undone by
+    // the next deploy, and an archive would be brought back by it.
+    if (row.key !== null) {
+      throw new ConflictException(seededRefusal('exercise', row.name));
     }
     return row;
   }

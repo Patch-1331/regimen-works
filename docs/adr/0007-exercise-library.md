@@ -213,8 +213,12 @@ nothing an athlete has: every reference is by primary key.
 ## Consequences
 
 - **`exercise-seed.ts` is deleted** once the import lands (DN-167), and with it the
-  upsert-by-name that ADR-0006 already notes overwrites an admin's edits to seeded
-  rows. The import upserts by stable id.
+  upsert-by-name. The import upserts by stable id, so a rename no longer makes a new
+  row.
+  *Corrected 2026-10-17:* this once said the overwrite of an admin's edits went with
+  it. It did not. The import still writes every field of a seeded row, and un-archives
+  it, on every deploy. [ADR 0010](0010-files-own-seeded-content.md) settles it: the
+  files own the seeded rows, and the admin routes refuse to change them.
 - **`Exercise` gains muscles, force, mechanic, level, category and a stable key**
   (DN-165). Level must not be confused with `SkillLevel`, which despite its name is
   the athlete's standing choice; the glossary has to say so before the code does.

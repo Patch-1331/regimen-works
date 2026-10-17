@@ -91,6 +91,7 @@ describe('importLibrary', () => {
     expect(second.created).toEqual([]);
     expect(second.renamed).toEqual([]);
     expect(second.unchanged).toBe(exercises.length);
+    expect(second.retired).toEqual([]);
     expect(second.idByKey).toEqual(first.idByKey);
     expect(await testPrisma().exercise.count()).toBe(count);
   });
@@ -110,6 +111,26 @@ describe('importLibrary', () => {
       (await testPrisma().exercise.findUniqueOrThrow({ where: { id: row.id } }))
         .archivedAt,
     ).toBeNull();
+  });
+
+  // DN-151, ADR 0010: leaving the files is how a seeded movement retires,
+  // and a row with no key is an admin's, which the deploy never archives.
+  it('retires a seeded row whose key has left the files, and no other', async () => {
+    const gone = await createExercise({
+      ownerId: null,
+      key: 'rw-no-longer-seeded',
+      name: 'Retired by the files',
+    });
+    const admins = await createExercise({ ownerId: null, key: null });
+
+    const report = await importLibrary(testPrisma(), exercises);
+
+    expect(report.retired).toEqual(['Retired by the files']);
+    const archivedAt = async (id: string) =>
+      (await testPrisma().exercise.findUniqueOrThrow({ where: { id } }))
+        .archivedAt;
+    expect(await archivedAt(gone.id)).not.toBeNull();
+    expect(await archivedAt(admins.id)).toBeNull();
   });
 
   it('never touches an athlete’s own exercise of the same name', async () => {

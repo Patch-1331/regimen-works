@@ -227,7 +227,7 @@ const programPath = (tier: LibraryTier, id: string) =>
 /**
  * A WOD as `GET /wods` returns it (DN-29).
  *
- * The shared `Wod` unchanged, plus the two columns the read schema does not
+ * The shared `Wod` unchanged, plus the columns the read schema does not
  * declare because no screen but the editor has any use for them. Extended
  * rather than restated — unlike `ApiExercise`, nothing in the web app reads a
  * WOD through a looser shape, so there is no divergence to preserve.
@@ -235,6 +235,11 @@ const programPath = (tier: LibraryTier, id: string) =>
 export type ApiWod = Wod & {
   /** Null for global library content, set for the reading athlete's own. */
   ownerId: string | null;
+  /**
+   * Set on a WOD seeded from `wod-seed.ts`, null on any other (DN-151). The
+   * deploy owns a row that carries one, so the library shows it read-only.
+   */
+  key: string | null;
   /** When it was retired, or null while it is live. */
   archivedAt: string | null;
 };

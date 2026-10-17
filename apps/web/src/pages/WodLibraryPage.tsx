@@ -4,6 +4,7 @@ import type { CreateWod } from "@regimen-works/shared";
 import { ApiError, api, type ApiWod, type LibraryTier } from "../lib/api";
 import { WodForm } from "../components/WodForm";
 import { LibraryNav } from "../components/LibraryNav";
+import { SeededNote } from "../components/SeededNote";
 import { SectionLabel } from "../components/Panel";
 import { patternLabel } from "../lib/progressions";
 import {
@@ -42,6 +43,7 @@ function summarise(wod: ApiWod): string {
 function WodRow({
   wod,
   editable,
+  seeded,
   onEdit,
   onArchive,
   onUnarchive,
@@ -49,6 +51,8 @@ function WodRow({
 }: {
   wod: ApiWod;
   editable: boolean;
+  /** Shown to an admin on a row `wod-seed.ts` owns, in place of controls. */
+  seeded: boolean;
   onEdit: () => void;
   onArchive: () => void;
   onUnarchive: () => void;
@@ -77,6 +81,7 @@ function WodRow({
         <p className="truncate text-[11px] text-[var(--ink-faint)]">
           {summarise(wod)}
         </p>
+        {seeded && <SeededNote kind="wod" />}
       </div>
       {editable && (
         <div className="flex shrink-0 gap-2">
@@ -287,7 +292,10 @@ export function WodLibraryPage() {
           <WodRow
             key={wod.id}
             wod={wod}
-            editable={editable}
+            // A shared WOD with a key is `wod-seed.ts`'s (ADR 0010): the API
+            // refuses to change it, so it says where to instead.
+            editable={editable && wod.key === null}
+            seeded={editable && wod.key !== null}
             busy={busy}
             onEdit={() => {
               setServerError(null);

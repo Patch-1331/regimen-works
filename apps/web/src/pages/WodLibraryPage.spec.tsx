@@ -201,6 +201,32 @@ describe("the workout library", () => {
     ).toBeInTheDocument();
   });
 
+  // DN-151, ADR 0010: every deploy writes a seeded workout from the file, so
+  // the API refuses to change one and the page says where to instead. Fran,
+  // with no key, is one an admin wrote, and stays theirs to edit.
+  it("shows an admin a seeded workout read-only, with the file to change", async () => {
+    const CINDY = fixtures.apiWod({
+      id: "w4",
+      name: "Cindy",
+      key: "cindy",
+      movements: [onPushup()],
+    });
+    library([FRAN, CINDY], { isAdmin: true });
+    renderRoute("/library/wods");
+
+    await screen.findByText("Cindy");
+    expect(
+      screen.queryByRole("button", { name: /edit cindy/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /retire cindy/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("apps/api/prisma/wod-seed.ts")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /edit fran/i }),
+    ).toBeInTheDocument();
+  });
+
   it("retires and brings back on the athlete's own route", async () => {
     const writes = library();
     renderRoute("/library/wods");

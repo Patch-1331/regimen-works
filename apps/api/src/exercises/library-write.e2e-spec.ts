@@ -1,9 +1,11 @@
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { App } from 'supertest/types';
-import { exerciseSchema } from '@regimen-works/shared';
+import { exerciseSchema, seededRefusal } from '@regimen-works/shared';
 import { z } from 'zod';
+import { testPrisma } from '../test-support/database';
 import { asUser, createE2eApp } from '../test-support/e2e-app';
+import { createExercise } from '../test-support/fixtures';
 
 /**
  * The library write routes through HTTP (DN-25).
@@ -261,6 +263,57 @@ describe('an admin curating the shared library', () => {
       .set(...asUser(ADMIN))
       .send({ scalable: true })
       .expect(403);
+  });
+
+  // DN-151, ADR 0010: the library files own a row with a key, and every
+  // deploy writes it from them. A change made here would not last, so it is
+  // refused -- with the file to change instead -- and one an admin wrote,
+  // which has no key, is not.
+  it('is refused a seeded movement, and told which file to change', async () => {
+    const seeded = await createExercise({
+      ownerId: null,
+      key: 'Pushups',
+      name: 'Pushups',
+    });
+    const theirs = await http()
+      .post('/admin/exercises')
+      .set(...asUser(ADMIN))
+      .send(body())
+      .expect(201);
+
+    // Built per use: a supertest request listens when it is sent.
+    const refusals = [
+      () =>
+        http().patch(`/admin/exercises/${seeded.id}`).send({ scalable: true }),
+      () => http().post(`/admin/exercises/${seeded.id}/archive`),
+    ];
+    for (const refused of refusals) {
+      const res = await refused()
+        .set(...asUser(ADMIN))
+        .expect(409);
+      const { message } = res.body as { message: string };
+      expect(message).toBe(seededRefusal('exercise', 'Pushups'));
+      expect(message).toContain('apps/api/prisma/library/curation.ts');
+    }
+    await testPrisma().exercise.update({
+      where: { id: seeded.id },
+      data: { archivedAt: new Date() },
+    });
+    await http()
+      .post(`/admin/exercises/${seeded.id}/unarchive`)
+      .set(...asUser(ADMIN))
+      .expect(409);
+    expect(
+      await testPrisma().exercise.findUniqueOrThrow({
+        where: { id: seeded.id },
+      }),
+    ).toMatchObject({ scalable: seeded.scalable, name: 'Pushups' });
+
+    await http()
+      .patch(`/admin/exercises/${idOf(theirs)}`)
+      .set(...asUser(ADMIN))
+      .send({ scalable: true })
+      .expect(200);
   });
 });
 
