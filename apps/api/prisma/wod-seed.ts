@@ -29,6 +29,11 @@ export type WodMovementSeed = {
 };
 
 export type WodSeed = {
+  // The WOD's stable identity, which the import matches on (DN-151, ADR
+  // 0010) -- the name is a label it is free to change, the way an
+  // exercise's is (DN-167). Never reused: a key that leaves this file
+  // retires its row on the next deploy, and the row keeps holding it.
+  key: string;
   name: string;
   type: 'amrap' | 'for_time' | 'emom' | 'tabata';
   timeCapMinutes: number;
@@ -48,6 +53,7 @@ export type WodSeed = {
 
 export const wods: WodSeed[] = [
   {
+    key: 'cindy',
     name: 'Cindy',
     type: 'amrap',
     timeCapMinutes: 20,
@@ -61,6 +67,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'angie',
     name: 'Angie',
     type: 'for_time',
     timeCapMinutes: 30,
@@ -77,6 +84,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'murph-home-cap',
     name: 'Murph, Home Cap',
     type: 'for_time',
     timeCapMinutes: 30,
@@ -92,6 +100,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'ten-to-one',
     name: 'Ten to One',
     type: 'for_time',
     timeCapMinutes: 20,
@@ -106,6 +115,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'frans-cousin',
     name: "Fran's Cousin",
     type: 'for_time',
     timeCapMinutes: 10,
@@ -120,6 +130,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'rung-by-rung',
     name: 'Rung by Rung',
     type: 'amrap',
     timeCapMinutes: 15,
@@ -133,6 +144,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'core-cindy',
     name: 'Core Cindy',
     type: 'amrap',
     timeCapMinutes: 12,
@@ -146,6 +158,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'chalk-line',
     name: 'Chalk Line',
     type: 'for_time',
     timeCapMinutes: 15,
@@ -159,6 +172,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'bar-ladder',
     name: 'Bar Ladder',
     type: 'emom',
     timeCapMinutes: 12,
@@ -174,6 +188,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'even-odd',
     name: 'Even Odd',
     type: 'emom',
     timeCapMinutes: 16,
@@ -191,6 +206,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'tabata-trio',
     name: 'Tabata Trio',
     type: 'tabata',
     timeCapMinutes: 14,
@@ -222,6 +238,7 @@ export const wods: WodSeed[] = [
   // no squat-dominant and no hinge-dominant WOD at all, so two of the eight
   // movement patterns never led a workout.
   {
+    key: 'squat-sixty',
     name: 'Squat Sixty',
     type: 'for_time',
     timeCapMinutes: 15,
@@ -237,6 +254,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'ladder-legs',
     name: 'Ladder Legs',
     type: 'for_time',
     timeCapMinutes: 12,
@@ -251,6 +269,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'hinge-line',
     name: 'Hinge Line',
     type: 'amrap',
     timeCapMinutes: 12,
@@ -275,6 +294,7 @@ export const wods: WodSeed[] = [
   // which is a workout but no longer this one. Substitution still covers the
   // non-dominant rows, so an athlete missing a box still gets the push-ups.
   {
+    key: 'rope-trick',
     name: 'Rope Trick',
     type: 'emom',
     timeCapMinutes: 10,
@@ -292,6 +312,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'step-change',
     name: 'Step Change',
     type: 'amrap',
     timeCapMinutes: 15,
@@ -307,6 +328,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'goblet-ladder',
     name: 'Goblet Ladder',
     type: 'for_time',
     timeCapMinutes: 14,
@@ -321,6 +343,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'swing-shift',
     name: 'Swing Shift',
     type: 'for_time',
     timeCapMinutes: 20,
@@ -348,6 +371,7 @@ export const wods: WodSeed[] = [
   // athlete with no bar had never once been given a workout *about* pulling.
   // Their pull group starts on the floor; the library had no WOD that did.
   {
+    key: 'floor-pull',
     name: 'Floor Pull',
     type: 'amrap',
     timeCapMinutes: 12,
@@ -363,6 +387,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'hold-fast',
     name: 'Hold Fast',
     type: 'amrap',
     timeCapMinutes: 10,
@@ -386,6 +411,7 @@ export const wods: WodSeed[] = [
   // version of it built from press-ups. Substitution still covers the
   // non-dominant rows.
   {
+    key: 'row-call',
     name: 'Row Call',
     type: 'amrap',
     timeCapMinutes: 12,
@@ -401,6 +427,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'floor-work',
     name: 'Floor Work',
     type: 'for_time',
     timeCapMinutes: 16,
@@ -416,6 +443,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'carry-on',
     name: 'Carry On',
     type: 'emom',
     timeCapMinutes: 10,
@@ -461,6 +489,7 @@ export const wods: WodSeed[] = [
   // ---------------------------------------------------------------------
 
   {
+    key: 'engine-room',
     name: 'Engine Room',
     type: 'amrap',
     timeCapMinutes: 12,
@@ -476,6 +505,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'skip-work',
     name: 'Skip Work',
     type: 'amrap',
     timeCapMinutes: 10,
@@ -492,6 +522,7 @@ export const wods: WodSeed[] = [
   },
 
   {
+    key: 'midline-five',
     name: 'Midline Five',
     type: 'for_time',
     timeCapMinutes: 14,
@@ -507,6 +538,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'toes-and-tens',
     name: 'Toes and Tens',
     type: 'for_time',
     timeCapMinutes: 15,
@@ -522,6 +554,7 @@ export const wods: WodSeed[] = [
   },
 
   {
+    key: 'tabata-midline',
     name: 'Tabata Midline',
     type: 'tabata',
     timeCapMinutes: 14,
@@ -540,6 +573,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'hollow-eight',
     name: 'Hollow Eight',
     type: 'tabata',
     timeCapMinutes: 10,
@@ -558,6 +592,7 @@ export const wods: WodSeed[] = [
   },
 
   {
+    key: 'hinge-minute',
     name: 'Hinge Minute',
     type: 'emom',
     timeCapMinutes: 12,
@@ -575,6 +610,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'swing-clock',
     name: 'Swing Clock',
     type: 'emom',
     timeCapMinutes: 14,
@@ -593,6 +629,7 @@ export const wods: WodSeed[] = [
   },
 
   {
+    key: 'tabata-hinge',
     name: 'Tabata Hinge',
     type: 'tabata',
     timeCapMinutes: 14,
@@ -611,6 +648,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'bridge-work',
     name: 'Bridge Work',
     type: 'tabata',
     timeCapMinutes: 10,
@@ -629,6 +667,7 @@ export const wods: WodSeed[] = [
   },
 
   {
+    key: 'tabata-pull',
     name: 'Tabata Pull',
     type: 'tabata',
     timeCapMinutes: 10,
@@ -646,6 +685,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'angel-intervals',
     name: 'Angel Intervals',
     type: 'tabata',
     timeCapMinutes: 14,
@@ -665,6 +705,7 @@ export const wods: WodSeed[] = [
   },
 
   {
+    key: 'press-on',
     name: 'Press On',
     type: 'amrap',
     timeCapMinutes: 12,
@@ -680,6 +721,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'pike-rounds',
     name: 'Pike Rounds',
     type: 'amrap',
     timeCapMinutes: 15,
@@ -696,6 +738,7 @@ export const wods: WodSeed[] = [
   },
 
   {
+    key: 'tabata-press',
     name: 'Tabata Press',
     type: 'tabata',
     timeCapMinutes: 10,
@@ -713,6 +756,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'press-and-carry',
     name: 'Press and Carry',
     type: 'tabata',
     timeCapMinutes: 14,
@@ -732,6 +776,7 @@ export const wods: WodSeed[] = [
   },
 
   {
+    key: 'squat-minute',
     name: 'Squat Minute',
     type: 'emom',
     timeCapMinutes: 12,
@@ -749,6 +794,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'lunge-clock',
     name: 'Lunge Clock',
     type: 'emom',
     timeCapMinutes: 16,
@@ -767,6 +813,7 @@ export const wods: WodSeed[] = [
   },
 
   {
+    key: 'tabata-squat',
     name: 'Tabata Squat',
     type: 'tabata',
     timeCapMinutes: 10,
@@ -784,6 +831,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'legs-every-twenty',
     name: 'Legs Every Twenty',
     type: 'tabata',
     timeCapMinutes: 14,
@@ -811,6 +859,7 @@ export const wods: WodSeed[] = [
   // everybody rather than for whoever bought the most kit.
 
   {
+    key: 'burpee-clock',
     name: 'Burpee Clock',
     type: 'emom',
     timeCapMinutes: 10,
@@ -828,6 +877,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'midline-minute',
     name: 'Midline Minute',
     type: 'emom',
     timeCapMinutes: 10,
@@ -845,6 +895,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'bridge-and-back',
     name: 'Bridge and Back',
     type: 'for_time',
     timeCapMinutes: 12,
@@ -860,6 +911,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'air-time',
     name: 'Air Time',
     type: 'amrap',
     timeCapMinutes: 14,
@@ -882,6 +934,7 @@ export const wods: WodSeed[] = [
   // an empty cell, one step quieter.
 
   {
+    key: 'ten-rounds-down',
     name: 'Ten Rounds Down',
     type: 'for_time',
     timeCapMinutes: 15,
@@ -897,6 +950,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'tabata-engine',
     name: 'Tabata Engine',
     type: 'tabata',
     timeCapMinutes: 10,
@@ -914,6 +968,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'deadlift-rounds',
     name: 'Deadlift Rounds',
     type: 'amrap',
     timeCapMinutes: 15,
@@ -929,6 +984,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'four-by-pull',
     name: 'Four by Pull',
     type: 'for_time',
     timeCapMinutes: 18,
@@ -944,6 +1000,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'row-minute',
     name: 'Row Minute',
     type: 'emom',
     timeCapMinutes: 12,
@@ -961,6 +1018,7 @@ export const wods: WodSeed[] = [
     ],
   },
   {
+    key: 'pike-minute',
     name: 'Pike Minute',
     type: 'emom',
     timeCapMinutes: 12,

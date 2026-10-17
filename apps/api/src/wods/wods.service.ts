@@ -5,10 +5,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type {
-  CreateWod,
-  CreateWodMovement,
-  UpdateWod,
+import {
+  seededRefusal,
+  type CreateWod,
+  type CreateWodMovement,
+  type UpdateWod,
 } from '@regimen-works/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -243,6 +244,11 @@ export class WodsService {
           ? 'That WOD belongs to an athlete, not to the shared library'
           : 'Global library content is edited by an admin',
       );
+    }
+    // The files own a seeded row (ADR 0010): an edit here would be undone by
+    // the next deploy, and an archive would be brought back by it.
+    if (row.key !== null) {
+      throw new ConflictException(seededRefusal('wod', row.name));
     }
     return row;
   }

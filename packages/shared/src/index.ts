@@ -26,3 +26,4 @@ export * from "./rep-shape.js";
 export * from "./setup.js";
 export * from "./rest.js";
 export * from "./paste-program.js";
+export * from "./seeded.js";
