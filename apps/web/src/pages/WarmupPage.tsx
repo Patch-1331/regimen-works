@@ -81,7 +81,7 @@ export function WarmupPage() {
                       style={{
                         fontFamily: "var(--font-mono)",
                         color: isChecked ? "var(--ink-faint)" : "var(--ink-soft)",
-                        textDecoration: isChecked ? "movementGroup-through" : "none",
+                        textDecoration: isChecked ? "line-through" : "none",
                       }}
                     >
                       {item.name.toUpperCase()}
