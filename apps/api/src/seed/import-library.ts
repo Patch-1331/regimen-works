@@ -59,7 +59,6 @@ export async function importLibrary(
       scalable: e.scalable,
       unit: e.unit,
       movementGroup: e.movementGroup,
-      sortOrder: e.sortOrder,
       isGroupDefault: e.isGroupDefault,
       instructions: e.instructions,
       primaryMuscles: e.primaryMuscles,

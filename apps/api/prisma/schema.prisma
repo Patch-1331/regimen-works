@@ -111,18 +111,17 @@ model Exercise {
   // or core contains several groups that are not interchangeable
   // (push_horizontal vs push_vertical; core_dynamic/core_hold/core_side).
   // Null for movements in no group (e.g. cardio).
+  //
+  // A group is unordered and carries no position for its members (DN-183):
+  // the swap panel ranks by muscle match, and every list of a group's
+  // members is by name.
   movementGroup String?
-  // Where this movement is listed among its group's members. Display order
-  // only -- it is not a difficulty, and as of DN-139 nothing resolves through
-  // it: an athlete's choice is a foreign key to a row, so this number can be
-  // changed or a member inserted mid-list without moving anybody's movement.
-  sortOrder     Int?
 
   // The member prescribed to an athlete who has no stored choice in this
   // group, or whose stored choice they cannot perform today (ADR-0004
-  // decisions 7 and 8). Declared here rather than inferred from `sortOrder`
-  // so it is an argument someone can disagree with, instead of an accident
-  // of list order -- which is what `STARTING_RUNG = 0` was.
+  // decisions 7 and 8). Declared rather than inferred from any list order,
+  // so it is an argument someone can disagree with instead of an accident --
+  // which is what `STARTING_RUNG = 0` was.
   //
   // Never written to `SkillLevel`: handing someone a starting point is not
   // the same as recording that they chose it.

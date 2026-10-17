@@ -16,8 +16,9 @@ import type { ApiExercise, ApiWod, LibraryTier } from "./api";
  * filled in at the same time, so the write schema's exactly-one-of rule is
  * something the form cannot express a violation of.
  *
- * Both counts are strings for the reason `ExerciseDraft.sortOrder` is: an input
- * has no number, it has "", and `Number("")` is 0.
+ * Both counts are strings because an input has no number, it has "", and
+ * `Number("")` is 0 -- a form holding them as numbers could not tell an empty
+ * box from a zero.
  */
 export type MovementDraft = {
   exerciseId: string;

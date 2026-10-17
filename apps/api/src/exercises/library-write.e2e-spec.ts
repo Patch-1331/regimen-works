@@ -84,7 +84,6 @@ function body(overrides: Record<string, unknown> = {}) {
     unit: 'reps',
     instructions: [],
     movementGroup: null,
-    sortOrder: null,
     fallbackExerciseId: null,
     ...overrides,
   };
@@ -263,6 +262,30 @@ describe('an admin curating the shared library', () => {
       .set(...asUser(ADMIN))
       .send({ scalable: true })
       .expect(403);
+  });
+
+  // DN-183: a group is unordered, so joining one, and moving between two,
+  // asks for nothing but the group.
+  it('puts a movement in a group, and moves it to another, with no position', async () => {
+    const res = await http()
+      .post('/admin/exercises')
+      .set(...asUser(ADMIN))
+      .send(body({ movementGroup: 'pull' }))
+      .expect(201);
+    // Off the raw body: the schema would strip a stray key and hide it.
+    expect(res.body as Record<string, unknown>).not.toHaveProperty('sortOrder');
+    const created = parsed(exerciseSchema, res);
+    expect(created.movementGroup).toBe('pull');
+
+    const moved = parsed(
+      exerciseSchema,
+      await http()
+        .patch(`/admin/exercises/${created.id}`)
+        .set(...asUser(ADMIN))
+        .send({ movementGroup: 'push_horizontal', pattern: 'push' })
+        .expect(200),
+    );
+    expect(moved.movementGroup).toBe('push_horizontal');
   });
 
   // DN-151, ADR 0010: the library files own a row with a key, and every

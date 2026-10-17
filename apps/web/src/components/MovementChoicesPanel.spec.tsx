@@ -33,7 +33,6 @@ function exercise(partial: Partial<ApiExercise> & { id: string }): ApiExercise {
     scalable: true,
     unit: "reps",
     movementGroup: "pull",
-    sortOrder: 0,
     instructions: [],
     fallbackExerciseId: null,
     key: null,
@@ -67,9 +66,9 @@ const CHIN_UP = { id: "chin-up", name: "Chin-up" };
 const PULL_UP = { id: "pull-up", name: "Pull-up" };
 
 const PULL_LINE = [
-  exercise({ id: "negative", name: "Negative chin-up", sortOrder: 0 }),
-  exercise({ id: "chin-up", name: "Chin-up", sortOrder: 1 }),
-  exercise({ id: "pull-up", name: "Pull-up", sortOrder: 2 }),
+  exercise({ id: "negative", name: "Negative chin-up" }),
+  exercise({ id: "chin-up", name: "Chin-up" }),
+  exercise({ id: "pull-up", name: "Pull-up" }),
 ];
 
 function renderPanel(skillLevels: SkillLevel[], exercises = PULL_LINE) {
@@ -121,7 +120,7 @@ describe("MovementChoicesPanel", () => {
     expect(screen.queryByText("Pull-up")).not.toBeInTheDocument();
   });
 
-  it("offers the whole movementGroup in order once expanded, marking only the chosen one", async () => {
+  it("offers the whole group by name once expanded, marking only the chosen one", async () => {
     const user = userEvent.setup();
     renderPanel([skill("pull", CHIN_UP)]);
 
@@ -129,16 +128,17 @@ describe("MovementChoicesPanel", () => {
     expect(expander("pull")).toHaveAttribute("aria-expanded", "true");
 
     const options = within(screen.getByRole("list")).getAllByRole("button");
+    // By name, not as given: a group is unordered (DN-183).
     expect(options.map((o) => o.textContent)).toEqual([
-      "Negative chin-up",
       "Chin-up",
+      "Negative chin-up",
       "Pull-up",
     ]);
-    // Nothing is cleared or locked — a movement below the choice and one above
-    // it are indistinguishable (DN-91).
+    // Nothing is cleared or locked — the movements either side of the choice
+    // are indistinguishable (DN-91).
     expect(options.map((o) => o.getAttribute("aria-current"))).toEqual([
-      "false",
       "true",
+      "false",
       "false",
     ]);
   });

@@ -90,7 +90,8 @@ export const sessionMovementSchema = z
       name: z.string(),
       unit: exerciseUnit,
       movementGroup: movementGroup.nullable(),
-      sortOrder: z.number().int().nonnegative().nullable(),
+      // Snapshots written before DN-183 also carry `sortOrder`. Not declared,
+      // so a read strips it rather than refusing the row.
     }),
   })
   .refine(

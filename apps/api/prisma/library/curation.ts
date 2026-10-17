@@ -21,26 +21,22 @@ export const curation: Record<string, Curation> = {
   'rw-knee-push-up': {
     pattern: 'push',
     movementGroup: 'push_horizontal',
-    sortOrder: 0,
     isGroupDefault: true,
   },
   Pushups: {
     pattern: 'push',
     formerly: 'Push-up',
     movementGroup: 'push_horizontal',
-    sortOrder: 1,
     fallback: 'rw-knee-push-up',
   },
   'Push-Ups_-_Close_Triceps_Position': {
     pattern: 'push',
     formerly: 'Diamond push-up',
     movementGroup: 'push_horizontal',
-    sortOrder: 2,
   },
   'rw-archer-push-up': {
     pattern: 'push',
     movementGroup: 'push_horizontal',
-    sortOrder: 3,
   },
 
   // Loaded pressing (DN-113) -- its own movement, not a member of
@@ -57,13 +53,11 @@ export const curation: Record<string, Curation> = {
   'rw-incline-pike-push-up': {
     pattern: 'push',
     movementGroup: 'push_vertical',
-    sortOrder: 0,
     isGroupDefault: true,
   },
   'rw-pike-push-up': {
     pattern: 'push',
     movementGroup: 'push_vertical',
-    sortOrder: 1,
     scalable: true,
     fallback: 'rw-incline-pike-push-up',
   },
@@ -71,7 +65,6 @@ export const curation: Record<string, Curation> = {
     pattern: 'push',
     formerly: 'Handstand push-up',
     movementGroup: 'push_vertical',
-    sortOrder: 2,
     scalable: true,
     fallback: 'rw-pike-push-up',
   },
@@ -80,27 +73,23 @@ export const curation: Record<string, Curation> = {
   'rw-supermans-reverse-snow-angels': {
     pattern: 'pull',
     movementGroup: 'pull',
-    sortOrder: 0,
     isGroupDefault: true,
   },
   'rw-negative-pull-up': {
     pattern: 'pull',
     movementGroup: 'pull',
-    sortOrder: 1,
     fallback: 'rw-supermans-reverse-snow-angels',
   },
   'Chin-Up': {
     pattern: 'pull',
     formerly: 'Chin-up',
     movementGroup: 'pull',
-    sortOrder: 2,
     fallback: 'rw-supermans-reverse-snow-angels',
   },
   Pullups: {
     pattern: 'pull',
     formerly: 'Pull-up',
     movementGroup: 'pull',
-    sortOrder: 3,
     fallback: 'rw-supermans-reverse-snow-angels',
   },
   // Loaded pulling (DN-113), off the group for the floor press's reason.
@@ -115,23 +104,19 @@ export const curation: Record<string, Curation> = {
     pattern: 'squat',
     formerly: 'Air squat',
     movementGroup: 'squat',
-    sortOrder: 0,
     isGroupDefault: true,
   },
   'rw-reverse-lunge': {
     pattern: 'squat',
     movementGroup: 'squat',
-    sortOrder: 1,
   },
   'rw-assisted-pistol': {
     pattern: 'squat',
     movementGroup: 'squat',
-    sortOrder: 2,
   },
   'rw-pistol-squat': {
     pattern: 'squat',
     movementGroup: 'squat',
-    sortOrder: 3,
     scalable: true,
     fallback: 'rw-assisted-pistol',
   },
@@ -139,7 +124,6 @@ export const curation: Record<string, Curation> = {
     pattern: 'squat',
     formerly: 'Goblet squat',
     movementGroup: 'squat',
-    sortOrder: 4,
     fallback: 'Bodyweight_Squat',
     // The dataset's goblet squat holds a kettlebell; ours has always been a
     // dumbbell, and an athlete's Settings say which they own.
@@ -148,13 +132,11 @@ export const curation: Record<string, Curation> = {
   'rw-dumbbell-front-squat': {
     pattern: 'squat',
     movementGroup: 'squat',
-    sortOrder: 5,
     fallback: 'Bodyweight_Squat',
   },
   'rw-box-step-up': {
     pattern: 'squat',
     movementGroup: 'squat',
-    sortOrder: 6,
     fallback: 'rw-reverse-lunge',
     equipment: ['box'],
   },
@@ -181,27 +163,23 @@ export const curation: Record<string, Curation> = {
     pattern: 'hinge',
     formerly: 'Glute bridge',
     movementGroup: 'hinge',
-    sortOrder: 0,
     isGroupDefault: true,
   },
   Single_Leg_Glute_Bridge: {
     pattern: 'hinge',
     formerly: 'Single-leg glute bridge',
     movementGroup: 'hinge',
-    sortOrder: 1,
     fallback: 'Butt_Lift_Bridge',
   },
-  Superman: { pattern: 'hinge', movementGroup: 'hinge', sortOrder: 2 },
+  Superman: { pattern: 'hinge', movementGroup: 'hinge' },
   'rw-single-leg-superman': {
     pattern: 'hinge',
     movementGroup: 'hinge',
-    sortOrder: 3,
   },
   Romanian_Deadlift: {
     pattern: 'hinge',
     formerly: 'Romanian deadlift',
     movementGroup: 'hinge',
-    sortOrder: 4,
     fallback: 'Butt_Lift_Bridge',
     // The dataset's is a barbell lift; ours has always been dumbbells.
     equipment: ['dumbbell'],
@@ -209,13 +187,11 @@ export const curation: Record<string, Curation> = {
   'rw-single-leg-romanian-deadlift': {
     pattern: 'hinge',
     movementGroup: 'hinge',
-    sortOrder: 5,
     fallback: 'Single_Leg_Glute_Bridge',
   },
   'rw-kettlebell-swing': {
     pattern: 'hinge',
     movementGroup: 'hinge',
-    sortOrder: 6,
     fallback: 'Standing_Long_Jump',
   },
   Standing_Long_Jump: { pattern: 'hinge', formerly: 'Broad jump' },
@@ -225,36 +201,30 @@ export const curation: Record<string, Curation> = {
     pattern: 'core',
     formerly: 'Sit-up',
     movementGroup: 'core_dynamic',
-    sortOrder: 0,
     isGroupDefault: true,
   },
   'rw-tuck-up': {
     pattern: 'core',
     movementGroup: 'core_dynamic',
-    sortOrder: 1,
   },
   'Jackknife_Sit-Up': {
     pattern: 'core',
     formerly: 'V-up',
     movementGroup: 'core_dynamic',
-    sortOrder: 2,
     fallback: 'rw-tuck-up',
   },
   'rw-lying-leg-raise': {
     pattern: 'core',
     movementGroup: 'core_dynamic',
-    sortOrder: 3,
   },
   'rw-hanging-knee-raise': {
     pattern: 'core',
     movementGroup: 'core_dynamic',
-    sortOrder: 4,
     fallback: 'rw-lying-leg-raise',
   },
   'rw-toes-to-bar': {
     pattern: 'core',
     movementGroup: 'core_dynamic',
-    sortOrder: 5,
     fallback: 'Jackknife_Sit-Up',
   },
 
@@ -263,48 +233,41 @@ export const curation: Record<string, Curation> = {
     pattern: 'core',
     unit: 'seconds',
     movementGroup: 'core_hold',
-    sortOrder: 0,
     isGroupDefault: true,
   },
   'rw-tucked-hollow-hold': {
     pattern: 'core',
     unit: 'seconds',
     movementGroup: 'core_hold',
-    sortOrder: 1,
   },
   Plank: {
     pattern: 'core',
     formerly: 'Plank hold',
     unit: 'seconds',
     movementGroup: 'core_hold',
-    sortOrder: 2,
     fallback: 'rw-knee-plank',
   },
   'rw-hollow-hold': {
     pattern: 'core',
     unit: 'seconds',
     movementGroup: 'core_hold',
-    sortOrder: 3,
     fallback: 'rw-tucked-hollow-hold',
   },
   'rw-long-lever-plank': {
     pattern: 'core',
     unit: 'seconds',
     movementGroup: 'core_hold',
-    sortOrder: 4,
   },
 
   // Core · Side
   'rw-knee-side-plank': {
     pattern: 'core',
     movementGroup: 'core_side',
-    sortOrder: 0,
     isGroupDefault: true,
   },
   'rw-side-plank': {
     pattern: 'core',
     movementGroup: 'core_side',
-    sortOrder: 1,
     fallback: 'rw-knee-side-plank',
   },
 
@@ -324,7 +287,6 @@ export const curation: Record<string, Curation> = {
     pattern: 'cardio',
     formerly: 'Single-unders',
     movementGroup: 'cardio_rope',
-    sortOrder: 0,
     isGroupDefault: true,
     fallback: 'rw-high-knees',
     // The dataset says "other".
@@ -333,7 +295,6 @@ export const curation: Record<string, Curation> = {
   'rw-double-unders': {
     pattern: 'cardio',
     movementGroup: 'cardio_rope',
-    sortOrder: 1,
     fallback: 'rw-high-knees',
     equipment: ['jump_rope'],
   },

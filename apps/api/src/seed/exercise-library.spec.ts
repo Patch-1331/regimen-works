@@ -29,11 +29,9 @@ const curated = exercises.filter((e) => e.curated);
 /** The guard reads names; the key is the one that does not change. */
 const guarded = curated.map((e) => ({ ...e, name: e.key }));
 
-/** A group's members, in the order the panel lists them. */
+/** A group's members. Unordered (DN-183), so compare them as a set. */
 const members = (group: string) =>
-  exercises
-    .filter((e) => e.movementGroup === group)
-    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  exercises.filter((e) => e.movementGroup === group);
 
 describe('the exercise library', () => {
   it('curates 64: 26 dataset twins and 38 of the app’s own', () => {
@@ -170,28 +168,6 @@ describe('the exercise library', () => {
     expect(unknown).toEqual([]);
   });
 
-  it('numbers each movementGroup from zero with no gaps and no ties', () => {
-    // Display order only since DN-139 -- no choice resolves through it -- but
-    // a tie still makes the order of two movements in the panel depend on row
-    // order, which is a list that reshuffles itself between loads.
-    const byGroup = new Map<string, number[]>();
-    for (const e of exercises) {
-      if (!e.movementGroup || e.sortOrder === null) continue;
-      byGroup.set(e.movementGroup, [
-        ...(byGroup.get(e.movementGroup) ?? []),
-        e.sortOrder,
-      ]);
-    }
-
-    for (const [group, orders] of byGroup) {
-      const sorted = [...orders].sort((a, b) => a - b);
-      expect({ group, orders: sorted }).toEqual({
-        group,
-        orders: sorted.map((_, i) => i),
-      });
-    }
-  });
-
   describe('the group defaults (DN-139, and DN-158 to DN-163 folded in)', () => {
     const groups = [
       ...new Set(exercises.flatMap((e) => e.movementGroup ?? [])),
@@ -284,33 +260,38 @@ describe('the exercise library', () => {
   });
 
   describe('the merged squat and hinge groups (DN-140)', () => {
-    const memberKeys = (group: string) => members(group).map((e) => e.key);
+    const memberKeys = (group: string) =>
+      new Set(members(group).map((e) => e.key));
 
     it('holds the bodyweight and the equipment squats in one group', () => {
       // The whole point of the merge: an athlete looking at a dumbbell can
       // swap a bodyweight squat for a goblet squat, because legality is group
       // membership (`assertLegalTarget`) and they are now in one group.
-      expect(memberKeys('squat')).toEqual([
-        'Bodyweight_Squat',
-        'rw-reverse-lunge',
-        'rw-assisted-pistol',
-        'rw-pistol-squat',
-        'Goblet_Squat',
-        'rw-dumbbell-front-squat',
-        'rw-box-step-up',
-      ]);
+      expect(memberKeys('squat')).toEqual(
+        new Set([
+          'Bodyweight_Squat',
+          'rw-reverse-lunge',
+          'rw-assisted-pistol',
+          'rw-pistol-squat',
+          'Goblet_Squat',
+          'rw-dumbbell-front-squat',
+          'rw-box-step-up',
+        ]),
+      );
     });
 
     it('holds the bodyweight and the equipment hinges in one group', () => {
-      expect(memberKeys('hinge')).toEqual([
-        'Butt_Lift_Bridge',
-        'Single_Leg_Glute_Bridge',
-        'Superman',
-        'rw-single-leg-superman',
-        'Romanian_Deadlift',
-        'rw-single-leg-romanian-deadlift',
-        'rw-kettlebell-swing',
-      ]);
+      expect(memberKeys('hinge')).toEqual(
+        new Set([
+          'Butt_Lift_Bridge',
+          'Single_Leg_Glute_Bridge',
+          'Superman',
+          'rw-single-leg-superman',
+          'Romanian_Deadlift',
+          'rw-single-leg-romanian-deadlift',
+          'rw-kettlebell-swing',
+        ]),
+      );
     });
 
     it('keeps the thruster and the box jump out of every group', () => {
@@ -350,7 +331,8 @@ describe('the exercise library', () => {
    * The rope pair (DN-115). The group is what lets the swap panel put both in
    * front of an athlete who owns the rope. What keeps it a group of its own
    * is that *both* members need the rope, so there is no bodyweight member
-   * to merge it into.
+   * to merge it into. Not a second kind of group (DN-135, ADR-0004): its way
+   * out is its members' fallbacks, which the next test holds it to.
    */
   describe('the group where every member needs equipment', () => {
     it('puts both rope movements on cardio_rope, and nothing else', () => {
@@ -509,7 +491,6 @@ describe('the exercise library', () => {
         rest.filter(
           (e) =>
             e.movementGroup !== null ||
-            e.sortOrder !== null ||
             e.isGroupDefault ||
             e.fallback !== undefined,
         ),

@@ -31,7 +31,6 @@ function body(overrides: Partial<CreateExercise> = {}): CreateExercise {
     unit: 'reps',
     instructions: [],
     movementGroup: null,
-    sortOrder: null,
     fallbackExerciseId: null,
     ...overrides,
   };
@@ -162,7 +161,6 @@ describe('what a patch means', () => {
       body({
         instructions: ['Chest to the bar.'],
         movementGroup: 'pull',
-        sortOrder: 1,
       }),
     );
 
@@ -172,7 +170,6 @@ describe('what a patch means', () => {
 
     expect(updated.instructions).toEqual(['Chest to the bar.']);
     expect(updated.movementGroup).toBe('pull');
-    expect(updated.sortOrder).toBe(1);
     expect(updated.pattern).toBe('pull');
   });
 
@@ -185,7 +182,6 @@ describe('what a patch means', () => {
       body({
         instructions: ['Chest to the bar.'],
         movementGroup: 'pull',
-        sortOrder: 1,
       }),
     );
 
@@ -193,7 +189,6 @@ describe('what a patch means', () => {
       instructions: [],
       pattern: null,
       movementGroup: null,
-      sortOrder: null,
     });
 
     expect(updated.instructions).toEqual([]);
@@ -237,14 +232,12 @@ describe('what a patch means', () => {
       unit: 'seconds',
       instructions: ['Elbows inside the knees.', 'Sit between your heels.'],
       movementGroup: 'squat',
-      sortOrder: 3,
       fallbackExerciseId: fallback.id,
     });
 
     expect(updated.name).toBe('Goblet squat');
     expect(updated.equipment).toEqual(['dumbbell']);
     expect(updated.fallbackExerciseId).toBe(fallback.id);
-    expect(updated.sortOrder).toBe(3);
   });
 });
 
@@ -365,32 +358,26 @@ describe('a movement needing equipment needs a way out', () => {
   });
 });
 
-describe('a position in a movement group is both halves', () => {
-  it('refuses a movement group with no position in it', async () => {
-    await expect(
-      exercises().create(
-        ADMIN,
-        body({ movementGroup: 'pull', sortOrder: null }),
-      ),
-    ).rejects.toThrow(/movementGroup and sortOrder/i);
+describe('a movement group has no positions (DN-183)', () => {
+  it('takes a movement into a group with nothing else said', async () => {
+    const created = await exercises().create(
+      ADMIN,
+      body({ movementGroup: 'pull' }),
+    );
+    expect(created.movementGroup).toBe('pull');
+    expect(created).not.toHaveProperty('sortOrder');
   });
 
-  it('refuses a position with no movement group', async () => {
-    await expect(
-      exercises().create(ADMIN, body({ movementGroup: null, sortOrder: 2 })),
-    ).rejects.toThrow(/movementGroup and sortOrder/i);
-  });
-
-  it('refuses a patch that clears only one of them', async () => {
+  it('moves a movement out of its group with only the group', async () => {
     const global = await createExercise({
       name: 'Ring row',
       movementGroup: 'pull',
-      sortOrder: 1,
     });
 
-    await expect(
-      exercises().update(ADMIN, global.id, { sortOrder: null }),
-    ).rejects.toThrow(/movementGroup and sortOrder/i);
+    const updated = await exercises().update(ADMIN, global.id, {
+      movementGroup: null,
+    });
+    expect(updated.movementGroup).toBeNull();
   });
 });
 

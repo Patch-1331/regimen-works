@@ -57,20 +57,17 @@ async function pullGroup() {
     name: 'Row under table',
     pattern: 'pull',
     movementGroup: null,
-    sortOrder: null,
   });
   const negative = await createExercise({
     name: 'Negative chin-up',
     pattern: 'pull',
     movementGroup: 'pull',
-    sortOrder: 0,
     isGroupDefault: true,
   });
   const chinUp = await createExercise({
     name: 'Chin-up',
     pattern: 'pull',
     movementGroup: 'pull',
-    sortOrder: 1,
     equipment: ['bar'],
     fallbackExerciseId: row.id,
   });
@@ -78,7 +75,6 @@ async function pullGroup() {
     name: 'Pull-up',
     pattern: 'pull',
     movementGroup: 'pull',
-    sortOrder: 2,
     equipment: ['bar'],
     fallbackExerciseId: row.id,
   });
@@ -131,13 +127,11 @@ async function ropeGroup() {
     name: 'High knees',
     pattern: 'cardio',
     movementGroup: null,
-    sortOrder: null,
   });
   const single = await createExercise({
     name: 'Single-unders',
     pattern: 'cardio',
     movementGroup: 'cardio_rope',
-    sortOrder: 0,
     isGroupDefault: true,
     equipment: ['jump_rope'],
     fallbackExerciseId: highKnees.id,
@@ -146,7 +140,6 @@ async function ropeGroup() {
     name: 'Double-unders',
     pattern: 'cardio',
     movementGroup: 'cardio_rope',
-    sortOrder: 1,
     equipment: ['jump_rope'],
     fallbackExerciseId: highKnees.id,
   });
@@ -309,7 +302,6 @@ describe('SchedulerService equipment resolution', () => {
       name: 'Bar muscle-up',
       pattern: 'pull',
       movementGroup: null,
-      sortOrder: null,
       equipment: ['bar'],
     });
     const { user } = await assignedDay(muscleUp.id, { equipment: [] });
@@ -343,7 +335,6 @@ async function benchWithoutFallback(
   const described = {
     pattern: 'push',
     movementGroup: null,
-    sortOrder: null,
     category: 'strength',
     level: 'beginner',
     primaryMuscles: ['chest'],
@@ -631,14 +622,12 @@ describe('SchedulerService.getToday', () => {
       name: 'Arm circles',
       pattern: 'pull',
       movementGroup: null,
-      sortOrder: null,
     });
     await createChecklistEntry(armCircles.id, 'warmup', { pattern: 'pull' });
     const latStretch = await createExercise({
       name: 'Lat stretch',
       pattern: 'pull',
       movementGroup: null,
-      sortOrder: null,
     });
     await createChecklistEntry(latStretch.id, 'cooldown', { pattern: 'pull' });
 
@@ -737,13 +726,11 @@ describe('SchedulerService equipment floor', () => {
       name: 'High knees',
       pattern: 'cardio',
       movementGroup: null,
-      sortOrder: null,
     });
     const doubleUnders = await createExercise({
       name: 'Double-unders',
       pattern: 'cardio',
       movementGroup: null,
-      sortOrder: null,
       equipment: ['jump_rope'],
       fallbackExerciseId: highKnees.id,
     });
@@ -751,7 +738,6 @@ describe('SchedulerService equipment floor', () => {
       name: 'Air squat',
       pattern: 'squat',
       movementGroup: 'squat',
-      sortOrder: 0,
     });
 
     const ropeWod = await createWod({
@@ -872,7 +858,7 @@ describe('SchedulerService reads the stored pattern cooldown', () => {
    * this test.
    */
   async function libraryAndHistory(cooldownDays: number) {
-    const move = await createExercise({ movementGroup: null, sortOrder: null });
+    const move = await createExercise({ movementGroup: null });
 
     // Yesterday's workout: an EMOM in the squat pattern.
     const helen = await createWod({
@@ -1149,7 +1135,6 @@ describe('SchedulerService.getToday, under a program', () => {
       name: 'Pull-up over a bar',
       pattern: 'pull',
       movementGroup: null,
-      sortOrder: null,
       equipment: ['bar'],
     });
     const user = await createUser();
@@ -1953,20 +1938,17 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
       name: 'Row under table',
       pattern: 'pull',
       movementGroup: null,
-      sortOrder: null,
     });
     const ring = await createExercise({
       name: 'Ring row',
       pattern: 'pull',
       movementGroup: 'pull',
-      sortOrder: 0,
       isGroupDefault: defaultTo === 'ring',
     });
     const chinUp = await createExercise({
       name: 'Chin-up',
       pattern: 'pull',
       movementGroup: 'pull',
-      sortOrder: 1,
       equipment: ['pull_up_bar'],
       fallbackExerciseId: fallback.id,
       isGroupDefault: defaultTo === 'chinUp',
@@ -2166,7 +2148,6 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
       name: 'Air squat',
       pattern: 'squat',
       movementGroup: 'squat',
-      sortOrder: 0,
       isGroupDefault: true,
     });
     const user = await athlete();

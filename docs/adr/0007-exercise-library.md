@@ -235,8 +235,8 @@ nothing an athlete has: every reference is by primary key.
   fallbacks today; it becomes whatever the panel would offer, including the collapsed
   heading.
 - **`Exercise.sortOrder` loses its reader.** The panel orders by curation and score,
-  not by the group's stored order. Whether it is deleted or kept for the library page
-  is not decided here.
+  not by the group's stored order. DN-183 then deleted the column, and the one list
+  of a group's members left, on the Stats page, is by name.
 - **Delivered in seven issues**, in order: this ADR (DN-164); schema (DN-165) and the
   equipment catalog (DN-166); the import of today's 64 (DN-167); the rest of the
   dataset (DN-168); muscle-match substitution (DN-169); the swap panel (DN-170); the

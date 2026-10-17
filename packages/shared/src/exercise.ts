@@ -40,9 +40,6 @@ export const exerciseSchema = z.object({
   // written copy for.
   instructions: instructionSteps,
   movementGroup: movementGroup.nullable(),
-  // Display order within the group, nothing more (DN-139) — no athlete's
-  // choice resolves through it.
-  sortOrder: z.number().int().nonnegative().nullable(),
   fallbackExerciseId: z.string().nullable(),
   /**
    * The stable identity the library import matches on (DN-165, ADR-0007):
@@ -101,9 +98,6 @@ export const createExerciseSchema = z.object({
   unit: exerciseUnit,
   instructions: instructionSteps,
   movementGroup: movementGroup.nullable(),
-  // Display order within the group, nothing more (DN-139) — no athlete's
-  // choice resolves through it.
-  sortOrder: z.number().int().nonnegative().nullable(),
   fallbackExerciseId: z.string().nullable(),
 });
 export type CreateExercise = z.infer<typeof createExerciseSchema>;

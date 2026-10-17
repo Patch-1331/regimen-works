@@ -92,7 +92,6 @@ function exerciseBody(overrides: Record<string, unknown> = {}) {
     unit: 'reps',
     instructions: [],
     movementGroup: null,
-    sortOrder: null,
     fallbackExerciseId: null,
     ...overrides,
   };

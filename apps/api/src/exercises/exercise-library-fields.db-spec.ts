@@ -83,7 +83,6 @@ describe('Exercise.key', () => {
         unit: 'reps',
         instructions: ['Lean back.', 'Pull the rings to your chest.'],
         movementGroup: null,
-        sortOrder: null,
         fallbackExerciseId: null,
       },
     );

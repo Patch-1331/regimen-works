@@ -40,8 +40,6 @@ function merged(existing: Exercise, patch: UpdateExercise) {
       patch.movementGroup === undefined
         ? existing.movementGroup
         : patch.movementGroup,
-    sortOrder:
-      patch.sortOrder === undefined ? existing.sortOrder : patch.sortOrder,
     fallbackExerciseId:
       patch.fallbackExerciseId === undefined
         ? existing.fallbackExerciseId
@@ -298,20 +296,10 @@ export class ExercisesService {
       equipment: string[];
       unit: string;
       movementGroup: string | null;
-      sortOrder: number | null;
       fallbackExerciseId: string | null;
     },
     selfId: string | null,
   ) {
-    // Half an answer is no answer: a `sortOrder` with no group orders the row
-    // against nothing, and a group member with no `sortOrder` sorts last in
-    // every list the athlete picks from.
-    if ((row.movementGroup === null) !== (row.sortOrder === null)) {
-      throw new BadRequestException(
-        'movementGroup and sortOrder go together — an exercise in a movement group needs its place in the list',
-      );
-    }
-
     const fallback = await this.loadAlternative(
       writer,
       row.fallbackExerciseId,

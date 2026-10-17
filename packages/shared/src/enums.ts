@@ -16,9 +16,9 @@ export type MovementPattern = z.infer<typeof movementPattern>;
  * or core contains several groups that are *not* interchangeable.
  *
  * **Membership is a statement about role, not about difficulty.** A group is
- * unordered and nothing compares two of its members; `Exercise.sortOrder`
- * decides only what the swap panel lists first. See ADR-0004, and DN-130 for
- * the audit that found no running code ever read this as a ladder.
+ * unordered and nothing compares two of its members, nor stores a position
+ * for one (DN-183). See ADR-0004, and DN-130 for the audit that found no
+ * running code ever read this as a ladder.
  */
 export const movementGroup = z.enum([
   "push_horizontal",

@@ -173,7 +173,7 @@ describe('SessionsService.start', () => {
 
     expect(session.movements).toHaveLength(1);
     expect(session.movements[0]).toMatchObject({
-      exercise: { id: members[2].id, name: members[2].name, sortOrder: 2 },
+      exercise: { id: members[2].id, name: members[2].name },
       prescribedName: members[0].name,
       isSwapped: false,
       reps: 30,
@@ -218,13 +218,11 @@ describe('SessionsService.start', () => {
       name: 'Supermans',
       pattern: 'pull',
       movementGroup: null,
-      sortOrder: null,
     });
     const pullUp = await createExercise({
       name: 'Pull-up',
       pattern: 'pull',
       movementGroup: 'pull',
-      sortOrder: 0,
       equipment: ['bar'],
       fallbackExerciseId: floor.id,
     });
@@ -232,7 +230,6 @@ describe('SessionsService.start', () => {
       name: 'Ring row',
       pattern: 'pull',
       movementGroup: 'pull',
-      sortOrder: 1,
     });
     const wod = await createWod({
       dominantPattern: 'pull',

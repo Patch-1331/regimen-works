@@ -71,6 +71,12 @@ Concretely:
    display sorts, carrying no claim about difficulty. It stops being printed to
    athletes.
 
+   > **Superseded (DN-183):** `sortOrder` is gone. ADR-0007 took away the swap
+   > panel's reading of it, and the one display sort left (the Stats page's
+   > movement choices) now lists a group's members by name. A required number
+   > that orders nothing invites someone to read difficulty into it again. A group
+   > stores no position for its members.
+
 7. **An absent or unusable choice resolves to the group's declared default member.**
    One rule replaces three. The default is an explicit flag in the seed, not the
    first-listed member and not index zero.
@@ -123,10 +129,22 @@ per-movement fallback looks redundant. It is not, on three counts. A group has m
 members and membership is symmetric; `altExerciseId` is exactly one and is
 many-to-one (one alternative stands in for several movements). An alt carries a
 guarantee a member does not — it needs no equipment, enforced at write time in three
-places. And decisively: every member of `squat_loaded` needs equipment, so the
-fallback must point *outside* the group. A rule that says "pick any performable
-member" has no answer when the whole group is unperformable at once, which is the
-case the field was built for.
+places. And decisively: every member of `cardio_rope` (single-unders,
+double-unders) needs a rope, so the fallback must point *outside* the group. A rule
+that says "pick any performable member" has no answer when the whole group is
+unperformable at once, which is the case the field was built for.
+
+**A group whose every member needs equipment is not a second kind of group**
+(DN-135). It is tempting to name one: an ordinary group, where the way out is
+another member, and an *equipment-closed* one, where the only way out is a
+fallback. But nothing needs the distinction. A group names a slot, supplies its
+default and keys the remembered choice (ADR-0007 decision 14). For an athlete
+without the kit, the default is simply unusable, and the fallback covers it. That
+already holds for every such group, because every curated movement that needs
+equipment owes a fallback (DN-83). Since §9 merged the equipment splits,
+`cardio_rope` is the only group of this shape, and it survived §9 because there was
+no bodyweight member to merge it into, not because rope is special. A future
+`press_barbell` group would follow the same rule, with nothing new to decide.
 
 The two concepts are joined at exactly one place — `assertLegalTarget` flattens
 members and their fallbacks into a single legal swap set — and that flattening is

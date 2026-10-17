@@ -383,7 +383,6 @@ describe('library ownership scoping', () => {
           equipment: ['dumbbell'],
           fallbackExerciseId: 'ex-2',
           movementGroup: null,
-          sortOrder: null,
         },
       },
     ] as unknown as Parameters<MovementResolutionService['resolve']>[2]);

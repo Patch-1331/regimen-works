@@ -13,11 +13,6 @@ import type { ApiExercise, LibraryTier } from "./api";
  * Every optional field is a string here rather than `T | null`, because a
  * `<select>` and an `<input>` have no null — they have "". Converting at the
  * edge, in `toWriteBody`, keeps the "" in one place instead of at each field.
- *
- * `sortOrder` is the reason this matters rather than being a detail. It is a
- * number the schema allows to be 0, and `Number("")` is also 0 — so a form
- * holding it as a number cannot tell an empty box from the first position
- * in a group, and would write order 0 onto every movement that has none.
  */
 export type ExerciseDraft = {
   name: string;
@@ -28,7 +23,6 @@ export type ExerciseDraft = {
   /** One step per line, as the textarea holds them; see `toSteps`. */
   instructions: string;
   movementGroup: MovementGroup | "";
-  sortOrder: string;
   fallbackExerciseId: string;
 };
 
@@ -41,7 +35,6 @@ export const EMPTY_DRAFT: ExerciseDraft = {
   unit: "reps",
   instructions: "",
   movementGroup: "",
-  sortOrder: "",
   fallbackExerciseId: "",
 };
 
@@ -55,7 +48,6 @@ export function toDraft(exercise: ApiExercise): ExerciseDraft {
     unit: exercise.unit,
     instructions: exercise.instructions.join("\n"),
     movementGroup: (exercise.movementGroup ?? "") as MovementGroup | "",
-    sortOrder: exercise.sortOrder === null ? "" : String(exercise.sortOrder),
     fallbackExerciseId: exercise.fallbackExerciseId ?? "",
   };
 }
@@ -72,7 +64,7 @@ export function toSteps(text: string): string[] {
     .filter((line) => line !== "");
 }
 
-/** The draft as the API takes it — "" back to null, `sortOrder` back to a number. */
+/** The draft as the API takes it — "" back to null. */
 export function toWriteBody(draft: ExerciseDraft): CreateExercise {
   return {
     name: draft.name.trim(),
@@ -82,7 +74,6 @@ export function toWriteBody(draft: ExerciseDraft): CreateExercise {
     unit: draft.unit,
     instructions: toSteps(draft.instructions),
     movementGroup: draft.movementGroup === "" ? null : draft.movementGroup,
-    sortOrder: draft.sortOrder === "" ? null : Number(draft.sortOrder),
     fallbackExerciseId: draft.fallbackExerciseId === "" ? null : draft.fallbackExerciseId,
   };
 }
@@ -129,15 +120,6 @@ export function problemsWith(
 
   if (draft.name.trim() === "") {
     problems.push("A movement needs a name.");
-  }
-
-  // Half an answer is no answer: a movement with a group and no order has
-  // nowhere to sit in the panel the athlete picks from, and one with an order
-  // and no group has no group to be ordered within.
-  if ((draft.movementGroup === "") !== (draft.sortOrder === "")) {
-    problems.push(
-      "A movement in a movement group needs its position in it — set both the movementGroup and the order, or neither.",
-    );
   }
 
   const fallback =

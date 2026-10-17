@@ -65,7 +65,6 @@ function exercise(overrides: Record<string, unknown> = {}) {
     unit: "reps",
     instructions: [],
     movementGroup: "push_horizontal",
-    sortOrder: 2,
     fallbackExerciseId: null,
     primaryMuscles: ["chest"],
     ...overrides,
@@ -293,7 +292,6 @@ describe("sessionMovementSchema", () => {
       name: "Push-up",
       unit: "reps",
       movementGroup: "push_horizontal",
-      sortOrder: 2,
     },
     ...overrides,
   });
@@ -304,6 +302,28 @@ describe("sessionMovementSchema", () => {
     expect(
       sessionMovementSchema.parse(sessionMovement()).prescribedName,
     ).toBeNull();
+  });
+
+  it("reads a snapshot written before DN-183, dropping its sortOrder", () => {
+    // The column is gone, but sessions already stored still carry the key in
+    // their JSON. History must keep reading them.
+    const parsed = sessionMovementSchema.parse(
+      sessionMovement({
+        exercise: {
+          id: "e-1",
+          name: "Push-up",
+          unit: "reps",
+          movementGroup: "push_horizontal",
+          sortOrder: 2,
+        },
+      }),
+    );
+    expect(parsed.exercise).toEqual({
+      id: "e-1",
+      name: "Push-up",
+      unit: "reps",
+      movementGroup: "push_horizontal",
+    });
   });
 
   it("keeps a prescribedName when the athlete's standing choice replaced one", () => {
@@ -840,7 +860,6 @@ describe("exerciseSchema", () => {
     unit: "reps",
     instructions: [],
     movementGroup: "push_horizontal",
-    sortOrder: 2,
     fallbackExerciseId: null,
     key: null,
     primaryMuscles: [],
@@ -878,7 +897,6 @@ describe("exerciseSchema", () => {
       unit: "reps",
       instructions: [],
       movementGroup: null,
-      sortOrder: null,
       fallbackExerciseId: null,
       phase: "warmup",
     });
@@ -886,11 +904,11 @@ describe("exerciseSchema", () => {
     expect(written.success && "phase" in written.data).toBe(false);
   });
 
-  it("accepts an exercise with no movementGroup or sort order", () => {
+  it("accepts an exercise with no movementGroup", () => {
     // Cardio is not on a movement group.
     expect(
       exerciseSchema.safeParse(
-        libraryExercise({ movementGroup: null, sortOrder: null }),
+        libraryExercise({ movementGroup: null }),
       ).success,
     ).toBe(true);
   });
@@ -969,7 +987,6 @@ describe("exerciseSchema", () => {
       unit: "reps",
       instructions: [],
       movementGroup: null,
-      sortOrder: null,
       fallbackExerciseId: null,
       key: "Pushups",
       level: "beginner",
@@ -1005,7 +1022,6 @@ describe("exerciseSchema", () => {
       unit: "reps",
       instructions: [],
       movementGroup: null,
-      sortOrder: null,
       fallbackExerciseId: null,
       ownerId: null,
     });

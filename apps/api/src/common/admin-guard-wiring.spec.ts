@@ -54,7 +54,6 @@ const BODY = {
   unit: 'reps',
   instructions: [],
   movementGroup: null,
-  sortOrder: null,
   fallbackExerciseId: null,
 };
 

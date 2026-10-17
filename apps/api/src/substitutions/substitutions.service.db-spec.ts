@@ -174,14 +174,12 @@ describe('SubstitutionsService.set', () => {
         name: 'Air squat',
         pattern: 'squat',
         movementGroup: 'squat',
-        sortOrder: 0,
         equipment: [],
       });
       const loaded = await createExercise({
         name: 'Barbell back squat',
         pattern: 'squat',
         movementGroup: 'squat',
-        sortOrder: 1,
         equipment: ['barbell'],
       });
       const wod = await createWod({
@@ -249,7 +247,6 @@ describe('SubstitutionsService.set', () => {
       name: 'Ring row',
       pattern: 'pull',
       movementGroup: 'pull',
-      sortOrder: 7,
       ownerId: stranger.id,
     });
 
@@ -271,7 +268,6 @@ describe('SubstitutionsService.set', () => {
         name: 'High knees',
         pattern: 'cardio',
         movementGroup: null,
-        sortOrder: null,
       },
     });
     const doubleUnders = await testPrisma().exercise.create({
@@ -279,7 +275,6 @@ describe('SubstitutionsService.set', () => {
         name: 'Double-unders',
         pattern: 'cardio',
         movementGroup: null,
-        sortOrder: null,
         equipment: ['jump_rope'],
         ...(options.withAlternative === false
           ? {}
@@ -1011,7 +1006,6 @@ async function benchDay(
   const described = {
     pattern: 'push',
     movementGroup: null,
-    sortOrder: null,
     category: 'strength',
     level: 'beginner',
     primaryMuscles: ['chest'],
@@ -1189,13 +1183,11 @@ describe('SubstitutionsService.options (DN-170)', () => {
       ...described,
       name: 'Incline push-up',
       level: 'beginner',
-      sortOrder: 0,
     });
     const chosen = await createExercise({
       ...described,
       name: 'Archer push-up',
       level: 'expert',
-      sortOrder: 1,
     });
     await createSkillLevel(user.id, 'push_horizontal', chosen.id);
     const wod = await createWod({
@@ -1237,7 +1229,7 @@ describe('SubstitutionsService.options (DN-170)', () => {
 
   it('offers nothing where the library has nothing to match on', async () => {
     const user = await createUser();
-    const ungrouped = { movementGroup: null, sortOrder: null };
+    const ungrouped = { movementGroup: null };
     const undescribed = await createExercise({
       ...ungrouped,
       name: 'Mystery move',
