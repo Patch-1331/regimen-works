@@ -27,7 +27,6 @@ const chinUp = fixtures.apiExercise({
   name: "Chin-up",
   pattern: "pull",
   movementGroup: "pull",
-  sortOrder: 1,
 });
 
 const ringRow = fixtures.apiExercise({
@@ -35,7 +34,6 @@ const ringRow = fixtures.apiExercise({
   name: "Ring row",
   pattern: "pull",
   movementGroup: "pull",
-  sortOrder: 0,
 });
 
 /** What the swap panel is served: the rest of the pull group (DN-170). */
@@ -131,7 +129,7 @@ describe("the prescribed plate", () => {
         id: "program-slot-movement-2",
         order: 1,
         sets: 3,
-        exercise: { id: ringRow.id, name: "Ring row", sortOrder: 0 },
+        exercise: { id: ringRow.id, name: "Ring row" },
       }),
     ]);
     renderRoute("/");
@@ -149,7 +147,7 @@ describe("the prescribed plate", () => {
     // somebody a different movement should at least say so.
     prescribing([
       fixtures.prescribedMovement({
-        exercise: { id: ringRow.id, name: "Row under table", movementGroup: null, sortOrder: null },
+        exercise: { id: ringRow.id, name: "Row under table", movementGroup: null },
         prescribedName: "Chin-up",
         prescribedId: chinUp.id,
         prescribedReason: "equipment",

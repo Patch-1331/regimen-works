@@ -44,7 +44,6 @@ export function patternLabel(pattern: string): string {
 export type MovementOption = {
   id: string;
   name: string;
-  sortOrder: number;
   /** The one the athlete currently has on record for this group. */
   isChosen: boolean;
 };
@@ -58,7 +57,10 @@ export type MovementChoice = {
    * the wrong movement.
    */
   chosenName: string | null;
-  /** Every movement on the group, in the group's own order. */
+  /**
+   * Every movement in the group, by name (DN-183). A group is unordered, so
+   * any other order would be an opinion the list never states.
+   */
   options: MovementOption[];
 };
 
@@ -83,7 +85,7 @@ export function buildMovementChoices(
 ): MovementChoice[] {
   const exercisesByLine = new Map<string, ApiExercise[]>();
   for (const e of exercises) {
-    if (!e.movementGroup || e.sortOrder === null) continue;
+    if (!e.movementGroup) continue;
     const list = exercisesByLine.get(e.movementGroup) ?? [];
     list.push(e);
     exercisesByLine.set(e.movementGroup, list);
@@ -97,12 +99,11 @@ export function buildMovementChoices(
     .map((skill) => {
       const lineExercises = (exercisesByLine.get(skill.movementGroup) ?? [])
         .slice()
-        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+        .sort((a, b) => a.name.localeCompare(b.name));
 
       const options: MovementOption[] = lineExercises.map((e) => ({
         id: e.id,
         name: e.name,
-        sortOrder: e.sortOrder ?? 0,
         // By id since DN-139. Matching on position meant that reordering a
         // group moved the tick to a movement the athlete never picked.
         isChosen: e.id === skill.exerciseId,

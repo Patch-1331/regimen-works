@@ -163,43 +163,29 @@ export function ExerciseForm({
         />
       </div>
 
-      <div className="flex gap-3">
-        <div className="flex-1">
-          <Label htmlFor="exercise-movementGroup">
-            Progression movementGroup
-          </Label>
-          <select
-            id="exercise-movementGroup"
-            className={field}
-            style={fieldStyle}
-            value={draft.movementGroup}
-            onChange={(e) =>
-              set(
-                "movementGroup",
-                e.target.value as ExerciseDraft["movementGroup"],
-              )
-            }
-          >
-            <option value="">None</option>
-            {movementGroup.options.map((l) => (
-              <option key={l} value={l}>
-                {lineLabel(l)}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="w-24">
-          <Label htmlFor="exercise-sort-order">Order</Label>
-          <input
-            id="exercise-sort-order"
-            type="number"
-            min={0}
-            className={field}
-            style={fieldStyle}
-            value={draft.sortOrder}
-            onChange={(e) => set("sortOrder", e.target.value)}
-          />
-        </div>
+      <div>
+        <Label htmlFor="exercise-movementGroup">
+          Progression movementGroup
+        </Label>
+        <select
+          id="exercise-movementGroup"
+          className={field}
+          style={fieldStyle}
+          value={draft.movementGroup}
+          onChange={(e) =>
+            set(
+              "movementGroup",
+              e.target.value as ExerciseDraft["movementGroup"],
+            )
+          }
+        >
+          <option value="">None</option>
+          {movementGroup.options.map((l) => (
+            <option key={l} value={l}>
+              {lineLabel(l)}
+            </option>
+          ))}
+        </select>
       </div>
 
       <fieldset>

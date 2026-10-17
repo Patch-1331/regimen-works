@@ -63,10 +63,6 @@ version, and it is not the same idea as another member of the group: a group has
 many symmetric members, a fallback is one, shared, and points outside the group
 when every member needs kit.
 
-**Sort order** (`Exercise.sortOrder`) — the order a group's members are listed in
-the swap panel. Display only. It carries no claim about difficulty even where a
-curated order happens to read like one.
-
 **SkillLevel** — despite the name, the athlete's *standing choice* of movement per
 movement group: the last thing they picked, remembered so they need not re-pick it
 every session. A row exists only once the athlete has chosen something; nobody is

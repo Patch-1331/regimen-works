@@ -28,7 +28,6 @@ export async function createExercise(overrides: Record<string, unknown> = {}) {
       pattern: 'push',
       unit: 'reps',
       movementGroup: 'push_horizontal',
-      sortOrder: 0,
       ...overrides,
     },
   });
@@ -175,7 +174,6 @@ export async function createGroup(
       : await createExercise({
           name: unique('Row under table'),
           movementGroup: null,
-          sortOrder: null,
         });
 
   // One declared default per group, enforced by a partial unique index. A
@@ -192,7 +190,6 @@ export async function createGroup(
       await createExercise({
         name: unique(name),
         movementGroup,
-        sortOrder: index,
         isGroupDefault: !declared && index === defaultAt,
         fallbackExerciseId: index === options.fallbackFor ? fallback!.id : null,
       }),

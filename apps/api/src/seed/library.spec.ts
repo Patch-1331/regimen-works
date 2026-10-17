@@ -227,7 +227,6 @@ describe('buildLibrary', () => {
         category: 'strength',
         unit: 'reps',
         movementGroup: null,
-        sortOrder: null,
         isGroupDefault: false,
         curated: true,
       }),
@@ -258,7 +257,6 @@ describe('buildLibrary', () => {
       unit: 'reps',
       equipment: ['bar'],
       movementGroup: null,
-      sortOrder: null,
       isGroupDefault: false,
       scalable: false,
     });

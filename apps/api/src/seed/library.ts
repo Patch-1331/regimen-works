@@ -92,8 +92,6 @@ export type Curation = {
    * thing in a program. Membership is a statement about role, not difficulty.
    */
   movementGroup?: string;
-  /** Display order within the group (DN-139). Nothing resolves through it. */
-  sortOrder?: number;
   /**
    * The member prescribed to an athlete who has not chosen in this group
    * (ADR-0004 decision 7). Exactly one per group, and declared rather than
@@ -145,7 +143,6 @@ export type LibraryExercise = {
   scalable: boolean;
   unit: 'reps' | 'seconds';
   movementGroup: string | null;
-  sortOrder: number | null;
   isGroupDefault: boolean;
   /** A key, like everything else that points at an exercise here. */
   fallback?: string;
@@ -178,7 +175,6 @@ export type Library = {
  */
 export const SCHEMA_WORDS = [
   'movementGroup',
-  'sortOrder',
   'exerciseId',
   'fallbackExerciseId',
   'isGroupDefault',
@@ -485,7 +481,6 @@ export function buildLibrary({
       scalable: c.scalable ?? false,
       unit: c.unit ?? 'reps',
       movementGroup: c.movementGroup ?? null,
-      sortOrder: c.sortOrder ?? null,
       isGroupDefault: c.isGroupDefault ?? false,
       ...describe(source, where),
     };
@@ -530,7 +525,6 @@ export function buildLibrary({
       // Groups stay hand-curated (ADR-0007): an entry nobody has looked at
       // is in no group, so no program slot can resolve to it.
       movementGroup: null,
-      sortOrder: null,
       isGroupDefault: false,
       ...describe(source, where),
     });

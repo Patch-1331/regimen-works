@@ -37,7 +37,6 @@ function movement(
       name: 'Chin-up',
       unit: 'reps',
       movementGroup: 'pull',
-      sortOrder: 1,
       ...overrides.exercise,
     },
   };
@@ -92,7 +91,7 @@ describe('buildMovementHistory', () => {
 
   it('puts the movement they are training now at the top', () => {
     const negatives = movement({
-      exercise: { id: 'negative', name: 'Negative pull-up', sortOrder: 0 },
+      exercise: { id: 'negative', name: 'Negative pull-up' },
     });
     const history = buildMovementHistory([
       day('2026-08-01', [negatives]),
@@ -110,7 +109,7 @@ describe('buildMovementHistory', () => {
         movement({
           reps: 15,
           wodMovementId: 'wm-2',
-          exercise: { id: 'pull-up', name: 'Pull-up', sortOrder: 2 },
+          exercise: { id: 'pull-up', name: 'Pull-up' },
         }),
       ]),
     ]);
@@ -132,7 +131,6 @@ describe('buildMovementHistory', () => {
             id: 'high-knees',
             name: 'High knees',
             movementGroup: null,
-            sortOrder: null,
           },
         }),
         movement({
@@ -142,7 +140,6 @@ describe('buildMovementHistory', () => {
             id: 'high-knees',
             name: 'High knees',
             movementGroup: null,
-            sortOrder: null,
           },
         }),
       ]),
@@ -161,7 +158,6 @@ describe('buildMovementHistory', () => {
             id: 'row',
             name: 'Row under table',
             movementGroup: null,
-            sortOrder: null,
           },
           prescribedName: 'Pull-up',
           prescribedReason: 'equipment',
@@ -206,7 +202,6 @@ describe('buildMovementHistory', () => {
             name: 'Plank hold',
             unit: 'seconds',
             movementGroup: 'core_hold',
-            sortOrder: 2,
           },
         }),
         movement({ reps: 45, wodMovementId: 'wm-2' }),

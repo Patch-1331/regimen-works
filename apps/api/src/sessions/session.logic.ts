@@ -20,7 +20,6 @@ export type ResolvedMovementInput = {
     name: string;
     unit: string;
     movementGroup: string | null;
-    sortOrder: number | null;
   };
 };
 
@@ -62,7 +61,6 @@ export function snapshotMovements(
         name: m.exercise.name,
         unit: m.exercise.unit as ExerciseUnit,
         movementGroup: m.exercise.movementGroup as MovementGroup | null,
-        sortOrder: m.exercise.sortOrder,
       },
     }));
 }
@@ -140,7 +138,6 @@ export type ResolvedPrescribedInput = {
     name: string;
     unit: string;
     movementGroup: string | null;
-    sortOrder: number | null;
   };
 };
 
@@ -189,7 +186,6 @@ export function snapshotPrescribedMovements(
         name: m.exercise.name,
         unit: m.exercise.unit as ExerciseUnit,
         movementGroup: m.exercise.movementGroup as MovementGroup | null,
-        sortOrder: m.exercise.sortOrder,
       },
     }));
 }

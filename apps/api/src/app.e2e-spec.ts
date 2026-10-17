@@ -295,13 +295,11 @@ describe('GET /today', () => {
       name: 'Row under table',
       pattern: 'pull',
       movementGroup: null,
-      sortOrder: null,
     });
     const pullUp = await createExercise({
       name: 'Pull-up',
       pattern: 'pull',
       movementGroup: 'pull',
-      sortOrder: 0,
       equipment: ['bar'],
       fallbackExerciseId: row.id,
     });

@@ -183,7 +183,6 @@ export type ApiExercise = {
   /** Numbered steps; empty where the exercise has no written copy. */
   instructions: string[];
   movementGroup: string | null;
-  sortOrder: number | null;
   fallbackExerciseId: string | null;
   /** The dataset's id for a global exercise; always null on the athlete's own. */
   key: string | null;

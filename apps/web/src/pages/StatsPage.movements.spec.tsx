@@ -24,13 +24,11 @@ const chinUp = fixtures.apiExercise({
   id: "chin-up",
   name: "Chin-up",
   movementGroup: "pull",
-  sortOrder: 1,
 });
 const negative = fixtures.apiExercise({
   id: "negative",
   name: "Negative chin-up",
   movementGroup: "pull",
-  sortOrder: 0,
 });
 
 function history(overrides: Partial<MovementHistory>[] = []): MovementHistory[] {

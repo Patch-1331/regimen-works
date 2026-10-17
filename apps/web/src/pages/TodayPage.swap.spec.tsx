@@ -33,7 +33,6 @@ const doubleUnders = fixtures.apiExercise({
   pattern: "cardio",
   equipment: ROPE,
   movementGroup: null,
-  sortOrder: null,
   fallbackExercise: { id: "high-knees", name: "High knees" },
 });
 
@@ -42,7 +41,6 @@ const highKnees = fixtures.apiExercise({
   name: "High knees",
   pattern: "cardio",
   movementGroup: null,
-  sortOrder: null,
   fallbackExercise: null,
 });
 
@@ -94,7 +92,6 @@ function plateShowing(
                     unit: "reps",
                     instructions: [],
                     movementGroup: null,
-                    sortOrder: null,
                     fallbackExerciseId: exercise.fallbackExercise?.id ?? null,
                     primaryMuscles,
                   },

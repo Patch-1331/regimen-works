@@ -144,17 +144,23 @@ export async function seedE2eUser(
  * Hard-coding group names would break the seed the first time the catalogue is
  * reshaped.
  *
- * The *second* member where a group has one, so the seeded athlete's choice is
- * visibly theirs rather than indistinguishable from the default they would
- * have been handed anyway (DN-139).
+ * A member other than the declared default where a group has one, so the
+ * seeded athlete's choice is visibly theirs rather than indistinguishable from
+ * the default they would have been handed anyway (DN-139).
  */
 async function pickSeededChoices(
   prisma: PrismaClient,
 ): Promise<{ movementGroup: string; exerciseId: string }[]> {
   const exercises = await prisma.exercise.findMany({
     where: { movementGroup: { not: null }, archivedAt: null, ownerId: null },
-    select: { id: true, movementGroup: true },
-    orderBy: [{ movementGroup: 'asc' }, { sortOrder: 'asc' }, { id: 'asc' }],
+    select: { id: true, movementGroup: true, isGroupDefault: true },
+    // Defaults last, so the first member of each group is someone else's
+    // pick where there is one.
+    orderBy: [
+      { movementGroup: 'asc' },
+      { isGroupDefault: 'asc' },
+      { name: 'asc' },
+    ],
   });
 
   const byGroup = new Map<string, string[]>();
@@ -171,7 +177,7 @@ async function pickSeededChoices(
     .slice(0, 2)
     .map(([movementGroup, ids]) => ({
       movementGroup,
-      exerciseId: ids[Math.min(1, ids.length - 1)],
+      exerciseId: ids[0],
     }));
 }
 

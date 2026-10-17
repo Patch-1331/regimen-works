@@ -78,7 +78,6 @@ async function createTagged(
   const row = await createExercise({
     ownerId: null,
     movementGroup: null,
-    sortOrder: null,
     ...overrides,
   });
   await testPrisma().$executeRawUnsafe(

@@ -18,7 +18,6 @@ function exercise(partial: Partial<ApiExercise> & { id: string }): ApiExercise {
     scalable: true,
     unit: "reps",
     movementGroup: "pull",
-    sortOrder: 0,
     instructions: [],
     fallbackExerciseId: null,
     key: null,
@@ -51,23 +50,20 @@ function skill(
 const negative = exercise({
   id: "negative",
   name: "Negative chin-up",
-  sortOrder: 0,
 });
-const chinUp = exercise({ id: "chin-up", name: "Chin-up", sortOrder: 1 });
-const pullUp = exercise({ id: "pull-up", name: "Pull-up", sortOrder: 2 });
+const chinUp = exercise({ id: "chin-up", name: "Chin-up" });
+const pullUp = exercise({ id: "pull-up", name: "Pull-up" });
 const airSquat = exercise({
   id: "air-squat",
   name: "Air squat",
   movementGroup: "squat",
   pattern: "squat",
-  sortOrder: 0,
 });
 const cardio = exercise({
   id: "row",
   name: "Row",
   pattern: "monostructural",
   movementGroup: null,
-  sortOrder: null,
 });
 
 const pullExercises = [chinUp, pullUp, negative, cardio];
@@ -80,13 +76,15 @@ describe("buildMovementChoices", () => {
     expect(choice.chosenName).toBe("Chin-up");
   });
 
-  it("offers the whole movementGroup in order, not just what is 'allowed'", () => {
+  it("offers the whole group by name, not just what is 'allowed'", () => {
+    // By name because a group is unordered (DN-183): the input order here is
+    // not the output order, so a list that kept it would fail.
     const [choice] = buildMovementChoices(pullExercises, [
       skill("pull", chinUp),
     ]);
     expect(choice.options.map((o) => o.name)).toEqual([
-      "Negative chin-up",
       "Chin-up",
+      "Negative chin-up",
       "Pull-up",
     ]);
     expect(choice.options.filter((o) => o.isChosen)).toHaveLength(1);
@@ -96,12 +94,17 @@ describe("buildMovementChoices", () => {
     const [choice] = buildMovementChoices(pullExercises, [
       skill("pull", chinUp),
     ]);
-    // A movement below the choice and one above it are indistinguishable:
-    // the panel has no third state now, which is the point of DN-91.
-    const below = choice.options.find((o) => o.sortOrder === 0)!;
-    const above = choice.options.find((o) => o.sortOrder === 2)!;
-    expect(below.isChosen).toBe(false);
-    expect(above.isChosen).toBe(false);
+    // What was once below the choice and what was once above it are
+    // indistinguishable: the panel has no third state now, which is the
+    // point of DN-91.
+    const below = choice.options.find((o) => o.id === "negative")!;
+    const above = choice.options.find((o) => o.id === "pull-up")!;
+    expect(below).toEqual({
+      id: "negative",
+      name: "Negative chin-up",
+      isChosen: false,
+    });
+    expect(above).toEqual({ id: "pull-up", name: "Pull-up", isChosen: false });
   });
 
   it("skips exercises off a tracked movementGroup", () => {

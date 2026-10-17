@@ -34,18 +34,14 @@ describe("toWriteBody", () => {
       unit: "reps",
       instructions: [],
       movementGroup: null,
-      sortOrder: null,
       fallbackExerciseId: null,
     });
   });
 
-  it("keeps order 0 and does not invent one from an empty box", () => {
-    // The whole reason the draft holds `sortOrder` as a string: `Number("")`
-    // is 0, and 0 is a real position in a group.
-    expect(toWriteBody(draft({ movementGroup: "push_horizontal", sortOrder: "0" })).sortOrder).toBe(
-      0,
-    );
-    expect(toWriteBody(draft({ sortOrder: "" })).sortOrder).toBeNull();
+  it("writes a group with no position in it (DN-183)", () => {
+    const body = toWriteBody(draft({ movementGroup: "push_horizontal" }));
+    expect(body.movementGroup).toBe("push_horizontal");
+    expect(body).not.toHaveProperty("sortOrder");
   });
 
   it("trims what was typed, so a name of spaces is not a name", () => {
@@ -71,7 +67,6 @@ describe("toDraft", () => {
       unit: "reps",
       instructions: ["Hang from the bar.", "Chin over the bar."],
       movementGroup: "pull_vertical",
-      sortOrder: 3,
       fallbackExerciseId: "exercise-9",
     });
 
@@ -81,7 +76,6 @@ describe("toDraft", () => {
       equipment: ["bar"],
       instructions: ["Hang from the bar.", "Chin over the bar."],
       movementGroup: "pull_vertical",
-      sortOrder: 3,
       fallbackExerciseId: "exercise-9",
     });
   });
@@ -141,18 +135,9 @@ describe("problemsWith", () => {
     ]);
   });
 
-  it("refuses half a group position, in either direction", () => {
+  it("takes a group on its own, with no position to go with it", () => {
     expect(
-      problemsWith(draft({ movementGroup: "push_horizontal" }), alternatives).join(),
-    ).toMatch(/both the movementGroup and the order/);
-    expect(problemsWith(draft({ sortOrder: "2" }), alternatives).join()).toMatch(
-      /both the movementGroup and the order/,
-    );
-    expect(
-      problemsWith(
-        draft({ movementGroup: "push_horizontal", sortOrder: "2" }),
-        alternatives,
-      ),
+      problemsWith(draft({ movementGroup: "push_horizontal" }), alternatives),
     ).toEqual([]);
   });
 
@@ -201,9 +186,9 @@ describe("problemsWith", () => {
   it("reports every problem at once rather than one at a time", () => {
     expect(
       problemsWith(
-        draft({ name: "", equipment: ["bar"], movementGroup: "push_horizontal" }),
+        draft({ name: "", equipment: ["bar"] }),
         alternatives,
       ),
-    ).toHaveLength(3);
+    ).toHaveLength(2);
   });
 });
