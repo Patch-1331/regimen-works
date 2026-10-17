@@ -351,6 +351,41 @@ describe('SetupService.commit', () => {
     expect(rule.trainingDays).toEqual([2, 4, 6]);
   });
 
+  it('starts a program that allows no end with no end', async () => {
+    // DN-154: an authored program, as `ProgramsService.create` stores one.
+    const { userId } = await provisionedAthlete();
+    const program = await createProgram({
+      minWeeks: 1,
+      maxWeeks: 52,
+      defaultWeeks: 8,
+      allowsNoEnd: true,
+    });
+
+    await service().commit(
+      userId,
+      answers({ programId: program.id, weeks: null }),
+      TODAY,
+    );
+
+    expect(await activeEnrollment(userId)).toMatchObject({
+      programId: program.id,
+      weeks: null,
+    });
+  });
+
+  it('still asks a curated bounded program for a length', async () => {
+    const { userId } = await provisionedAthlete();
+    const program = await createProgram();
+
+    await expect(
+      service().commit(
+        userId,
+        answers({ programId: program.id, weeks: null }),
+        TODAY,
+      ),
+    ).rejects.toThrow(BadRequestException);
+  });
+
   it('leaves the stored days alone for a fixed program', async () => {
     // DN-118: the athlete's own days stay true and merely asleep for the run,
     // so overwriting them here would destroy the value the lock hands back.
@@ -697,6 +732,37 @@ describe('SetupService.commit, leaving a run part-way', () => {
       programId: program.id,
       status: 'active',
     });
+  });
+
+  it('ends a run with no end like any other, with no total', async () => {
+    // DN-154: an open-ended run never completes, so starting something else
+    // is the only way out of it -- and the run left keeps `weeks: null`,
+    // which is what reads back as "ended at week N" with no "of".
+    const { userId } = await provisionedAthlete();
+    const program = await createProgram({ allowsNoEnd: true });
+    await service().commit(
+      userId,
+      answers({ programId: program.id, weeks: null }),
+      TODAY,
+    );
+    const run = await activeEnrollment(userId);
+    await trainedDay(userId, run.id, TODAY);
+
+    await service().commit(
+      userId,
+      answers({
+        programId: DEFAULT_PROGRAM_ID,
+        weeks: null,
+        startDate: '2026-09-17',
+      }),
+      TODAY,
+    );
+
+    const left = await testPrisma().programEnrollment.findUniqueOrThrow({
+      where: { id: run.id },
+    });
+    expect(left).toMatchObject({ status: 'ended', weeks: null });
+    expect(left.completedAt).toBeNull();
   });
 
   it('writes nothing when the switch is refused', async () => {

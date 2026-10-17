@@ -31,6 +31,7 @@ function program(overrides: Record<string, unknown> = {}) {
     minWeeks: 4,
     maxWeeks: 8,
     defaultWeeks: 6,
+    allowsNoEnd: false,
     fixedDays: [],
     hasStraightSets: false,
     restPaceRequired: false,

@@ -625,6 +625,10 @@ function programFields(program: CreateProgram) {
     minWeeks: PROGRAM_WEEKS.min,
     maxWeeks: PROGRAM_WEEKS.max,
     defaultWeeks: PROGRAM_WEEKS.default,
+    // One repeating week has nothing to finish, so "no end" is a length too
+    // (DN-154). Here rather than on create alone, so a copy and an import --
+    // both saved through `create` -- carry it the same way.
+    allowsNoEnd: true,
   } satisfies Prisma.ProgramUpdateInput;
 }
 

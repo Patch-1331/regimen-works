@@ -65,6 +65,9 @@ export const JUST_WODS_PROGRAM = {
   minWeeks: null,
   maxWeeks: null,
   defaultWeeks: null,
+  // Open-ended is its only length already: there are no bounds to choose
+  // between, so there is no "or no end" to offer beside them (DN-154).
+  allowsNoEnd: false,
   ownerId: null,
 };
 

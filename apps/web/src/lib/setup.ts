@@ -103,18 +103,29 @@ export function formatStartDate(isoDate: string): string {
   });
 }
 
-/** The length the picker starts at, and the bounds it may move between. */
+/**
+ * The length the picker starts at, the bounds it may move between, and
+ * whether "No end" is offered beside them (DN-154).
+ */
 export function weeksChoice(program: SetupProgram): {
   min: number;
   max: number;
   start: number;
+  noEnd: boolean;
 } | null {
   const { minWeeks, maxWeeks, defaultWeeks } = program;
   // All three are null together for an open-ended program, which has no
   // length to choose -- and the wizard shows no stepper at all rather than
   // one that cannot move.
   if (minWeeks === null || maxWeeks === null) return null;
-  return { min: minWeeks, max: maxWeeks, start: defaultWeeks ?? minWeeks };
+  return {
+    min: minWeeks,
+    max: maxWeeks,
+    start: defaultWeeks ?? minWeeks,
+    // An authored program starts on a length rather than on no end: it is
+    // the offer the program is written as, and "No end" is one tap away.
+    noEnd: program.allowsNoEnd,
+  };
 }
 
 /**

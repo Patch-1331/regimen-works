@@ -17,6 +17,8 @@ export type SetupProgramBounds = {
   maxDaysPerWeek: number | null;
   minWeeks: number | null;
   maxWeeks: number | null;
+  /** It may also run with no end, as well as for a length (DN-154). */
+  allowsNoEnd: boolean;
   /** Some movement leaves its rest unstated, so blank is not an answer (ADR 0005). */
   restPaceRequired: boolean;
 };
@@ -160,8 +162,13 @@ function weeksRejection(
       : `${program.name} has no end, so there is no length to choose.`;
   }
 
-  if (weeks === null)
-    return `Choose how many weeks to run ${program.name} for.`;
+  // An authored program may be kept at until the athlete starts something
+  // else (DN-154): null is the answer "no end", not a missing one.
+  if (weeks === null) {
+    return program.allowsNoEnd
+      ? null
+      : `Choose how many weeks to run ${program.name} for.`;
+  }
   if (weeks < min || weeks > max) {
     return `${program.name} runs for between ${min} and ${max} weeks.`;
   }

@@ -286,6 +286,17 @@ describe('resolveSlotForDate', () => {
       );
     });
 
+    it('keeps prescribing past the 52 weeks an authored program may be chosen for', () => {
+      // DN-154: "no end" on an authored program is this same enrollment, so
+      // the bound on a chosen length is no bound on an open-ended one.
+      expect(resolveSlotForDate(justWods, oneWeek, '2027-09-20')).toMatchObject(
+        {
+          status: 'scheduled',
+          weekIndex: 53,
+        },
+      );
+    });
+
     it('cycles its weeks rather than running out of them', () => {
       const two = [{ slots }, { slots: [{ dayOfWeek: 1, kind: 'rest' }] }];
       expect(resolveSlotForDate(justWods, two, '2026-09-21')).toMatchObject({
