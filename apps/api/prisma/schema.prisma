@@ -740,6 +740,14 @@ model Program {
   minWeeks     Int?
   maxWeeks     Int?
   defaultWeeks Int?
+  // Whether the athlete may also run it with no end, `weeks: null` on the
+  // enrollment, as well as for a length inside the bounds above (DN-154). Set
+  // on every authored program: one repeating week has nothing to finish, so
+  // how long to keep at it is the athlete's to say, and "until I start
+  // something else" is an answer. Curated bounded programs leave it false,
+  // because their length is part of the programming. Just WODs leaves it
+  // false too -- it has no bounds, so open-ended is its only length already.
+  allowsNoEnd  Boolean @default(false)
 
   // Which tier of the library this row belongs to, exactly as on Exercise and
   // Wod (DN-93): null is global, admin-curated content; set is that athlete's

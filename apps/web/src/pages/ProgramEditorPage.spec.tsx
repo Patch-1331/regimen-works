@@ -90,6 +90,7 @@ function api(
                     minWeeks: 1,
                     maxWeeks: 52,
                     defaultWeeks: 8,
+                    allowsNoEnd: true,
                     hasStraightSets: true,
                   }),
                 ]

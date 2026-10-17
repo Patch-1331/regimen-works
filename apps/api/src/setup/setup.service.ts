@@ -66,6 +66,7 @@ function toSetupProgram(
     minWeeks: program.minWeeks,
     maxWeeks: program.maxWeeks,
     defaultWeeks: program.defaultWeeks,
+    allowsNoEnd: program.allowsNoEnd,
     fixedDays: fixedDaysOf(program),
     hasStraightSets: rest.paced.has(program.id),
     restPaceRequired: rest.unstated.has(program.id),

@@ -17,6 +17,7 @@ const FLEXIBLE: SetupProgramBounds = {
   maxDaysPerWeek: 5,
   minWeeks: 4,
   maxWeeks: 8,
+  allowsNoEnd: false,
   restPaceRequired: false,
 };
 
@@ -27,6 +28,7 @@ const FIXED: SetupProgramBounds = {
   maxDaysPerWeek: null,
   minWeeks: 6,
   maxWeeks: 6,
+  allowsNoEnd: false,
   restPaceRequired: false,
 };
 
@@ -37,6 +39,19 @@ const OPEN_ENDED: SetupProgramBounds = {
   maxDaysPerWeek: 7,
   minWeeks: null,
   maxWeeks: null,
+  allowsNoEnd: false,
+  restPaceRequired: false,
+};
+
+/** An authored program: one repeating week, a length or no end (DN-154). */
+const AUTHORED: SetupProgramBounds = {
+  name: 'Tom Hardy Split',
+  scheduleMode: 'fixed',
+  minDaysPerWeek: null,
+  maxDaysPerWeek: null,
+  minWeeks: 1,
+  maxWeeks: 52,
+  allowsNoEnd: true,
   restPaceRequired: false,
 };
 
@@ -286,6 +301,26 @@ describe('setupRejection: length', () => {
         RANGE,
       ),
     ).toBe('Just WODs has no end, so there is no length to choose.');
+  });
+
+  it('takes no end for a program that allows one', () => {
+    expect(
+      setupRejection(
+        AUTHORED,
+        answers({ weeks: null, trainingDays: null }),
+        RANGE,
+      ),
+    ).toBeNull();
+  });
+
+  it('still takes a length inside the bounds where no end is allowed', () => {
+    const fixed = { trainingDays: null };
+    expect(
+      setupRejection(AUTHORED, answers({ ...fixed, weeks: 52 }), RANGE),
+    ).toBeNull();
+    expect(
+      setupRejection(AUTHORED, answers({ ...fixed, weeks: 53 }), RANGE),
+    ).toBe('Tom Hardy Split runs for between 1 and 52 weeks.');
   });
 });
 

@@ -103,7 +103,7 @@ describe('ProgramsService.create', () => {
     ]);
   });
 
-  it('leaves the length to enrolment, within wide bounds', async () => {
+  it('leaves the length to enrolment, within wide bounds or with no end', async () => {
     const alice = await createUser();
 
     const program = await stored(
@@ -115,6 +115,8 @@ describe('ProgramsService.create', () => {
       PROGRAM_WEEKS.max,
       PROGRAM_WEEKS.default,
     ]);
+    // DN-154: one repeating week has nothing to finish.
+    expect(program.allowsNoEnd).toBe(true);
   });
 
   it('stores "any N days a week" as exactly N, starting on the days written', async () => {
@@ -1178,6 +1180,7 @@ describe('copying a global program (DN-149)', () => {
       summary: 'Two days, heavy',
     });
     expect((await stored(mine.id)).ownerId).toBe(alice.id);
+    expect((await stored(mine.id)).allowsNoEnd).toBe(true);
     expect(await shape(mine.id)).toEqual(await shape(source.id));
     expect(await programs().listOwn(alice.id)).toEqual([mine]);
   });
@@ -1318,6 +1321,7 @@ describe('exporting and importing global programs (DN-150)', () => {
     expect(await Promise.all(created.map((r) => shape(r.id)))).toEqual(before);
     for (const r of created) {
       expect((await stored(r.id)).ownerId).toBeNull();
+      expect((await stored(r.id)).allowsNoEnd).toBe(true);
     }
     expect((await stored(created[1].id)).summary).toBe('Hang, pull, repeat');
   });

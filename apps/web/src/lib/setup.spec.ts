@@ -120,6 +120,16 @@ describe("weeksChoice", () => {
       min: 4,
       max: 8,
       start: 6,
+      noEnd: false,
+    });
+  });
+
+  it("offers no end beside the length on an authored program", () => {
+    expect(weeksChoice(fixtures.authoredProgram())).toEqual({
+      min: 1,
+      max: 52,
+      start: 8,
+      noEnd: true,
     });
   });
 
@@ -132,7 +142,7 @@ describe("weeksChoice", () => {
   it("falls back to the minimum where a program suggests no length", () => {
     expect(
       weeksChoice(fixtures.boundedProgram({ defaultWeeks: null })),
-    ).toEqual({ min: 4, max: 8, start: 4 });
+    ).toEqual({ min: 4, max: 8, start: 4, noEnd: false });
   });
 });
 

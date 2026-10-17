@@ -465,6 +465,7 @@ export function setupProgram(
     minWeeks: null,
     maxWeeks: null,
     defaultWeeks: null,
+    allowsNoEnd: false,
     fixedDays: [],
     // Just WODs has no rest between sets, so the wizard asks nothing about it.
     hasStraightSets: false,
@@ -492,6 +493,31 @@ export function boundedProgram(
     maxWeeks: 8,
     defaultWeeks: 6,
     // Straight sets, every rest stated: the pace is on offer, not asked for.
+    hasStraightSets: true,
+    ...overrides,
+  });
+}
+
+/**
+ * A program the athlete wrote (DN-145): one repeating week, run for a length
+ * or with no end (DN-154).
+ */
+export function authoredProgram(
+  overrides: Partial<SetupProgram> = {},
+): SetupProgram {
+  return setupProgram({
+    id: "program-tom-hardy-split",
+    name: "Tom Hardy Split",
+    summary: "Monday to Friday.",
+    scheduleMode: "fixed",
+    minDaysPerWeek: null,
+    maxDaysPerWeek: null,
+    defaultDays: [],
+    minWeeks: 1,
+    maxWeeks: 52,
+    defaultWeeks: 8,
+    allowsNoEnd: true,
+    fixedDays: [1, 2, 3, 4, 5],
     hasStraightSets: true,
     ...overrides,
   });

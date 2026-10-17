@@ -67,6 +67,13 @@ const extras = [
           minDaysPerWeek: 3,
           maxDaysPerWeek: 3,
           defaultDays: yours.days,
+          // As `ProgramsService.create` stores every authored program: a
+          // length within wide bounds, or no end (DN-154).
+          minWeeks: 1,
+          maxWeeks: 52,
+          defaultWeeks: 8,
+          allowsNoEnd: true,
+          hasStraightSets: true,
         }),
       ],
       earliestStartDate: localIsoDate(),

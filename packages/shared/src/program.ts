@@ -235,6 +235,13 @@ const programFields = z.object({
   minWeeks: z.number().int().positive().nullable(),
   maxWeeks: z.number().int().positive().nullable(),
   defaultWeeks: z.number().int().positive().nullable(),
+  /**
+   * Whether it may also run with no end, as well as for a length inside the
+   * bounds above (DN-154). True for every authored program, whose one
+   * repeating week has nothing to finish. False for a curated bounded
+   * program, and for Just WODs, where open-ended is the only length there is.
+   */
+  allowsNoEnd: z.boolean(),
 });
 
 /** The half of the schedule-mode CHECK that a shape with these three fields can answer. */

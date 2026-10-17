@@ -572,6 +572,96 @@ describe("how long to run it", () => {
   });
 });
 
+describe("a program of your own, with no end (DN-154)", () => {
+  function withAuthored() {
+    return newAthlete({
+      setup: {
+        programs: [fixtures.setupProgram(), fixtures.authoredProgram()],
+      },
+    });
+  }
+
+  it("says no end is a length it can run for", async () => {
+    withAuthored();
+    renderRoute("/setup");
+    await click("Begin");
+
+    expect(
+      await screen.findByText(/1–52 weeks or no end/),
+    ).toBeInTheDocument();
+  });
+
+  it("offers no end beside the length, starting on the length", async () => {
+    withAuthored();
+    renderRoute("/setup");
+    await walkTo("Tom Hardy Split");
+
+    expect(screen.getByRole("button", { name: "Weeks" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "No end" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByText("8 weeks")).toBeInTheDocument();
+  });
+
+  it("puts the stepper away for no end, and says how the run ends", async () => {
+    withAuthored();
+    renderRoute("/setup");
+    await walkTo("Tom Hardy Split");
+
+    await click("No end");
+
+    expect(
+      screen.queryByRole("button", { name: "More weeks" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Tom Hardy Split repeats its week until you start another program from Programs.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("hands back the weeks stepped to when the athlete changes their mind", async () => {
+    withAuthored();
+    renderRoute("/setup");
+    await walkTo("Tom Hardy Split");
+
+    await click("More weeks");
+    await click("No end");
+    await click("Weeks");
+
+    expect(screen.getByText("9 weeks")).toBeInTheDocument();
+  });
+
+  it("sends no length, and confirms it as open-ended", async () => {
+    const sent = withAuthored();
+    renderRoute("/setup");
+    await walkTo("Tom Hardy Split");
+    await click("No end");
+    await click("Continue");
+    await click("Continue");
+
+    expect(screen.getByText("Open-ended")).toBeInTheDocument();
+    await click("Go to today");
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0].weeks).toBeNull();
+  });
+
+  it("offers no such choice on a curated program with a length", async () => {
+    newAthlete();
+    renderRoute("/setup");
+    await walkTo("Pull-Up Builder");
+
+    expect(
+      screen.queryByRole("button", { name: "No end" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("the start date", () => {
   it("offers today when today has not been trained", async () => {
     newAthlete();

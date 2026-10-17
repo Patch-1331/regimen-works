@@ -474,7 +474,7 @@ function programMeta(program: SetupProgram): string {
       ? "Open-ended"
       : program.minWeeks === program.maxWeeks
         ? `${program.minWeeks} weeks`
-        : `${program.minWeeks}–${program.maxWeeks} weeks`;
+        : `${program.minWeeks}–${program.maxWeeks} weeks${program.allowsNoEnd ? " or no end" : ""}`;
   const cadence =
     program.scheduleMode === "fixed"
       ? `Fixed schedule · ${daysLabel(program.fixedDays.length)}`
@@ -502,7 +502,8 @@ function CadenceStep({
   weeks: number | null;
   warning: string | null;
   onToggleDay: (day: number) => void;
-  onWeeks: (weeks: number) => void;
+  /** Null is "No end", on a program that offers it (DN-154). */
+  onWeeks: (weeks: number | null) => void;
   onBack?: () => void;
   onNext: () => void;
 }) {
@@ -512,6 +513,13 @@ function CadenceStep({
   // what makes the locked case a readout rather than a second component.
   const shown = isFixed ? program.fixedDays : days;
   const lengths = weeksChoice(program);
+  // The length "No end" hands back to, so trying it and changing your mind
+  // does not lose the weeks you had stepped to.
+  const [lastWeeks, setLastWeeks] = useState(weeks ?? lengths?.start ?? null);
+  const stepWeeks = (next: number) => {
+    setLastWeeks(next);
+    onWeeks(next);
+  };
 
   return (
     <div>
@@ -607,38 +615,66 @@ function CadenceStep({
         </p>
       )}
 
-      {lengths && weeks !== null && (
+      {lengths && (
         <div className="mt-6">
           <p className="text-xs uppercase tracking-[0.1em] text-[var(--ink-faint)]">
             How long
           </p>
-          <div className="mt-2 flex items-center gap-4">
-            <StepperButton
-              label="Fewer weeks"
-              disabled={weeks <= lengths.min}
-              onClick={() => onWeeks(weeks - 1)}
-            >
-              −
-            </StepperButton>
-            <span
-              className="text-2xl font-semibold"
-              style={{ fontFamily: "var(--font-mono)", color: "var(--ink)" }}
-            >
-              {weeks} weeks
-            </span>
-            <StepperButton
-              label="More weeks"
-              disabled={weeks >= lengths.max}
-              onClick={() => onWeeks(weeks + 1)}
-            >
-              +
-            </StepperButton>
-          </div>
-          <p className="mt-2 text-xs text-[var(--ink-faint)]">
-            {weeks === program.defaultWeeks
-              ? `${program.name} is written as ${weeks} weeks.`
-              : `${program.name} is written as ${program.defaultWeeks} weeks — ${weeks} repeats or trims the middle block.`}
-          </p>
+          {/* "A number or no end" (DN-154): two answers to one question, so
+              a pair of pressed buttons rather than a checkbox that disables
+              the stepper beside it. */}
+          {lengths.noEnd && (
+            <div className="mt-2 flex gap-2">
+              <LengthModeButton
+                on={weeks !== null}
+                onClick={() => onWeeks(lastWeeks ?? lengths.start)}
+              >
+                Weeks
+              </LengthModeButton>
+              <LengthModeButton
+                on={weeks === null}
+                onClick={() => onWeeks(null)}
+              >
+                No end
+              </LengthModeButton>
+            </div>
+          )}
+          {weeks === null ? (
+            <p className="mt-3 text-sm text-[var(--ink-soft)]">
+              {program.name} repeats its week until you start another program
+              from Programs.
+            </p>
+          ) : (
+            <>
+              <div className="mt-2 flex items-center gap-4">
+                <StepperButton
+                  label="Fewer weeks"
+                  disabled={weeks <= lengths.min}
+                  onClick={() => stepWeeks(weeks - 1)}
+                >
+                  −
+                </StepperButton>
+                <span
+                  className="text-2xl font-semibold"
+                  style={{ fontFamily: "var(--font-mono)", color: "var(--ink)" }}
+                >
+                  {weeks} weeks
+                </span>
+                <StepperButton
+                  label="More weeks"
+                  disabled={weeks >= lengths.max}
+                  onClick={() => stepWeeks(weeks + 1)}
+                >
+                  +
+                </StepperButton>
+              </div>
+              <p className="mt-2 text-xs text-[var(--ink-faint)]">
+                {weeks === program.defaultWeeks
+                  ? `${program.name} is written as ${weeks} weeks.`
+                  : `${program.name} is written as ${program.defaultWeeks} weeks — ${weeks} repeats or trims the middle block.`}
+              </p>
+            </>
+          )}
         </div>
       )}
 
@@ -647,6 +683,33 @@ function CadenceStep({
       </PrimaryButton>
       {onBack && <BackButton onClick={onBack} />}
     </div>
+  );
+}
+
+function LengthModeButton({
+  on,
+  onClick,
+  children,
+}: {
+  on: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className="h-10 px-4 text-[12px] font-semibold uppercase tracking-[0.1em]"
+      style={{
+        background: on ? "var(--glow)" : "var(--panel-2)",
+        border: "1px solid var(--border)",
+        color: on ? "var(--panel)" : "var(--ink-soft)",
+        fontFamily: "var(--font-mono)",
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
