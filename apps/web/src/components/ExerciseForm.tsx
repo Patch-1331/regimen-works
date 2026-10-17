@@ -165,7 +165,7 @@ export function ExerciseForm({
 
       <div>
         <Label htmlFor="exercise-movementGroup">
-          Progression movementGroup
+          Movement group
         </Label>
         <select
           id="exercise-movementGroup"
