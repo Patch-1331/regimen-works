@@ -229,6 +229,16 @@ model ChecklistEntry {
   ownerId String?
   owner   User?   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
+  // Set on a seeded entry, null on any other (DN-151, ADR 0010): the deploy
+  // owns the rows that carry one, and deletes one whose key has left
+  // `checklist-seed.ts`. `<kind>/<exercise key>`, both of which are stable,
+  // so it is derived rather than written into the seed.
+  //
+  // Global rows only, and unique among them, by a CHECK and a partial unique
+  // index that live only in the migration (20261017100000_seeded_keys).
+  // Keep them.
+  key String?
+
   createdAt DateTime @default(now())
 
   // A movement is on each checklist at most once per tier. Postgres treats
@@ -306,6 +316,17 @@ model Wod {
   // library with them and leaves the shared one alone.
   ownerId String?
   owner   User?   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // The stable identity the seed import matches on (DN-151, ADR 0010), as
+  // `Exercise.key` is for the library. Set on a WOD from `wod-seed.ts`, null
+  // on one an admin or athlete wrote. The files own a row that carries one:
+  // the admin routes refuse to change it, and the deploy archives it when
+  // its key leaves the file.
+  //
+  // Global rows only, and unique among them -- archived rows included -- by
+  // a CHECK and a partial unique index that live only in the migration
+  // (20261017100000_seeded_keys). Prisma can express neither. Keep them.
+  key String?
 
   movements   WodMovement[]
   assignments DailyAssignment[]

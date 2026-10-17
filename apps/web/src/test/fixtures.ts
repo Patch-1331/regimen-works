@@ -158,10 +158,11 @@ export function wod(overrides: Partial<Wod> = {}): Wod {
 
 /**
  * A WOD as the library editor reads it (DN-29) — the shared shape plus the
- * two ownership columns. Global and live unless a test says otherwise.
+ * ownership columns. Global, live and admin-authored (no seed key, DN-151)
+ * unless a test says otherwise.
  */
 export function apiWod(overrides: Partial<ApiWod> = {}): ApiWod {
-  return { ...wod(), ownerId: null, archivedAt: null, ...overrides };
+  return { ...wod(), ownerId: null, key: null, archivedAt: null, ...overrides };
 }
 
 export function session(

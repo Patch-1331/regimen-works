@@ -1,7 +1,11 @@
 import { loadLibrary } from '../../prisma/library';
 import { wods, type WodSeed } from '../../prisma/wod-seed';
 import { testPrisma } from '../test-support/database';
-import { createAssignment, createUser } from '../test-support/fixtures';
+import {
+  createAssignment,
+  createUser,
+  createWod,
+} from '../test-support/fixtures';
 import { importLibrary } from './import-library';
 import { importWods } from './import-wods';
 
@@ -19,8 +23,7 @@ const { exercises } = loadLibrary();
 
 async function seedLibrary(library: readonly WodSeed[] = wods) {
   const { idByKey } = await importLibrary(testPrisma(), exercises);
-  await importWods(testPrisma(), library, idByKey);
-  return idByKey;
+  return importWods(testPrisma(), library, idByKey);
 }
 
 function movementsOf(name: string) {
@@ -103,11 +106,63 @@ describe('importWods', () => {
     await seedLibrary();
     const ids = (await testPrisma().wodMovement.findMany()).map((m) => m.id);
 
-    await seedLibrary();
+    expect(await seedLibrary()).toEqual({ retired: [] });
 
     expect(
       (await testPrisma().wodMovement.findMany()).map((m) => m.id).sort(),
     ).toEqual(ids.sort());
     expect(await testPrisma().wod.count()).toBe(wods.length);
+  });
+
+  // DN-151: the rows already deployed have no key. The first run finds each
+  // by the name it has today and gives it one, so nothing is recreated.
+  it('gives an already-deployed WOD its key where it stands', async () => {
+    const legacy = await createWod({
+      ownerId: null,
+      key: null,
+      name: first.name,
+    });
+
+    await seedLibrary();
+
+    expect(
+      await testPrisma().wod.findUniqueOrThrow({ where: { id: legacy.id } }),
+    ).toMatchObject({ key: first.key, name: first.name, archivedAt: null });
+    expect(await testPrisma().wod.count()).toBe(wods.length);
+  });
+
+  it('renames a WOD in place by its key', async () => {
+    await seedLibrary();
+    const before = await testPrisma().wod.findFirstOrThrow({
+      where: { key: first.key },
+    });
+
+    await seedLibrary([
+      { ...first, name: 'Renamed in the file' },
+      ...wods.slice(1),
+    ]);
+
+    expect(
+      await testPrisma().wod.findUniqueOrThrow({ where: { id: before.id } }),
+    ).toMatchObject({ key: first.key, name: 'Renamed in the file' });
+  });
+
+  // ADR 0010: leaving the file is how a seeded WOD retires, and a WOD with no
+  // key is an admin's, which the deploy never archives.
+  it('retires a WOD whose key has left the file, and no other', async () => {
+    await seedLibrary();
+    const admins = await createWod({ ownerId: null, key: null });
+
+    const report = await seedLibrary(wods.slice(1));
+
+    expect(report.retired).toEqual([first.name]);
+    const archivedAt = async (where: { key: string } | { id: string }) =>
+      (await testPrisma().wod.findFirstOrThrow({ where })).archivedAt;
+    expect(await archivedAt({ key: first.key })).not.toBeNull();
+    expect(await archivedAt({ id: admins.id })).toBeNull();
+
+    // And putting it back brings it back.
+    await seedLibrary();
+    expect(await archivedAt({ key: first.key })).toBeNull();
   });
 });

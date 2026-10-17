@@ -1,9 +1,15 @@
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { App } from 'supertest/types';
-import { exerciseSchema, wodSchema } from '@regimen-works/shared';
+import {
+  exerciseSchema,
+  seededRefusal,
+  wodSchema,
+} from '@regimen-works/shared';
 import { z } from 'zod';
+import { testPrisma } from '../test-support/database';
 import { asUser, createE2eApp } from '../test-support/e2e-app';
+import { createWod } from '../test-support/fixtures';
 
 /**
  * The WOD write routes through HTTP (DN-26).
@@ -295,6 +301,56 @@ describe('an admin curating the shared pool', () => {
       .set(...asUser(ADMIN))
       .send({ timeCapMinutes: 20 })
       .expect(403);
+  });
+
+  // DN-151, ADR 0010: `wod-seed.ts` owns a WOD with a key, and every deploy
+  // writes it from there. Refused, with the file named; one an admin wrote has
+  // no key and stays theirs to change.
+  it('is refused a seeded WOD, and told which file to change', async () => {
+    const exerciseId = await globalExercise();
+    const seeded = await createWod({
+      ownerId: null,
+      key: 'cindy',
+      name: 'Cindy',
+      movements: [{ exerciseId, reps: 5, order: 0 }],
+    });
+    const theirs = await http()
+      .post('/admin/wods')
+      .set(...asUser(ADMIN))
+      .send(wodBody(exerciseId))
+      .expect(201);
+
+    // Built per use: a supertest request listens when it is sent.
+    const refusals = [
+      () =>
+        http().patch(`/admin/wods/${seeded.id}`).send({ timeCapMinutes: 20 }),
+      () => http().post(`/admin/wods/${seeded.id}/archive`),
+    ];
+    for (const refused of refusals) {
+      const res = await refused()
+        .set(...asUser(ADMIN))
+        .expect(409);
+      const { message } = res.body as { message: string };
+      expect(message).toBe(seededRefusal('wod', 'Cindy'));
+      expect(message).toContain('apps/api/prisma/wod-seed.ts');
+    }
+    await testPrisma().wod.update({
+      where: { id: seeded.id },
+      data: { archivedAt: new Date() },
+    });
+    await http()
+      .post(`/admin/wods/${seeded.id}/unarchive`)
+      .set(...asUser(ADMIN))
+      .expect(409);
+    expect(
+      await testPrisma().wod.findUniqueOrThrow({ where: { id: seeded.id } }),
+    ).toMatchObject({ timeCapMinutes: seeded.timeCapMinutes });
+
+    await http()
+      .patch(`/admin/wods/${wodId(theirs)}`)
+      .set(...asUser(ADMIN))
+      .send({ timeCapMinutes: 20 })
+      .expect(200);
   });
 
   // The one-way reference rule, end to end. Alice's exercise is real and the

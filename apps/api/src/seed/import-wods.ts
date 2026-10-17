@@ -39,8 +39,23 @@ function assertUniformSchemes(w: WodSeed): void {
   }
 }
 
+/** What one run of the WOD import did, for the deploy log. */
+export type WodImportReport = {
+  /** WODs archived because their key has left `wod-seed.ts` (DN-151). */
+  retired: string[];
+};
+
 /**
- * Writes the seeded WODs as global rows, matching on name.
+ * Writes the seeded WODs as global rows, matching on `key` (DN-151).
+ *
+ * Found by key, and the first time -- before any row has one -- by the name
+ * it has today, which is how the keys arrive on the rows already deployed
+ * (the way the library import took exercise keys, DN-167). From then on a
+ * rename happens in place.
+ *
+ * The files own every row that carries a key (ADR 0010). One whose key has
+ * left the file is archived; a row with no key is an admin's, and is never
+ * touched.
  *
  * A WOD that already stands keeps its movement rows, updated in place by
  * position (DN-175). Athletes' logged swaps point at those rows, and that
@@ -56,7 +71,7 @@ export async function importWods(
   prisma: PrismaClient,
   wods: readonly WodSeed[],
   idByKey: ReadonlyMap<string, string>,
-): Promise<void> {
+): Promise<WodImportReport> {
   for (const w of wods) {
     assertUniformSchemes(w);
     const movements = w.movements.map((m, i) => ({
@@ -66,6 +81,8 @@ export async function importWods(
     }));
 
     const fields = {
+      key: w.key,
+      name: w.name,
       type: w.type,
       timeCapMinutes: w.timeCapMinutes,
       rounds: w.rounds,
@@ -75,20 +92,30 @@ export async function importWods(
       isNamed: w.isNamed,
       dominantPattern: w.dominantPattern,
       description: w.description ?? null,
-      // Same as the exercise loop: re-seeding un-retires (DN-25).
+      // Same as the exercise loop: the files own the row, so a WOD they name
+      // is live (ADR 0010).
       archivedAt: null,
     };
 
     // Scoped to the global tier for the same reason the exercise loop is
     // (DN-93): re-seeding must not reach into an athlete's own library.
-    const existing = await prisma.wod.findFirst({
-      where: { ...GLOBAL_LIBRARY, name: w.name },
-      select: { id: true, movements: { select: { id: true, order: true } } },
-    });
+    const select = {
+      id: true,
+      movements: { select: { id: true, order: true } },
+    } as const;
+    const existing =
+      (await prisma.wod.findFirst({
+        where: { ...GLOBAL_LIBRARY, key: w.key },
+        select,
+      })) ??
+      (await prisma.wod.findFirst({
+        where: { ...GLOBAL_LIBRARY, key: null, name: w.name },
+        select,
+      }));
 
     if (!existing) {
       await prisma.wod.create({
-        data: { name: w.name, ...fields, movements: { create: movements } },
+        data: { ...fields, movements: { create: movements } },
       });
       continue;
     }
@@ -109,4 +136,22 @@ export async function importWods(
       where: { wodId: existing.id, order: { gte: movements.length } },
     });
   }
+
+  // Archived rather than deleted, for the reason `WodsService.archive` is a
+  // soft delete: a trained session still points at the WOD.
+  const leaving = {
+    ...GLOBAL_LIBRARY,
+    key: { not: null, notIn: wods.map((w) => w.key) },
+    archivedAt: null,
+  };
+  const retired = await prisma.wod.findMany({
+    where: leaving,
+    select: { name: true },
+    orderBy: { name: 'asc' },
+  });
+  await prisma.wod.updateMany({
+    where: leaving,
+    data: { archivedAt: new Date() },
+  });
+  return { retired: retired.map((w) => w.name) };
 }

@@ -27,6 +27,15 @@ function dominantMovement(wod: (typeof wods)[number]) {
 }
 
 describe('the seeded WOD library', () => {
+  it('gives every WOD a key of its own', () => {
+    // The import matches on it (DN-151), and the global index refuses a
+    // second row holding one -- a duplicate would fail the deploy, or write
+    // two WODs into one row.
+    const keys = wods.map((w) => w.key);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(keys.filter((k) => !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(k))).toEqual([]);
+  });
+
   it('names only exercises that exist', () => {
     // The seed resolves movements by key through `idByKey.get(m.exercise)!`
     // — a typo is not a seeding error, it is `undefined` handed to Prisma as

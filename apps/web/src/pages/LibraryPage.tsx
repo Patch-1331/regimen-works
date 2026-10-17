@@ -28,6 +28,7 @@ import {
 } from "../lib/libraryFilters";
 import { SectionLabel } from "../components/Panel";
 import { LibraryNav } from "../components/LibraryNav";
+import { SeededNote } from "../components/SeededNote";
 import { DatasetCredit } from "../components/DatasetCredit";
 
 /**
@@ -62,6 +63,7 @@ function ExerciseRow({
   exercise,
   search,
   editable,
+  seeded,
   onEdit,
   onArchive,
   onUnarchive,
@@ -71,6 +73,8 @@ function ExerciseRow({
   /** The list's own query string, for the detail view's way back. */
   search: string;
   editable: boolean;
+  /** Shown to an admin on a row the library files own, in place of controls. */
+  seeded: boolean;
   onEdit: () => void;
   onArchive: () => void;
   onUnarchive: () => void;
@@ -115,6 +119,7 @@ function ExerciseRow({
         <p className="truncate text-[11px] text-[var(--ink-faint)]">
           {summarise(exercise)}
         </p>
+        {seeded && <SeededNote kind="exercise" />}
       </div>
       {editable && (
         <div className="flex shrink-0 gap-2">
@@ -314,7 +319,11 @@ export function LibraryPage() {
   const isAdmin = me?.isAdmin === true;
   const tierOf = (e: ApiExercise): LibraryTier =>
     e.ownerId === null ? "global" : "own";
-  const canEdit = (e: ApiExercise) => e.ownerId !== null || isAdmin;
+  // A shared row with a key is the library files' (ADR 0010): the API
+  // refuses to change it, so an admin is shown where to change it instead.
+  const isSeeded = (e: ApiExercise) => e.ownerId === null && e.key !== null;
+  const canEdit = (e: ApiExercise) =>
+    e.ownerId !== null || (isAdmin && !isSeeded(e));
   const busy =
     archive.isPending ||
     unarchive.isPending ||
@@ -387,6 +396,7 @@ export function LibraryPage() {
             exercise={exercise}
             search={location.search}
             editable={canEdit(exercise)}
+            seeded={isAdmin && isSeeded(exercise)}
             busy={busy}
             onEdit={() => {
               setServerError(null);

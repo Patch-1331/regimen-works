@@ -3,15 +3,15 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
-import { GLOBAL_LIBRARY } from '../src/library/visible-to';
 import { upsertJustWods } from '../src/programs/just-wods';
+import { importChecklists } from '../src/seed/import-checklists';
 import { importLibrary } from '../src/seed/import-library';
 import { importWods } from '../src/seed/import-wods';
 import {
   assertSubstitutesReachable,
   assertSubstituteUnitsMatch,
 } from '../src/seed/substitute-guard';
-import { checklistEntries, entrySteps } from './checklist-seed';
+import { checklistEntries } from './checklist-seed';
 import { loadLibrary } from './library';
 import { wods } from './wod-seed';
 
@@ -48,7 +48,7 @@ async function main() {
   assertSubstituteUnitsMatch(guarded);
 
   console.log('Importing the exercise library...');
-  const { created, renamed, unchanged, idByKey } = await importLibrary(
+  const { created, renamed, unchanged, retired, idByKey } = await importLibrary(
     prisma,
     exercises,
   );
@@ -57,6 +57,10 @@ async function main() {
   console.log(`  ${renamed.length} renamed in place`);
   for (const change of renamed) console.log(`    ${change}`);
   console.log(`  ${unchanged} updated under the name they had`);
+  // Gone from the files, so retired (DN-151, ADR 0010). A row nobody seeded
+  // has no key and is never on this list.
+  console.log(`  ${retired.length} retired, gone from the library files`);
+  for (const name of retired) console.log(`    ${name}`);
   console.log(`  ${library.leftOut.length} left out of the dataset:`);
   for (const { name, reason } of library.leftOut) {
     console.log(`    ${name}: ${reason}`);
@@ -74,34 +78,14 @@ async function main() {
   for (const [piece, count] of added) console.log(`    ${piece}: ${count}`);
 
   console.log('Seeding warm-up and cool-down lists...');
-  for (const c of checklistEntries) {
-    const exerciseId = idByKey.get(c.exercise);
-    if (!exerciseId)
-      throw new Error(
-        `Unknown exercise "${c.exercise}" on the ${c.kind} checklist`,
-      );
-    const fields = { pattern: c.pattern, instructions: entrySteps(c) };
-
-    // Found by hand for the reason the exercise loop is (DN-93): the global
-    // tier's uniqueness is a partial index Prisma cannot name in a `where`.
-    const existing = await prisma.checklistEntry.findFirst({
-      where: { ...GLOBAL_LIBRARY, exerciseId, kind: c.kind },
-      select: { id: true },
-    });
-    if (existing) {
-      await prisma.checklistEntry.update({
-        where: { id: existing.id },
-        data: fields,
-      });
-    } else {
-      await prisma.checklistEntry.create({
-        data: { exerciseId, kind: c.kind, ...fields },
-      });
-    }
-  }
+  const { removed } = await importChecklists(prisma, checklistEntries, idByKey);
+  console.log(`  ${removed.length} removed, gone from checklist-seed.ts`);
+  for (const key of removed) console.log(`    ${key}`);
 
   console.log('Seeding WOD library...');
-  await importWods(prisma, wods, idByKey);
+  const { retired: retiredWods } = await importWods(prisma, wods, idByKey);
+  console.log(`  ${retiredWods.length} retired, gone from wod-seed.ts`);
+  for (const name of retiredWods) console.log(`    ${name}`);
 
   // ScheduleRule and SkillLevel rows used to be seeded here, when they were
   // global singletons. They are per-user now, so UserProvisioningService

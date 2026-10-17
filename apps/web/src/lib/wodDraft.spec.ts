@@ -150,6 +150,7 @@ describe("toWodDraft", () => {
   const wod = (overrides: Partial<ApiWod> = {}): ApiWod => ({
     ...fixtures.wod(),
     ownerId: null,
+    key: null,
     archivedAt: null,
     ...overrides,
   });
