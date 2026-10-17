@@ -57,6 +57,14 @@ export default defineConfig(({ mode }) => ({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // Not UTC (DN-127). The app is about which day something happens on, and
+    // a runner in UTC makes `getDay()` and `getUTCDay()` indistinguishable --
+    // a date parsed as UTC midnight and read back in local time only slips a
+    // day when the offset is non-zero. Chicago is west of UTC, where that
+    // slip lands on the evening before, and observes DST, so the offset is
+    // -6 in winter and -5 in summer and a date across a transition is tested
+    // too. src/test/timezone.spec.ts fails if this stops taking effect.
+    env: { TZ: 'America/Chicago' },
     // e2e/ is Playwright's (DN-72). Its specs import @playwright/test, which
     // throws under Vitest, and vitest's default glob would otherwise claim
     // them.
