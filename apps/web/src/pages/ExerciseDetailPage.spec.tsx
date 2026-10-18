@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { renderRoute } from "../test/renderRoute";
 import { server, http, HttpResponse } from "../test/server";
 import * as fixtures from "../test/fixtures";
@@ -142,5 +143,121 @@ describe("a movement's detail view", () => {
 
     expect(await screen.findByText(/there's no movement here/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /← movements/i })).toHaveAttribute("href", "/library");
+  });
+});
+
+describe("putting a movement on your own warm-up or cool-down (DN-173)", () => {
+  function withEntries(entries: ReturnType<typeof fixtures.checklistEntry>[]) {
+    server.use(http.get("/api/checklist-entries", () => HttpResponse.json(entries)));
+  }
+
+  it("says when the movement is on neither of your lists", async () => {
+    withEntries([]);
+    showing();
+
+    const section = within(await screen.findByRole("region", { name: /your warm-up & cool-down/i }));
+    expect(await section.findByText(/not on your warm-up or cool-down/i)).toBeInTheDocument();
+  });
+
+  it("lists only the entries for this movement, with the day each is for", async () => {
+    withEntries([
+      fixtures.checklistEntry({ id: "e1", kind: "warmup", pattern: "push", exercise: { id: "db-bench", name: "Dumbbell bench press" } }),
+      fixtures.checklistEntry({ id: "e2", kind: "cooldown", pattern: null, exercise: { id: "db-bench", name: "Dumbbell bench press" } }),
+      fixtures.checklistEntry({ id: "e3", kind: "warmup", exercise: { id: "other", name: "Arm circles" } }),
+    ]);
+    showing();
+
+    const list = within(await screen.findByRole("list", { name: /on your lists/i }));
+    expect(list.getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      expect.stringContaining("Warm-up · Push days"),
+      expect.stringContaining("Cool-down · Any day"),
+    ]);
+  });
+
+  it("adds it to the list and day chosen, defaulting to the movement's own pattern", async () => {
+    withEntries([]);
+    let sent: unknown;
+    server.use(
+      http.post("/api/checklist-entries", async ({ request }) => {
+        sent = await request.json();
+        return HttpResponse.json(fixtures.checklistEntry(), { status: 201 });
+      }),
+    );
+    showing();
+
+    const list = await screen.findByLabelText("List");
+    await userEvent.selectOptions(list, "cooldown");
+    expect(screen.getByLabelText("Day")).toHaveValue("push");
+    await userEvent.click(screen.getByRole("button", { name: /add to my list/i }));
+
+    await waitFor(() =>
+      expect(sent).toEqual({ exerciseId: "db-bench", kind: "cooldown", pattern: "push" }),
+    );
+  });
+
+  it("sends 'any day' as no pattern", async () => {
+    withEntries([]);
+    let sent: unknown;
+    server.use(
+      http.post("/api/checklist-entries", async ({ request }) => {
+        sent = await request.json();
+        return HttpResponse.json(fixtures.checklistEntry(), { status: 201 });
+      }),
+    );
+    showing();
+
+    await userEvent.selectOptions(await screen.findByLabelText("Day"), "");
+    await userEvent.click(screen.getByRole("button", { name: /add to my list/i }));
+
+    await waitFor(() =>
+      expect(sent).toEqual({ exerciseId: "db-bench", kind: "warmup", pattern: null }),
+    );
+  });
+
+  it("says what the API said when the movement is already on that list", async () => {
+    withEntries([]);
+    server.use(
+      http.post("/api/checklist-entries", () =>
+        HttpResponse.json(
+          { message: "Dumbbell bench press is already on your warm-up." },
+          { status: 409 },
+        ),
+      ),
+    );
+    showing();
+
+    await userEvent.click(await screen.findByRole("button", { name: /add to my list/i }));
+
+    expect(
+      await screen.findByText("Dumbbell bench press is already on your warm-up."),
+    ).toBeInTheDocument();
+  });
+
+  it("takes it off a list", async () => {
+    withEntries([
+      fixtures.checklistEntry({ id: "e1", kind: "warmup", pattern: "push", exercise: { id: "db-bench", name: "Dumbbell bench press" } }),
+    ]);
+    let removed: string | undefined;
+    server.use(
+      http.delete("/api/checklist-entries/:id", ({ params }) => {
+        removed = params.id as string;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    showing();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /remove from warm-up · push days/i }),
+    );
+
+    await waitFor(() => expect(removed).toBe("e1"));
+  });
+
+  it("offers no add for a retired movement", async () => {
+    withEntries([]);
+    showing({ ...BENCH_PRESS, archivedAt: "2026-09-01T00:00:00.000Z" });
+
+    await screen.findByText("RETIRED");
+    expect(screen.queryByRole("button", { name: /add to my list/i })).not.toBeInTheDocument();
   });
 });

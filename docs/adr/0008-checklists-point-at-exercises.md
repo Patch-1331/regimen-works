@@ -74,16 +74,20 @@ do with it.
   the squat warm-up is now Air squat with the warm-up copy. A db-spec checks this
   for every pattern.
 - The import (DN-167) has one squat row to key, not two.
-- **Athletes cannot yet add, remove or reorder entries.** The library editor lost
-  its "Warm-up / cool-down" select, and nothing replaces it yet. The tier and the
-  scoping are in place for when something does. Until then the global lists are
-  edited in `checklist-seed.ts`, and an athlete's own movement can no longer be
-  put on a checklist by them. Any athlete-owned tagged rows that existed were
-  migrated to athlete-tier entries and still show.
+- **Athletes manage their own entries (DN-173).** This ADR first shipped without
+  an editor: the library editor lost its "Warm-up / cool-down" select, and the
+  tier sat unused. Now an athlete adds a movement to either list from its page in
+  the library, choosing the day it is for, and orders or removes their entries in
+  Settings (`ChecklistEntry.sortOrder`). Their entries **add to** the global
+  list rather than replacing it, and come **first** on the day, so the four-item
+  cap never cuts them. A movement on both tiers of one list shows once, as the
+  athlete wrote it. An athlete cannot hide a global entry; that is not decided.
+  The global lists stay seed-only (ADR-0010) and are edited in
+  `checklist-seed.ts`.
 
 ## What this does not decide
 
-- **An editor for the lists.** Who may edit them, and whether an athlete's own
-  entries add to the global list or replace it.
+- **Hiding a global entry.** An athlete who does not want one can only turn the
+  checklists off.
 - **Which dataset exercises join the lists.** The import may suggest stretches as
   cool-down entries; adding them is a content decision, not this one.

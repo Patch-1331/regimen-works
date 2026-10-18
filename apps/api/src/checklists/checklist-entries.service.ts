@@ -27,7 +27,9 @@ const ENTRY_SELECT = {
   exercise: { select: { id: true, name: true } },
 } satisfies Prisma.ChecklistEntrySelect;
 
-type EntryRow = Prisma.ChecklistEntryGetPayload<{ select: typeof ENTRY_SELECT }>;
+type EntryRow = Prisma.ChecklistEntryGetPayload<{
+  select: typeof ENTRY_SELECT;
+}>;
 
 /** `kind` and `pattern` are plain strings in the table, validated on the way in. */
 function toEntry(row: EntryRow): AthleteChecklistEntry {
@@ -56,7 +58,12 @@ export class ChecklistEntriesService {
     const rows = await this.prisma.checklistEntry.findMany({
       where: { ownerId: userId },
       select: ENTRY_SELECT,
-      orderBy: [{ kind: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+      orderBy: [
+        { kind: 'asc' },
+        { sortOrder: 'asc' },
+        { createdAt: 'asc' },
+        { id: 'asc' },
+      ],
     });
     return rows.map(toEntry);
   }

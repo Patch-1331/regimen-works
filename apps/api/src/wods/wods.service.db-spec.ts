@@ -294,8 +294,16 @@ describe('WodsService.getChecklists', () => {
 
   it("keeps an athlete's own entries in the order they set", async () => {
     const alice = await createUser();
-    await createOnChecklist('warmup', { name: 'Set second' }, { ownerId: alice.id, sortOrder: 1 });
-    await createOnChecklist('warmup', { name: 'Set first' }, { ownerId: alice.id, sortOrder: 0 });
+    await createOnChecklist(
+      'warmup',
+      { name: 'Set second' },
+      { ownerId: alice.id, sortOrder: 1 },
+    );
+    await createOnChecklist(
+      'warmup',
+      { name: 'Set first' },
+      { ownerId: alice.id, sortOrder: 0 },
+    );
 
     const { warmup } = await service().getChecklists(alice.id, 'push');
 

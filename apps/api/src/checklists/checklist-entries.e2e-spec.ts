@@ -116,7 +116,9 @@ describe('/checklist-entries', () => {
         .send({ exerciseId: a.id, kind: 'cooldown', pattern: null });
     await add().expect(201);
     const res = await add().expect(409);
-    expect(res.body.message).toBe('A is already on your cool-down.');
+    expect(res.body).toMatchObject({
+      message: 'A is already on your cool-down.',
+    });
   });
 
   it("will not remove another athlete's entry", async () => {
@@ -128,7 +130,9 @@ describe('/checklist-entries', () => {
       .expect(201);
 
     await http()
-      .delete(`/checklist-entries/${athleteChecklistEntrySchema.parse(added.body).id}`)
+      .delete(
+        `/checklist-entries/${athleteChecklistEntrySchema.parse(added.body).id}`,
+      )
       .set(...asUser(BOB))
       .expect(404);
   });

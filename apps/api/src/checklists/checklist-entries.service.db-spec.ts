@@ -1,7 +1,4 @@
-import {
-  ConflictException,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service';
 import { testPrisma } from '../test-support/database';
 import {
@@ -34,7 +31,7 @@ describe('ChecklistEntriesService.create', () => {
     });
 
     expect(entry).toEqual({
-      id: expect.any(String),
+      id: entry.id,
       kind: 'warmup',
       pattern: 'squat',
       sortOrder: 0,
@@ -49,7 +46,10 @@ describe('ChecklistEntriesService.create', () => {
 
   it("puts the athlete's own exercise on their list", async () => {
     const alice = await createUser();
-    const mine = await createExercise({ name: 'My stretch', ownerId: alice.id });
+    const mine = await createExercise({
+      name: 'My stretch',
+      ownerId: alice.id,
+    });
 
     const entry = await service().create(alice.id, {
       exerciseId: mine.id,
@@ -69,9 +69,17 @@ describe('ChecklistEntriesService.create', () => {
       await createExercise({ name: 'C' }),
     ];
 
-    await service().create(alice.id, { exerciseId: a.id, kind: 'warmup', pattern: null });
+    await service().create(alice.id, {
+      exerciseId: a.id,
+      kind: 'warmup',
+      pattern: null,
+    });
     // The other list keeps its own count.
-    await service().create(alice.id, { exerciseId: c.id, kind: 'cooldown', pattern: null });
+    await service().create(alice.id, {
+      exerciseId: c.id,
+      kind: 'cooldown',
+      pattern: null,
+    });
     const second = await service().create(alice.id, {
       exerciseId: b.id,
       kind: 'warmup',
@@ -87,36 +95,65 @@ describe('ChecklistEntriesService.create', () => {
     const bobs = await createExercise({ name: "Bob's move", ownerId: bob.id });
 
     await expect(
-      service().create(alice.id, { exerciseId: bobs.id, kind: 'warmup', pattern: null }),
+      service().create(alice.id, {
+        exerciseId: bobs.id,
+        kind: 'warmup',
+        pattern: null,
+      }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('refuses a retired exercise', async () => {
     const alice = await createUser();
-    const retired = await createExercise({ name: 'Old', archivedAt: new Date() });
+    const retired = await createExercise({
+      name: 'Old',
+      archivedAt: new Date(),
+    });
 
     await expect(
-      service().create(alice.id, { exerciseId: retired.id, kind: 'warmup', pattern: null }),
+      service().create(alice.id, {
+        exerciseId: retired.id,
+        kind: 'warmup',
+        pattern: null,
+      }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('refuses a movement already on that list with a 409, not a 500', async () => {
     const alice = await createUser();
     const squat = await createExercise({ name: 'Air squat' });
-    await service().create(alice.id, { exerciseId: squat.id, kind: 'warmup', pattern: 'squat' });
+    await service().create(alice.id, {
+      exerciseId: squat.id,
+      kind: 'warmup',
+      pattern: 'squat',
+    });
 
     await expect(
-      service().create(alice.id, { exerciseId: squat.id, kind: 'warmup', pattern: null }),
-    ).rejects.toThrow(new ConflictException('Air squat is already on your warm-up.'));
+      service().create(alice.id, {
+        exerciseId: squat.id,
+        kind: 'warmup',
+        pattern: null,
+      }),
+    ).rejects.toThrow(
+      new ConflictException('Air squat is already on your warm-up.'),
+    );
   });
 
   it('lets one movement be on both lists', async () => {
     const alice = await createUser();
     const bridge = await createExercise({ name: 'Glute bridge' });
 
-    await service().create(alice.id, { exerciseId: bridge.id, kind: 'warmup', pattern: 'hinge' });
+    await service().create(alice.id, {
+      exerciseId: bridge.id,
+      kind: 'warmup',
+      pattern: 'hinge',
+    });
     await expect(
-      service().create(alice.id, { exerciseId: bridge.id, kind: 'cooldown', pattern: 'hinge' }),
+      service().create(alice.id, {
+        exerciseId: bridge.id,
+        kind: 'cooldown',
+        pattern: 'hinge',
+      }),
     ).resolves.toMatchObject({ kind: 'cooldown' });
   });
 
@@ -127,7 +164,11 @@ describe('ChecklistEntriesService.create', () => {
     await createChecklistEntry(squat.id, 'warmup', { pattern: 'squat' });
 
     await expect(
-      service().create(alice.id, { exerciseId: squat.id, kind: 'warmup', pattern: 'squat' }),
+      service().create(alice.id, {
+        exerciseId: squat.id,
+        kind: 'warmup',
+        pattern: 'squat',
+      }),
     ).resolves.toMatchObject({ exercise: { id: squat.id } });
   });
 });
@@ -141,9 +182,18 @@ describe('ChecklistEntriesService.list', () => {
       await createExercise({ name: 'B' }),
       await createExercise({ name: 'C' }),
     ];
-    await createChecklistEntry(a.id, 'warmup', { ownerId: alice.id, sortOrder: 1 });
-    await createChecklistEntry(b.id, 'warmup', { ownerId: alice.id, sortOrder: 0 });
-    await createChecklistEntry(c.id, 'cooldown', { ownerId: alice.id, sortOrder: 0 });
+    await createChecklistEntry(a.id, 'warmup', {
+      ownerId: alice.id,
+      sortOrder: 1,
+    });
+    await createChecklistEntry(b.id, 'warmup', {
+      ownerId: alice.id,
+      sortOrder: 0,
+    });
+    await createChecklistEntry(c.id, 'cooldown', {
+      ownerId: alice.id,
+      sortOrder: 0,
+    });
     await createChecklistEntry(c.id, 'warmup', { ownerId: bob.id });
     await createChecklistEntry(c.id, 'warmup', { pattern: null }); // global
 
@@ -161,7 +211,9 @@ describe('ChecklistEntriesService.remove', () => {
   it("takes an entry off the athlete's list", async () => {
     const alice = await createUser();
     const a = await createExercise({ name: 'A' });
-    const entry = await createChecklistEntry(a.id, 'warmup', { ownerId: alice.id });
+    const entry = await createChecklistEntry(a.id, 'warmup', {
+      ownerId: alice.id,
+    });
 
     await service().remove(alice.id, entry.id);
 
@@ -174,7 +226,9 @@ describe('ChecklistEntriesService.remove', () => {
     const alice = await createUser();
     const bob = await createUser();
     const a = await createExercise({ name: 'A' });
-    const bobs = await createChecklistEntry(a.id, 'warmup', { ownerId: bob.id });
+    const bobs = await createChecklistEntry(a.id, 'warmup', {
+      ownerId: bob.id,
+    });
     const global = await createChecklistEntry(a.id, 'cooldown');
 
     for (const id of [bobs.id, global.id]) {
@@ -195,9 +249,18 @@ describe('ChecklistEntriesService.reorder', () => {
       await createExercise({ name: 'C' }),
     ];
     const entries = [
-      await createChecklistEntry(a.id, 'warmup', { ownerId: alice.id, sortOrder: 0 }),
-      await createChecklistEntry(b.id, 'warmup', { ownerId: alice.id, sortOrder: 1 }),
-      await createChecklistEntry(c.id, 'warmup', { ownerId: alice.id, sortOrder: 2 }),
+      await createChecklistEntry(a.id, 'warmup', {
+        ownerId: alice.id,
+        sortOrder: 0,
+      }),
+      await createChecklistEntry(b.id, 'warmup', {
+        ownerId: alice.id,
+        sortOrder: 1,
+      }),
+      await createChecklistEntry(c.id, 'warmup', {
+        ownerId: alice.id,
+        sortOrder: 2,
+      }),
     ];
     return { alice, ids: entries.map((e) => e.id) };
   }
@@ -219,21 +282,24 @@ describe('ChecklistEntriesService.reorder', () => {
     const { alice, ids } = await aliceWithThree();
 
     await expect(
-      service().reorder(alice.id, { kind: 'warmup', entryIds: [ids[1], ids[0]] }),
+      service().reorder(alice.id, {
+        kind: 'warmup',
+        entryIds: [ids[1], ids[0]],
+      }),
     ).rejects.toBeInstanceOf(ConflictException);
 
-    expect((await service().list(alice.id)).map((e) => e.exercise.name)).toEqual([
-      'A',
-      'B',
-      'C',
-    ]);
+    expect(
+      (await service().list(alice.id)).map((e) => e.exercise.name),
+    ).toEqual(['A', 'B', 'C']);
   });
 
   it("refuses another athlete's entry in the list", async () => {
     const { alice, ids } = await aliceWithThree();
     const bob = await createUser();
     const x = await createExercise({ name: 'X' });
-    const bobs = await createChecklistEntry(x.id, 'warmup', { ownerId: bob.id });
+    const bobs = await createChecklistEntry(x.id, 'warmup', {
+      ownerId: bob.id,
+    });
 
     await expect(
       service().reorder(alice.id, {
