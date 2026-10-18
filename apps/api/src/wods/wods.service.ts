@@ -331,11 +331,30 @@ export class WodsService {
         instructions: true,
         exercise: { select: { id: true, name: true, instructions: true } },
       },
-      // Seed order, so the list reads the same on every load.
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      // The athlete's own entries first, in the order they set, then the
+      // global ones in seed order (DN-173). The checklist stops at four, and
+      // an athlete's entries are always written after the seed's, so by
+      // creation order alone theirs would be the first to be cut.
+      orderBy: [
+        { ownerId: { sort: 'asc', nulls: 'last' } },
+        { sortOrder: 'asc' },
+        { createdAt: 'asc' },
+        { id: 'asc' },
+      ],
     });
 
-    const pool = entries.map((entry) => ({
+    // A movement on both tiers of one list shows once, as the athlete wrote
+    // it: the screens key their rows by exercise id. Theirs come first, so
+    // the first seen is the one kept.
+    const seen = new Set<string>();
+    const unique = entries.filter((entry) => {
+      const key = `${entry.kind}/${entry.exercise.id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    const pool = unique.map((entry) => ({
       id: entry.exercise.id,
       name: entry.exercise.name,
       pattern: entry.pattern,
