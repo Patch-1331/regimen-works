@@ -57,16 +57,19 @@ still be found the same way.
 
 If that cost ever bites, this is the decision to revisit first.
 
-## Deferred: external uptime monitor
+## Rejected: external uptime monitor
 
 An out-of-repo monitor (UptimeRobot free tier or similar) polling
 `https://api.regimenworks.com/health` and mailing after two consecutive
-failures. Deliberately **outside Render**, so it still alerts when Render
-itself is the problem.
+failures, deliberately **outside Render** so it would still alert when Render
+itself is the problem. It was deferred from DN-41 as an account signup rather
+than a code change, then **declined on 2026-10-18**.
 
-Not done here because it is an account signup rather than a code change.
-Tracked separately. Nothing in this repo would otherwise reveal whether such a
-monitor exists, which is why it is written down here.
+There is no uptime monitor of any kind. Only Render's `healthCheckPath` probes
+`/health`, and that gates deploys rather than alerting anyone. The cost
+matches the Sentry decision above: an outage, or a database `/health` reports
+as down, is noticed only when someone uses the app or goes looking. Revisit
+this alongside that decision.
 
 ## Reasoning
 
