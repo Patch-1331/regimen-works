@@ -60,6 +60,7 @@ export const handlers = [
   ),
   http.get(api("/exercises/retired"), () => HttpResponse.json([])),
   http.get(api("/exercises/:id"), () => HttpResponse.json(fixtures.apiExercise())),
+  http.get(api("/checklist-entries"), () => HttpResponse.json([])),
   http.get(api("/skill-levels"), () => HttpResponse.json([fixtures.skillLevel()])),
   // The WOD library, empty by default (DN-29): most route tests are about a
   // day rather than about the pool it was planned from.

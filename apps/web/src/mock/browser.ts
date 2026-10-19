@@ -26,7 +26,33 @@ const yours: ProgramSummary = {
   archived: false,
 };
 
+// The athlete's own warm-up and cool-down (DN-173), so Settings has lists to
+// order and the default movement page (Push-up) shows an entry of its own.
+const ownChecklistEntries = [
+  fixtures.checklistEntry({ id: "entry-1", kind: "warmup", pattern: "push", sortOrder: 0 }),
+  fixtures.checklistEntry({
+    id: "entry-2",
+    kind: "warmup",
+    pattern: null,
+    sortOrder: 1,
+    exercise: { id: "exercise-band", name: "Band pull-apart" },
+  }),
+  fixtures.checklistEntry({
+    id: "entry-3",
+    kind: "cooldown",
+    pattern: null,
+    sortOrder: 0,
+    exercise: { id: "exercise-pigeon", name: "Pigeon stretch" },
+  }),
+];
+
 const extras = [
+  http.get(api("/checklist-entries"), () => HttpResponse.json(ownChecklistEntries)),
+  http.post(api("/checklist-entries"), () =>
+    HttpResponse.json(ownChecklistEntries[0], { status: 201 }),
+  ),
+  http.put(api("/checklist-entries/order"), () => HttpResponse.json(ownChecklistEntries)),
+  http.delete(api("/checklist-entries/:id"), () => new HttpResponse(null, { status: 204 })),
   http.get(api("/programs/runs"), () =>
     HttpResponse.json({
       current: fixtures.programRun({ week: 2 }),

@@ -7,6 +7,7 @@ import { SchedulerService } from '../scheduler/scheduler.service';
 import { MovementResolutionService } from '../scheduler/movement-resolution.service';
 import { EnrollmentsService } from '../enrollments/enrollments.service';
 import { WodsService } from '../wods/wods.service';
+import { ChecklistEntriesService } from '../checklists/checklist-entries.service';
 import { ProgramsService } from '../programs/programs.service';
 import type { PrismaService } from '../prisma/prisma.service';
 
@@ -73,7 +74,20 @@ function recordingPrisma() {
         (calls['checklistEntry.findMany'] ??= []).push(args);
         return Promise.resolve([]);
       }),
+      aggregate: jest.fn((args: unknown) => {
+        (calls['checklistEntry.aggregate'] ??= []).push(args);
+        return Promise.resolve({ _max: { sortOrder: null } });
+      }),
+      deleteMany: jest.fn((args: unknown) => {
+        (calls['checklistEntry.deleteMany'] ??= []).push(args);
+        return Promise.resolve({ count: 1 });
+      }),
+      updateMany: jest.fn((args: unknown) => {
+        (calls['checklistEntry.updateMany'] ??= []).push(args);
+        return Promise.resolve({ count: 1 });
+      }),
     },
+    $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
     exercise: {
       findMany: jest.fn((args: unknown) => {
         (calls['exercise.findMany'] ??= []).push(args);
@@ -322,6 +336,37 @@ describe('library ownership scoping', () => {
       expect(ownTier).toContain('"ownerId":null');
       expect(ownTier).toContain(ALICE);
       expectLibraryScope(JSON.stringify(exercise ?? {}));
+    }
+  });
+
+  it("scopes every read and write of the athlete's own checklist entries", async () => {
+    // DN-173. Each of these names `ownerId: ALICE` alone -- not the library's
+    // two tiers -- because an athlete edits only their own list. A where
+    // with `"ownerId":null` in it would let them delete a global entry.
+    const prisma = recordingPrisma();
+    const entries = new ChecklistEntriesService(prisma);
+    await entries.list(ALICE);
+    await entries.remove(ALICE, 'entry-1');
+    await entries.reorder(ALICE, { kind: 'warmup', entryIds: [] });
+
+    for (const key of [
+      'checklistEntry.findMany',
+      'checklistEntry.deleteMany',
+    ]) {
+      for (const where of whereOf(prisma, key)) {
+        expect(where).toContain(ALICE);
+        expect(where).not.toContain('"ownerId":null');
+      }
+    }
+  });
+
+  it('only lets an athlete put a movement they can see on their list', async () => {
+    const prisma = recordingPrisma();
+    await new ChecklistEntriesService(prisma)
+      .create(ALICE, { exerciseId: 'ex-1', kind: 'warmup', pattern: null })
+      .catch(() => undefined);
+    for (const where of whereOf(prisma, 'exercise.findFirst')) {
+      expectLibraryScope(where);
     }
   });
 

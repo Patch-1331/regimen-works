@@ -13,6 +13,7 @@ import { HealthModule } from './health/health.module';
 import { loggerParams } from './logging/logging.config';
 import { ExercisesModule } from './exercises/exercises.module';
 import { WodsModule } from './wods/wods.module';
+import { ChecklistsModule } from './checklists/checklists.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { SessionsModule } from './sessions/sessions.module';
 import { SubstitutionsModule } from './substitutions/substitutions.module';
@@ -49,6 +50,7 @@ import { ProgramsModule } from './programs/programs.module';
     AuthModule,
     ExercisesModule,
     WodsModule,
+    ChecklistsModule,
     SchedulerModule,
     SessionsModule,
     SubstitutionsModule,

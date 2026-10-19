@@ -1,4 +1,5 @@
 import type {
+  AthleteChecklistEntry,
   ChecklistExercise,
   Settings,
   SkillLevel,
@@ -572,6 +573,20 @@ export function movementVolume(
     sessions: [
       { date: "2026-09-16", assignmentId: "assignment-1", sets: [3, 3, 3] },
     ],
+    ...overrides,
+  };
+}
+
+/** One of the athlete's own warm-up/cool-down entries (DN-173). */
+export function checklistEntry(
+  overrides: Partial<AthleteChecklistEntry> = {},
+): AthleteChecklistEntry {
+  return {
+    id: "entry-1",
+    kind: "warmup",
+    pattern: null,
+    sortOrder: 0,
+    exercise: { id: "exercise-1", name: "Push-up" },
     ...overrides,
   };
 }

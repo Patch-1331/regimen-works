@@ -7,6 +7,7 @@ import { humanize } from "../lib/libraryFilters";
 import { lineLabel, patternLabel } from "../lib/progressions";
 import { SectionLabel } from "../components/Panel";
 import { DatasetCredit } from "../components/DatasetCredit";
+import { ExerciseChecklists } from "../components/ChecklistEntries";
 
 /**
  * One movement, read in full (DN-171): how to do it, what it works, what it
@@ -166,6 +167,8 @@ export function ExerciseDetailPage() {
           ))}
         </ol>
       )}
+
+      <ExerciseChecklists exercise={exercise} />
 
       {/* Only under the dataset's own rows: an athlete's movement is theirs. */}
       {exercise.key !== null && <DatasetCredit />}

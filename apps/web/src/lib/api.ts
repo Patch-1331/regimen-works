@@ -1,5 +1,8 @@
 import type {
   AdvanceInterval,
+  AthleteChecklistEntry,
+  CreateChecklistEntry,
+  ReorderChecklistEntries,
   ExerciseCategory,
   ExerciseForce,
   ExerciseLevel,
@@ -270,6 +273,15 @@ export const api = {
   /** One movement, for the library's detail view (DN-171). */
   exercise: (id: string) =>
     request<ApiExercise>(`/exercises/${encodeURIComponent(id)}`),
+  /** The athlete's own warm-up and cool-down entries, each list in its set order (DN-173). */
+  checklistEntries: () => request<AthleteChecklistEntry[]>("/checklist-entries"),
+  addChecklistEntry: (body: CreateChecklistEntry) =>
+    postJson<AthleteChecklistEntry>("/checklist-entries", body),
+  removeChecklistEntry: (id: string) =>
+    request<void>(`/checklist-entries/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  /** Every one of the athlete's entries of `kind`, in the new order. */
+  reorderChecklistEntries: (body: ReorderChecklistEntries) =>
+    putJson<AthleteChecklistEntry[]>("/checklist-entries/order", body),
   createExercise: (tier: LibraryTier, body: CreateExercise) =>
     postJson<ApiExercise>(exercisesBase(tier), body),
   updateExercise: (tier: LibraryTier, id: string, body: UpdateExercise) =>
