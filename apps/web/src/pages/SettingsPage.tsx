@@ -4,6 +4,7 @@ import { EQUIPMENT_CATALOG, type Equipment, type RestPace, type UpdateSettings }
 import { api } from "../lib/api";
 import { parseRestDraft, restDraftOf, restSecondsOf } from "../lib/rest";
 import { WEEKDAYS } from "../lib/weekdays";
+import { MyChecklistsSetting } from "../components/ChecklistEntries";
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
@@ -53,6 +54,7 @@ export function SettingsPage() {
             pending={toggleMutation.isPending}
             onChange={(warmupCooldownEnabled) => toggleMutation.mutate({ warmupCooldownEnabled })}
           />
+          <MyChecklistsSetting />
           <SettingRow
             title="Stop at the time cap"
             description="End the workout when its time cap runs out. Turn this off to keep the clock running past the cap and finish it yourself."

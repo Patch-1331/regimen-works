@@ -238,6 +238,13 @@ model ChecklistEntry {
   // Keep them.
   key String?
 
+  // Where an athlete's own entry sits on their list of this kind (DN-173),
+  // which they set from Settings. Their entries come before the global ones,
+  // so this orders only within the athlete's tier. A global entry keeps 0
+  // and is read in seed order (`createdAt`, then `id`) instead: the seed
+  // writes the lists in the order it means them.
+  sortOrder Int @default(0)
+
   createdAt DateTime @default(now())
 
   // A movement is on each checklist at most once per tier. Postgres treats

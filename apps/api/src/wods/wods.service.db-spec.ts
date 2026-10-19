@@ -269,6 +269,81 @@ describe('WodsService.getChecklists', () => {
     expect((await service().getChecklists(bob.id, 'push')).warmup).toEqual([]);
   });
 
+  it("puts an athlete's own entries before the global ones (DN-173)", async () => {
+    // The checklist stops at four. Read in creation order, an athlete's
+    // entries -- always written after the seed's -- would be the first cut.
+    const alice = await createUser();
+    for (const name of ['Global 1', 'Global 2', 'Global 3', 'Global 4']) {
+      await createOnChecklist('warmup', { name, pattern: 'push' });
+    }
+    await createOnChecklist(
+      'warmup',
+      { name: 'Mine', pattern: 'push' },
+      { ownerId: alice.id },
+    );
+
+    const { warmup } = await service().getChecklists(alice.id, 'push');
+
+    expect(warmup.map((e) => e.name)).toEqual([
+      'Mine',
+      'Global 1',
+      'Global 2',
+      'Global 3',
+    ]);
+  });
+
+  it("keeps an athlete's own entries in the order they set", async () => {
+    const alice = await createUser();
+    await createOnChecklist(
+      'warmup',
+      { name: 'Set second' },
+      { ownerId: alice.id, sortOrder: 1 },
+    );
+    await createOnChecklist(
+      'warmup',
+      { name: 'Set first' },
+      { ownerId: alice.id, sortOrder: 0 },
+    );
+
+    const { warmup } = await service().getChecklists(alice.id, 'push');
+
+    expect(warmup.map((e) => e.name)).toEqual(['Set first', 'Set second']);
+  });
+
+  it('still prefers the day’s pattern over filler, whoever wrote it', async () => {
+    const alice = await createUser();
+    await createOnChecklist('warmup', { name: 'Global push', pattern: 'push' });
+    await createOnChecklist(
+      'warmup',
+      { name: 'My filler' },
+      { ownerId: alice.id, pattern: null },
+    );
+
+    const { warmup } = await service().getChecklists(alice.id, 'push');
+
+    expect(warmup.map((e) => e.name)).toEqual(['Global push', 'My filler']);
+  });
+
+  it('shows a movement on both tiers once, as the athlete wrote it', async () => {
+    // The screens key their rows by exercise id, so twice would collide.
+    const alice = await createUser();
+    const squat = await createExercise({ name: 'Air squat', pattern: 'squat' });
+    await createChecklistEntry(squat.id, 'warmup', {
+      pattern: 'squat',
+      instructions: ['The seed’s warm-up copy.'],
+    });
+    await createChecklistEntry(squat.id, 'warmup', {
+      pattern: null,
+      ownerId: alice.id,
+    });
+
+    const { warmup } = await service().getChecklists(alice.id, 'squat');
+
+    expect(warmup).toEqual([
+      expect.objectContaining({ id: squat.id, pattern: null }),
+    ]);
+  });
+
   it('answers with empty lists when nothing is on either checklist', async () => {
     expect(await service().getChecklists(ANY_ATHLETE, 'push')).toEqual({
       warmup: [],
