@@ -171,8 +171,14 @@ projects:
                 fromDatabase:
                   name: regimen-works-db
                   property: connectionString
+              # 24 for NestJS 12, which ships only as ESM (DN-156). The built CommonJS
+              # server would boot on 22 too; it is Jest that needs >= 24.9, and CI
+              # stays on the production runtime. To roll this back, revert the PR
+              # on main so the Blueprint sets 22 and Render rebuilds. A Dashboard
+              # rollback reuses an old artifact but is not documented to restore
+              # its Node version, and it turns autodeploy off.
               - key: NODE_VERSION
-                value: "22"
+                value: "24"
               # Clerk verifies session tokens with this. Unlike the shared secret it
               # replaces, it is not generatable — paste the production instance's
               # secret key from dashboard.clerk.com. The service refuses to boot

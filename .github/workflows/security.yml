@@ -90,7 +90,10 @@ jobs:
           # Matches NODE_VERSION in render.yaml. CI on 20 was testing a runtime
           # nothing runs: jsdom reaches worker_threads.markAsUncloneable
           # through undici, which does not exist before Node 22.10 (DN-95).
-          node-version: 22
+          # 24, not 22, since NestJS 12 ships only as ESM: Jest can require() it
+          # from the CommonJS API only on Node >= 24.9, and only with
+          # --experimental-vm-modules, which the api's jest scripts pass (DN-156).
+          node-version: 24
           cache: npm
 
       - run: npm ci

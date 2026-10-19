@@ -49,7 +49,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           # Matches ci.yml and NODE_VERSION in render.yaml.
-          node-version: 22
+          node-version: 24
           cache: npm
 
       # The e2e database reset runs through ts-node and imports the Prisma
