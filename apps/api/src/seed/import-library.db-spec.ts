@@ -81,6 +81,20 @@ describe('importLibrary', () => {
     );
   });
 
+  it('writes which movements are kept off the muscle match (DN-174)', async () => {
+    await importLibrary(testPrisma(), exercises);
+
+    const kept = await testPrisma().exercise.findMany({
+      where: { excludeFromMuscleMatch: true },
+      orderBy: { key: 'asc' },
+    });
+    expect(kept.map((e) => e.key)).toEqual([
+      'Floor_Glute-Ham_Raise',
+      'Natural_Glute_Ham_Raise',
+      'rw-supermans-reverse-snow-angels',
+    ]);
+  });
+
   it('changes nothing on a second run', async () => {
     await legacyPushUp();
     const first = await importLibrary(testPrisma(), exercises);

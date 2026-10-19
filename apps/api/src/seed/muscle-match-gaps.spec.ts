@@ -10,8 +10,10 @@ import { muscleMatch, muscleMatchTargets } from '../scheduler/muscle-match';
  * rather than on someone's Today screen. Mostly isolation work no bodyweight
  * movement honestly stands in for -- curls, flyes, calf raises, cable and
  * machine moves -- and the heavy lifts, where a loose match would be a
- * different workout under the prescribed reps. A gap closes with a
- * hand-written fallback, or is accepted by staying on this list.
+ * different workout under the prescribed reps. Most of the cleans, snatches
+ * and rows are here because a person kept their only match off it (DN-174).
+ * A gap closes with a hand-written fallback, or is accepted by staying on
+ * this list.
  */
 
 /** Sorted. Remove a line when a fallback closes it. */
@@ -19,6 +21,7 @@ const KNOWN_GAPS = [
   'Advanced_Kettlebell_Windmill',
   'Alternate_Hammer_Curl',
   'Alternate_Incline_Dumbbell_Curl',
+  'Alternating_Hang_Clean',
   'Alternating_Kettlebell_Row',
   'Alternating_Renegade_Row',
   'Backward_Medicine_Ball_Throw',
@@ -31,8 +34,14 @@ const KNOWN_GAPS = [
   'Barbell_Rear_Delt_Row',
   'Barbell_Seated_Calf_Raise',
   'Bent-Arm_Barbell_Pullover',
+  'Bent_Over_Barbell_Row',
   'Bent_Over_Dumbbell_Rear_Delt_Raise_With_Head_On_Bench',
   'Bent_Over_Low-Pulley_Side_Lateral',
+  'Bent_Over_One-Arm_Long_Bar_Row',
+  'Bent_Over_Two-Arm_Long_Bar_Row',
+  'Bent_Over_Two-Dumbbell_Row',
+  'Bent_Over_Two-Dumbbell_Row_With_Palms_In',
+  'Bodyweight_Mid_Row',
   'Bottoms-Up_Clean_From_The_Hang_Position',
   'Brachialis-SMR',
   'Butterfly',
@@ -51,6 +60,7 @@ const KNOWN_GAPS = [
   'Calf_Raises_-_With_Bands',
   'Car_Drivers',
   'Catch_and_Overhead_Throw',
+  'Clean',
   'Clean_Deadlift',
   'Clean_Shrug',
   'Close-Grip_EZ-Bar_Curl_with_Band',
@@ -60,12 +70,15 @@ const KNOWN_GAPS = [
   'Concentration_Curls',
   'Cross_Body_Hammer_Curl',
   'Donkey_Calf_Raises',
+  'Double_Kettlebell_Alternating_Hang_Clean',
   'Double_Kettlebell_Snatch',
   'Downward_Facing_Balance',
   'Drag_Curl',
   'Dumbbell_Alternate_Bicep_Curl',
   'Dumbbell_Bicep_Curl',
+  'Dumbbell_Clean',
   'Dumbbell_Flyes',
+  'Dumbbell_Incline_Row',
   'Dumbbell_Lying_One-Arm_Rear_Lateral_Raise',
   'Dumbbell_Lying_Pronation',
   'Dumbbell_Lying_Rear_Lateral_Raise',
@@ -85,7 +98,12 @@ const KNOWN_GAPS = [
   'Flexor_Incline_Dumbbell_Curls',
   'Full_Range-Of-Motion_Lat_Pulldown',
   'Gironda_Sternum_Chins',
+  'Good_Morning',
+  'Good_Morning_off_Pins',
   'Hammer_Curls',
+  'Hang_Snatch',
+  'Hang_Snatch_-_Below_Knees',
+  'Hanging_Bar_Good_Morning',
   'High_Cable_Curls',
   'Hip_Flexion_with_Band',
   'Incline_Bench_Pull',
@@ -93,15 +111,21 @@ const KNOWN_GAPS = [
   'Incline_Hammer_Curls',
   'Incline_Inner_Biceps_Curl',
   'Internal_Rotation_with_Band',
+  'Inverted_Row',
+  'Inverted_Row_with_Straps',
+  'Kettlebell_Dead_Clean',
   'Kettlebell_Figure_8',
   'Kettlebell_Halo',
+  'Kettlebell_Hang_Clean',
   'Kettlebell_Sumo_High_Pull',
   'Kipping_Muscle_Up',
   'Kneeling_High_Pulley_Row',
   'Kneeling_Single-Arm_High_Pulley_Row',
   'Leg_Extensions',
+  'Leverage_High_Row',
   'Leverage_Iso_Row',
   'Low_Pulley_Row_To_Neck',
+  'Lunge_Pass_Through',
   'Lying_Cable_Curl',
   'Lying_Cambered_Barbell_Row',
   'Lying_Close-Grip_Bar_Curl_On_High_Pulley',
@@ -111,18 +135,27 @@ const KNOWN_GAPS = [
   'Lying_One-Arm_Lateral_Raise',
   'Lying_Rear_Delt_Raise',
   'Lying_Supine_Dumbbell_Curl',
+  'Lying_T-Bar_Row',
   'Machine_Bicep_Curl',
   'Machine_Preacher_Curls',
   'Medicine_Ball_Full_Twist',
   'Medicine_Ball_Scoop_Throw',
   'Middle_Back_Shrug',
+  'Mixed_Grip_Chin',
   'Monster_Walk',
+  'Muscle_Snatch',
   'Muscle_Up',
   'One-Arm_Flat_Bench_Dumbbell_Flye',
+  'One-Arm_Kettlebell_Clean',
+  'One-Arm_Kettlebell_Row',
   'One-Arm_Kettlebell_Snatch',
   'One-Arm_Kettlebell_Split_Snatch',
+  'One-Arm_Long_Bar_Row',
+  'One-Arm_Open_Palm_Kettlebell_Clean',
+  'One_Arm_Chin-Up',
   'One_Arm_Dumbbell_Preacher_Curl',
   'One_Arm_Lat_Pulldown',
+  'Open_Palm_Kettlebell_Clean',
   'Overhead_Cable_Curl',
   'Overhead_Slam',
   'Palms-Down_Dumbbell_Wrist_Curl_Over_A_Bench',
@@ -130,23 +163,30 @@ const KNOWN_GAPS = [
   'Palms-Up_Barbell_Wrist_Curl_Over_A_Bench',
   'Palms-Up_Dumbbell_Wrist_Curl_Over_A_Bench',
   'Plate_Pinch',
+  'Power_Clean',
+  'Power_Clean_from_Blocks',
+  'Power_Snatch',
   'Preacher_Curl',
   'Preacher_Hammer_Dumbbell_Curl',
   'Pyramid',
   'Rack_Delivery',
   'Return_Push_from_Stance',
+  'Reverse_Band_Sumo_Deadlift',
   'Reverse_Barbell_Curl',
   'Reverse_Barbell_Preacher_Curls',
   'Reverse_Cable_Curl',
   'Reverse_Flyes',
   'Reverse_Flyes_With_External_Rotation',
+  'Reverse_Grip_Bent-Over_Rows',
   'Reverse_Machine_Flyes',
   'Reverse_Plate_Curls',
   'Rocking_Standing_Calf_Raise',
   'Rocky_Pull-Ups_Pulldowns',
+  'Romanian_Deadlift_from_Deficit',
   'Rope_Straight-Arm_Pulldown',
   'Rowing_Stationary',
   'Seated_Bent-Over_Rear_Delt_Raise',
+  'Seated_Cable_Rows',
   'Seated_Calf_Raise',
   'Seated_Close-Grip_Concentration_Barbell_Curl',
   'Seated_Dumbbell_Curl',
@@ -155,6 +195,7 @@ const KNOWN_GAPS = [
   'Seated_Dumbbell_Palms-Up_Wrist_Curl',
   'Seated_One-Arm_Dumbbell_Palms-Down_Wrist_Curl',
   'Seated_One-Arm_Dumbbell_Palms-Up_Wrist_Curl',
+  'Seated_One-arm_Cable_Pulley_Rows',
   'Seated_Palm-Up_Barbell_Wrist_Curl',
   'Seated_Palms-Down_Barbell_Wrist_Curl',
   'Seated_Two-Arm_Palms-Up_Low-Pulley_Wrist_Curl',
@@ -165,13 +206,18 @@ const KNOWN_GAPS = [
   'Single-Leg_Leg_Extension',
   'Single_Dumbbell_Raise',
   'Smith_Incline_Shoulder_Raise',
+  'Smith_Machine_Bent_Over_Row',
   'Smith_Machine_Calf_Raise',
+  'Smith_Machine_Hang_Power_Clean',
   'Smith_Machine_One-Arm_Upright_Row',
   'Smith_Machine_Reverse_Calf_Raises',
   'Smith_Machine_Upright_Row',
   'Snatch',
+  'Snatch_Deadlift',
+  'Snatch_Pull',
   'Snatch_Shrug',
   'Spider_Curl',
+  'Split_Snatch',
   'Standing_Barbell_Calf_Raise',
   'Standing_Biceps_Cable_Curl',
   'Standing_Calf_Raises',
@@ -187,14 +233,21 @@ const KNOWN_GAPS = [
   'Standing_Palms-Up_Barbell_Behind_The_Back_Wrist_Curl',
   'Standing_Two-Arm_Overhead_Throw',
   'Straight-Arm_Pulldown',
+  'Straight_Bar_Bench_Mid_Rows',
   'Straight_Raises_on_Incline_Bench',
+  'Sumo_Deadlift',
+  'Sumo_Deadlift_with_Bands',
+  'Sumo_Deadlift_with_Chains',
   'Supine_Chest_Throw',
   'Supine_One-Arm_Overhead_Throw',
   'Supine_Two-Arm_Overhead_Throw',
+  'Suspended_Row',
+  'T-Bar_Row_with_Handle',
   'Thigh_Abductor',
   'Thigh_Adductor',
   'Two-Arm_Dumbbell_Preacher_Curl',
   'Two-Arm_Kettlebell_Clean',
+  'Two-Arm_Kettlebell_Row',
   'Underhand_Cable_Pulldowns',
   'Upright_Barbell_Row',
   'Upright_Cable_Row',
@@ -251,5 +304,23 @@ describe('the muscle match over the real library (DN-169)', () => {
       if (!m) continue;
       expect([t.key, m.unit, m.equipment]).toEqual([t.key, t.unit, []]);
     }
+  });
+
+  it('never picks a movement kept off the muscle match (DN-174)', () => {
+    const kept = rows.filter((e) => e.excludeFromMuscleMatch).map((e) => e.key);
+    expect(kept.sort()).toEqual([
+      'Floor_Glute-Ham_Raise',
+      'Natural_Glute_Ham_Raise',
+      'rw-supermans-reverse-snow-angels',
+    ]);
+    const picked = targets
+      .map((t) => [t.key, muscleMatch(t, rows, owned)?.key] as const)
+      .filter(([, m]) => m !== undefined && kept.includes(m));
+    expect(picked).toEqual([]);
+  });
+
+  it('keeps the machine glute-ham raise on its bodyweight twin by hand', () => {
+    const machine = rows.find((e) => e.key === 'Glute_Ham_Raise');
+    expect(machine?.fallbackExerciseId).toBe('Natural_Glute_Ham_Raise');
   });
 });

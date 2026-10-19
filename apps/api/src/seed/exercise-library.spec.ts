@@ -34,12 +34,12 @@ const members = (group: string) =>
   exercises.filter((e) => e.movementGroup === group);
 
 describe('the exercise library', () => {
-  it('curates 64: 26 dataset twins and 38 of the app’s own', () => {
+  it('curates 66: 28 dataset twins and 38 of the app’s own', () => {
     // DN-168 brings the rest of the dataset in uncurated. A count that moves
     // here is a curation entry, which is a decision about what the seeded
     // programs prescribe -- not something an import does in passing.
-    expect(curated).toHaveLength(64);
-    expect(curated.filter((e) => e.source === 'dataset')).toHaveLength(26);
+    expect(curated).toHaveLength(66);
+    expect(curated.filter((e) => e.source === 'dataset')).toHaveLength(28);
     expect(curated.filter((e) => e.source === 'own')).toHaveLength(38);
     expect(exercises.filter((e) => e.source === 'own' && !e.curated)).toEqual(
       [],

@@ -105,6 +105,14 @@ model Exercise {
   // same, the curated one wins (DN-169).
   curated  Boolean @default(false)
 
+  // Never offered by the muscle match on muscles alone (DN-174): a person
+  // has said this is a poor stand-in for what happens to share its muscles,
+  // where the data cannot tell them apart -- a glute-ham raise and a clean
+  // share the prime mover, the force and the mechanic. Written by the
+  // library import from the curation file, false on every athlete-owned
+  // row. Its own group and a hand-written fallback still reach it.
+  excludeFromMuscleMatch Boolean @default(false)
+
   // The movement group this belongs to (Feature #2, ADR-0004): movements
   // that accomplish the same thing in a program and are freely
   // interchangeable. Finer-grained than `pattern`, since a pattern like push

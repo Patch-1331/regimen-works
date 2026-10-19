@@ -32,6 +32,7 @@ const ex = (
   mechanic: 'compound',
   movementGroup: null,
   curated: false,
+  excludeFromMuscleMatch: false,
   archivedAt: null,
   ...overrides,
 });
@@ -356,6 +357,92 @@ describe('swapSections', () => {
       nothing,
     );
     expect(Object.values(sections).flat()).toEqual([]);
+  });
+});
+
+describe('a movement kept off the muscle match (DN-174)', () => {
+  // Real rows. Each pair shares the prime mover, the force and the mechanic,
+  // and the bad pick is the only candidate clearing the threshold -- so no
+  // reweighting moves it down, and a person has to say no.
+  const clean = ex('Clean', {
+    equipment: ['barbell'],
+    category: 'olympic_weightlifting',
+    level: 'intermediate',
+    primaryMuscles: ['hamstrings'],
+    secondaryMuscles: [
+      'calves',
+      'forearms',
+      'glutes',
+      'lower_back',
+      'quadriceps',
+      'shoulders',
+      'traps',
+    ],
+    force: 'pull',
+  });
+  const gluteHamRaise = ex('Natural_Glute_Ham_Raise', {
+    level: 'intermediate',
+    primaryMuscles: ['hamstrings'],
+    secondaryMuscles: ['calves', 'glutes', 'lower_back'],
+    force: 'pull',
+    excludeFromMuscleMatch: true,
+  });
+  const snowAngels = ex('rw-supermans-reverse-snow-angels', {
+    curated: true,
+    movementGroup: 'pull',
+    primaryMuscles: ['middle_back'],
+    secondaryMuscles: ['lower_back', 'shoulders', 'traps'],
+    force: 'pull',
+    excludeFromMuscleMatch: true,
+  });
+  const pool = [clean, gluteHamRaise, bentOverRow, snowAngels];
+  const keys = (rows: MatchableExercise[]) => rows.map((e) => e.key);
+
+  it('would otherwise clear the threshold', () => {
+    expect(matchScore(clean, gluteHamRaise)).toBeGreaterThan(MATCH_THRESHOLD);
+    expect(matchScore(bentOverRow, snowAngels)).toBeGreaterThan(
+      MATCH_THRESHOLD,
+    );
+  });
+
+  it('never hands a clean over as a glute-ham raise', () => {
+    expect(muscleMatch(clean, pool, nothing)).toBeNull();
+  });
+
+  it('never hands a row over as snow angels', () => {
+    expect(muscleMatch(bentOverRow, pool, nothing)).toBeNull();
+  });
+
+  it('leaves both out of the swap panel', () => {
+    for (const target of [clean, bentOverRow]) {
+      const all = Object.values(swapSections(target, pool, nothing)).flat();
+      expect(keys(all)).toEqual([]);
+    }
+  });
+
+  it('still reaches its own group', () => {
+    const pullUp = ex('Pullups', {
+      curated: true,
+      movementGroup: 'pull',
+      equipment: ['bar'],
+      primaryMuscles: ['lats'],
+      secondaryMuscles: ['biceps', 'middle_back'],
+      force: 'pull',
+    });
+    expect(keys(swapSections(pullUp, [snowAngels], nothing).main)).toEqual([
+      'rw-supermans-reverse-snow-angels',
+    ]);
+    // A group mate the muscles would also pick.
+    const mate = { ...bentOverRow, movementGroup: 'pull' };
+    expect(muscleMatch(mate, [snowAngels], nothing)?.key).toBe(
+      'rw-supermans-reverse-snow-angels',
+    );
+  });
+
+  it('leaves the next-best match standing', () => {
+    expect(muscleMatch(bentOverRow, [...pool, invertedRow], nothing)?.key).toBe(
+      'Inverted_Row',
+    );
   });
 });
 
