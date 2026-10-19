@@ -12,7 +12,8 @@ a leftover.
 ### Issue tracker
 
 Linear, team **Dark Neon** (key `DN`), reached via the Linear MCP tools.
-GitHub Issues are a stale, all-closed mirror — never read or write them.
+GitHub Issues is switched off; [`docs/github-issues.md`](docs/github-issues.md)
+maps the old `#N` numbers.
 See [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
 
 ### Triage labels
