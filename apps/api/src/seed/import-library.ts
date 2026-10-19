@@ -68,6 +68,7 @@ export async function importLibrary(
       level: e.level,
       category: e.category,
       curated: e.curated,
+      excludeFromMuscleMatch: e.excludeFromMuscleMatch,
       // The files own this row (ADR 0010), so a movement they name is live
       // whatever was done to it since. Neither lookup filters on
       // `archivedAt`: a retired row still holds its key and its name, so

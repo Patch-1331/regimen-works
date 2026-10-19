@@ -74,6 +74,9 @@ export const curation: Record<string, Curation> = {
     pattern: 'pull',
     movementGroup: 'pull',
     isGroupDefault: true,
+    // A prone hold that shares a row's prime mover, force and mechanic, and
+    // is no row (DN-174). Its group still reaches it.
+    excludeFromMuscleMatch: true,
   },
   'rw-negative-pull-up': {
     pattern: 'pull',
@@ -322,6 +325,21 @@ export const curation: Record<string, Curation> = {
     formerly: 'Cross-body shoulder stretch',
   },
   'rw-deep-breathing': { pattern: null },
+
+  // The glute-ham raise (DN-174). On muscles alone the bodyweight one stood
+  // in for every clean, snatch and good morning in the library: the same
+  // prime mover, force and mechanic, and a different movement. Kept off the
+  // muscle match, so the machine version gets it by hand instead.
+  Natural_Glute_Ham_Raise: {
+    pattern: 'hinge',
+    // The bench or box in the steps is not the kit.
+    equipment: [],
+    excludeFromMuscleMatch: true,
+  },
+  Glute_Ham_Raise: {
+    pattern: 'hinge',
+    fallback: 'Natural_Glute_Ham_Raise',
+  },
 };
 
 const STRONGMAN = 'strongman kit: stones, kegs, logs, yokes and the like';
@@ -501,7 +519,6 @@ export const corrections: Record<string, Correction> = {
   'Decline_Push-Up': { equipment: NONE },
   'Push-Ups_With_Feet_Elevated': { equipment: NONE },
   'Incline_Push-Up': { equipment: NONE },
-  Natural_Glute_Ham_Raise: { equipment: NONE },
   Weighted_Crunches: { equipment: ['medicine_ball'] },
   Barbell_Rear_Delt_Row: { equipment: ['barbell'] },
   One_Arm_Floor_Press: { equipment: ['barbell'] },
@@ -535,6 +552,10 @@ export const corrections: Record<string, Correction> = {
   Step_Mill: { unit: 'seconds', equipment: ['gym_machines'] },
   Walking_Treadmill: { unit: 'seconds', equipment: ['gym_machines'] },
   Trail_Running_Walking: { unit: 'seconds', equipment: NONE },
+
+  // The next glute-ham raise the muscle match reached for once the
+  // bodyweight one was kept off (DN-174), for the same reason.
+  'Floor_Glute-Ham_Raise': { excludeFromMuscleMatch: true },
 
   // "Squats - With Bands" is the bands-only one; this is under a barbell.
   Squat_with_Bands: { name: 'Barbell squat with bands' },

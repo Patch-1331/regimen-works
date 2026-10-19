@@ -106,6 +106,8 @@ export type Curation = {
    * equipment word gets it wrong or has no word for it ("other").
    */
   equipment?: Equipment[];
+  /** Never offered on muscles alone (DN-174). See `Exercise` in the schema. */
+  excludeFromMuscleMatch?: true;
 };
 
 /**
@@ -122,6 +124,8 @@ export type Correction = {
   equipment?: Equipment[];
   /** Where the dataset's name collides with another's under `nameKey`. */
   name?: string;
+  /** Never offered on muscles alone (DN-174). See `Exercise` in the schema. */
+  excludeFromMuscleMatch?: true;
 };
 
 /** An exercise as the import writes it: one global row. */
@@ -138,6 +142,8 @@ export type LibraryExercise = {
    * and checklists, so only these owe a hand-written fallback (DN-83).
    */
   curated: boolean;
+  /** Never offered on muscles alone (DN-174). */
+  excludeFromMuscleMatch: boolean;
   pattern: string | null;
   equipment: Equipment[];
   scalable: boolean;
@@ -476,6 +482,7 @@ export function buildLibrary({
       name: isOwn ? source.name : sentenceCase(source.name),
       source: isOwn ? 'own' : 'dataset',
       curated: true,
+      excludeFromMuscleMatch: c.excludeFromMuscleMatch ?? false,
       pattern: c.pattern,
       equipment: equipment ?? [],
       scalable: c.scalable ?? false,
@@ -518,6 +525,7 @@ export function buildLibrary({
       name: c.name ?? sentenceCase(source.name),
       source: 'dataset',
       curated: false,
+      excludeFromMuscleMatch: c.excludeFromMuscleMatch ?? false,
       pattern: c.pattern !== undefined ? c.pattern : suggestPattern(source),
       equipment: equipment ?? [],
       scalable: false,

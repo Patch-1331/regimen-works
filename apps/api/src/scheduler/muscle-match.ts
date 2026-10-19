@@ -26,6 +26,12 @@ export type MatchableExercise = {
   mechanic: string | null;
   movementGroup: string | null;
   curated: boolean;
+  /**
+   * Never offered on muscles alone (DN-174): a person has said this one is a
+   * poor stand-in for whatever happens to share its muscles. Its own group
+   * and a hand-written fallback still reach it.
+   */
+  excludeFromMuscleMatch: boolean;
   archivedAt: Date | null;
 };
 
@@ -103,6 +109,19 @@ function comparable(
   return level <= targetLevel ? 'same_or_easier' : 'harder';
 }
 
+const inTargetGroup = (target: MatchableExercise, e: MatchableExercise) =>
+  target.movementGroup !== null && e.movementGroup === target.movementGroup;
+
+/**
+ * Whether the muscles may put `candidate` forward at all. Not where a person
+ * has kept it off (DN-174): a glute-ham raise shares a clean's prime mover,
+ * force and mechanic, and is no clean. The data cannot tell them apart, so
+ * nothing short of saying so does -- unless the movement's own group, which
+ * a person wrote too, vouches for it.
+ */
+const matchable = (target: MatchableExercise, candidate: MatchableExercise) =>
+  !candidate.excludeFromMuscleMatch || inTargetGroup(target, candidate);
+
 /**
  * Whether `candidate` may be swapped in automatically: performable, and
  * never harder (ADR-0007).
@@ -113,6 +132,7 @@ function eligible(
   owned: ReadonlySet<string>,
 ): boolean {
   return (
+    matchable(target, candidate) &&
     comparable(target, candidate) === 'same_or_easier' &&
     performable(candidate, owned)
   );
@@ -157,8 +177,7 @@ function tieBreak(
   a: MatchableExercise,
   b: MatchableExercise,
 ): number {
-  const inGroup = (e: MatchableExercise) =>
-    target.movementGroup !== null && e.movementGroup === target.movementGroup;
+  const inGroup = (e: MatchableExercise) => inTargetGroup(target, e);
   if (inGroup(a) !== inGroup(b)) return inGroup(a) ? -1 : 1;
   const kept = (e: MatchableExercise) =>
     e.equipment.filter((piece) => target.equipment.includes(piece)).length;
@@ -207,7 +226,8 @@ export function muscleMatch<E extends MatchableExercise>(
  * hand-curated set of interchangeable movements, any member for any other
  * (ADR-0004), and muscles alone would split it -- a glute bridge and a
  * Romanian deadlift share a group and not a prime mover. Everything else
- * passes the automatic swap's hard filters and clears `MATCH_THRESHOLD`.
+ * passes the automatic swap's hard filters, clears `MATCH_THRESHOLD`, and is
+ * not kept off the muscle match (DN-174).
  *
  * Uncapped and in display order: curated first, then by score, then the
  * automatic swap's own tie-break. The cap is the caller's, because legality
@@ -227,9 +247,8 @@ export function swapSections<E extends MatchableExercise>(
   > = { main: [], harder: [], needsEquipment: [] };
 
   for (const candidate of candidates) {
-    const mate =
-      target.movementGroup !== null &&
-      candidate.movementGroup === target.movementGroup;
+    const mate = inTargetGroup(target, candidate);
+    if (!matchable(target, candidate)) continue;
     const difficulty = mate
       ? groupMateDifficulty(target, candidate)
       : comparable(target, candidate);
