@@ -206,7 +206,7 @@ function LogResultForm({
       await queryClient.invalidateQueries({ queryKey: ["today"] });
       await queryClient.invalidateQueries({ queryKey: ["logs"] });
       await queryClient.invalidateQueries({ queryKey: ["set-logs", assignmentId] });
-      navigate("/history");
+      void navigate("/history");
     },
   });
 

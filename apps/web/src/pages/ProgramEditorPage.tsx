@@ -169,9 +169,9 @@ export function ProgramEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
         }),
       ]);
       if (fromSetup) {
-        navigate("/setup", { state: { programId: created.id } });
+        void navigate("/setup", { state: { programId: created.id } });
       } else {
-        navigate("/programs");
+        void navigate("/programs");
       }
     },
   });

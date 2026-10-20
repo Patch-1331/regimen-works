@@ -53,7 +53,7 @@ export function useWorkoutSession(assignmentId: string) {
       // it (DN-126). A straight-sets day used to end on Today instead, because
       // there was nothing there to write -- that hole is closed, and both kinds
       // of day now end with the athlete saying how it went.
-      navigate(
+      void navigate(
         hasCooldown ? `/cooldown/${assignmentId}` : `/log/${assignmentId}`,
       );
     },
@@ -74,7 +74,7 @@ export function useWorkoutSession(assignmentId: string) {
     mutationFn: () => api.cancelSession(assignmentId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["today"] });
-      navigate("/");
+      void navigate("/");
     },
   });
 

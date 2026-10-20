@@ -14,8 +14,8 @@
     "dev:web": "npm run dev --workspace apps/web",
     "dev:web:mock": "npm run dev:mock --workspace apps/web",
     "build": "npm run build --workspace packages/shared && npm run build --workspaces --if-present",
-    "lint": "npm run lint --workspaces",
-    "lint:fix": "npm run lint:fix --workspaces",
+    "lint": "npm run build --workspace packages/shared && npm run lint --workspaces",
+    "lint:fix": "npm run build --workspace packages/shared && npm run lint:fix --workspaces",
     "test": "npm run build --workspace packages/shared && npm run test --workspaces --if-present",
     "test:cov": "npm run build --workspace packages/shared && npm run test:cov --workspaces --if-present",
     "typecheck": "npm run build --workspace packages/shared && npm run typecheck --workspaces --if-present"
