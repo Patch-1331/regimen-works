@@ -10,6 +10,8 @@ import {
 import { defaultProgramSummary } from "@regimen-works/shared";
 import { ApiError, api, type ApiExercise, type LibraryTier } from "../lib/api";
 import { MovementPicker } from "../components/MovementPicker";
+import { SwapButton, SwapPanel } from "../components/MovementSwap";
+import { buildAlternativeRows, canSwap } from "../lib/swapOptions";
 import { WEEKDAYS } from "../lib/weekdays";
 import {
   EMPTY_PROGRAM,
@@ -118,6 +120,9 @@ export function ProgramEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
   }
   const [open, setOpen] = useState<string | null>(null);
   const [picking, setPicking] = useState<string | null>(null);
+  // The line whose alternatives are showing (DN-185). Apart from `picking` so
+  // each control toggles its own panel, and each clears the other's.
+  const [swapping, setSwapping] = useState<string | null>(null);
   const [copying, setCopying] = useState<number | null>(null);
 
   const days = trainingDays(draft);
@@ -417,8 +422,16 @@ export function ProgramEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
                     pickable={library}
                     open={open === line.id}
                     picking={picking === line.id}
+                    swapping={swapping === line.id}
                     onToggle={() => setOpen(open === line.id ? null : line.id)}
-                    onPick={(on) => setPicking(on ? line.id : null)}
+                    onPick={(on) => {
+                      setPicking(on ? line.id : null);
+                      if (on) setSwapping(null);
+                    }}
+                    onSwap={(on) => {
+                      setSwapping(on ? line.id : null);
+                      if (on) setPicking(null);
+                    }}
                     onChange={(next) => putLine(day, next)}
                     onDuplicate={() =>
                       setDraft(duplicateLine(draft, day, line.id))
@@ -511,8 +524,10 @@ function LineRow({
   pickable,
   open,
   picking,
+  swapping,
   onToggle,
   onPick,
+  onSwap,
   onChange,
   onDuplicate,
   onRemove,
@@ -524,38 +539,67 @@ function LineRow({
   pickable: ApiExercise[];
   open: boolean;
   picking: boolean;
+  swapping: boolean;
   onToggle: () => void;
   onPick: (on: boolean) => void;
+  onSwap: (on: boolean) => void;
   onChange: (line: DraftLine) => void;
   onDuplicate: () => void;
   onRemove: () => void;
 }) {
   const problems = lineProblems(line);
-  const unit = library.find((e) => e.id === line.exerciseId)?.unit ?? "reps";
+  const exercise = library.find((e) => e.id === line.exerciseId);
+  const unit = exercise?.unit ?? "reps";
+  // A group line has no ⇄: it already names any of its members (DN-185).
+  const swappable =
+    exercise !== undefined &&
+    canSwap(exercise, { isSwapped: false, prescribedId: null });
+  const panelId = `alternatives-${line.id}`;
   return (
     <li className="border-t border-[var(--border)] py-1.5 first:border-t-0">
-      <button
-        type="button"
-        className="flex w-full items-baseline gap-2 text-left"
-        onClick={onToggle}
-      >
-        <span
-          className="flex-1 text-sm"
-          style={{ color: problems.length ? "var(--danger)" : "var(--ink)" }}
+      <div className="flex items-center">
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-baseline gap-2 text-left"
+          onClick={onToggle}
         >
-          {problems.length ? "✕ " : ""}
-          {lineMovementName(line, library)}
-        </span>
-        <span className="text-xs text-[var(--ink-soft)]" style={mono}>
-          {formatScheme(line, unit)}
-        </span>
-        <span
-          className="w-20 text-right text-[11px] text-[var(--ink-faint)]"
-          style={mono}
-        >
-          {formatRest(line)}
-        </span>
-      </button>
+          <span
+            className="flex-1 text-sm"
+            style={{ color: problems.length ? "var(--danger)" : "var(--ink)" }}
+          >
+            {problems.length ? "✕ " : ""}
+            {lineMovementName(line, library)}
+          </span>
+          <span className="text-xs text-[var(--ink-soft)]" style={mono}>
+            {formatScheme(line, unit)}
+          </span>
+          <span
+            className="w-20 text-right text-[11px] text-[var(--ink-faint)]"
+            style={mono}
+          >
+            {formatRest(line)}
+          </span>
+        </button>
+        {swappable && (
+          <SwapButton
+            name={exercise.name}
+            open={swapping}
+            panelId={panelId}
+            onClick={() => onSwap(!swapping)}
+          />
+        )}
+      </div>
+      {swappable && swapping && (
+        <LineAlternatives
+          id={panelId}
+          current={exercise}
+          pickable={pickable}
+          onPick={(exerciseId) => {
+            onChange({ ...line, exerciseId, movementGroup: null });
+            onSwap(false);
+          }}
+        />
+      )}
       {open && (
         <div className="pb-2">
           {problems.map((p) => (
@@ -602,6 +646,41 @@ function LineRow({
         </div>
       )}
     </li>
+  );
+}
+
+/**
+ * A line's alternatives, read when the ⇄ opens (DN-185): Today's sections for
+ * the movement, narrowed to what this program may name. A pick changes the
+ * line being written -- its numbers stay -- and nothing more until Save.
+ */
+function LineAlternatives({
+  id,
+  current,
+  pickable,
+  onPick,
+}: {
+  id: string;
+  current: ApiExercise;
+  pickable: ApiExercise[];
+  onPick: (exerciseId: string) => void;
+}) {
+  const { data, isError } = useQuery({
+    queryKey: ["exercise-alternatives", current.id],
+    queryFn: () => api.exerciseAlternatives(current.id),
+  });
+  return (
+    <SwapPanel
+      id={id}
+      label="ALTERNATIVES"
+      rows={data ? buildAlternativeRows(data, current, pickable) : null}
+      failed={isError}
+      isSwapped={false}
+      prescribedName={null}
+      prescribedReason={null}
+      onPick={onPick}
+      onRevert={() => undefined}
+    />
   );
 }
 

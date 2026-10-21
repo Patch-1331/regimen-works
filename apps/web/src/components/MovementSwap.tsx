@@ -121,6 +121,7 @@ export function LiveSwapPanel({
  */
 export function SwapPanel({
   id,
+  label = "TODAY ONLY",
   rows,
   failed = false,
   isSwapped,
@@ -130,6 +131,11 @@ export function SwapPanel({
   onRevert,
 }: {
   id: string;
+  /**
+   * What the choice is for. Today's swap lasts the day; the program editor's
+   * (DN-185) changes the line being written, and says so instead.
+   */
+  label?: string;
   /** Null while the options are still being read. */
   rows: SwapRows | null;
   failed?: boolean;
@@ -154,7 +160,7 @@ export function SwapPanel({
         className="pb-1.5 text-[10px] font-semibold tracking-[0.14em] text-[var(--ink-faint)]"
         style={{ fontFamily: "var(--font-mono)" }}
       >
-        TODAY ONLY
+        {label}
       </p>
       {failed ? (
         <Note>Couldn't load the options. Close and try again.</Note>
@@ -291,6 +297,16 @@ function OptionList({ rows, onPick }: { rows: SwapRow[]; onPick: (exerciseId: st
             >
               {option.name}
             </span>
+            {/* Counted differently from what it replaces (DN-185): the
+                editor keeps the line's numbers, so the unit is the change. */}
+            {option.unitNote && (
+              <span
+                className="shrink-0 text-[10px] tracking-[0.1em] text-[var(--ink-faint)]"
+                style={{ fontFamily: "var(--font-mono)" }}
+              >
+                {option.unitNote}
+              </span>
+            )}
             {option.isAlternative && (
               <span
                 className="shrink-0 text-[10px] tracking-[0.1em] text-[var(--ink-faint)]"

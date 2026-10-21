@@ -1,4 +1,4 @@
-import type { SwapOptionsResponse } from "@regimen-works/shared";
+import type { ExerciseUnit, SwapOptionsResponse } from "@regimen-works/shared";
 
 /**
  * The rows the swap panel shows (WOD-5, DN-170).
@@ -25,6 +25,12 @@ export type SwapRow = {
    * between movements, and which one the workout named is part of the choice.
    */
   isPrescribed: boolean;
+  /**
+   * Set where the movement is counted in a different unit from the one it
+   * would replace (DN-185): the program editor keeps a line's numbers across
+   * a swap, so ten reps becoming a ten-second hold is said before the tap.
+   */
+  unitNote?: "HELD" | "REPS";
 };
 
 export type SwapRows = {
@@ -86,6 +92,36 @@ export function buildSwapRows(
   }
 
   return { main: [...pinned, ...main], harder, needsEquipment };
+}
+
+/**
+ * The program editor's rows for one line's movement (DN-185): Today's
+ * sections with the movement marked, narrowed to what the program's tier may
+ * name -- a curated program cannot save an athlete's own movement, so it is
+ * not offered one -- and with a change of unit said on the row.
+ *
+ * No prescription to pin: a program line is the prescription being written.
+ */
+export function buildAlternativeRows(
+  sections: SwapOptionsResponse,
+  current: Named & { unit: ExerciseUnit },
+  pickable: { id: string; unit: ExerciseUnit }[],
+): SwapRows {
+  const units = new Map(pickable.map((e) => [e.id, e.unit]));
+  const narrow = (rows: SwapRow[]) =>
+    rows.flatMap((r): SwapRow[] => {
+      if (r.isCurrent) return [r];
+      const unit = units.get(r.exerciseId);
+      if (unit === undefined) return [];
+      if (unit === current.unit) return [r];
+      return [{ ...r, unitNote: unit === "seconds" ? "HELD" : "REPS" }];
+    });
+  const rows = buildSwapRows(sections, current, null);
+  return {
+    main: narrow(rows.main),
+    harder: narrow(rows.harder),
+    needsEquipment: narrow(rows.needsEquipment),
+  };
 }
 
 /**
