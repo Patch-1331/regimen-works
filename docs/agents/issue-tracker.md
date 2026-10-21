@@ -3,11 +3,11 @@
 Issues and specs for this repo live in **Linear**, team **Dark Neon** (key `DN`).
 A bare `DN-123` or `#123` in conversation means the Linear issue `DN-123`.
 
-**GitHub Issues on `Patch-1331/regimen-works` are a stale mirror.** They are all
-closed and are not maintained. Never read them for context, never open one, and
-never treat their absence of an issue as evidence. Pull requests on GitHub are
-still real and still the delivery mechanism — it is only the *issue* tracker that
-moved.
+**GitHub Issues on `Patch-1331/regimen-works` is switched off.** The 101 closed
+issues from before Linear are listed in [`../github-issues.md`](../github-issues.md),
+which is the only place to look one up. A `#N` in an old commit message is one
+of those or a pull request, never `DN-N`. Pull requests on GitHub are still real
+and still the delivery mechanism — it is only the *issue* tracker that moved.
 
 ## How to reach it
 

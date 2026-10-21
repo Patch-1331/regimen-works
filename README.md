@@ -17,14 +17,11 @@ See [`docs/plan.md`](docs/plan.md) for the full plan and
 Planning lives in **[Linear](https://linear.app/regimen-works)** — the backlog,
 what's in progress, and everything not yet built.
 
-GitHub Issues is the **archive of shipped work**, kept readable because the
-code cites it: comments like `Feature #63 opt-in` in `schema.prisma` point at
-the issue that explains why a field exists. Those issues are all closed, and
-the empty backlog there means the work moved, not that the project is done.
-
-A bare `#N` in a doc, comment or commit message is a GitHub issue. Linear
-issues are always written in full (`DN-5`) — the two numbering schemes
-overlap and mean different things, so the prefix is what tells them apart.
+GitHub Issues is switched off. The shipped work it tracked before Linear
+(`#2`–`#161`) is listed in [`docs/github-issues.md`](docs/github-issues.md),
+with the Linear counterpart where one exists. A bare `#N` in an old commit
+message is one of those issues or a pull request; Linear issues are always
+written in full (`DN-5`), and the two numbering schemes mean different things.
 
 ## Stack
 
