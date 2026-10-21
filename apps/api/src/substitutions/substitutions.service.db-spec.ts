@@ -1320,3 +1320,47 @@ describe('SubstitutionsService.set, against the swap panel (DN-170)', () => {
     expect(rule.equipment).toEqual([]);
   });
 });
+
+describe('SubstitutionsService.alternatives (DN-185)', () => {
+  it('offers a movement the same sections the swap panel offers it on a day', async () => {
+    const { user, bench } = await benchDay();
+
+    const alternatives = await service().alternatives(user.id, bench.id);
+
+    expect(names(alternatives.main)).toEqual([
+      'Pushups',
+      'Knee push-up',
+      'Decline push-up',
+    ]);
+    expect(names(alternatives.harder)).toEqual(['Archer push-up']);
+    expect(names(alternatives.needsEquipment)).toEqual([
+      'Dumbbell bench press',
+    ]);
+  });
+
+  it('heads the list with the written fallback, marked as one', async () => {
+    const fallback = await createExercise({
+      name: 'Floor press hold',
+      movementGroup: null,
+      equipment: [],
+    });
+    const { user, bench } = await benchDay({ fallbackId: fallback.id });
+
+    const alternatives = await service().alternatives(user.id, bench.id);
+
+    expect(alternatives.main[0]).toMatchObject({
+      name: 'Floor press hold',
+      isFallback: true,
+    });
+  });
+
+  it("404s on another athlete's own movement", async () => {
+    const owner = await createUser();
+    const stranger = await createUser();
+    const theirs = await createExercise({ ownerId: owner.id });
+
+    await expect(
+      service().alternatives(stranger.id, theirs.id),
+    ).rejects.toThrow(NotFoundException);
+  });
+});

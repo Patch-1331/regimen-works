@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SwapOptionsResponse } from "@regimen-works/shared";
 import * as fixtures from "../test/fixtures";
-import { buildSwapRows, canSwap, offersAChoice } from "./swapOptions";
+import { buildAlternativeRows, buildSwapRows, canSwap, offersAChoice } from "./swapOptions";
 
 /**
  * The rows the athlete is shown. What is on offer is the API's (DN-170); what
@@ -69,6 +69,47 @@ describe("buildSwapRows", () => {
     expect(all.filter((r) => r.exerciseId === "pull-up")).toEqual([
       expect.objectContaining({ isPrescribed: true }),
     ]);
+  });
+});
+
+describe("buildAlternativeRows (DN-185)", () => {
+  const library = [
+    { id: "chin-up", unit: "reps" as const },
+    { id: "negative", unit: "reps" as const },
+    { id: "row", unit: "reps" as const },
+    { id: "pull-up", unit: "reps" as const },
+    { id: "ring-row", unit: "reps" as const },
+  ];
+  const chinUpLine = { ...chinUp, unit: "reps" as const };
+
+  it("marks the line's movement at the head of the list", () => {
+    const rows = buildAlternativeRows(sections, chinUpLine, library);
+    expect(rows.main.map((r) => [r.name, r.isCurrent])).toEqual([
+      ["Chin-up", true],
+      ["Negative chin-up", false],
+      ["Row under table", false],
+    ]);
+  });
+
+  it("offers only what the program's tier may name", () => {
+    // A curated program draws from the global library alone: an athlete's
+    // own movement in the API's sections is one it could not save.
+    const curated = library.filter((e) => e.id !== "row" && e.id !== "pull-up");
+    const rows = buildAlternativeRows(sections, chinUpLine, curated);
+    expect(rows.main.map((r) => r.name)).toEqual(["Chin-up", "Negative chin-up"]);
+    expect(rows.harder).toEqual([]);
+    expect(rows.needsEquipment.map((r) => r.name)).toEqual(["Ring row"]);
+  });
+
+  it("says where an alternative is counted differently from the line", () => {
+    // The scheme's numbers stay when the movement changes, so ten reps
+    // becoming ten seconds of a hold is said on the row before the tap.
+    const held = library.map((e) => (e.id === "negative" ? { ...e, unit: "seconds" as const } : e));
+    const rows = buildAlternativeRows(sections, chinUpLine, held);
+    expect(rows.main.map((r) => r.unitNote ?? null)).toEqual([null, "HELD", null]);
+
+    const fromHold = buildAlternativeRows(sections, { ...chinUp, unit: "seconds" }, library);
+    expect(fromHold.harder[0].unitNote).toBe("REPS");
   });
 });
 

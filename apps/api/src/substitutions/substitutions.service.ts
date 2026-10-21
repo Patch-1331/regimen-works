@@ -93,20 +93,35 @@ export class SubstitutionsService {
       assignmentId,
       key,
     );
-    const { sections, fallbackId } = await this.sectionsFor(userId, movement);
-    const shown = (rows: Exercise[]): SwapOption[] =>
-      rows.slice(0, SECTION_CAP).map((e) => ({
-        exerciseId: e.id,
-        name: e.name,
-        level: e.level as SwapOption['level'],
-        equipment: e.equipment as SwapOption['equipment'],
-        isFallback: e.id === fallbackId,
-      }));
-    return {
-      main: shown(sections.main),
-      harder: shown(sections.harder),
-      needsEquipment: shown(sections.needsEquipment),
-    };
+    return shownSections(await this.sectionsFor(userId, movement));
+  }
+
+  /**
+   * The same sections for a movement on its own, away from any day (DN-185):
+   * what the program editor offers in place of a line's movement. Matched
+   * against the movement as written -- a program line names it outright, so
+   * there is no remembered choice or equipment layer to see past.
+   *
+   * One computation with `options`, so the editor and Today can never
+   * disagree about what an alternative is.
+   */
+  async alternatives(
+    userId: string,
+    exerciseId: string,
+  ): Promise<SwapOptionsResponse> {
+    const exercise = await this.prisma.exercise.findFirst({
+      where: { ...libraryVisibleTo(userId), id: exerciseId },
+    });
+    if (!exercise) throw new NotFoundException('Exercise not found');
+    return shownSections(
+      await this.sectionsFor(userId, {
+        currentExerciseId: exercise.id,
+        movementGroup: exercise.movementGroup,
+        fallbackExerciseId: exercise.fallbackExerciseId,
+        written: exercise,
+        followsChoice: false,
+      }),
+    );
   }
 
   /**
@@ -419,6 +434,29 @@ export class SubstitutionsService {
 
 /** How many of each section the panel lists (DN-170). */
 export const SECTION_CAP = 8;
+
+/** The sections as the panel lists them: capped, with the fallback marked. */
+function shownSections({
+  sections,
+  fallbackId,
+}: {
+  fallbackId: string | null;
+  sections: SwapSections<Exercise>;
+}): SwapOptionsResponse {
+  const shown = (rows: Exercise[]): SwapOption[] =>
+    rows.slice(0, SECTION_CAP).map((e) => ({
+      exerciseId: e.id,
+      name: e.name,
+      level: e.level as SwapOption['level'],
+      equipment: e.equipment as SwapOption['equipment'],
+      isFallback: e.id === fallbackId,
+    }));
+  return {
+    main: shown(sections.main),
+    harder: shown(sections.harder),
+    needsEquipment: shown(sections.needsEquipment),
+  };
+}
 
 /**
  * Which movement the athlete tapped: exactly one of the two, the same xor the

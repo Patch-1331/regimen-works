@@ -9,6 +9,7 @@ import { EnrollmentsService } from '../enrollments/enrollments.service';
 import { WodsService } from '../wods/wods.service';
 import { ChecklistEntriesService } from '../checklists/checklist-entries.service';
 import { ProgramsService } from '../programs/programs.service';
+import { SubstitutionsService } from '../substitutions/substitutions.service';
 import type { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -308,6 +309,34 @@ describe('library ownership scoping', () => {
       ...whereOf(prisma, 'exercise.findFirst'),
     ]) {
       expect(where).toContain('"ownerId":null');
+      expect(where).toContain(ALICE);
+    }
+  });
+
+  it("scopes a movement's alternatives and the library they come from (DN-185)", async () => {
+    // Answered with a movement, so the read gets past the 404 and into the
+    // candidate pool and the fallback lookup -- the reads worth guarding.
+    const prisma = recordingPrisma();
+    prisma.exercise.findFirst = jest.fn((args: unknown) => {
+      (prisma.calls['exercise.findFirst'] ??= []).push(args);
+      return Promise.resolve({
+        id: 'ex-1',
+        movementGroup: 'push_horizontal',
+        fallbackExerciseId: 'ex-2',
+        primaryMuscles: ['chest'],
+        secondaryMuscles: [],
+        equipment: [],
+      });
+    }) as unknown as typeof prisma.exercise.findFirst;
+    await new SubstitutionsService(prisma).alternatives(ALICE, 'ex-1');
+
+    for (const where of [
+      ...whereOf(prisma, 'exercise.findFirst'),
+      ...whereOf(prisma, 'exercise.findMany'),
+    ]) {
+      expectLibraryScope(where);
+    }
+    for (const where of whereOf(prisma, 'scheduleRule.findUnique')) {
       expect(where).toContain(ALICE);
     }
   });

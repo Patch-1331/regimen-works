@@ -273,6 +273,12 @@ export const api = {
   /** One movement, for the library's detail view (DN-171). */
   exercise: (id: string) =>
     request<ApiExercise>(`/exercises/${encodeURIComponent(id)}`),
+  /**
+   * A movement's alternatives away from any day (DN-185): the swap panel's
+   * sections, for the program editor's swap control.
+   */
+  exerciseAlternatives: (id: string) =>
+    request<SwapOptionsResponse>(`/exercises/${encodeURIComponent(id)}/alternatives`),
   /** The athlete's own warm-up and cool-down entries, each list in its set order (DN-173). */
   checklistEntries: () => request<AthleteChecklistEntry[]>("/checklist-entries"),
   addChecklistEntry: (body: CreateChecklistEntry) =>

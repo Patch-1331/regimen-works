@@ -1,6 +1,6 @@
 import { setupWorker } from "msw/browser";
 import { http, HttpResponse } from "msw";
-import { addIsoDays, type ProgramSummary } from "@regimen-works/shared";
+import { addIsoDays, type ProgramSummary, type SwapOption } from "@regimen-works/shared";
 import { handlers } from "../test/handlers";
 import * as fixtures from "../test/fixtures";
 import { localIsoDate } from "../lib/weekdays";
@@ -46,7 +46,30 @@ const ownChecklistEntries = [
   }),
 ];
 
+// A push family around the default Push-up (DN-185), so a program line naming
+// it has alternatives to show: easier, harder, a hold, and one needing kit.
+const pushFamily = [
+  fixtures.apiExercise({ id: "exercise-knee", name: "Knee push-up" }),
+  fixtures.apiExercise({ id: "exercise-archer", name: "Archer push-up", level: "expert" }),
+  fixtures.apiExercise({ id: "exercise-plank", name: "High plank hold", unit: "seconds", movementGroup: null }),
+  fixtures.apiExercise({ id: "exercise-ring", name: "Ring push-up", equipment: ["suspension_trainer"] }),
+];
+const asOption = (e: (typeof pushFamily)[number]) =>
+  fixtures.swapOption({ exerciseId: e.id, name: e.name, equipment: e.equipment as SwapOption["equipment"] });
+
 const extras = [
+  // The active library only; retired rows fall through to the default.
+  http.get(api("/exercises"), ({ request }) => {
+    if (new URL(request.url).searchParams.get("includeArchived") === "true") return;
+    return HttpResponse.json([fixtures.apiExercise(), ...pushFamily]);
+  }),
+  http.get(api("/exercises/:id/alternatives"), () =>
+    HttpResponse.json({
+      main: [asOption(pushFamily[0]), asOption(pushFamily[2])],
+      harder: [asOption(pushFamily[1])],
+      needsEquipment: [asOption(pushFamily[3])],
+    }),
+  ),
   http.get(api("/checklist-entries"), () => HttpResponse.json(ownChecklistEntries)),
   http.post(api("/checklist-entries"), () =>
     HttpResponse.json(ownChecklistEntries[0], { status: 201 }),

@@ -59,6 +59,10 @@ export const handlers = [
     HttpResponse.json({ items: [fixtures.apiExercise()], total: 1, page: 1, pageSize: 25 }),
   ),
   http.get(api("/exercises/retired"), () => HttpResponse.json([])),
+  // Nothing to move to by default (DN-185), like the swap panel's options.
+  http.get(api("/exercises/:id/alternatives"), () =>
+    HttpResponse.json({ main: [], harder: [], needsEquipment: [] }),
+  ),
   http.get(api("/exercises/:id"), () => HttpResponse.json(fixtures.apiExercise())),
   http.get(api("/checklist-entries"), () => HttpResponse.json([])),
   http.get(api("/skill-levels"), () => HttpResponse.json([fixtures.skillLevel()])),

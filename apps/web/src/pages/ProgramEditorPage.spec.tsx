@@ -252,6 +252,108 @@ function editing(overrides: Partial<EditableProgram> = {}) {
   return sent;
 }
 
+describe("alternatives on a line (DN-185)", () => {
+  const PLANK = fixtures.apiExercise({
+    id: "plank",
+    name: "Plank",
+    movementGroup: null,
+  });
+
+  /** Monday: one line naming the chin-up, with Ring row on offer for it. */
+  async function writeMondayChinUp() {
+    server.use(
+      http.get("/api/exercises/chin/alternatives", () =>
+        HttpResponse.json({
+          main: [fixtures.swapOption({ exerciseId: "ring", name: "Ring row" })],
+          harder: [],
+          needsEquipment: [],
+        }),
+      ),
+    );
+    const monday = await screen.findByRole("region", { name: "Mon" });
+    await userEvent.click(within(monday).getByRole("button", { name: "+ ADD MOVEMENT" }));
+    await userEvent.type(within(monday).getByLabelText("Search movements"), "chin");
+    await userEvent.click(within(monday).getByRole("button", { name: /^Chin-up/ }));
+    return monday;
+  }
+
+  it("swaps the line's movement and keeps its scheme", async () => {
+    const sent = api();
+    renderRoute("/programs/new");
+
+    await userEvent.type(await screen.findByLabelText("Program name"), "Rows");
+    const monday = await writeMondayChinUp();
+    const reps = within(monday).getByLabelText("Reps");
+    await userEvent.clear(reps);
+    await userEvent.type(reps, "8");
+
+    await userEvent.click(within(monday).getByRole("button", { name: "Swap chin-up" }));
+    await userEvent.click(await within(monday).findByRole("button", { name: /Ring row/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Save program" }));
+
+    await screen.findByRole("link", { name: "+ New program" });
+    expect(sent[0].days[0].lines[0]).toMatchObject({
+      exerciseId: "ring",
+      movementGroup: null,
+      sets: 3,
+      reps: 8,
+    });
+  });
+
+  it("marks the movement the line holds among its alternatives", async () => {
+    api();
+    renderRoute("/programs/new");
+
+    const monday = await writeMondayChinUp();
+    await userEvent.click(within(monday).getByRole("button", { name: "Swap chin-up" }));
+
+    const current = await within(monday).findByRole("button", { current: true });
+    expect(current).toHaveTextContent("Chin-up");
+    expect(within(monday).getByText("ALTERNATIVES")).toBeInTheDocument();
+  });
+
+  it("offers no swap on a line that names a whole group", async () => {
+    api();
+    renderRoute("/programs/new");
+
+    await writeMondayPull();
+
+    const monday = screen.getByRole("region", { name: "Mon" });
+    expect(within(monday).queryByRole("button", { name: /^Swap / })).toBeNull();
+  });
+
+  it("offers no swap on a movement with nothing to match on", async () => {
+    api();
+    server.use(
+      http.get("/api/exercises", () => HttpResponse.json([CHIN_UP, RING_ROW, PLANK])),
+    );
+    renderRoute("/programs/new");
+
+    const monday = await screen.findByRole("region", { name: "Mon" });
+    await userEvent.click(within(monday).getByRole("button", { name: "+ ADD MOVEMENT" }));
+    await userEvent.type(within(monday).getByLabelText("Search movements"), "plank");
+    await userEvent.click(within(monday).getByRole("button", { name: /^Plank/ }));
+
+    expect(within(monday).queryByRole("button", { name: "Swap plank" })).toBeNull();
+  });
+
+  it("shows the alternatives or the search, never both", async () => {
+    api();
+    renderRoute("/programs/new");
+
+    const monday = await writeMondayChinUp();
+    await userEvent.click(within(monday).getByRole("button", { name: "Swap chin-up" }));
+    expect(await within(monday).findByText("ALTERNATIVES")).toBeInTheDocument();
+
+    await userEvent.click(within(monday).getByRole("button", { name: "Change movement" }));
+    expect(within(monday).getByLabelText("Search movements")).toBeInTheDocument();
+    expect(within(monday).queryByText("ALTERNATIVES")).toBeNull();
+
+    await userEvent.click(within(monday).getByRole("button", { name: "Swap chin-up" }));
+    expect(within(monday).queryByLabelText("Search movements")).toBeNull();
+  });
+});
+
 describe("editing a program (DN-146)", () => {
   it("loads the saved program into the sheet and saves it back", async () => {
     const sent = editing();
