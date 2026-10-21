@@ -23,7 +23,7 @@ export function WarmupPage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["today"] });
-      navigate(`/workout/${assignmentId}`);
+      void navigate(`/workout/${assignmentId}`);
     },
   });
 
@@ -32,7 +32,7 @@ export function WarmupPage() {
   // Nothing to show — proceed straight to the timer instead of an empty screen.
   useEffect(() => {
     if (today && warmup.length === 0) {
-      navigate(`/workout/${assignmentId}`, { replace: true });
+      void navigate(`/workout/${assignmentId}`, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today, warmup.length]);

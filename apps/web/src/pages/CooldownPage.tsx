@@ -30,14 +30,14 @@ export function CooldownPage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["today"] });
-      navigate(exitPath);
+      void navigate(exitPath);
     },
   });
 
   // Nothing to show — proceed straight on instead of an empty screen.
   useEffect(() => {
     if (today && cooldown.length === 0) {
-      navigate(exitPath, { replace: true });
+      void navigate(exitPath, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today, cooldown.length, exitPath]);

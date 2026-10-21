@@ -35,7 +35,7 @@ describe("Stats, movement volume", () => {
   it("charts a movement that has been trained more than once", async () => {
     serveVolume([chinUp]);
 
-    await renderRoute("/stats");
+    renderRoute("/stats");
 
     expect(await screen.findByLabelText("Volume trend for Chin-up")).toBeInTheDocument();
   });
@@ -43,7 +43,7 @@ describe("Stats, movement volume", () => {
   it("says where the movement started and where it is now", async () => {
     serveVolume([chinUp]);
 
-    await renderRoute("/stats");
+    renderRoute("/stats");
 
     // The totals, not the set lists: the caption is the chart's axis in words.
     expect(await screen.findByText("8 reps")).toBeInTheDocument();
@@ -65,7 +65,7 @@ describe("Stats, movement volume", () => {
       },
     ]);
 
-    await renderRoute("/stats");
+    renderRoute("/stats");
 
     expect(await screen.findByText("40 seconds")).toBeInTheDocument();
     expect(screen.getByText("30 seconds")).toBeInTheDocument();
@@ -74,7 +74,7 @@ describe("Stats, movement volume", () => {
   it("asks for a second session rather than charting one", async () => {
     serveVolume([{ ...chinUp, sessions: [chinUp.sessions[0]] }]);
 
-    await renderRoute("/stats");
+    renderRoute("/stats");
 
     expect(
       await screen.findByText(/Train a prescribed movement on more than one day/),
@@ -83,7 +83,7 @@ describe("Stats, movement volume", () => {
   });
 
   it("says so when no prescribed movement has been recorded", async () => {
-    await renderRoute("/stats");
+    renderRoute("/stats");
 
     expect(
       await screen.findByText(/Train a prescribed movement on more than one day/),

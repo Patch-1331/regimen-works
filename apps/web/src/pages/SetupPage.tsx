@@ -172,7 +172,7 @@ function Wizard({
       // is most of what the app has cached. Everything, rather than a list
       // that would need an entry adding every time a screen is built.
       await queryClient.invalidateQueries();
-      navigate("/", { replace: true });
+      void navigate("/", { replace: true });
     },
   });
 
