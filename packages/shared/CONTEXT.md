@@ -51,6 +51,16 @@ its members. See [ADR-0004](../../docs/adr/0004-movement-groups.md).
 > way — see DN-130. If you find prose that reasons in harder/easier terms about
 > group membership, it is a leftover and it is wrong.
 
+**Set** — one bout of a movement on a program line, followed by its rest. A line is
+an ordered list of sets, and each has its own count (fixed, range or to failure),
+load step and rest. A uniform 3 × 8 is three identical sets; RPT is three different
+ones. **Not a ladder**: a WOD's `repScheme` is a count per *round*, not a set. See
+[ADR-0011](../../docs/adr/0011-a-prescription-is-a-list-of-sets.md).
+
+**Load step** — how a set's load relates to the set before it, as a signed
+percentage ("−10%"), or unstated. An instruction, never a weight: the app holds no
+load and tracks none (DN-85).
+
 **Default member** — the one movement in a group handed to an athlete who has not
 chosen, or whose choice is no longer usable. Declared explicitly in the seed, never
 inferred from list order. It is a prescription-time answer and never a stored one:

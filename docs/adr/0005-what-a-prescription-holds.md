@@ -6,6 +6,10 @@
 > app now calls a **program**. ADR 0009 retired both names. The decisions here stand
 > as written.
 
+> **Amended by ADR 0011:** the three rep shapes now apply to each set of a line
+> rather than to the whole line (decision 2), and an explicit 0 rest between two sets
+> of one line is not replaced by the athlete's rest pace (decision 4).
+
 ## Context
 
 `PlanSlotMovement` was built for one authoring act. Every `Plan` in the app is
