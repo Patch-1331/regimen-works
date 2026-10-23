@@ -5,6 +5,8 @@ import { ProgramCompletionCard } from "../components/ProgramCompletionCard";
 import {
   DEFAULT_PROGRAM_ID,
   effectiveRounds,
+  loadStepLabel,
+  repsLabel,
   type MakeupOffer as MakeupOfferBlock,
   type PrescribedMovement,
   type TodayProgram,
@@ -598,7 +600,47 @@ function movementCount(m: {
 
 /** How many working sets the whole day comes to. */
 function totalSets(movements: PrescribedMovement[]): number {
-  return movements.reduce((sum, m) => sum + m.sets, 0);
+  return movements.reduce((sum, m) => sum + m.sets.length, 0);
+}
+
+/**
+ * The line's sets when every one is alike -- the same count and no load step
+ * -- or null where they differ (ADR 0011). A uniform line reads "5 × 3"; one
+ * that varies has no single count to put after the ×.
+ */
+function uniformCount(movement: PrescribedMovement): string | null {
+  const [first, ...more] = movement.sets;
+  const alike = more.every(
+    (s) =>
+      s.reps === first.reps &&
+      s.repsMax === first.repsMax &&
+      s.toFailure === first.toFailure &&
+      s.loadStepPercent === null,
+  );
+  return alike ? repsLabel(first, movement.exercise.unit) : null;
+}
+
+/** Each set in order with its load step: "6-8 · 8-10 −10% · 10-12 −10%". */
+function setByStep(movement: PrescribedMovement): string {
+  return movement.sets
+    .map((s) => {
+      const step = loadStepLabel(s.loadStepPercent);
+      const reps = repsLabel(s, movement.exercise.unit);
+      return step ? `${reps} ${step}` : reps;
+    })
+    .join(" · ");
+}
+
+/**
+ * The rest between the line's sets, or "varies" where they differ. The rest
+ * after the last set is left out: it is the pace's, not the line's, and it is
+ * what lets a drop set read as straight through (ADR 0011, decision 4).
+ */
+function lineRest(movement: PrescribedMovement): number | null | "varies" {
+  const between =
+    movement.sets.length > 1 ? movement.sets.slice(0, -1) : movement.sets;
+  const [first, ...more] = between.map((s) => s.restSeconds);
+  return more.every((r) => r === first) ? first : "varies";
 }
 
 /**
@@ -627,6 +669,8 @@ function PrescribedName({
   movement: PrescribedMovement;
   onToggle: () => void;
 }) {
+  const eachCount = uniformCount(movement);
+  const rest = lineRest(movement);
   const name = (
     <span className="flex min-w-0 flex-col gap-0.5">
       <span className="flex min-w-0 items-center gap-2">
@@ -654,27 +698,36 @@ function PrescribedName({
           stops that being a number anyone reads at a glance. No line at all
           where nobody stated a rest: "STRAIGHT THROUGH" there would be a
           prescription the source never made (DN-143). */}
-      {movement.restSeconds !== null && (
+      {eachCount === null && (
+        <span
+          className="text-xs tracking-[0.05em] text-[var(--ink-soft)]"
+          style={{ fontFamily: "var(--font-mono)" }}
+        >
+          {setByStep(movement)}
+        </span>
+      )}
+      {rest !== null && (
         <span
           className="text-[10px] tracking-[0.1em] text-[var(--ink-faint)]"
           style={{ fontFamily: "var(--font-mono)" }}
         >
-          {restCopy(movement.restSeconds)}
+          {rest === "varies" ? "REST VARIES" : restCopy(rest)}
         </span>
       )}
     </span>
   );
   const count = (
     <span
-      className="text-lg font-bold"
+      className="shrink-0 whitespace-nowrap text-lg font-bold"
       style={{
         fontFamily: "var(--font-mono)",
         fontVariantNumeric: "tabular-nums",
         color: "var(--ink)",
       }}
     >
-      {movement.sets} × {movement.reps}
-      {movement.exercise.unit === "seconds" ? "s" : ""}
+      {eachCount === null
+        ? `${movement.sets.length} SETS`
+        : `${movement.sets.length} × ${eachCount}`}
     </span>
   );
 

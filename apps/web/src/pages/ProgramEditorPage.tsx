@@ -15,6 +15,8 @@ import { buildAlternativeRows, canSwap } from "../lib/swapOptions";
 import { WEEKDAYS } from "../lib/weekdays";
 import {
   EMPTY_PROGRAM,
+  SET_PRESETS,
+  applyPreset,
   blankLine,
   changesWeek,
   copyDay,
@@ -26,8 +28,11 @@ import {
   lineMovementName,
   lineProblems,
   toCreateProgram,
+  toPerSet,
+  toSameForAll,
   trainingDays,
   type DraftLine,
+  type DraftSet,
   type ProgramDraft,
 } from "../lib/programDraft";
 
@@ -684,6 +689,22 @@ function LineAlternatives({
   );
 }
 
+// Whole numbers only: anything else reads as blank, which the line then
+// reports as missing rather than saving as NaN.
+const num = (v: string) => (/^\d+$/.test(v.trim()) ? Number(v.trim()) : null);
+// A load step is signed: "-10", "+5", "0". A true minus sign counts too.
+const signed = (v: string) => {
+  const t = v.trim().replace("\u2212", "-").replace(/%$/, "");
+  return /^[+-]?\d+$/.test(t) ? Number(t) : null;
+};
+const field =
+  "w-14 border border-[var(--border)] bg-[var(--panel)] px-1 py-1 text-center text-sm text-[var(--ink)]";
+
+/**
+ * How much of the movement, and how it is rested. "Same for all sets" is the
+ * default; "set by set" and the presets write each set on its own row (ADR
+ * 0011). A preset only fills the rows -- its name is not kept.
+ */
 function SchemeFields({
   line,
   onChange,
@@ -691,16 +712,59 @@ function SchemeFields({
   line: DraftLine;
   onChange: (line: DraftLine) => void;
 }) {
-  // Whole numbers only: anything else reads as blank, which the line then
-  // reports as missing rather than saving as NaN.
-  const num = (v: string) => (/^\d+$/.test(v.trim()) ? Number(v.trim()) : null);
-  const field =
-    "w-14 border border-[var(--border)] bg-[var(--panel)] px-1 py-1 text-center text-sm text-[var(--ink)]";
+  const perSet = line.perSet;
   return (
-    <div
-      className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--ink-soft)]"
-      style={mono}
-    >
+    <div className="mt-2 text-xs text-[var(--ink-soft)]" style={mono}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+        <label className="flex items-center gap-1">
+          <input
+            type="checkbox"
+            checked={perSet === null}
+            onChange={(e) =>
+              onChange(e.target.checked ? toSameForAll(line) : toPerSet(line))
+            }
+          />
+          same for all sets
+        </label>
+      </div>
+      <div
+        className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]"
+        role="group"
+        aria-label="Fill sets from a preset"
+      >
+        <span className="text-[var(--ink-faint)]">PRESET</span>
+        {SET_PRESETS.map((preset) => (
+          <button
+            key={preset.id}
+            type="button"
+            onClick={() => onChange(applyPreset(line, preset.id))}
+            className="border border-[var(--border)] px-1.5 py-0.5 text-[var(--ink-soft)]"
+          >
+            {preset.label}
+          </button>
+        ))}
+      </div>
+      {perSet === null ? (
+        <SameForAllFields line={line} onChange={onChange} />
+      ) : (
+        <PerSetFields
+          sets={perSet}
+          onChange={(sets) => onChange({ ...line, perSet: sets })}
+        />
+      )}
+    </div>
+  );
+}
+
+function SameForAllFields({
+  line,
+  onChange,
+}: {
+  line: DraftLine;
+  onChange: (line: DraftLine) => void;
+}) {
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
       <input
         className={field}
         inputMode="numeric"
@@ -709,45 +773,7 @@ function SchemeFields({
         aria-label="Sets"
       />
       <span>×</span>
-      {line.toFailure ? (
-        <span className="text-[var(--glow)]">failure</span>
-      ) : (
-        <>
-          <input
-            className={field}
-            inputMode="numeric"
-            value={line.reps ?? ""}
-            onChange={(e) => onChange({ ...line, reps: num(e.target.value) })}
-            aria-label="Reps"
-          />
-          <span>to</span>
-          <input
-            className={field}
-            inputMode="numeric"
-            placeholder="—"
-            value={line.repsMax ?? ""}
-            onChange={(e) =>
-              onChange({ ...line, repsMax: num(e.target.value) })
-            }
-            aria-label="Reps up to"
-          />
-        </>
-      )}
-      <label className="flex items-center gap-1">
-        <input
-          type="checkbox"
-          checked={line.toFailure}
-          onChange={(e) =>
-            onChange({
-              ...line,
-              toFailure: e.target.checked,
-              reps: e.target.checked ? null : 10,
-              repsMax: null,
-            })
-          }
-        />
-        failure
-      </label>
+      <CountFields set={line} onChange={(next) => onChange({ ...line, ...next })} />
       <span>rest</span>
       <input
         className={field}
@@ -761,5 +787,191 @@ function SchemeFields({
       />
       <span>s</span>
     </div>
+  );
+}
+
+/**
+ * One row per set: its count, its load step against the set before, and the
+ * rest after it. The first set has no step -- nothing comes before it.
+ */
+function PerSetFields({
+  sets,
+  onChange,
+}: {
+  sets: DraftSet[];
+  onChange: (sets: DraftSet[]) => void;
+}) {
+  const put = (i: number, next: Partial<DraftSet>) =>
+    onChange(sets.map((s, at) => (at === i ? { ...s, ...next } : s)));
+  return (
+    <ol className="mt-2 flex flex-col gap-1.5">
+      {sets.map((set, i) => {
+        const n = i + 1;
+        return (
+          <li
+            key={i}
+            className="flex flex-wrap items-center gap-2"
+            aria-label={`Set ${n}`}
+          >
+            <span className="w-10 text-[var(--ink-faint)]">SET {n}</span>
+            <CountFields
+              set={set}
+              label={`Set ${n} `}
+              onChange={(next) => put(i, next)}
+            />
+            {i === 0 ? (
+              <span className="w-24 text-center text-[var(--ink-faint)]">
+                —
+              </span>
+            ) : (
+              <span className="flex items-center gap-1">
+                <span>load</span>
+                <LoadStepInput
+                  value={set.loadStepPercent}
+                  onChange={(loadStepPercent) => put(i, { loadStepPercent })}
+                  label={`Set ${n} load step percent`}
+                />
+                <span>%</span>
+              </span>
+            )}
+            <span>rest</span>
+            <input
+              className={field}
+              inputMode="numeric"
+              placeholder="—"
+              value={set.restSeconds ?? ""}
+              onChange={(e) => put(i, { restSeconds: num(e.target.value) })}
+              aria-label={`Set ${n} rest seconds`}
+            />
+            <span>s</span>
+            {sets.length > 1 && (
+              <button
+                type="button"
+                className="text-[var(--danger)]"
+                onClick={() => onChange(sets.filter((_, at) => at !== i))}
+                aria-label={`Remove set ${n}`}
+              >
+                ✕
+              </button>
+            )}
+          </li>
+        );
+      })}
+      <li>
+        <button
+          type="button"
+          className="text-[11px] text-[var(--glow)]"
+          onClick={() => {
+            const last = sets[sets.length - 1];
+            onChange([
+              ...sets,
+              last
+                ? { ...last, loadStepPercent: null }
+                : {
+                    reps: 10,
+                    repsMax: null,
+                    toFailure: false,
+                    loadStepPercent: null,
+                    restSeconds: null,
+                  },
+            ]);
+          }}
+        >
+          + ADD SET
+        </button>
+      </li>
+    </ol>
+  );
+}
+
+/** How a stored step reads in the box: "+5", "-10", "0", or empty. */
+const stepText = (v: number | null) => (v === null ? "" : v > 0 ? `+${v}` : String(v));
+
+/**
+ * A load step, signed. It keeps what was typed while it is typed, because "-"
+ * on its way to "-10" is no number yet, and a box that only held numbers
+ * would drop the sign before the digits arrived.
+ */
+function LoadStepInput({
+  value,
+  onChange,
+  label,
+}: {
+  value: number | null;
+  onChange: (value: number | null) => void;
+  label: string;
+}) {
+  const [typed, setTyped] = useState<string | null>(null);
+  return (
+    <input
+      className={field}
+      inputMode="text"
+      placeholder="—"
+      value={typed ?? stepText(value)}
+      onChange={(e) => {
+        setTyped(e.target.value);
+        onChange(signed(e.target.value));
+      }}
+      onBlur={() => setTyped(null)}
+      aria-label={label}
+    />
+  );
+}
+
+/** A set's count: a number, a range, or to failure (ADR 0005). */
+function CountFields({
+  set,
+  label = "",
+  onChange,
+}: {
+  set: Pick<DraftSet, "reps" | "repsMax" | "toFailure">;
+  /** Prefixed to each field's name, so a row's fields say which set they are. */
+  label?: string;
+  onChange: (next: Pick<DraftSet, "reps" | "repsMax" | "toFailure">) => void;
+}) {
+  // "Reps" on its own, "Set 2 reps" on a row.
+  const name = (what: string) => (label ? `${label}${what.toLowerCase()}` : what);
+  return (
+    <>
+      {set.toFailure ? (
+        <span className="text-[var(--glow)]">failure</span>
+      ) : (
+        <>
+          <input
+            className={field}
+            inputMode="numeric"
+            value={set.reps ?? ""}
+            onChange={(e) => onChange({ ...set, reps: num(e.target.value) })}
+            aria-label={name("Reps")}
+          />
+          <span>to</span>
+          <input
+            className={field}
+            inputMode="numeric"
+            placeholder="—"
+            value={set.repsMax ?? ""}
+            onChange={(e) =>
+              onChange({ ...set, repsMax: num(e.target.value) })
+            }
+            aria-label={name("Reps up to")}
+          />
+        </>
+      )}
+      <label className="flex items-center gap-1">
+        <input
+          type="checkbox"
+          checked={set.toFailure}
+          aria-label={label ? name("To failure") : undefined}
+          onChange={(e) =>
+            onChange({
+              toFailure: e.target.checked,
+              reps: e.target.checked ? null : 10,
+              repsMax: null,
+            })
+          }
+        />
+        failure
+      </label>
+    </>
   );
 }

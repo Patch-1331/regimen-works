@@ -1,6 +1,7 @@
 import type {
   ExerciseUnit,
   MovementGroup,
+  PrescribedSet,
   RoundSplit,
   SessionMovement,
   SubstitutionReason,
@@ -44,6 +45,7 @@ export function snapshotMovements(
       // A WOD movement has rounds, not sets. Null rather than zero, which
       // would read as a movement nobody was asked to do.
       sets: null,
+      prescribedSets: null,
       restSeconds: null,
       order: m.order,
       reps: m.reps,
@@ -123,13 +125,11 @@ export function advanceInterval(
 export type ResolvedPrescribedInput = {
   id: string;
   order: number;
-  sets: number;
-  /** The prescribed count, in all three of its shapes — see `repShapeFields`. */
-  reps: number | null;
-  repsMax: number | null;
-  toFailure: boolean;
-  /** Already resolved through the athlete's pace; null runs no clock. */
-  restSeconds: number | null;
+  /**
+   * In order, each in all three shapes with its load step, and its rest
+   * already resolved through the athlete's pace -- null runs no clock.
+   */
+  sets: PrescribedSet[];
   isSwapped: boolean;
   prescribedName: string | null;
   prescribedReason: SubstitutionReason | null;
@@ -153,39 +153,44 @@ export type ResolvedPrescribedInput = {
  * made after the session started would otherwise shift which movement the
  * athlete resumes on.
  *
- * `reps` is the count in one set, not the movement's total. Everything that
- * reads a snapshot -- the runner, history -- asks what one set is, and the
- * total is `sets * reps` for anything that wants it.
+ * Each set is copied whole into `prescribedSets` (ADR 0011), and read back
+ * through `sessionSetAt`. `reps` and its neighbours are the first set's: what
+ * a reader that asks for one shape -- history -- reads, and on a uniform line
+ * what every set is.
  */
 export function snapshotPrescribedMovements(
   movements: ResolvedPrescribedInput[],
 ): SessionMovement[] {
   return [...movements]
     .sort((a, b) => a.order - b.order)
-    .map((m) => ({
-      wodMovementId: null,
-      programSlotMovementId: m.id,
-      sets: m.sets,
-      restSeconds: m.restSeconds,
-      order: m.order,
-      // All three shapes carry through from the prescription (DN-142): the
-      // snapshot is what the runner renders, so a range collapsed to its floor
-      // here would show the athlete a number the day never asked for.
-      reps: m.reps,
-      repsMax: m.repsMax,
-      toFailure: m.toFailure,
-      // A prescribed movement is the same count every set, so there is no
-      // ladder to record. Empty rather than [reps] repeated: a repScheme means
-      // "the counts descend as written", which this is not.
-      repScheme: [],
-      isSwapped: m.isSwapped,
-      prescribedName: m.prescribedName,
-      prescribedReason: m.prescribedReason,
-      exercise: {
-        id: m.exercise.id,
-        name: m.exercise.name,
-        unit: m.exercise.unit as ExerciseUnit,
-        movementGroup: m.exercise.movementGroup as MovementGroup | null,
-      },
-    }));
+    .map((m) => {
+      const [first] = m.sets;
+      return {
+        wodMovementId: null,
+        programSlotMovementId: m.id,
+        sets: m.sets.length,
+        prescribedSets: m.sets.map((s) => ({ ...s })),
+        restSeconds: first.restSeconds,
+        order: m.order,
+        // All three shapes carry through from the prescription (DN-142): the
+        // snapshot is what the runner renders, so a range collapsed to its floor
+        // here would show the athlete a number the day never asked for.
+        reps: first.reps,
+        repsMax: first.repsMax,
+        toFailure: first.toFailure,
+        // Straight sets, not a ladder, even where their counts differ: a
+        // repScheme is a count per *round* of a WOD (ADR 0011, "Not a
+        // ladder"), so it stays empty here.
+        repScheme: [],
+        isSwapped: m.isSwapped,
+        prescribedName: m.prescribedName,
+        prescribedReason: m.prescribedReason,
+        exercise: {
+          id: m.exercise.id,
+          name: m.exercise.name,
+          unit: m.exercise.unit as ExerciseUnit,
+          movementGroup: m.exercise.movementGroup as MovementGroup | null,
+        },
+      };
+    });
 }

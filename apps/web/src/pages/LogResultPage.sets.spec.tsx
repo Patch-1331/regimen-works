@@ -29,8 +29,7 @@ const PRESCRIBED = [
   fixtures.prescribedMovement({
     id: "program-slot-movement-2",
     order: 1,
-    sets: 3,
-    reps: 8,
+    sets: fixtures.prescribedSets(3, { reps: 8 }),
     movementGroup: "push_horizontal",
     exercise: { id: "exercise-push-up", name: "Push-up", movementGroup: "push_horizontal" },
   }),

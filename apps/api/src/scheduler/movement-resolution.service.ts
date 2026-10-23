@@ -1,9 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  asUniform,
-  DEFAULT_EQUIPMENT,
-  resolveRestSeconds,
-} from '@regimen-works/shared';
+import { DEFAULT_EQUIPMENT, resolveRestSeconds } from '@regimen-works/shared';
 import type { SubstitutionReason } from '@regimen-works/shared';
 import type { Exercise } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -277,26 +273,25 @@ export class MovementResolutionService {
     return available.map((m, i) => {
       const swap = swaps.get(m.movement.id);
       const replaced = m.exercise.id !== prescribed[i].exercise.id;
-      // The athlete is still handed a line as "N × one shape" (DN-190): every
-      // line is N identical sets until DN-186, which is what replaces this.
-      const line = asUniform(m.movement.sets);
-      if (line === null) {
-        throw new Error(
-          `Program line ${m.movement.id} has sets that differ, which nothing can write yet`,
-        );
-      }
+      const last = m.movement.sets.length - 1;
       return {
         id: m.movement.id,
         order: m.movement.order,
-        sets: line.count,
-        // All three shapes, carried rather than flattened (DN-142).
-        reps: line.set.reps,
-        repsMax: line.set.repsMax,
-        toFailure: line.set.toFailure,
-        restSeconds: resolveRestSeconds(
-          defaultRestSeconds,
-          line.set.restSeconds,
-        ),
+        // Each set as written (ADR 0011), its rest resolved through the
+        // athlete's pace -- which tells a 0 between two sets of this line
+        // from the gap after its last one.
+        sets: m.movement.sets.map((s, i) => ({
+          // All three shapes, carried rather than flattened (DN-142).
+          reps: s.reps,
+          repsMax: s.repsMax,
+          toFailure: s.toFailure,
+          loadStepPercent: s.loadStepPercent,
+          restSeconds: resolveRestSeconds(
+            defaultRestSeconds,
+            s.restSeconds,
+            i < last ? 'between_sets' : 'after_line',
+          ),
+        })),
         // What the *program* asked for, kept even where equipment moved the
         // athlete off it: the group is the session's intent, and a screen that
         // showed only the substitute could not say what the day was for.

@@ -21,12 +21,24 @@ import { z } from "zod";
 export const restSecondsSchema = z.number().int().nonnegative().nullable();
 
 /**
- * The rest this athlete actually trains at, for one movement on one run.
+ * Where a rest falls: between two sets of one line, or after a line's last
+ * set, before whatever comes next.
+ */
+export type RestPosition = "between_sets" | "after_line";
+
+/**
+ * The rest this athlete actually trains at, after one set on one run.
  *
  * The athlete's pace if they set one -- it governs the whole run and replaces
- * every per-movement value, deliberately. Otherwise the movement's own, which
+ * every per-set value above zero, deliberately. Otherwise the set's own, which
  * may itself be null: then no clock runs, because the only number available
  * would be one nobody wrote down.
+ *
+ * **One exception (ADR 0011, decision 4):** an explicit 0 between two sets of
+ * one line survives the pace. No rest between drops is what makes a drop set a
+ * drop set -- *what you do*, which the app decides, rather than *how hard it
+ * is*, which the athlete does. A 0 after a line's last set is the gap before
+ * the next movement, which is pace again, so the pace still replaces it.
  *
  * The result does not carry what it replaced. `prescribedName` records a
  * substitution *the app* made; this records one the athlete made on purpose,
@@ -38,9 +50,11 @@ export const restSecondsSchema = z.number().int().nonnegative().nullable();
  */
 export function resolveRestSeconds(
   enrollmentDefault: number | null,
-  movementRest: number | null,
+  setRest: number | null,
+  position: RestPosition,
 ): number | null {
-  return enrollmentDefault ?? movementRest;
+  if (setRest === 0 && position === "between_sets") return 0;
+  return enrollmentDefault ?? setRest;
 }
 
 /**

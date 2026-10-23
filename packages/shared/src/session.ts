@@ -5,6 +5,7 @@ import {
   sessionStatus,
   substitutionReason,
 } from "./enums.js";
+import { prescribedSetSchema, type PrescribedSet } from "./prescription.js";
 
 export const roundSplitSchema = z.object({
   round: z.number().int().positive(),
@@ -41,6 +42,16 @@ export const sessionMovementSchema = z
      * which would read as a movement nobody was asked to do.
      */
     sets: z.number().int().positive().nullable().default(null),
+    /**
+     * Each of those sets as prescribed, in order (ADR 0011) -- its count, load
+     * step and resolved rest. Read one through `sessionSetAt`, never directly.
+     *
+     * Null on a WOD day, and on every straight-sets session snapshotted before
+     * sets could differ (DN-186), when each set was the one shape this row's
+     * own `reps`, `repsMax`, `toFailure` and `restSeconds` hold. On a session
+     * that has it, those four are the first set's.
+     */
+    prescribedSets: z.array(prescribedSetSchema).nullable().default(null),
     /** Seconds of rest between those sets; 0 means straight through. */
     restSeconds: z.number().int().nonnegative().nullable().default(null),
     order: z.number().int().nonnegative(),
@@ -103,6 +114,29 @@ export const sessionMovementSchema = z
     },
   );
 export type SessionMovement = z.infer<typeof sessionMovementSchema>;
+
+/**
+ * Set `setNumber` (1-based) of a snapshotted straight-sets movement, as it was
+ * prescribed: its count, load step and the rest after it.
+ *
+ * The one reader of `prescribedSets`. A session snapshotted before sets could
+ * differ has none, and every one of its sets was the row's own shape, with no
+ * load step -- the app did not know of any.
+ */
+export function sessionSetAt(
+  movement: SessionMovement,
+  setNumber: number,
+): PrescribedSet {
+  const set = movement.prescribedSets?.[setNumber - 1];
+  if (set !== undefined) return set;
+  return {
+    reps: movement.reps,
+    repsMax: movement.repsMax,
+    toFailure: movement.toFailure,
+    loadStepPercent: null,
+    restSeconds: movement.restSeconds,
+  };
+}
 
 export const workoutSessionSchema = z.object({
   id: z.string(),

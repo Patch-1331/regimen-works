@@ -112,7 +112,7 @@ function LogResultForm({
   // refused rather than quietly stored.
   const totalSets =
     day.kind === "prescribed"
-      ? day.prescription.movements.reduce((sum, m) => sum + m.sets, 0)
+      ? day.prescription.movements.reduce((sum, m) => sum + m.sets.length, 0)
       : 0;
 
   // Computed once at mount from whatever's already loaded — a timer session's

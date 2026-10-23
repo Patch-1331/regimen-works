@@ -169,6 +169,56 @@ describe("the week sheet", () => {
     ]);
   });
 
+  it("fills a line from the RPT preset, takes edits set by set, and saves each set (ADR 0011)", async () => {
+    const sent = api();
+    renderRoute("/programs/new");
+
+    await userEvent.type(await screen.findByLabelText("Program name"), "RPT days");
+    await writeMondayPull();
+    const monday = screen.getByRole("region", { name: "Mon" });
+    expect(within(monday).getByLabelText("same for all sets")).toBeChecked();
+    await userEvent.click(within(monday).getByRole("button", { name: "RPT" }));
+
+    expect(within(monday).getByLabelText("same for all sets")).not.toBeChecked();
+    expect(within(monday).queryByLabelText("Set 1 load step percent")).not.toBeInTheDocument();
+    const step = within(monday).getByLabelText("Set 3 load step percent");
+    expect(step).toHaveValue("-10");
+    await userEvent.clear(step);
+    await userEvent.type(step, "-15");
+    const reps = within(monday).getByLabelText("Set 2 reps");
+    await userEvent.clear(reps);
+    await userEvent.type(reps, "9");
+    await userEvent.click(screen.getByRole("button", { name: "Save program" }));
+
+    await screen.findByRole("link", { name: "+ New program" });
+    // No scheme name anywhere: the sets are the line.
+    expect(sent[0].days[0].lines[0]).toEqual({
+      movementGroup: "pull",
+      exerciseId: null,
+      sets: [
+        { reps: 6, repsMax: 8, toFailure: false, loadStepPercent: null, restSeconds: null },
+        { reps: 9, repsMax: 10, toFailure: false, loadStepPercent: -10, restSeconds: null },
+        { reps: 10, repsMax: 12, toFailure: false, loadStepPercent: -15, restSeconds: null },
+      ],
+    });
+  });
+
+  it("goes back to one count for all sets from the first set", async () => {
+    api();
+    renderRoute("/programs/new");
+    await writeMondayPull();
+    const monday = screen.getByRole("region", { name: "Mon" });
+    await userEvent.click(within(monday).getByRole("button", { name: "Drop set" }));
+    expect(within(monday).getAllByText("failure")).not.toHaveLength(0);
+    await userEvent.click(within(monday).getByRole("button", { name: "Remove set 3" }));
+    expect(within(monday).queryByLabelText("Set 3 rest seconds")).not.toBeInTheDocument();
+
+    await userEvent.click(within(monday).getByLabelText("same for all sets"));
+
+    expect(within(monday).getByLabelText("Sets")).toHaveValue("2");
+    expect(within(monday).getByLabelText("Rest seconds")).toHaveValue("0");
+  });
+
   it("names a specific exercise when one is picked", async () => {
     const sent = api();
     renderRoute("/programs/new");

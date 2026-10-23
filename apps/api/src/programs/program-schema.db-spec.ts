@@ -432,6 +432,62 @@ describe('a prescribed movement names one movement and prescribes work', () => {
     ).rejects.toThrow(UNIQUE_VIOLATION);
   });
 
+  /**
+   * The load step (ADR 0011): relative to the set before, so the first set
+   * has none, and no set can drop by the whole load. Both CHECKs are SQL-only;
+   * `program.spec.ts` mirrors them in Zod.
+   */
+  describe('the load step', () => {
+    it('accepts a step on a later set, signed either way, and none at all', async () => {
+      const first = await prescribeSet();
+      const line = first.programSlotMovementId;
+      const later = (order: number, loadStepPercent: number | null) =>
+        testPrisma().programSlotSet.create({
+          data: {
+            programSlotMovementId: line,
+            order,
+            reps: 8,
+            loadStepPercent,
+          },
+        });
+
+      await expect(later(1, -10)).resolves.toMatchObject({
+        loadStepPercent: -10,
+      });
+      await expect(later(2, 10)).resolves.toMatchObject({
+        loadStepPercent: 10,
+      });
+      await expect(later(3, 0)).resolves.toMatchObject({ loadStepPercent: 0 });
+      await expect(later(4, null)).resolves.toMatchObject({
+        loadStepPercent: null,
+      });
+    });
+
+    it('leaves an unstated step null, never 0', async () => {
+      await expect(prescribeSet()).resolves.toMatchObject({
+        loadStepPercent: null,
+      });
+    });
+
+    it('refuses a step on the first set', async () => {
+      await expect(prescribeSet({ loadStepPercent: -10 })).rejects.toThrow(
+        CHECK_VIOLATION,
+      );
+      await expect(prescribeSet({ loadStepPercent: 0 })).rejects.toThrow(
+        CHECK_VIOLATION,
+      );
+    });
+
+    it('refuses a drop of 100% or more', async () => {
+      await expect(
+        prescribeSet({ order: 1, loadStepPercent: -100 }),
+      ).rejects.toThrow(CHECK_VIOLATION);
+      await expect(
+        prescribeSet({ order: 1, loadStepPercent: -99 }),
+      ).resolves.toMatchObject({ loadStepPercent: -99 });
+    });
+  });
+
   it('takes the sets with the line', async () => {
     const set = await prescribeSet();
     await testPrisma().programSlotMovement.delete({

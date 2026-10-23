@@ -23,7 +23,32 @@ import { SATURDAY, SUNDAY } from "./schedule.js";
 export const DEFAULT_PROGRAM_ID = "plan_just_wods";
 
 /**
- * One set of a program line (ADR 0011): its count, and the rest after it.
+ * A load step (ADR 0011, decision 3): how a set's load relates to the set
+ * before it, as a signed whole-number percentage. -10 is 10% lighter, +5 is
+ * heavier, 0 is "same weight" said out loud.
+ *
+ * Null is the source saying nothing, and nothing converts it to 0. Never a
+ * weight: the app holds no load and tracks none (DN-85). Above -100, because a
+ * drop of the whole bar is no bar. Mirrors the CHECKs in
+ * `20261024000000_program_set_load_step`.
+ */
+export const loadStepPercentSchema = z.number().int().gt(-100).nullable();
+
+/**
+ * How a load step reads: "−10%", "+5%", or "same weight" for a 0 stated out
+ * loud. Null where the source said nothing, so a screen shows nothing rather
+ * than a 0 nobody wrote. A true minus sign, not a hyphen, so "−10%" never
+ * reads as a range.
+ */
+export function loadStepLabel(step: number | null): string | null {
+  if (step === null) return null;
+  if (step === 0) return "same weight";
+  return step > 0 ? `+${step}%` : `\u2212${-step}%`;
+}
+
+/**
+ * One set of a program line (ADR 0011): its count, its load step, and the rest
+ * after it.
  *
  * A line is an ordered list of these. A uniform 3 × 8 is three identical sets,
  * stored the same way a reverse pyramid is -- there is no second format for
@@ -47,28 +72,37 @@ export const programSetSchema = z
      * `resolveRestSeconds`.
      */
     restSeconds: restSecondsSchema,
+    /**
+     * Relative to the previous set — see `loadStepPercentSchema`. Defaulted so
+     * an export file or a body written before load steps existed still loads,
+     * as the silence it was.
+     */
+    loadStepPercent: loadStepPercentSchema.default(null),
   })
   .superRefine(refineRepShape);
 export type ProgramSet = z.infer<typeof programSetSchema>;
 
 /**
- * `count` identical sets: how a line written as "N × one shape" is stored.
- *
- * The editor and paste-import both write a line this way until DN-186 lets a
- * set differ from the one before it.
+ * `count` identical sets: how a line written as "N × one shape" is stored --
+ * what the editor's "same for all sets" writes, and what paste-import writes
+ * for each scheme it reads.
  */
-export function uniformSets(count: number, set: ProgramSet): ProgramSet[] {
-  return Array.from({ length: count }, () => ({ ...set }));
+export function uniformSets(
+  count: number,
+  set: Omit<ProgramSet, "loadStepPercent">,
+): ProgramSet[] {
+  // No load step on any of them: identical sets state no change in load, and
+  // "same weight" written on each would be a fact nobody wrote.
+  return Array.from({ length: count }, () => ({ ...set, loadStepPercent: null }));
 }
 
 /**
  * A line's sets back as "N × one shape", or null where they differ.
  *
- * Every line is uniform until DN-186: the migration that moved sets onto rows
- * of their own wrote N identical ones, and nothing writes any other kind. The
- * readers that still think in "N × one shape" -- the day an athlete is handed,
- * the session snapshot, the editor -- go through this, so the one place that
- * would have to learn about a line that varies is easy to find.
+ * What the editor asks before opening a line in "same for all sets": a line
+ * that comes back null opens set by set instead. A line with any load step
+ * stated is not uniform, even "same weight" on every set -- the uniform editor
+ * has nowhere to show one, and opening it there would drop it on save.
  */
 export function asUniform(
   sets: readonly ProgramSet[],
@@ -80,15 +114,24 @@ export function asUniform(
       s.reps === first.reps &&
       s.repsMax === first.repsMax &&
       s.toFailure === first.toFailure &&
-      s.restSeconds === first.restSeconds,
+      s.restSeconds === first.restSeconds &&
+      s.loadStepPercent === null,
   );
   return same ? { count: sets.length, set: { ...first } } : null;
 }
 
-/** A line has at least one set: one with none prescribes nothing. */
+/**
+ * A line has at least one set: one with none prescribes nothing. The first
+ * set has no load step, because nothing comes before it (ADR 0011) -- the
+ * same rule as the `ProgramSlotSet_first_set_no_load_step` CHECK.
+ */
 const setsSchema = z
   .array(programSetSchema)
-  .min(1, "a line has at least one set");
+  .min(1, "a line has at least one set")
+  .refine((sets) => sets[0] === undefined || sets[0].loadStepPercent === null, {
+    message: "the first set has no load step — there is no set before it",
+    path: [0, "loadStepPercent"],
+  });
 
 /**
  * One movement a `movements` day prescribes, as authored (DN-19).

@@ -82,8 +82,7 @@ describe("the prescribed plate", () => {
     prescribing([
       fixtures.prescribedMovement({
         exercise: { unit: "seconds", name: "Hollow hold" },
-        sets: 3,
-        reps: 40,
+        sets: fixtures.prescribedSets(3, { reps: 40 }),
       }),
     ]);
     renderRoute("/");
@@ -94,7 +93,9 @@ describe("the prescribed plate", () => {
   it("reads a whole number of minutes as minutes", async () => {
     // "REST 120S" is a number the athlete has to divide before it means
     // anything.
-    prescribing([fixtures.prescribedMovement({ restSeconds: 120 })]);
+    prescribing([fixtures.prescribedMovement({
+        sets: fixtures.prescribedSets(5, { restSeconds: 120 }),
+      })]);
     renderRoute("/");
 
     expect(await screen.findByText("REST 2M")).toBeInTheDocument();
@@ -102,7 +103,9 @@ describe("the prescribed plate", () => {
 
   it("says straight through rather than a rest of nothing", async () => {
     // Zero is a prescription, not a field somebody left blank.
-    prescribing([fixtures.prescribedMovement({ restSeconds: 0 })]);
+    prescribing([fixtures.prescribedMovement({
+        sets: fixtures.prescribedSets(5, { restSeconds: 0 }),
+      })]);
     renderRoute("/");
 
     expect(await screen.findByText("STRAIGHT THROUGH")).toBeInTheDocument();
@@ -111,7 +114,9 @@ describe("the prescribed plate", () => {
   it("says nothing about rest where nobody stated one, which is not straight through", async () => {
     // DN-143: null and 0 are different facts. Reading the first as the second
     // would hand the athlete a prescription their program never made.
-    prescribing([fixtures.prescribedMovement({ restSeconds: null })]);
+    prescribing([fixtures.prescribedMovement({
+        sets: fixtures.prescribedSets(5, { restSeconds: null }),
+      })]);
     renderRoute("/");
 
     expect(await screen.findByText("CHIN-UP")).toBeInTheDocument();
@@ -119,16 +124,72 @@ describe("the prescribed plate", () => {
     expect(screen.queryByText(/^REST /)).not.toBeInTheDocument();
   });
 
+  it("reads an RPT line out set by set, each with its load step (ADR 0011)", async () => {
+    prescribing([
+      fixtures.prescribedMovement({
+        sets: [
+          { reps: 6, repsMax: 8, toFailure: false, loadStepPercent: null, restSeconds: 120 },
+          { reps: 8, repsMax: 10, toFailure: false, loadStepPercent: -10, restSeconds: 120 },
+          { reps: 10, repsMax: 12, toFailure: false, loadStepPercent: -10, restSeconds: 120 },
+        ],
+      }),
+      fixtures.prescribedMovement({
+        id: "program-slot-movement-2",
+        order: 1,
+        exercise: { id: ringRow.id, name: "Ring row" },
+      }),
+    ]);
+    renderRoute("/");
+
+    expect(await screen.findByText("3 SETS")).toBeInTheDocument();
+    expect(screen.getByText("6-8 · 8-10 \u221210% · 10-12 \u221210%")).toBeInTheDocument();
+    expect(screen.getByText("REST 2M")).toBeInTheDocument();
+    // The uniform line beside it still reads as one count.
+    expect(screen.getByText(/5 × 3/)).toBeInTheDocument();
+  });
+
+  it("reads a drop set as straight through, whatever it rests after", async () => {
+    prescribing([
+      fixtures.prescribedMovement({
+        sets: [
+          { reps: null, repsMax: null, toFailure: true, loadStepPercent: null, restSeconds: 0 },
+          { reps: null, repsMax: null, toFailure: true, loadStepPercent: -20, restSeconds: 0 },
+          { reps: null, repsMax: null, toFailure: true, loadStepPercent: -20, restSeconds: 90 },
+        ],
+      }),
+    ]);
+    renderRoute("/");
+
+    expect(await screen.findByText("STRAIGHT THROUGH")).toBeInTheDocument();
+    expect(
+      screen.getByText("to failure · to failure \u221220% · to failure \u221220%"),
+    ).toBeInTheDocument();
+  });
+
+  it("says the rest varies where the sets rest differently", async () => {
+    prescribing([
+      fixtures.prescribedMovement({
+        sets: [
+          ...fixtures.prescribedSets(1, { restSeconds: 180 }),
+          ...fixtures.prescribedSets(2, { restSeconds: 60 }),
+        ],
+      }),
+    ]);
+    renderRoute("/");
+
+    expect(await screen.findByText("REST VARIES")).toBeInTheDocument();
+  });
+
   it("reports what the day has rather than dimming what it hasn't", async () => {
     // A prescribed day has no time cap and no rounds. Dimming those two says
     // today is a lesser day; filling them in says something false. So the bank
     // holds the two numbers this day does have.
     prescribing([
-      fixtures.prescribedMovement({ sets: 5 }),
+      fixtures.prescribedMovement({ sets: fixtures.prescribedSets(5) }),
       fixtures.prescribedMovement({
         id: "program-slot-movement-2",
         order: 1,
-        sets: 3,
+        sets: fixtures.prescribedSets(3),
         exercise: { id: ringRow.id, name: "Ring row" },
       }),
     ]);

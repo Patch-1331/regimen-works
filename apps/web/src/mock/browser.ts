@@ -57,7 +57,80 @@ const pushFamily = [
 const asOption = (e: (typeof pushFamily)[number]) =>
   fixtures.swapOption({ exerciseId: e.id, name: e.name, equipment: e.equipment as SwapOption["equipment"] });
 
+// A strength day mixing per-set lines with a uniform one (ADR 0011): RPT,
+// a drop set and a plain 3 × 8. Served by `/today` when the page's URL has
+// `?mock=strength`; `&set=N` serves it mid-session, N sets done, so the
+// runner can be looked at on any set.
+const rpt = [
+  { reps: 6, repsMax: 8, toFailure: false, loadStepPercent: null, restSeconds: 180 },
+  { reps: 8, repsMax: 10, toFailure: false, loadStepPercent: -10, restSeconds: 180 },
+  { reps: 10, repsMax: 12, toFailure: false, loadStepPercent: -10, restSeconds: 180 },
+];
+const drop = [
+  { reps: null, repsMax: null, toFailure: true, loadStepPercent: null, restSeconds: 0 },
+  { reps: null, repsMax: null, toFailure: true, loadStepPercent: -20, restSeconds: 0 },
+  { reps: null, repsMax: null, toFailure: true, loadStepPercent: -20, restSeconds: 90 },
+];
+const strengthDay = [
+  fixtures.prescribedMovement({ sets: rpt }),
+  fixtures.prescribedMovement({
+    id: "program-slot-movement-2",
+    order: 1,
+    sets: drop,
+    movementGroup: "push_horizontal",
+    exercise: { id: "exercise-push-up", name: "Push-up", movementGroup: "push_horizontal" },
+  }),
+  fixtures.prescribedMovement({
+    id: "program-slot-movement-3",
+    order: 2,
+    sets: fixtures.prescribedSets(3, { reps: 8, restSeconds: 60 }),
+    movementGroup: "squat",
+    exercise: { id: "exercise-squat", name: "Air squat", movementGroup: "squat" },
+  }),
+];
+
+function strengthToday(setsDone: number | null) {
+  const day = fixtures.today();
+  return {
+    ...day,
+    assignment: {
+      ...day.assignment!,
+      wod: null,
+      prescription: { movements: strengthDay },
+      status: setsDone === null ? "scheduled" : "in_progress",
+      session:
+        setsDone === null
+          ? null
+          : fixtures.session({
+              capSeconds: null,
+              autoStopAtCap: false,
+              setsCompleted: setsDone,
+              restStartedAtSeconds: null,
+              movements: strengthDay.map((m) =>
+                fixtures.sessionMovement({
+                  programSlotMovementId: m.id,
+                  order: m.order,
+                  sets: m.sets.length,
+                  reps: m.sets[0].reps,
+                  repsMax: m.sets[0].repsMax,
+                  toFailure: m.sets[0].toFailure,
+                  restSeconds: m.sets[0].restSeconds,
+                  prescribedSets: m.sets,
+                  exercise: m.exercise,
+                }),
+              ),
+            }),
+    },
+  };
+}
+
 const extras = [
+  http.get(api("/today"), () => {
+    const page = new URLSearchParams(window.location.search);
+    if (page.get("mock") !== "strength") return;
+    const set = page.get("set");
+    return HttpResponse.json(strengthToday(set === null ? null : Number(set)));
+  }),
   // The active library only; retired rows fall through to the default.
   http.get(api("/exercises"), ({ request }) => {
     if (new URL(request.url).searchParams.get("includeArchived") === "true") return;

@@ -200,26 +200,73 @@ describe('ProgramsService.create', () => {
     ).toBe(0);
   });
 
-  it('refuses a line whose sets differ, which nothing can run yet (DN-190)', async () => {
-    // Stored per set (ADR 0011), but the scheduler, the session and the
-    // editor still prescribe one count of one shape.
+  it('stores an RPT line set by set, load steps and all, and reads it back (ADR 0011)', async () => {
+    const alice = await createUser();
+    const rpt = [
+      {
+        reps: 6,
+        repsMax: 8,
+        toFailure: false,
+        loadStepPercent: null,
+        restSeconds: 180,
+      },
+      {
+        reps: 8,
+        repsMax: 10,
+        toFailure: false,
+        loadStepPercent: -10,
+        restSeconds: 180,
+      },
+      {
+        reps: 10,
+        repsMax: 12,
+        toFailure: false,
+        loadStepPercent: -10,
+        restSeconds: 180,
+      },
+    ];
+    const program = await programs().create(
+      { ownerId: alice.id },
+      body({
+        days: [{ dayOfWeek: 1, lines: [line({ sets: rpt }), line()] }],
+      }),
+    );
+
+    const [first] = (await stored(program.id)).weeks[0].slots[0].movements;
+    expect(
+      first.sets.map(({ order, reps, repsMax, loadStepPercent }) => ({
+        order,
+        reps,
+        repsMax,
+        loadStepPercent,
+      })),
+    ).toEqual([
+      { order: 0, reps: 6, repsMax: 8, loadStepPercent: null },
+      { order: 1, reps: 8, repsMax: 10, loadStepPercent: -10 },
+      { order: 2, reps: 10, repsMax: 12, loadStepPercent: -10 },
+    ]);
+    const { program: back } = await programs().getForEditing(
+      { ownerId: alice.id },
+      program.id,
+    );
+    expect(back.days[0].lines[0].sets).toEqual(rpt);
+    expect(back.days[0].lines[1].sets[2].loadStepPercent).toBeNull();
+  });
+
+  it('refuses a load step on the first set, which has no set before it', async () => {
     const alice = await createUser();
     const set = {
       reps: 5,
       repsMax: null,
       toFailure: false,
+      loadStepPercent: -10,
       restSeconds: 90,
     };
     await expect(
       programs().create(
         { ownerId: alice.id },
         body({
-          days: [
-            {
-              dayOfWeek: 1,
-              lines: [line({ sets: [set, { ...set, reps: 3 }] })],
-            },
-          ],
+          days: [{ dayOfWeek: 1, lines: [line({ sets: [set, set] })] }],
         }),
       ),
     ).rejects.toThrow(BadRequestException);

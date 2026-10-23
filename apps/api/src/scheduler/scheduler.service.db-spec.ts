@@ -1991,9 +1991,13 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
       movements: [
         {
           movementGroup: 'pull',
-          sets: 5,
-          reps: 3,
-          restSeconds: 90,
+          sets: Array.from({ length: 5 }, () => ({
+            reps: 3,
+            repsMax: null,
+            toFailure: false,
+            loadStepPercent: null,
+            restSeconds: 90,
+          })),
           exercise: { id: ring.id, name: ring.name },
           // The group default is not a substitution. A program that asked for "pull"
           // and handed over a ring row did exactly what it said, and naming
@@ -2041,7 +2045,103 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
 
     const today = await programService().getToday(user.id, TODAY);
 
-    expect(today.assignment!.prescription!.movements[0].restSeconds).toBe(45);
+    expect(
+      today.assignment!.prescription!.movements[0].sets[0].restSeconds,
+    ).toBe(45);
+  });
+
+  it('hands over each set of an RPT line with its own count and load step (ADR 0011)', async () => {
+    await pullMembers();
+    const user = await athlete();
+    await enrolled(
+      user,
+      (
+        await prescribingProgram([
+          {
+            order: 0,
+            movementGroup: 'pull',
+            sets: {
+              create: [
+                { order: 0, reps: 6, repsMax: 8, restSeconds: 180 },
+                {
+                  order: 1,
+                  reps: 8,
+                  repsMax: 10,
+                  loadStepPercent: -10,
+                  restSeconds: 180,
+                },
+                {
+                  order: 2,
+                  reps: 10,
+                  repsMax: 12,
+                  loadStepPercent: -10,
+                  restSeconds: 180,
+                },
+              ],
+            },
+          },
+        ])
+      ).id,
+    );
+
+    const today = await programService().getToday(user.id, TODAY);
+
+    expect(
+      today.assignment!.prescription!.movements[0].sets.map(
+        ({ reps, repsMax, loadStepPercent }) => [
+          reps,
+          repsMax,
+          loadStepPercent,
+        ],
+      ),
+    ).toEqual([
+      [6, 8, null],
+      [8, 10, -10],
+      [10, 12, -10],
+    ]);
+  });
+
+  it('keeps a drop set straight through under a pace, and paces the rest after it (ADR 0011)', async () => {
+    // Decision 4: an explicit 0 between two sets of one line is the
+    // prescription -- a drop set rested is not a drop set. Every rest above 0
+    // is the pace's, and so is the rest after the line, 0 or not.
+    await pullMembers();
+    const user = await athlete();
+    const program = await prescribingProgram([
+      {
+        order: 0,
+        movementGroup: 'pull',
+        sets: {
+          create: [
+            { order: 0, toFailure: true, restSeconds: 0 },
+            { order: 1, toFailure: true, loadStepPercent: -20, restSeconds: 0 },
+            { order: 2, toFailure: true, loadStepPercent: -20, restSeconds: 0 },
+          ],
+        },
+      },
+      {
+        order: 1,
+        movementGroup: 'pull',
+        sets: {
+          create: [
+            { order: 0, reps: 5, restSeconds: 120 },
+            { order: 1, reps: 5, restSeconds: 1 },
+          ],
+        },
+      },
+    ]);
+    await createEnrollment(user.id, {
+      programId: program.id,
+      startDate: MONDAY,
+      weeks: null,
+      defaultRestSeconds: 45,
+    });
+
+    const today = await programService().getToday(user.id, TODAY);
+    const [drop, straight] = today.assignment!.prescription!.movements;
+
+    expect(drop.sets.map((s) => s.restSeconds)).toEqual([0, 0, 45]);
+    expect(straight.sets.map((s) => s.restSeconds)).toEqual([45, 45]);
   });
 
   it('hands over an unstated rest as unstated, not as straight through', async () => {
@@ -2062,7 +2162,9 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
 
     const today = await programService().getToday(user.id, TODAY);
 
-    expect(today.assignment!.prescription!.movements[0].restSeconds).toBeNull();
+    expect(
+      today.assignment!.prescription!.movements[0].sets[0].restSeconds,
+    ).toBeNull();
   });
 
   it('meets the athlete at the movement they train the movementGroup at', async () => {
