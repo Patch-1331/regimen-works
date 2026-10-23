@@ -12,6 +12,7 @@ import {
   createSkillLevel,
   createUser,
   createWod,
+  lineSets,
 } from '../test-support/fixtures';
 import { SessionsService } from './sessions.service';
 
@@ -823,16 +824,12 @@ async function prescribedDay(
                     {
                       order: 0,
                       movementGroup: 'pull',
-                      sets: 5,
-                      reps: 3,
-                      restSeconds: 90,
+                      sets: lineSets(5, { reps: 3, restSeconds: 90 }),
                     },
                     {
                       order: 1,
                       exerciseId: push.id,
-                      sets: 3,
-                      reps: 8,
-                      restSeconds: 60,
+                      sets: lineSets(3, { reps: 8, restSeconds: 60 }),
                     },
                   ],
                 },
@@ -1251,18 +1248,12 @@ describe('SessionsService, on a day prescribed in ranges and to failure', () => 
         {
           order: 0,
           movementGroup: 'pull',
-          sets: 2,
-          reps: null,
-          toFailure: true,
-          restSeconds: 90,
+          sets: lineSets(2, { reps: null, toFailure: true, restSeconds: 90 }),
         },
         {
           order: 1,
           movementGroup: 'pull',
-          sets: 1,
-          reps: 8,
-          repsMax: 12,
-          restSeconds: 60,
+          sets: lineSets(1, { reps: 8, repsMax: 12, restSeconds: 60 }),
         },
       ],
     });
@@ -1356,9 +1347,7 @@ describe('SessionsService, resolving rest through the athlete pace', () => {
   const pull = (restSeconds: number | null) => ({
     order: 0,
     movementGroup: 'pull',
-    sets: 3,
-    reps: 5,
-    restSeconds,
+    sets: lineSets(3, { reps: 5, restSeconds }),
   });
 
   it("snapshots the athlete's pace over every movement's own", async () => {

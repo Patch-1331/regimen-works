@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { DEFAULT_EQUIPMENT, resolveRestSeconds } from '@regimen-works/shared';
+import {
+  asUniform,
+  DEFAULT_EQUIPMENT,
+  resolveRestSeconds,
+} from '@regimen-works/shared';
 import type { SubstitutionReason } from '@regimen-works/shared';
 import type { Exercise } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -273,17 +277,25 @@ export class MovementResolutionService {
     return available.map((m, i) => {
       const swap = swaps.get(m.movement.id);
       const replaced = m.exercise.id !== prescribed[i].exercise.id;
+      // The athlete is still handed a line as "N × one shape" (DN-190): every
+      // line is N identical sets until DN-186, which is what replaces this.
+      const line = asUniform(m.movement.sets);
+      if (line === null) {
+        throw new Error(
+          `Program line ${m.movement.id} has sets that differ, which nothing can write yet`,
+        );
+      }
       return {
         id: m.movement.id,
         order: m.movement.order,
-        sets: m.movement.sets,
+        sets: line.count,
         // All three shapes, carried rather than flattened (DN-142).
-        reps: m.movement.reps,
-        repsMax: m.movement.repsMax,
-        toFailure: m.movement.toFailure,
+        reps: line.set.reps,
+        repsMax: line.set.repsMax,
+        toFailure: line.set.toFailure,
         restSeconds: resolveRestSeconds(
           defaultRestSeconds,
-          m.movement.restSeconds,
+          line.set.restSeconds,
         ),
         // What the *program* asked for, kept even where equipment moved the
         // athlete off it: the group is the session's intent, and a screen that

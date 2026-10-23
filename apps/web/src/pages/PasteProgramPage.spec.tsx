@@ -6,6 +6,10 @@ import { renderRoute } from "../test/renderRoute";
 import { server, http, HttpResponse } from "../test/server";
 import * as fixtures from "../test/fixtures";
 
+/** `count` sets, each matching `set`: a pasted line is that many identical sets. */
+const times = (count: number, set: object) =>
+  Array.from({ length: count }, () => expect.objectContaining(set));
+
 vi.mock("@clerk/clerk-react", async () => {
   const { clerkTestDouble } = await import("../test/clerk");
   return clerkTestDouble();
@@ -184,15 +188,15 @@ describe("pasting a program", () => {
           dayOfWeek: 1,
           label: "Legs",
           lines: [
-            { exerciseId: "squat", sets: 5, reps: 5 },
-            { exerciseId: "crossover", sets: 4, reps: 8, repsMax: 10 },
+            { exerciseId: "squat", sets: times(5, { reps: 5 }) },
+            { exerciseId: "crossover", sets: times(4, { reps: 8, repsMax: 10 }) },
           ],
         },
         {
           dayOfWeek: 3,
           lines: [
-            { exerciseId: "floor", sets: 2, reps: 10, repsMax: 15 },
-            { exerciseId: "floor", sets: 2, reps: 5, repsMax: 8 },
+            { exerciseId: "floor", sets: times(2, { reps: 10, repsMax: 15 }) },
+            { exerciseId: "floor", sets: times(2, { reps: 5, repsMax: 8 }) },
           ],
         },
       ],

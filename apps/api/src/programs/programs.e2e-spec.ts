@@ -11,6 +11,7 @@ import {
   programSaveResultSchema,
   programSummarySchema,
   setupOptionsSchema,
+  uniformSets,
 } from '@regimen-works/shared';
 import { z } from 'zod';
 import { asUser, createE2eApp } from '../test-support/e2e-app';
@@ -74,11 +75,12 @@ const program = {
       {
         movementGroup: 'pull',
         exerciseId: null,
-        sets: 4,
-        reps: 6,
-        repsMax: 10,
-        toFailure: false,
-        restSeconds: 120,
+        sets: uniformSets(4, {
+          reps: 6,
+          repsMax: 10,
+          toFailure: false,
+          restSeconds: 120,
+        }),
       },
     ],
   })),
@@ -167,7 +169,7 @@ describe('editing a program', () => {
     ...program,
     days: program.days.map((d) => ({
       ...d,
-      lines: d.lines.map((l) => ({ ...l, sets: 5 })),
+      lines: d.lines.map((l) => ({ ...l, sets: uniformSets(5, l.sets[0]) })),
     })),
   };
 

@@ -1,3 +1,4 @@
+import { uniformSets } from '@regimen-works/shared';
 import { attachPrescribedExercises } from './prescription';
 import type { ProgramSlotMovement } from './program-day';
 
@@ -17,11 +18,12 @@ function movement(overrides: Partial<ProgramSlotMovement> = {}) {
     order: 0,
     movementGroup: 'pull',
     exerciseId: null,
-    sets: 5,
-    reps: 3,
-    repsMax: null,
-    toFailure: false,
-    restSeconds: 90,
+    sets: uniformSets(5, {
+      reps: 3,
+      repsMax: null,
+      toFailure: false,
+      restSeconds: 90,
+    }),
     ...overrides,
   };
 }
@@ -67,7 +69,7 @@ describe('attachPrescribedExercises', () => {
     const [attached] = attach([movement()], [['pull', 'ex_chinup']]);
 
     expect(attached.exercise.id).toBe('ex_chinup');
-    expect(attached.movement.sets).toBe(5);
+    expect(attached.movement.sets).toHaveLength(5);
   });
 
   // The absent-choice path (DN-139, ADR-0004 decisions 7 and 8). Before this

@@ -5,7 +5,7 @@ import { z } from "zod";
  *
  * Two sources can speak to it, and they are different kinds of fact:
  *
- * - `ProgramSlotMovement.restSeconds` is what the program's *source* said. Null
+ * - `ProgramSlotSet.restSeconds` is what the program's *source* said. Null
  *   means the source was silent -- the program DN-131 measured states rest 0
  *   times in 25 movements -- and 0 means "straight through", which is a
  *   prescription. The two are never converted into each other.
@@ -59,14 +59,14 @@ export function restClockSeconds(restSeconds: number | null): number | null {
 /**
  * Whether starting this program must ask the athlete for a pace.
  *
- * Only where some movement leaves rest unstated. A program with holes asks
- * the one question once rather than 25 times; a fully specified one -- every
+ * Only where some set leaves rest unstated. A program with holes asks the
+ * one question once rather than 25 times; a fully specified one -- every
  * built-in program -- asks nothing, because it already knows.
  */
 export function restPaceRequired(
-  movements: readonly { restSeconds: number | null }[],
+  sets: readonly { restSeconds: number | null }[],
 ): boolean {
-  return movements.some((m) => m.restSeconds === null);
+  return sets.some((s) => s.restSeconds === null);
 }
 
 /**

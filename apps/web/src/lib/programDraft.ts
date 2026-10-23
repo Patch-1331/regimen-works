@@ -1,4 +1,4 @@
-import type { CreateProgram, MovementGroup } from "@regimen-works/shared";
+import { asUniform, uniformSets, type CreateProgram, type MovementGroup } from "@regimen-works/shared";
 import type { ApiExercise } from "./api";
 import { lineLabel } from "./progressions";
 
@@ -121,11 +121,12 @@ export function toCreateProgram(draft: ProgramDraft): CreateProgram {
       lines: (draft.days[dayOfWeek] ?? []).map((line) => ({
         movementGroup: line.exerciseId ? null : line.movementGroup,
         exerciseId: line.exerciseId,
-        sets: line.sets ?? 0,
-        reps: line.toFailure ? null : line.reps,
-        repsMax: line.toFailure ? null : line.repsMax,
-        toFailure: line.toFailure,
-        restSeconds: line.restSeconds,
+        sets: uniformSets(line.sets ?? 0, {
+          reps: line.toFailure ? null : line.reps,
+          repsMax: line.toFailure ? null : line.repsMax,
+          toFailure: line.toFailure,
+          restSeconds: line.restSeconds,
+        }),
       })),
     })),
   };
@@ -150,22 +151,36 @@ export function fromProgram(program: CreateProgram): ProgramDraft {
     days: Object.fromEntries(
       program.days.map((day) => [
         day.dayOfWeek,
-        day.lines.map((line) => ({
-          id: lineId(),
-          exerciseId: line.exerciseId,
-          movementGroup: line.movementGroup,
-          sets: line.sets,
-          reps: line.reps,
-          repsMax: line.repsMax,
-          toFailure: line.toFailure,
-          restSeconds: line.restSeconds,
-        })),
+        day.lines.map((line) => {
+          const { count, set } = uniform(line.sets);
+          return {
+            id: lineId(),
+            exerciseId: line.exerciseId,
+            movementGroup: line.movementGroup,
+            sets: count,
+            reps: set.reps,
+            repsMax: set.repsMax,
+            toFailure: set.toFailure,
+            restSeconds: set.restSeconds,
+          };
+        }),
       ]),
     ),
     labels: Object.fromEntries(
       program.days.flatMap((day) => (day.label ? [[day.dayOfWeek, day.label]] : [])),
     ),
   };
+}
+
+/**
+ * A saved line's sets as the editor holds them: a count of one set (DN-190).
+ * The API refuses a line whose sets differ, so one here is a bug, not a
+ * program to open half-understood.
+ */
+function uniform(sets: CreateProgram["days"][number]["lines"][number]["sets"]) {
+  const line = asUniform(sets);
+  if (!line) throw new Error("A program line's sets differ; the editor cannot hold it.");
+  return line;
 }
 
 /**

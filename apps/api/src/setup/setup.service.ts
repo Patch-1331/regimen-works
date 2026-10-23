@@ -294,7 +294,7 @@ export class SetupService {
     };
     const [paced, unstated] = await Promise.all([
       programsWith({}),
-      programsWith({ restSeconds: null }),
+      programsWith({ sets: { some: { restSeconds: null } } }),
     ]);
     return { paced, unstated };
   }

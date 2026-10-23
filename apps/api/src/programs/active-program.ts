@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import type { ActiveProgram } from './program-day';
+import { SLOT_MOVEMENTS } from './prescribed-slot';
 
 /**
  * The athlete's active enrollment, flattened to what deciding anything about
@@ -37,7 +38,7 @@ export async function loadActiveProgram(
                 // before anyone knows which kind it turned out to be, and a
                 // second round trip to find out would be one per request for
                 // the one program in ten that uses them.
-                include: { movements: { orderBy: { order: 'asc' } } },
+                include: { movements: SLOT_MOVEMENTS },
               },
             },
           },

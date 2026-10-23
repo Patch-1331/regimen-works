@@ -13,6 +13,7 @@ import {
   createSession,
   createSkillLevel,
   createUser,
+  lineSets,
 } from '../test-support/fixtures';
 import { upsertJustWods } from '../programs/just-wods';
 import type { PrismaService } from '../prisma/prisma.service';
@@ -830,9 +831,10 @@ describe('SetupService, the rest pace', () => {
                   create: rests.map((restSeconds, i) => ({
                     order: i,
                     movementGroup: 'pull',
-                    sets: 3,
-                    reps: 5,
-                    restSeconds: order === weeks - 1 ? restSeconds : 90,
+                    sets: lineSets(3, {
+                      reps: 5,
+                      restSeconds: order === weeks - 1 ? restSeconds : 90,
+                    }),
                   })),
                 },
               },

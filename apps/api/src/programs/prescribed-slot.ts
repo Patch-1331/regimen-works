@@ -1,4 +1,15 @@
+import type { Prisma } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
+
+/**
+ * A slot's lines with their sets, both in order -- how every reader of a
+ * prescription loads it. The sets are rows of their own (ADR 0011), so a
+ * read that forgets them gets lines that prescribe nothing.
+ */
+export const SLOT_MOVEMENTS = {
+  orderBy: { order: 'asc' },
+  include: { sets: { orderBy: { order: 'asc' } } },
+} satisfies Prisma.ProgramSlot$movementsArgs;
 
 /**
  * The `movements` slot behind an assignment, or null where there is none.
@@ -22,7 +33,7 @@ export async function loadPrescribedSlot(
 
   const slot = await prisma.programSlot.findUnique({
     where: { id: programSlotId },
-    include: { movements: { orderBy: { order: 'asc' } } },
+    include: { movements: SLOT_MOVEMENTS },
   });
   if (!slot || slot.kind !== 'movements' || slot.movements.length === 0) {
     return null;
@@ -31,6 +42,6 @@ export async function loadPrescribedSlot(
 }
 
 /** How many working sets a prescribed day comes to, across every movement. */
-export function prescribedSetCount(movements: { sets: number }[]): number {
-  return movements.reduce((sum, movement) => sum + movement.sets, 0);
+export function prescribedSetCount(movements: { sets: unknown[] }[]): number {
+  return movements.reduce((sum, movement) => sum + movement.sets.length, 0);
 }

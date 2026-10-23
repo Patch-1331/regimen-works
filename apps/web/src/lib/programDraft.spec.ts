@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createProgramSchema } from "@regimen-works/shared";
+import { createProgramSchema, uniformSets } from "@regimen-works/shared";
 import * as fixtures from "../test/fixtures";
 import {
   EMPTY_PROGRAM,
@@ -83,8 +83,20 @@ describe("toCreateProgram", () => {
       draft({ days: { 1: [line({ toFailure: true, reps: 10 })] } }),
     );
 
-    expect(body.days[0].lines[0]).toMatchObject({ reps: null, toFailure: true });
+    expect(body.days[0].lines[0].sets).toEqual(
+      uniformSets(3, { reps: null, repsMax: null, toFailure: true, restSeconds: null }),
+    );
     expect(createProgramSchema.safeParse(body).success).toBe(true);
+  });
+
+  it("writes a line's count as that many identical sets (DN-190)", () => {
+    const body = toCreateProgram(
+      draft({ days: { 1: [line({ sets: 4, reps: 6, repsMax: 10, restSeconds: 0 })] } }),
+    );
+
+    expect(body.days[0].lines[0].sets).toEqual(
+      uniformSets(4, { reps: 6, repsMax: 10, toFailure: false, restSeconds: 0 }),
+    );
   });
 
   it("sends a blank summary as none, for the API to write", () => {
@@ -103,6 +115,15 @@ describe("editing a saved program (DN-146)", () => {
 
   it("loads no summary as a blank box", () => {
     expect(fromProgram({ ...saved, summary: null }).summary).toBe("");
+  });
+
+  it("refuses a line whose sets differ rather than open it as something else", () => {
+    const [day] = saved.days;
+    const [first] = day.lines;
+    const set = first.sets[0];
+    const varied = { ...first, sets: [...first.sets, { ...set, reps: (set.reps ?? 0) + 1 }] };
+
+    expect(() => fromProgram({ ...saved, days: [{ ...day, lines: [varied] }] })).toThrow();
   });
 
   it("calls a rename or a new summary no change to the week", () => {

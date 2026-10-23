@@ -10,6 +10,7 @@ import {
   DEFAULT_PROGRAM_ID,
   PROGRAM_EXPORT_FORMAT,
   PROGRAM_EXPORT_VERSION,
+  asUniform,
   createProgramSchema,
   defaultProgramSummary,
   exportProgramsSchema,
@@ -26,6 +27,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { validateBody } from '../common/validate';
+import { SLOT_MOVEMENTS } from './prescribed-slot';
 import {
   GLOBAL_LIBRARY,
   referenceableBy,
@@ -61,7 +63,7 @@ const PROGRAM_CONTENT = {
       include: {
         slots: {
           orderBy: { dayOfWeek: 'asc' },
-          include: { movements: { orderBy: { order: 'asc' } } },
+          include: { movements: SLOT_MOVEMENTS },
         },
       },
     },
@@ -99,7 +101,7 @@ export class ProgramsService {
    * The tier is `writer`, which comes from the route and never the body.
    */
   async create(writer: LibraryWriter, body: unknown): Promise<ProgramSummary> {
-    const program = validateBody(createProgramSchema, body);
+    const program = validateProgram(body);
     return this.insert(this.prisma, writer, program);
   }
 
@@ -146,7 +148,7 @@ export class ProgramsService {
         'Just WODs is built in. It cannot be edited.',
       );
     }
-    const program = validateBody(createProgramSchema, body);
+    const program = validateProgram(body);
     const stored = await this.findOwned(writer, id);
     if (stored.archivedAt !== null) {
       // Editing a retired version would fork it into a second live copy of a
@@ -397,11 +399,7 @@ export class ProgramsService {
     );
     const programs: CreateProgram[] = [];
     for (const [index, entry] of entries.entries()) {
-      programs.push(
-        await inEntry(index, entry, () =>
-          validateBody(createProgramSchema, entry),
-        ),
-      );
+      programs.push(await inEntry(index, entry, () => validateProgram(entry)));
     }
     return this.prisma.$transaction(
       async (tx) => {
@@ -652,11 +650,9 @@ function weeksData(program: CreateProgram) {
                 exercise: line.exerciseId
                   ? { connect: { id: line.exerciseId } }
                   : undefined,
-                sets: line.sets,
-                reps: line.reps,
-                repsMax: line.repsMax,
-                toFailure: line.toFailure,
-                restSeconds: line.restSeconds,
+                sets: {
+                  create: line.sets.map((set, order) => ({ order, ...set })),
+                },
               })),
             },
           })),
@@ -684,11 +680,12 @@ function toCreateProgram(program: ProgramContent): CreateProgram {
         movementGroup:
           m.movementGroup as ProgramDay['lines'][number]['movementGroup'],
         exerciseId: m.exerciseId,
-        sets: m.sets,
-        reps: m.reps,
-        repsMax: m.repsMax,
-        toFailure: m.toFailure,
-        restSeconds: m.restSeconds,
+        sets: m.sets.map((s) => ({
+          reps: s.reps,
+          repsMax: s.repsMax,
+          toFailure: s.toFailure,
+          restSeconds: s.restSeconds,
+        })),
       })),
     }))
     .sort((a, b) => a.dayOfWeek - b.dayOfWeek);
@@ -704,6 +701,25 @@ function toCreateProgram(program: ProgramContent): CreateProgram {
   };
 }
 
+/**
+ * The body as a program this release can run (DN-190). A line is stored as
+ * its list of sets (ADR 0011), but every reader still prescribes one count of
+ * one shape -- the scheduler, the session, the editor -- so a line whose sets
+ * differ is refused here, on every write path, until those readers vary them.
+ */
+function validateProgram(body: unknown): CreateProgram {
+  const program = validateBody(createProgramSchema, body);
+  const varied = program.days.some((day) =>
+    day.lines.some((line) => asUniform(line.sets) === null),
+  );
+  if (varied) {
+    throw new BadRequestException(
+      'Every set on a line has to be the same, for now.',
+    );
+  }
+  return program;
+}
+
 /** Whether two bodies describe the same week, whatever they are called. */
 function sameStructure(a: CreateProgram, b: CreateProgram): boolean {
   const shape = (r: CreateProgram) =>
@@ -716,11 +732,7 @@ function sameStructure(a: CreateProgram, b: CreateProgram): boolean {
           lines: d.lines.map((l) => [
             l.movementGroup,
             l.exerciseId,
-            l.sets,
-            l.reps,
-            l.repsMax,
-            l.toFailure,
-            l.restSeconds,
+            l.sets.map((s) => [s.reps, s.repsMax, s.toFailure, s.restSeconds]),
           ]),
         })),
     });

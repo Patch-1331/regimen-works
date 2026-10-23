@@ -911,10 +911,11 @@ model ProgramSlot {
 // (DN-19). The shape a program uses where the session is straight sets rather
 // than a WOD.
 //
-// Sets and reps sit here directly -- no multiplier and no progression rule.
-// An author wanting escalation writes a core block that already waves
-// (3x5 / 4x5 / 5x5), which `expandProgramWeeks` then repeats as a wave. A
-// multiplier would put the same fact in two places and let them disagree.
+// Its sets are rows of their own (`ProgramSlotSet`, ADR 0011) -- no multiplier
+// and no progression rule. An author wanting escalation writes a core block
+// that already waves (3x5 / 4x5 / 5x5), which `expandProgramWeeks` then
+// repeats as a wave. A multiplier would put the same fact in two places and
+// let them disagree.
 model ProgramSlotMovement {
   id         String   @id @default(cuid())
   programSlotId String
@@ -939,11 +940,30 @@ model ProgramSlotMovement {
   // decide how hard it is.
   substitutedIn AssignmentSubstitution[]
 
-  sets Int
+  // The sets, in order (ADR 0011). A uniform 3 x 8 is three identical rows,
+  // stored the same way a set-by-set line is: there is no second format for
+  // "same for every set". `20261023000000_program_slot_sets` moved them here.
+  sets ProgramSlotSet[]
 
-  // **The prescribed count, in exactly one of three shapes** (DN-142). A CHECK
-  // in this field's migration admits those three and nothing else, because
-  // Prisma cannot say it here:
+  @@unique([programSlotId, order])
+}
+
+// One set of a program line (ADR 0011): its count and the rest after it.
+//
+// A line is an ordered list of these, so a reverse pyramid's 6-8, 8-10, 10-12
+// is three rows here rather than three lines that each read as a movement.
+// The editor still writes "N x one shape" as N identical rows (DN-190); what
+// varies set to set arrives with DN-186.
+model ProgramSlotSet {
+  id                    String              @id @default(cuid())
+  programSlotMovementId String
+  programSlotMovement   ProgramSlotMovement @relation(fields: [programSlotMovementId], references: [id], onDelete: Cascade)
+  // Position in the line, 0-based, the way ProgramSlotMovement.order is.
+  order                 Int
+
+  // **The prescribed count, in exactly one of three shapes** (DN-142), now per
+  // set (ADR 0011). A CHECK in `20261023000000_program_slot_sets` admits those
+  // three and nothing else, because Prisma cannot say it here:
   //
   //   fixed    reps set,  repsMax null,        toFailure false
   //   range    reps set,  repsMax set > reps,  toFailure false
@@ -965,18 +985,18 @@ model ProgramSlotMovement {
   repsMax   Int?
   toFailure Boolean @default(false)
 
-  // Prescribed rest between sets, as the source stated it (ADR 0005). 0 says
+  // The rest after this set, as the source stated it (ADR 0005). 0 says
   // "straight through" out loud, which is a prescription. Null says the
   // source was silent, which is not one -- the program DN-131 measured states
   // rest 0 times in 25 movements. Nothing converts one into the other.
   //
   // What the athlete actually rests is resolved against
   // `ProgramEnrollment.defaultRestSeconds` by `resolveRestSeconds` in the shared
-  // package, and nowhere else. The CHECK keeping it non-negative is in the
-  // rest_pace migration, written so a null cannot switch off the `sets` half.
+  // package, and nowhere else. The CHECK keeping it non-negative is in
+  // `20261023000000_program_slot_sets`.
   restSeconds Int?
 
-  @@unique([programSlotId, order])
+  @@unique([programSlotMovementId, order])
 }
 
 // One athlete's run at one program.

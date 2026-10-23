@@ -1,3 +1,4 @@
+import type { ProgramSet } from '@regimen-works/shared';
 import {
   assignSlotsToTrainingDays,
   expandProgramWeeks,
@@ -29,13 +30,12 @@ export type ProgramSlotMovement = {
   order: number;
   movementGroup: string | null;
   exerciseId: string | null;
-  sets: number;
-  /** The prescribed count, in all three of its shapes — see `repShapeFields`. */
-  reps: number | null;
-  repsMax: number | null;
-  toFailure: boolean;
-  /** Null where the source was silent — not 0, which is "straight through" (ADR 0005). */
-  restSeconds: number | null;
+  /**
+   * In order, each with its count in all three shapes and the rest after it
+   * — see `programSetSchema`. A null rest is the source being silent, not 0,
+   * which is "straight through" (ADR 0005).
+   */
+  sets: ProgramSet[];
 };
 
 /** Enough of an authored slot to decide and then record the day. */

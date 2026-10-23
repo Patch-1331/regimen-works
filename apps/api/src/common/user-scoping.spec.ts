@@ -1,3 +1,4 @@
+import { uniformSets } from '@regimen-works/shared';
 import { ExercisesService } from '../exercises/exercises.service';
 import { LogsService } from '../logs/logs.service';
 import { SessionsService } from '../sessions/sessions.service';
@@ -512,11 +513,12 @@ describe('library ownership scoping', () => {
               {
                 movementGroup: 'pull',
                 exerciseId: null,
-                sets: 3,
-                reps: 5,
-                repsMax: null,
-                toFailure: false,
-                restSeconds: null,
+                sets: uniformSets(3, {
+                  reps: 5,
+                  repsMax: null,
+                  toFailure: false,
+                  restSeconds: null,
+                }),
               },
             ],
           },
@@ -600,11 +602,12 @@ describe('library ownership scoping', () => {
                 {
                   movementGroup: null,
                   exerciseId: 'ex-1',
-                  sets: 3,
-                  reps: 5,
-                  repsMax: null,
-                  toFailure: false,
-                  restSeconds: null,
+                  sets: uniformSets(3, {
+                    reps: 5,
+                    repsMax: null,
+                    toFailure: false,
+                    restSeconds: null,
+                  }),
                 },
               ],
             },

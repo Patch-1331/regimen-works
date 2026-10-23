@@ -9,6 +9,7 @@ import {
   createSkillLevel,
   createUser,
   createWod,
+  lineSets,
 } from '../test-support/fixtures';
 import { SECTION_CAP, SubstitutionsService } from './substitutions.service';
 
@@ -722,9 +723,7 @@ async function prescribedDay(options: { pinned?: string } = {}) {
                       order: 0,
                       movementGroup: options.pinned ? null : 'pull',
                       exerciseId: options.pinned ?? null,
-                      sets: 5,
-                      reps: 3,
-                      restSeconds: 90,
+                      sets: lineSets(5, { reps: 3, restSeconds: 90 }),
                     },
                   ],
                 },
