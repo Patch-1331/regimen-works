@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  asUniform,
   createProgramSchema,
   defaultProgramSummary,
   LEGACY_PROGRAM_EXPORT_FORMAT,
   PROGRAM_EXPORT_FORMAT,
   programExportEnvelopeSchema,
   type CreateProgram,
+  uniformSets,
 } from "./program.js";
 
 /**
@@ -17,15 +19,20 @@ import {
  */
 
 type Line = CreateProgram["days"][number]["lines"][number];
+type Set = Line["sets"][number];
 
-const line = (overrides: Partial<Line> & Record<string, unknown> = {}) => ({
-  movementGroup: "pull",
-  exerciseId: null,
-  sets: 3,
+const set = (overrides: Partial<Set> & Record<string, unknown> = {}) => ({
   reps: 8,
   repsMax: null,
   toFailure: false,
   restSeconds: 90,
+  ...overrides,
+});
+
+const line = (overrides: Partial<Line> & Record<string, unknown> = {}) => ({
+  movementGroup: "pull",
+  exerciseId: null,
+  sets: [set(), set(), set()],
   ...overrides,
 });
 
@@ -42,6 +49,10 @@ const program = (overrides: Record<string, unknown> = {}) => ({
 
 const withLine = (overrides: Record<string, unknown>) =>
   program({ days: [{ dayOfWeek: 1, lines: [line(overrides)] }] });
+
+/** A line of one set, so a rule on the set is reported once. */
+const withSet = (overrides: Record<string, unknown>) =>
+  withLine({ sets: [set(overrides)] });
 
 const messages = (body: unknown) => {
   const result = createProgramSchema.safeParse(body);
@@ -75,31 +86,101 @@ describe("createProgramSchema", () => {
 
   describe("the rep shape is fixed, range or failure", () => {
     it("accepts a range", () => {
-      expect(messages(withLine({ reps: 8, repsMax: 12 }))).toEqual([]);
+      expect(messages(withSet({ reps: 8, repsMax: 12 }))).toEqual([]);
     });
 
     it("accepts to failure", () => {
-      expect(messages(withLine({ reps: null, toFailure: true }))).toEqual([]);
+      expect(messages(withSet({ reps: null, toFailure: true }))).toEqual([]);
     });
 
     it("refuses a row with no count and no failure", () => {
-      expect(messages(withLine({ reps: null }))).toHaveLength(1);
+      expect(messages(withSet({ reps: null }))).toHaveLength(1);
     });
 
     it("refuses a range whose top is not above its bottom", () => {
-      expect(messages(withLine({ reps: 8, repsMax: 8 }))).toEqual([
+      expect(messages(withSet({ reps: 8, repsMax: 8 }))).toEqual([
         "the top of a range is above its bottom",
       ]);
     });
   });
 
+  describe("a line is a list of sets (ADR 0011)", () => {
+    it("refuses a line with no sets", () => {
+      expect(messages(withLine({ sets: [] }))).toEqual([
+        "a line has at least one set",
+      ]);
+    });
+
+    it("holds each set to the rep shape on its own", () => {
+      expect(
+        messages(withLine({ sets: [set(), set({ reps: 8, repsMax: 8 })] })),
+      ).toEqual(["the top of a range is above its bottom"]);
+    });
+
+    it("refuses an unknown key on a set rather than dropping it", () => {
+      expect(messages(withSet({ tempo: "3010" }))).toHaveLength(1);
+    });
+  });
+
+  // DN-190: an export file, or an editor page loaded before the deploy, still
+  // writes a line as a count beside one shape.
+  describe("a line written as a count", () => {
+    const counted = {
+      movementGroup: "pull",
+      exerciseId: null,
+      sets: 3,
+      reps: 8,
+      repsMax: 10,
+      toFailure: false,
+      restSeconds: 0,
+    };
+
+    it("reads as that many identical sets", () => {
+      const result = createProgramSchema.parse(
+        program({ days: [{ dayOfWeek: 1, lines: [counted] }] }),
+      );
+      expect(result.days[0].lines[0]).toEqual({
+        movementGroup: "pull",
+        exerciseId: null,
+        sets: uniformSets(3, {
+          reps: 8,
+          repsMax: 10,
+          toFailure: false,
+          restSeconds: 0,
+        }),
+      });
+    });
+
+    it("keeps a null rest null", () => {
+      const result = createProgramSchema.parse(
+        program({
+          days: [{ dayOfWeek: 1, lines: [{ ...counted, restSeconds: null }] }],
+        }),
+      );
+      expect(
+        result.days[0].lines[0].sets.map((s) => s.restSeconds),
+      ).toEqual([null, null, null]);
+    });
+
+    it("still refuses no sets, and a malformed shape", () => {
+      expect(
+        messages(program({ days: [{ dayOfWeek: 1, lines: [{ ...counted, sets: 0 }] }] })),
+      ).toEqual(["a line has at least one set"]);
+      expect(
+        messages(
+          program({ days: [{ dayOfWeek: 1, lines: [{ ...counted, sets: 1, reps: null, repsMax: null }] }] }),
+        ),
+      ).toHaveLength(1);
+    });
+  });
+
   describe("rest may be unstated", () => {
     it("accepts null rest", () => {
-      expect(messages(withLine({ restSeconds: null }))).toEqual([]);
+      expect(messages(withSet({ restSeconds: null }))).toEqual([]);
     });
 
     it("accepts zero, which is a prescription rather than an omission", () => {
-      expect(messages(withLine({ restSeconds: 0 }))).toEqual([]);
+      expect(messages(withSet({ restSeconds: 0 }))).toEqual([]);
     });
   });
 
@@ -246,5 +327,26 @@ describe("programExportEnvelopeSchema", () => {
     for (const file of [null, "regimen-works/routines", [], { format: "something/else" }]) {
       expect(programExportEnvelopeSchema.safeParse(file).success).toBe(false);
     }
+  });
+});
+
+describe("asUniform", () => {
+  const fixed = { reps: 5, repsMax: null, toFailure: false, restSeconds: 90 };
+
+  it("reads N identical sets back as N of one", () => {
+    expect(asUniform(uniformSets(5, fixed))).toEqual({ count: 5, set: fixed });
+  });
+
+  it("tells null rest from 0", () => {
+    expect(
+      asUniform([fixed, { ...fixed, restSeconds: null }]),
+    ).toBeNull();
+    expect(asUniform([{ ...fixed, restSeconds: 0 }, { ...fixed, restSeconds: 0 }]))
+      .toEqual({ count: 2, set: { ...fixed, restSeconds: 0 } });
+  });
+
+  it("is null where the sets differ, or there are none", () => {
+    expect(asUniform([fixed, { ...fixed, reps: 6 }])).toBeNull();
+    expect(asUniform([])).toBeNull();
   });
 });

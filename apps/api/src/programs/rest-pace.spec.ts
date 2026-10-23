@@ -1,3 +1,4 @@
+import { uniformSets } from '@regimen-works/shared';
 import type { ActiveProgram, ProgramSlot } from './program-day';
 import { restPaceOf } from './rest-pace';
 
@@ -22,11 +23,12 @@ function slot(rests: (number | null)[]): ProgramSlot {
       order,
       movementGroup: 'pull',
       exerciseId: null,
-      sets: 3,
-      reps: 5,
-      repsMax: null,
-      toFailure: false,
-      restSeconds,
+      sets: uniformSets(3, {
+        reps: 5,
+        repsMax: null,
+        toFailure: false,
+        restSeconds,
+      }),
     })),
   };
 }

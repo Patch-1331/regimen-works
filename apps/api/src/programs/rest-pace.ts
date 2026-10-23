@@ -23,6 +23,6 @@ export function restPaceOf(program: ActiveProgram | null): RestPace | null {
     enrollmentId: program.enrollmentId,
     programName: program.programName,
     defaultRestSeconds: program.defaultRestSeconds,
-    required: restPaceRequired(movements),
+    required: restPaceRequired(movements.flatMap((m) => m.sets)),
   };
 }

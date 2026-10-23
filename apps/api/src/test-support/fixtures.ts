@@ -283,6 +283,16 @@ export async function createEnrollment(
 }
 
 /**
+ * `count` identical sets for a program line's `sets: { create }` (DN-190).
+ * Every line the app writes today is this shape; DN-186 is what varies them.
+ */
+export function lineSets(count: number, set: Record<string, unknown>) {
+  return {
+    create: Array.from({ length: count }, (_, order) => ({ order, ...set })),
+  };
+}
+
+/**
  * A prescribed day: an assignment with no WOD, pointing at a `movements` slot.
  *
  * The shape `createAssignment` cannot make, because that one always builds a
@@ -309,9 +319,7 @@ export async function createPrescribedDay(
                   create: sets.map((count, order) => ({
                     order,
                     movementGroup: 'pull',
-                    sets: count,
-                    reps: 3,
-                    restSeconds: 90,
+                    sets: lineSets(count, { reps: 3, restSeconds: 90 }),
                   })),
                 },
               },

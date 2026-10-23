@@ -11,6 +11,7 @@ import {
   createSkillLevel,
   createUser,
   createWod,
+  lineSets,
 } from '../test-support/fixtures';
 import { WodsService } from '../wods/wods.service';
 import { MovementResolutionService } from './movement-resolution.service';
@@ -1959,7 +1960,11 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
   /** A program that prescribes `pull, 5x3, rest 90s` every day of the week. */
   async function prescribingProgram(
     movements: Record<string, unknown>[] = [
-      { order: 0, movementGroup: 'pull', sets: 5, reps: 3, restSeconds: 90 },
+      {
+        order: 0,
+        movementGroup: 'pull',
+        sets: lineSets(5, { reps: 3, restSeconds: 90 }),
+      },
     ],
   ) {
     return everyDayProgram('movements', { movements: { create: movements } });
@@ -2049,9 +2054,7 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
           {
             order: 0,
             movementGroup: 'pull',
-            sets: 5,
-            reps: 3,
-            restSeconds: null,
+            sets: lineSets(5, { reps: 3, restSeconds: null }),
           },
         ])
       ).id,
@@ -2158,16 +2161,12 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
           {
             order: 1,
             movementGroup: 'squat',
-            sets: 3,
-            reps: 10,
-            restSeconds: 60,
+            sets: lineSets(3, { reps: 10, restSeconds: 60 }),
           },
           {
             order: 0,
             movementGroup: 'pull',
-            sets: 5,
-            reps: 3,
-            restSeconds: 90,
+            sets: lineSets(5, { reps: 3, restSeconds: 90 }),
           },
         ])
       ).id,

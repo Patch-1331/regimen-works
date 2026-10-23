@@ -29,6 +29,7 @@ import {
   createGroup,
   createProgram,
   createWod,
+  lineSets,
 } from './test-support/fixtures';
 
 jest.mock('@clerk/backend', () => ({
@@ -832,9 +833,7 @@ async function prescribedDay(userId: string) {
                     {
                       order: 0,
                       movementGroup: 'pull',
-                      sets: 5,
-                      reps: 3,
-                      restSeconds: 90,
+                      sets: lineSets(5, { reps: 3, restSeconds: 90 }),
                     },
                   ],
                 },

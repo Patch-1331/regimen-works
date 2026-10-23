@@ -10,6 +10,7 @@ import {
   createProgram,
   createSkillLevel,
   createUser,
+  lineSets,
 } from '../test-support/fixtures';
 import { upsertJustWods } from '../programs/just-wods';
 import { EnrollmentsService } from './enrollments.service';
@@ -634,9 +635,7 @@ describe('EnrollmentsService.updateRestPace', () => {
                     create: rests.map((restSeconds, order) => ({
                       order,
                       movementGroup: 'pull',
-                      sets: 3,
-                      reps: 5,
-                      restSeconds,
+                      sets: lineSets(3, { reps: 5, restSeconds }),
                     })),
                   },
                 },

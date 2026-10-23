@@ -8,6 +8,7 @@ import type {
   GlobalProgramSummary,
   ProgramSummary,
 } from "@regimen-works/shared";
+import { uniformSets } from "@regimen-works/shared";
 import { renderRoute } from "../test/renderRoute";
 import { saveJson } from "../lib/download";
 import { server, http, HttpResponse } from "../test/server";
@@ -154,11 +155,12 @@ describe("the week sheet", () => {
               {
                 movementGroup: "pull",
                 exerciseId: null,
-                sets: 3,
-                reps: 10,
-                repsMax: null,
-                toFailure: false,
-                restSeconds: null,
+                sets: uniformSets(3, {
+                  reps: 10,
+                  repsMax: null,
+                  toFailure: false,
+                  restSeconds: null,
+                }),
               },
             ],
           },
@@ -213,11 +215,12 @@ const PULL_DAYS: CreateProgram = {
         {
           movementGroup: "pull",
           exerciseId: null,
-          sets: 3,
-          reps: 10,
-          repsMax: null,
-          toFailure: false,
-          restSeconds: null,
+          sets: uniformSets(3, {
+            reps: 10,
+            repsMax: null,
+            toFailure: false,
+            restSeconds: null,
+          }),
         },
       ],
     },
@@ -295,8 +298,7 @@ describe("alternatives on a line (DN-185)", () => {
     expect(sent[0].days[0].lines[0]).toMatchObject({
       exerciseId: "ring",
       movementGroup: null,
-      sets: 3,
-      reps: 8,
+      sets: uniformSets(3, { reps: 8, repsMax: null, toFailure: false, restSeconds: null }),
     });
   });
 

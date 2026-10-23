@@ -1785,18 +1785,24 @@ describe("programSlotSchema's pinned-WOD refinement", () => {
 });
 
 describe("programSlotSchema's prescription refinement", () => {
-  const prescribed = (overrides: Record<string, unknown> = {}) => ({
-    id: "psm-1",
-    order: 0,
-    movementGroup: "pull",
-    exerciseId: null,
-    sets: 5,
+  const set = (overrides: Record<string, unknown> = {}) => ({
     reps: 3,
     repsMax: null,
     toFailure: false,
     restSeconds: 90,
     ...overrides,
   });
+  const prescribed = (overrides: Record<string, unknown> = {}) => ({
+    id: "psm-1",
+    order: 0,
+    movementGroup: "pull",
+    exerciseId: null,
+    sets: [set(), set(), set(), set(), set()],
+    ...overrides,
+  });
+  /** A one-set line, for a rule on the set itself. */
+  const withSet = (overrides: Record<string, unknown>) =>
+    prescribed({ sets: [set(overrides)] });
   const movementDay = (movements: unknown[]) =>
     slot({
       kind: "movements",
@@ -1864,26 +1870,26 @@ describe("programSlotSchema's prescription refinement", () => {
 
   it("rejects zero sets and zero reps", () => {
     expect(
-      programSlotSchema.safeParse(movementDay([prescribed({ sets: 0 })])).success,
+      programSlotSchema.safeParse(movementDay([prescribed({ sets: [] })])).success,
     ).toBe(false);
     expect(
-      programSlotSchema.safeParse(movementDay([prescribed({ reps: 0 })])).success,
+      programSlotSchema.safeParse(movementDay([withSet({ reps: 0 })])).success,
     ).toBe(false);
   });
 
   it("accepts no rest but refuses negative rest", () => {
     // 0 is a prescription -- straight through -- rather than an omission.
     expect(
-      programSlotSchema.safeParse(movementDay([prescribed({ restSeconds: 0 })]))
+      programSlotSchema.safeParse(movementDay([withSet({ restSeconds: 0 })]))
         .success,
     ).toBe(true);
     // And null is the omission: the source said nothing (ADR 0005).
     expect(
-      programSlotSchema.safeParse(movementDay([prescribed({ restSeconds: null })]))
+      programSlotSchema.safeParse(movementDay([withSet({ restSeconds: null })]))
         .success,
     ).toBe(true);
     expect(
-      programSlotSchema.safeParse(movementDay([prescribed({ restSeconds: -1 })]))
+      programSlotSchema.safeParse(movementDay([withSet({ restSeconds: -1 })]))
         .success,
     ).toBe(false);
   });

@@ -11,6 +11,7 @@ import {
   DEFAULT_PROGRAM_ID,
   PROGRAM_EXPORT_FORMAT,
   PROGRAM_EXPORT_VERSION,
+  uniformSets,
 } from '@regimen-works/shared';
 import type { PrismaService } from '../prisma/prisma.service';
 import { testPrisma } from '../test-support/database';
@@ -21,6 +22,7 @@ import {
 } from '../test-support/fixtures';
 import { SetupService } from '../setup/setup.service';
 import { loadActiveProgram } from './active-program';
+import { SLOT_MOVEMENTS } from './prescribed-slot';
 import { upsertJustWods } from './just-wods';
 import { failureLines, importProgramsFile } from './import-programs';
 import { PROGRAM_WEEKS, ProgramsService } from './programs.service';
@@ -40,11 +42,12 @@ function programs(): ProgramsService {
 const line = (overrides: Record<string, unknown> = {}) => ({
   movementGroup: 'pull',
   exerciseId: null,
-  sets: 3,
-  reps: 8,
-  repsMax: 12,
-  toFailure: false,
-  restSeconds: null,
+  sets: uniformSets(3, {
+    reps: 8,
+    repsMax: 12,
+    toFailure: false,
+    restSeconds: null,
+  }),
   ...overrides,
 });
 
@@ -65,7 +68,7 @@ function stored(id: string) {
     include: {
       weeks: {
         include: {
-          slots: { include: { movements: { orderBy: { order: 'asc' } } } },
+          slots: { include: { movements: SLOT_MOVEMENTS } },
         },
       },
     },
@@ -93,13 +96,16 @@ describe('ProgramsService.create', () => {
       slots[0].movements.map((m) => [
         m.order,
         m.movementGroup,
-        m.reps,
-        m.repsMax,
-        m.restSeconds,
+        m.sets.map((set) => [
+          set.order,
+          set.reps,
+          set.repsMax,
+          set.restSeconds,
+        ]),
       ]),
     ).toEqual([
-      [0, 'pull', 8, 12, null],
-      [1, 'push_vertical', 8, 12, null],
+      [0, 'pull', [0, 1, 2].map((order) => [order, 8, 12, null])],
+      [1, 'push_vertical', [0, 1, 2].map((order) => [order, 8, 12, null])],
     ]);
   });
 
@@ -187,6 +193,34 @@ describe('ProgramsService.create', () => {
       programs().create(
         { ownerId: alice.id },
         body({ days: [{ dayOfWeek: 1, lines: [line({ load: '80%' })] }] }),
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(
+      await testPrisma().program.count({ where: { ownerId: alice.id } }),
+    ).toBe(0);
+  });
+
+  it('refuses a line whose sets differ, which nothing can run yet (DN-190)', async () => {
+    // Stored per set (ADR 0011), but the scheduler, the session and the
+    // editor still prescribe one count of one shape.
+    const alice = await createUser();
+    const set = {
+      reps: 5,
+      repsMax: null,
+      toFailure: false,
+      restSeconds: 90,
+    };
+    await expect(
+      programs().create(
+        { ownerId: alice.id },
+        body({
+          days: [
+            {
+              dayOfWeek: 1,
+              lines: [line({ sets: [set, { ...set, reps: 3 }] })],
+            },
+          ],
+        }),
       ),
     ).rejects.toThrow(BadRequestException);
     expect(
@@ -1139,6 +1173,11 @@ async function shape(id: string) {
           ...movement,
           id: undefined,
           programSlotId: undefined,
+          sets: movement.sets.map((set) => ({
+            ...set,
+            id: undefined,
+            programSlotMovementId: undefined,
+          })),
         })),
       })),
   }));
@@ -1166,7 +1205,16 @@ describe('copying a global program (DN-149)', () => {
           },
           {
             dayOfWeek: 4,
-            lines: [line({ toFailure: true, reps: null, repsMax: null })],
+            lines: [
+              line({
+                sets: uniformSets(3, {
+                  reps: null,
+                  repsMax: null,
+                  toFailure: true,
+                  restSeconds: null,
+                }),
+              }),
+            ],
           },
         ],
       }),

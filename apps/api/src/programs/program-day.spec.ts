@@ -1,3 +1,4 @@
+import { uniformSets } from '@regimen-works/shared';
 import {
   narrowToSlot,
   resolveProgramDay,
@@ -41,11 +42,12 @@ function prescribed(
     order: 0,
     movementGroup: 'pull',
     exerciseId: null,
-    sets: 5,
-    reps: 3,
-    repsMax: null,
-    toFailure: false,
-    restSeconds: 90,
+    sets: uniformSets(5, {
+      reps: 3,
+      repsMax: null,
+      toFailure: false,
+      restSeconds: 90,
+    }),
     ...overrides,
   };
 }
@@ -404,7 +406,15 @@ describe('resolveProgramDay', () => {
         kind: 'prescribed',
         day: { slotKind: 'movements', programSlotId: 'slot_1' },
         movements: [
-          { movementGroup: 'pull', sets: 5, reps: 3, restSeconds: 90 },
+          {
+            movementGroup: 'pull',
+            sets: uniformSets(5, {
+              reps: 3,
+              repsMax: null,
+              toFailure: false,
+              restSeconds: 90,
+            }),
+          },
         ],
       });
     });

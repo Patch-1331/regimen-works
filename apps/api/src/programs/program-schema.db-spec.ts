@@ -364,7 +364,22 @@ describe('a prescribed movement names one movement and prescribes work', () => {
         programSlotId: programSlot.id,
         order: 0,
         movementGroup: 'pull',
-        sets: 5,
+        sets: { create: [{ order: 0, reps: 3, restSeconds: 90 }] },
+        ...overrides,
+      },
+    });
+  }
+
+  /**
+   * One set on a throwaway line (DN-190). The rep shape and the rest live on
+   * each set now, so their CHECKs are on `ProgramSlotSet`, not the line.
+   */
+  async function prescribeSet(overrides: Record<string, unknown> = {}) {
+    const line = await prescribe({ sets: undefined });
+    return testPrisma().programSlotSet.create({
+      data: {
+        programSlotMovementId: line.id,
+        order: 0,
         reps: 3,
         restSeconds: 90,
         ...overrides,
@@ -400,9 +415,32 @@ describe('a prescribed movement names one movement and prescribes work', () => {
     ).rejects.toThrow(CHECK_VIOLATION);
   });
 
-  it('refuses zero sets, and zero reps', async () => {
-    await expect(prescribe({ sets: 0 })).rejects.toThrow(CHECK_VIOLATION);
-    await expect(prescribe({ reps: 0 })).rejects.toThrow(CHECK_VIOLATION);
+  it('refuses zero reps', async () => {
+    await expect(prescribeSet({ reps: 0 })).rejects.toThrow(CHECK_VIOLATION);
+  });
+
+  it('refuses two sets in the same position on a line', async () => {
+    const first = await prescribeSet();
+    await expect(
+      testPrisma().programSlotSet.create({
+        data: {
+          programSlotMovementId: first.programSlotMovementId,
+          order: 0,
+          reps: 5,
+        },
+      }),
+    ).rejects.toThrow(UNIQUE_VIOLATION);
+  });
+
+  it('takes the sets with the line', async () => {
+    const set = await prescribeSet();
+    await testPrisma().programSlotMovement.delete({
+      where: { id: set.programSlotMovementId },
+    });
+
+    expect(
+      await testPrisma().programSlotSet.findUnique({ where: { id: set.id } }),
+    ).toBeNull();
   });
 
   /**
@@ -416,7 +454,7 @@ describe('a prescribed movement names one movement and prescribes work', () => {
    */
   describe('the rep shape', () => {
     it('accepts a fixed count', async () => {
-      await expect(prescribe({ reps: 3 })).resolves.toMatchObject({
+      await expect(prescribeSet({ reps: 3 })).resolves.toMatchObject({
         reps: 3,
         repsMax: null,
         toFailure: false,
@@ -424,7 +462,9 @@ describe('a prescribed movement names one movement and prescribes work', () => {
     });
 
     it('accepts a range', async () => {
-      await expect(prescribe({ reps: 8, repsMax: 12 })).resolves.toMatchObject({
+      await expect(
+        prescribeSet({ reps: 8, repsMax: 12 }),
+      ).resolves.toMatchObject({
         reps: 8,
         repsMax: 12,
       });
@@ -432,51 +472,50 @@ describe('a prescribed movement names one movement and prescribes work', () => {
 
     it('accepts a set prescribed to failure', async () => {
       await expect(
-        prescribe({ reps: null, toFailure: true }),
+        prescribeSet({ reps: null, toFailure: true }),
       ).resolves.toMatchObject({ reps: null, repsMax: null, toFailure: true });
     });
 
     it('refuses a range whose top is not above its bottom', async () => {
       // 8-8 is a fixed prescription written the long way. Admitting it would
       // mean two spellings of one prescription, and every reader choosing.
-      await expect(prescribe({ reps: 8, repsMax: 8 })).rejects.toThrow(
+      await expect(prescribeSet({ reps: 8, repsMax: 8 })).rejects.toThrow(
         CHECK_VIOLATION,
       );
-      await expect(prescribe({ reps: 8, repsMax: 5 })).rejects.toThrow(
+      await expect(prescribeSet({ reps: 8, repsMax: 5 })).rejects.toThrow(
         CHECK_VIOLATION,
       );
     });
 
     it('refuses a top with no bottom', async () => {
-      await expect(prescribe({ reps: null, repsMax: 12 })).rejects.toThrow(
+      await expect(prescribeSet({ reps: null, repsMax: 12 })).rejects.toThrow(
         CHECK_VIOLATION,
       );
     });
 
     it('refuses a failure set that names a count anyway', async () => {
-      await expect(prescribe({ reps: 3, toFailure: true })).rejects.toThrow(
+      await expect(prescribeSet({ reps: 3, toFailure: true })).rejects.toThrow(
         CHECK_VIOLATION,
       );
       await expect(
-        prescribe({ reps: null, repsMax: 12, toFailure: true }),
+        prescribeSet({ reps: null, repsMax: 12, toFailure: true }),
       ).rejects.toThrow(CHECK_VIOLATION);
     });
 
     it('refuses a prescription with no count at all', async () => {
       // Nullable `reps` is what makes failure sayable, and this is the hole it
       // opens: a row that is neither a count, nor a range, nor an instruction.
-      await expect(prescribe({ reps: null })).rejects.toThrow(CHECK_VIOLATION);
+      await expect(prescribeSet({ reps: null })).rejects.toThrow(
+        CHECK_VIOLATION,
+      );
     });
 
-    it('still guards sets and rest now that reps may be null', async () => {
-      // The old CHECK named `reps` alongside these two. `TRUE AND NULL` is
-      // NULL and a CHECK only fails on FALSE, so left as it was it would have
-      // stopped refusing anything on a failure set. The migration splits it.
+    it('still guards rest now that reps may be null', async () => {
+      // The old CHECK named `reps` alongside rest. `TRUE AND NULL` is NULL and
+      // a CHECK only fails on FALSE, so left as it was it would have stopped
+      // refusing anything on a failure set. The rest CHECK stands on its own.
       await expect(
-        prescribe({ reps: null, toFailure: true, sets: 0 }),
-      ).rejects.toThrow(CHECK_VIOLATION);
-      await expect(
-        prescribe({ reps: null, toFailure: true, restSeconds: -30 }),
+        prescribeSet({ reps: null, toFailure: true, restSeconds: -30 }),
       ).rejects.toThrow(CHECK_VIOLATION);
     });
   });
@@ -484,25 +523,17 @@ describe('a prescribed movement names one movement and prescribes work', () => {
   it('refuses negative rest, and accepts none at all', async () => {
     // 0 says "straight through" out loud, which is a real prescription; -30
     // is arithmetic the rest of the stack would carry.
-    await expect(prescribe({ restSeconds: -30 })).rejects.toThrow(
+    await expect(prescribeSet({ restSeconds: -30 })).rejects.toThrow(
       CHECK_VIOLATION,
     );
-    await expect(prescribe({ restSeconds: 0 })).resolves.toBeDefined();
+    await expect(prescribeSet({ restSeconds: 0 })).resolves.toBeDefined();
   });
 
   it('accepts a rest the source never stated, as null rather than 0', async () => {
     // ADR 0005: null is "the source was silent", a different fact from the
     // "straight through" 0 says, and the column keeps them apart.
-    const row = await prescribe({ restSeconds: null });
+    const row = await prescribeSet({ restSeconds: null });
     expect(row.restSeconds).toBeNull();
-  });
-
-  it('still guards sets when the rest is unstated', async () => {
-    // `"sets" >= 1 AND NULL` is NULL, which a CHECK accepts. Left as it was,
-    // an unstated rest would have switched off the sets guard on its row.
-    await expect(prescribe({ sets: 0, restSeconds: null })).rejects.toThrow(
-      CHECK_VIOLATION,
-    );
   });
 
   it('refuses two movements in the same position', async () => {
@@ -513,9 +544,6 @@ describe('a prescribed movement names one movement and prescribes work', () => {
           programSlotId: first.programSlotId,
           order: 0,
           movementGroup: 'squat',
-          sets: 3,
-          reps: 8,
-          restSeconds: 60,
         },
       }),
     ).rejects.toThrow(UNIQUE_VIOLATION);

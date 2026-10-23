@@ -23,6 +23,74 @@ import { SATURDAY, SUNDAY } from "./schedule.js";
 export const DEFAULT_PROGRAM_ID = "plan_just_wods";
 
 /**
+ * One set of a program line (ADR 0011): its count, and the rest after it.
+ *
+ * A line is an ordered list of these. A uniform 3 × 8 is three identical sets,
+ * stored the same way a reverse pyramid is -- there is no second format for
+ * "same for every set", which would be two ways to write one fact.
+ *
+ * Mirrors a `ProgramSlotSet` row and its two CHECKs in
+ * `20261023000000_program_slot_sets`. Strict, like the line it sits in.
+ */
+export const programSetSchema = z
+  .strictObject({
+    /**
+     * The prescribed count, in one of three shapes — see `repShapeFields`,
+     * which documents all three and is the only place they are defined.
+     */
+    ...repShapeFields,
+    /**
+     * The rest after this set. 0 is a prescription — "straight through" —
+     * rather than an omission, and null is the omission: the source said
+     * nothing about rest (ADR 0005). The two are different facts, and the
+     * athlete's pace at enrollment is what fills the second — see
+     * `resolveRestSeconds`.
+     */
+    restSeconds: restSecondsSchema,
+  })
+  .superRefine(refineRepShape);
+export type ProgramSet = z.infer<typeof programSetSchema>;
+
+/**
+ * `count` identical sets: how a line written as "N × one shape" is stored.
+ *
+ * The editor and paste-import both write a line this way until DN-186 lets a
+ * set differ from the one before it.
+ */
+export function uniformSets(count: number, set: ProgramSet): ProgramSet[] {
+  return Array.from({ length: count }, () => ({ ...set }));
+}
+
+/**
+ * A line's sets back as "N × one shape", or null where they differ.
+ *
+ * Every line is uniform until DN-186: the migration that moved sets onto rows
+ * of their own wrote N identical ones, and nothing writes any other kind. The
+ * readers that still think in "N × one shape" -- the day an athlete is handed,
+ * the session snapshot, the editor -- go through this, so the one place that
+ * would have to learn about a line that varies is easy to find.
+ */
+export function asUniform(
+  sets: readonly ProgramSet[],
+): { count: number; set: ProgramSet } | null {
+  const [first] = sets;
+  if (first === undefined) return null;
+  const same = sets.every(
+    (s) =>
+      s.reps === first.reps &&
+      s.repsMax === first.repsMax &&
+      s.toFailure === first.toFailure &&
+      s.restSeconds === first.restSeconds,
+  );
+  return same ? { count: sets.length, set: { ...first } } : null;
+}
+
+/** A line has at least one set: one with none prescribes nothing. */
+const setsSchema = z
+  .array(programSetSchema)
+  .min(1, "a line has at least one set");
+
+/**
  * One movement a `movements` day prescribes, as authored (DN-19).
  *
  * The authoring shape. What the athlete is handed is
@@ -31,10 +99,11 @@ export const DEFAULT_PROGRAM_ID = "plan_just_wods";
  * "chin-up", and keeping the two shapes apart is what stops a client
  * resolving the choice for itself.
  *
- * Sets and the rep count sit here directly: no multiplier, no progression rule. An
- * author wanting escalation writes a core block that already waves
- * (3x5 / 4x5 / 5x5), which `expandProgramWeeks` repeats as a wave. A multiplier
- * would put the same fact in two places and let them disagree.
+ * Its sets sit here directly, one entry per set (ADR 0011): no multiplier, no
+ * progression rule. An author wanting escalation writes a core block that
+ * already waves (3x5 / 4x5 / 5x5), which `expandProgramWeeks` repeats as a
+ * wave. A multiplier would put the same fact in two places and let them
+ * disagree.
  */
 export const programSlotMovementSchema = z
   .object({
@@ -52,21 +121,9 @@ export const programSlotMovementSchema = z
      * athlete further up the group should still train it that day.
      */
     exerciseId: z.string().nullable(),
-    sets: z.number().int().positive(),
-    /**
-     * The prescribed count, in one of three shapes — see `repShapeFields`,
-     * which documents all three and is the only place they are defined.
-     */
-    ...repShapeFields,
-    /**
-     * 0 is a prescription — "straight through" — rather than an omission, and
-     * null is the omission: the source said nothing about rest (ADR 0005). The
-     * two are different facts, and the athlete's pace at enrollment is what
-     * fills the second — see `resolveRestSeconds`.
-     */
-    restSeconds: restSecondsSchema,
+    /** In order — see `programSetSchema`. */
+    sets: setsSchema,
   })
-  .superRefine(refineRepShape)
   // Mirrors the ProgramSlotMovement_line_xor_exercise CHECK. Neither set is a
   // rep count attached to nothing; both set is two different instructions in
   // one row, and a reader picking one would be guessing at the author.
@@ -304,21 +361,44 @@ export type ProgramDetail = z.infer<typeof programDetailSchema>;
  */
 
 /**
+ * A line as it was written before its sets were a list (DN-190): `sets` a
+ * count beside one rep shape and one rest. Read as that many identical sets,
+ * so an export file written before then still loads -- the same courtesy
+ * `fromLegacyExport` gives the envelope -- and so does a body from an editor
+ * page loaded before the deploy.
+ *
+ * Only a line whose `sets` is a number is touched; anything else is left for
+ * the line itself to accept or refuse.
+ */
+function fromCountedLine(line: unknown): unknown {
+  if (typeof line !== "object" || line === null) return line;
+  const { sets, reps, repsMax, toFailure, restSeconds, ...rest } =
+    line as Record<string, unknown>;
+  if (typeof sets !== "number") return line;
+  // A count that is not a positive whole number becomes no sets at all, which
+  // the line refuses, rather than being rounded into one it never said.
+  const count = Number.isInteger(sets) && sets >= 1 ? sets : 0;
+  const set = { reps, repsMax, toFailure, restSeconds };
+  return { ...rest, sets: Array.from({ length: count }, () => ({ ...set })) };
+}
+
+/**
  * One line of a day: a movement, and how much of it.
  *
  * The strictness ADR 0005 took out of the columns lives here -- a row the
  * database would store is not necessarily a row an author finished writing.
  */
-export const programLineSchema = z
+const programLineFields = z
   .strictObject({
     /** "Any pull, chosen by my equipment" -- resolved per athlete, per day. */
     movementGroup: movementGroup.nullable(),
     /** A specific exercise, where the variation is the point. */
     exerciseId: z.string().min(1).nullable(),
-    sets: z.number().int().positive(),
-    ...repShapeFields,
-    /** Null is "the program does not say" -- the pace at enrolment fills it. */
-    restSeconds: restSecondsSchema,
+    /**
+     * In order — see `programSetSchema`. A null rest on a set is "the program
+     * does not say", which the pace at enrolment fills.
+     */
+    sets: setsSchema,
     /**
      * Named only to be refused with a reason. Sources write loads ("3x5 @
      * 80%", "135 lb") and the app does not prescribe them -- the athlete's
@@ -333,7 +413,6 @@ export const programLineSchema = z
       })
       .optional(),
   })
-  .superRefine(refineRepShape)
   // Every row names a group or an exercise, one of them. Neither is sets and
   // reps of nothing; both is two instructions in one row.
   .refine(
@@ -343,6 +422,8 @@ export const programLineSchema = z
       path: ["movementGroup"],
     },
   );
+
+export const programLineSchema = z.preprocess(fromCountedLine, programLineFields);
 export type ProgramLine = z.infer<typeof programLineSchema>;
 
 /**
