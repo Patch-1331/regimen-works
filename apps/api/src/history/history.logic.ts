@@ -1,7 +1,9 @@
-import type {
-  MovementHistory,
-  MovementHistoryDay,
-  SessionMovement,
+import {
+  sessionSetAt,
+  type MovementHistory,
+  type MovementHistoryDay,
+  type MovementHistorySet,
+  type SessionMovement,
 } from '@regimen-works/shared';
 
 /** One training day as the service loads it: the snapshot plus what it belongs to. */
@@ -11,6 +13,43 @@ export type TrainedDay = {
   name: string;
   movements: SessionMovement[];
 };
+
+/**
+ * Every set a straight-sets movement prescribed, in order, or null on a WOD
+ * movement, which has rounds rather than sets (DN-191).
+ *
+ * Read through `sessionSetAt`, so a day snapshotted before sets could differ
+ * answers its one shape for every set rather than nothing.
+ */
+function prescribedSets(
+  movement: SessionMovement,
+): MovementHistorySet[] | null {
+  if (movement.sets === null) return null;
+  return Array.from({ length: movement.sets }, (_, i) => {
+    const { reps, repsMax, toFailure, loadStepPercent } = sessionSetAt(
+      movement,
+      i + 1,
+    );
+    return { reps, repsMax, toFailure, loadStepPercent };
+  });
+}
+
+/**
+ * The floor of what one movement prescribed on one day. A range adds its
+ * bottom, and a set worked to failure adds nothing -- it named no number, and
+ * the only other options are to invent one or to stop reporting volume at all
+ * (DN-142).
+ *
+ * Every set of a straight-sets day counts, so a 5 x 5 is 25 (DN-191). A WOD
+ * movement's `reps` is already the whole day's, ladder and all.
+ */
+function floorOf(
+  movement: SessionMovement,
+  sets: MovementHistorySet[] | null,
+): number {
+  if (sets === null) return movement.reps ?? 0;
+  return sets.reduce((sum, set) => sum + (set.reps ?? 0), 0);
+}
 
 /**
  * Turns training days into one history per movement (DN-89).
@@ -40,12 +79,14 @@ export function buildMovementHistory(days: TrainedDay[]): MovementHistory[] {
 
   for (const day of ordered) {
     for (const movement of day.movements) {
+      const sets = prescribedSets(movement);
       const entry: MovementHistoryDay = {
         date: day.date,
         name: day.name,
         reps: movement.reps,
         repsMax: movement.repsMax,
         toFailure: movement.toFailure,
+        sets,
         isSwapped: movement.isSwapped,
         prescribedName: movement.prescribedName,
         prescribedReason: movement.prescribedReason,
@@ -59,7 +100,7 @@ export function buildMovementHistory(days: TrainedDay[]): MovementHistory[] {
           movementGroup: movement.exercise.movementGroup,
           unit: movement.exercise.unit,
           sessions: 1,
-          total: movement.reps ?? 0,
+          total: floorOf(movement, sets),
           firstTrained: day.date,
           lastTrained: day.date,
           days: [entry],
@@ -72,11 +113,7 @@ export function buildMovementHistory(days: TrainedDay[]): MovementHistory[] {
       // is volume, not a second session.
       const sameDay = existing.days.some((d) => d.date === day.date);
       if (!sameDay) existing.sessions += 1;
-      // The floor of what was prescribed. A range adds its bottom, and a set
-      // worked to failure adds nothing -- it named no number, and the only
-      // other options are to invent one or to stop reporting volume at all
-      // (DN-142).
-      existing.total += movement.reps ?? 0;
+      existing.total += floorOf(movement, sets);
       // Days arrive newest first, so every later one is older than what is
       // already there. Only the first day sets `lastTrained`.
       existing.firstTrained = day.date;

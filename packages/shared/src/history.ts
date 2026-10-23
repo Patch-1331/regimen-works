@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { exerciseUnit, movementGroup, substitutionReason } from "./enums.js";
+import { loadStepPercentSchema } from "./program.js";
+import { refineRepShape, repShapeFields } from "./rep-shape.js";
 
 /**
  * Per-movement history (DN-89): what the athlete has actually trained, movement
@@ -11,6 +13,23 @@ import { exerciseUnit, movementGroup, substitutionReason } from "./enums.js";
  * was the app's guess at it, and the app no longer holds opinions about what
  * an athlete is capable of.
  */
+
+/**
+ * One set of a past straight-sets day, as it was prescribed (ADR 0011): its
+ * count and its load step.
+ *
+ * Not `prescribedSetSchema`, which also carries the rest the athlete was
+ * handed. Rest is the pace, and the pace is the athlete's own decision rather
+ * than part of what the day asked for (ADR 0005).
+ */
+export const movementHistorySetSchema = z
+  .object({
+    ...repShapeFields,
+    /** Relative to the set before -- see `loadStepPercentSchema`. Never a weight (DN-85). */
+    loadStepPercent: loadStepPercentSchema,
+  })
+  .superRefine(refineRepShape);
+export type MovementHistorySet = z.infer<typeof movementHistorySetSchema>;
 
 /** One day this movement was trained. */
 export const movementHistoryDaySchema = z.object({
@@ -29,6 +48,16 @@ export const movementHistoryDaySchema = z.object({
   reps: z.number().int().positive().nullable(),
   repsMax: z.number().int().positive().nullable().default(null),
   toFailure: z.boolean().default(false),
+  /**
+   * Every set of a straight-sets day, in order (DN-191). On a line that varied
+   * -- RPT, a pyramid, a drop set -- `reps` and its neighbours are only the
+   * first of these.
+   *
+   * Null on a WOD day, which has rounds rather than sets; `reps` is then the
+   * day's whole count. A day snapshotted before sets could differ (DN-186)
+   * still has them: every set was the one shape `reps` holds.
+   */
+  sets: z.array(movementHistorySetSchema).nullable().default(null),
   /** True where the athlete swapped into this movement themselves that day. */
   isSwapped: z.boolean(),
   /**
@@ -53,9 +82,10 @@ export const movementHistorySchema = z.object({
   sessions: z.number().int().positive(),
   /**
    * Everything prescribed across those days, in `unit` — **the floor of what
-   * was prescribed**, never an estimate of what was done. A range contributes
-   * its bottom and a day worked to failure contributes nothing, because
-   * neither names a number that can be added without inventing one (DN-142).
+   * was prescribed**, never an estimate of what was done. Every set of a
+   * straight-sets day counts (DN-191): a 5 × 5 is 25. A range contributes its
+   * bottom and a set worked to failure contributes nothing, because neither
+   * names a number that can be added without inventing one (DN-142).
    *
    * Deliberately not normalised across movements: seconds of plank and reps of
    * pull-up are not the same quantity, and adding them would invent one.

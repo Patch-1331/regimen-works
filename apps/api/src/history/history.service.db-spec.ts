@@ -199,6 +199,81 @@ describe('HistoryService.movements', () => {
       name: 'Strength',
       reps: 3,
     });
+    // Snapshotted before sets could differ (DN-186): five sets of its one
+    // shape, every one of them counted (DN-191).
+    expect(history[0].days[0].sets).toHaveLength(5);
+    expect(history[0].total).toBe(15);
+  });
+
+  it('reads every set of a varied day back out of the snapshot (DN-191)', async () => {
+    const user = await createUser();
+    const { assignment } = await createPrescribedDay(user.id, {
+      date: '2026-10-20',
+    });
+    const set = (
+      reps: number | null,
+      repsMax: number | null,
+      loadStepPercent: number | null,
+    ) => ({
+      reps,
+      repsMax,
+      toFailure: reps === null,
+      loadStepPercent,
+      restSeconds: 0,
+    });
+    const rpt = [set(6, 8, null), set(8, 10, -10), set(10, 12, -10)];
+    const drop = [set(8, null, null), set(null, null, -20)];
+    const uniform = [
+      set(5, null, null),
+      set(5, null, null),
+      set(5, null, null),
+    ];
+    const line = (
+      id: string,
+      order: number,
+      exerciseId: string,
+      sets: ReturnType<typeof set>[],
+    ) =>
+      snapshot({
+        wodMovementId: null,
+        programSlotMovementId: id,
+        order,
+        sets: sets.length,
+        prescribedSets: sets,
+        reps: sets[0].reps,
+        repsMax: sets[0].repsMax,
+        toFailure: sets[0].toFailure,
+        restSeconds: 0,
+        exercise: {
+          id: exerciseId,
+          name: exerciseId,
+          unit: 'reps',
+          movementGroup: null,
+        },
+      });
+    await createSession(user.id, assignment.id, {
+      status: 'completed',
+      movements: [
+        line('psm-1', 0, 'squat', rpt),
+        line('psm-2', 1, 'curl', drop),
+        line('psm-3', 2, 'row', uniform),
+      ],
+    });
+
+    const byId = new Map(
+      (await service().movements(user.id)).map((h) => [h.exerciseId, h]),
+    );
+
+    expect(
+      byId.get('squat')!.days[0].sets!.map((s) => s.loadStepPercent),
+    ).toEqual([null, -10, -10]);
+    expect(byId.get('squat')!.total).toBe(24);
+    expect(byId.get('curl')!.days[0].sets!.map((s) => s.toFailure)).toEqual([
+      false,
+      true,
+    ]);
+    expect(byId.get('curl')!.total).toBe(8);
+    expect(byId.get('row')!.total).toBe(15);
   });
 });
 
