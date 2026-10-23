@@ -3,6 +3,8 @@ import { createProgramSchema, uniformSets } from "@regimen-works/shared";
 import * as fixtures from "../test/fixtures";
 import {
   EMPTY_PROGRAM,
+  SET_PRESETS,
+  applyPreset,
   blankLine,
   changesWeek,
   copyDay,
@@ -12,6 +14,8 @@ import {
   lineProblems,
   searchExercises,
   toCreateProgram,
+  toPerSet,
+  toSameForAll,
   trainingDays,
   type DraftLine,
   type ProgramDraft,
@@ -117,13 +121,22 @@ describe("editing a saved program (DN-146)", () => {
     expect(fromProgram({ ...saved, summary: null }).summary).toBe("");
   });
 
-  it("refuses a line whose sets differ rather than open it as something else", () => {
+  it("opens a line whose sets differ set by set, and saves it back the same (ADR 0011)", () => {
     const [day] = saved.days;
     const [first] = day.lines;
     const set = first.sets[0];
-    const varied = { ...first, sets: [...first.sets, { ...set, reps: (set.reps ?? 0) + 1 }] };
+    const stepped = { ...set, reps: (set.reps ?? 0) + 1, loadStepPercent: -10 };
+    const varied = { ...first, sets: [...first.sets, stepped] };
+    const withVaried = { ...saved, days: [{ ...day, lines: [varied] }] };
+    const loaded = fromProgram(withVaried);
 
-    expect(() => fromProgram({ ...saved, days: [{ ...day, lines: [varied] }] })).toThrow();
+    expect(loaded.days[1]?.[0].perSet).toHaveLength(4);
+    expect(loaded.days[1]?.[0].perSet?.[3].loadStepPercent).toBe(-10);
+    expect(toCreateProgram(loaded)).toEqual(withVaried);
+  });
+
+  it("opens a uniform line as same for all sets", () => {
+    expect(fromProgram(saved).days[1]?.[0].perSet).toBeNull();
   });
 
   it("calls a rename or a new summary no change to the week", () => {
@@ -137,6 +150,107 @@ describe("editing a saved program (DN-146)", () => {
     expect(changesWeek(copyDay(loaded, 1, [2]), saved)).toBe(true);
     expect(changesWeek({ ...loaded, days: { ...loaded.days, 1: monday } }, saved)).toBe(true);
     expect(changesWeek({ ...loaded, scheduleMode: "fixed" }, saved)).toBe(true);
+  });
+});
+
+describe("per-set lines (ADR 0011)", () => {
+  const rested = line({ sets: 3, reps: 8, restSeconds: 120 });
+  const filled = (preset: (typeof SET_PRESETS)[number]["id"]) =>
+    (applyPreset(rested, preset).perSet ?? []).map((s) => [
+      s.reps,
+      s.repsMax,
+      s.toFailure,
+      s.loadStepPercent,
+      s.restSeconds,
+    ]);
+
+  it("fills RPT heaviest first, about 10% lighter and more reps each set", () => {
+    expect(filled("rpt")).toEqual([
+      [6, 8, false, null, 120],
+      [8, 10, false, -10, 120],
+      [10, 12, false, -10, 120],
+    ]);
+  });
+
+  it("fills the pyramids load up, reps down and the other way round", () => {
+    expect(filled("pyramid-up")).toEqual([
+      [12, null, false, null, 120],
+      [10, null, false, 10, 120],
+      [8, null, false, 10, 120],
+    ]);
+    expect(filled("pyramid-down")).toEqual([
+      [8, null, false, null, 120],
+      [10, null, false, -10, 120],
+      [12, null, false, -10, 120],
+    ]);
+  });
+
+  it("fills a top set with back-offs at -15%, then the same weight", () => {
+    expect(filled("top-backoff")).toEqual([
+      [5, null, false, null, 120],
+      [5, null, false, -15, 120],
+      [5, null, false, 0, 120],
+      [5, null, false, 0, 120],
+    ]);
+  });
+
+  it("fills a drop set with no rest between drops, and the line's rest after", () => {
+    expect(filled("drop")).toEqual([
+      [null, null, true, null, 0],
+      [null, null, true, -20, 0],
+      [null, null, true, -20, 120],
+    ]);
+  });
+
+  it("fills 5/5/5+ with the last set to failure and no load steps", () => {
+    expect(filled("5-5-5plus")).toEqual([
+      [5, null, false, null, 120],
+      [5, null, false, null, 120],
+      [null, null, true, null, 120],
+    ]);
+  });
+
+  it("saves every preset as a body the API accepts, beside a uniform line", () => {
+    for (const { id } of SET_PRESETS) {
+      const uniform = line({ sets: 3, reps: 5 });
+      const body = toCreateProgram(draft({ days: { 1: [applyPreset(rested, id), uniform] } }));
+      expect(createProgramSchema.safeParse(body).success).toBe(true);
+      expect(body.days[0].lines[1].sets).toHaveLength(3);
+    }
+  });
+
+  it("never sends a load step on the first set", () => {
+    const split = toPerSet(rested);
+    const stepped = {
+      ...split,
+      perSet: split.perSet!.map((s, i) => (i === 0 ? { ...s, loadStepPercent: -10 } : s)),
+    };
+    const [sent] = toCreateProgram(draft({ days: { 1: [stepped] } })).days[0].lines[0].sets;
+
+    expect(sent.loadStepPercent).toBeNull();
+  });
+
+  it("splits a uniform line into its sets and joins it back", () => {
+    const split = toPerSet(rested);
+    expect(split.perSet).toHaveLength(3);
+    expect(split.perSet?.every((s) => s.reps === 8 && s.loadStepPercent === null)).toBe(true);
+
+    expect(toSameForAll(split)).toMatchObject({ perSet: null, sets: 3, reps: 8, restSeconds: 120 });
+  });
+
+  it("names the set a problem is on, and refuses a drop of the whole load", () => {
+    const rpt = applyPreset(rested, "rpt");
+    const broken = {
+      ...rpt,
+      perSet: rpt.perSet!.map((s, i) =>
+        i === 1 ? { ...s, reps: null } : i === 2 ? { ...s, loadStepPercent: -100 } : s,
+      ),
+    };
+    const problems = lineProblems(broken);
+
+    expect(problems.some((p) => p.startsWith("Set 2: "))).toBe(true);
+    expect(problems.some((p) => p.startsWith("Set 3: ") && /100%/.test(p))).toBe(true);
+    expect(lineProblems({ ...rpt, perSet: [] })).toContain("Add at least one set.");
   });
 });
 

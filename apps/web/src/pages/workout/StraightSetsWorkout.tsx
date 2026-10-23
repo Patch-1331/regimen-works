@@ -1,9 +1,11 @@
 import { useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  loadStepLabel,
   repsLabel,
   restClockSeconds,
   restStateAt,
+  sessionSetAt,
   straightSetsStateAt,
   type SessionMovement,
   type WorkoutSession,
@@ -72,16 +74,27 @@ export function StraightSetsWorkout({
   // Null would mean this is not a straight-sets session, which is what the
   // fork in ActiveWorkoutPage has already ruled out.
   const setsCompleted = session.setsCompleted ?? 0;
-  const state = straightSetsStateAt(
-    movements.map((m) => ({ sets: m.sets ?? 0 })),
-    setsCompleted,
-  );
+  const counts = movements.map((m) => ({ sets: m.sets ?? 0 }));
+  const state = straightSetsStateAt(counts, setsCompleted);
   const movement = movements[state.movementIndex] as SessionMovement | undefined;
+  // This set's own count and load step (ADR 0011): an RPT line asks for
+  // something different every set.
+  const set = movement ? sessionSetAt(movement, state.setNumber) : undefined;
+  const loadStep = set ? loadStepLabel(set.loadStepPercent) : null;
+
+  // The rest running now is the one after the set just finished, which is
+  // where a drop set's 0 lives -- not the next set's.
+  const finished =
+    setsCompleted > 0 ? straightSetsStateAt(counts, setsCompleted - 1) : null;
+  const finishedSet =
+    finished && movements[finished.movementIndex]
+      ? sessionSetAt(movements[finished.movementIndex], finished.setNumber)
+      : undefined;
 
   // Null for straight through and for a rest nobody stated alike: neither has
   // a countdown. Never `?? 0` here -- the snapshot's null is a fact about the
   // prescription, and the resolver upstream is the only place it may be filled.
-  const restClock = restClockSeconds(movement?.restSeconds ?? null);
+  const restClock = restClockSeconds(finishedSet?.restSeconds ?? null);
   const rest =
     session.restStartedAtSeconds === null || state.isComplete || restClock === null
       ? null
@@ -121,17 +134,18 @@ export function StraightSetsWorkout({
   }, [rest?.secondsRemaining, rest?.isOver, setsCompleted, isFinished]);
 
   /**
-   * A set is done. The rest starts now unless this movement has no clock --
+   * A set is done. The rest starts now unless this set has no clock --
    * straight through, or no rest stated anywhere -- or unless that was the last set of the day -- resting after the workout is
    * a countdown to nothing.
    */
   function handleSetDone() {
     const next = setsCompleted + 1;
     const isLast = next >= state.totalSets;
+    const restAfter = restClockSeconds(set?.restSeconds ?? null);
     logSetMutation.mutate({
       setsCompleted: next,
       restStartedAtSeconds:
-        isLast || restClock === null ? null : Math.floor(elapsedSeconds),
+        isLast || restAfter === null ? null : Math.floor(elapsedSeconds),
     });
   }
 
@@ -206,7 +220,7 @@ export function StraightSetsWorkout({
                   textShadow: "0 0 20px var(--glow-tint), 0 0 4px var(--glow)",
                 }}
               >
-                {movement ? repsLabel(movement, movement.exercise.unit) : "—"}
+                {movement && set ? repsLabel(set, movement.exercise.unit) : "—"}
               </div>
             )}
 
@@ -224,6 +238,7 @@ export function StraightSetsWorkout({
               }}
             >
               SET {state.setNumber} OF {state.setsInMovement}
+              {loadStep && ` · ${loadStep.toUpperCase()}`}
             </div>
           </div>
 

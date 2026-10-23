@@ -194,9 +194,15 @@ describe("pasting a program", () => {
         },
         {
           dayOfWeek: 3,
+          // One line of four sets, in the order written (ADR 0011).
           lines: [
-            { exerciseId: "floor", sets: times(2, { reps: 10, repsMax: 15 }) },
-            { exerciseId: "floor", sets: times(2, { reps: 5, repsMax: 8 }) },
+            {
+              exerciseId: "floor",
+              sets: [
+                ...times(2, { reps: 10, repsMax: 15, loadStepPercent: null }),
+                ...times(2, { reps: 5, repsMax: 8, loadStepPercent: null }),
+              ],
+            },
           ],
         },
       ],

@@ -948,12 +948,14 @@ model ProgramSlotMovement {
   @@unique([programSlotId, order])
 }
 
-// One set of a program line (ADR 0011): its count and the rest after it.
+// One set of a program line (ADR 0011): its count, its load step and the rest
+// after it.
 //
 // A line is an ordered list of these, so a reverse pyramid's 6-8, 8-10, 10-12
 // is three rows here rather than three lines that each read as a movement.
-// The editor still writes "N x one shape" as N identical rows (DN-190); what
-// varies set to set arrives with DN-186.
+// "Same for all sets" is N identical rows (DN-190); a preset or a hand edit
+// writes rows that differ (DN-186). No scheme name is stored: the rows are
+// the line.
 model ProgramSlotSet {
   id                    String              @id @default(cuid())
   programSlotMovementId String
@@ -995,6 +997,17 @@ model ProgramSlotSet {
   // package, and nowhere else. The CHECK keeping it non-negative is in
   // `20261023000000_program_slot_sets`.
   restSeconds Int?
+
+  // The load step (ADR 0011, decision 3): how this set's load relates to the
+  // set before it, as a signed whole-number percentage. -10 is 10% lighter, 0
+  // is "same weight" said out loud, and null is the source saying nothing --
+  // never read as 0. An instruction about the bar, never a weight: nothing in
+  // the app stores, logs or charts one (DN-85).
+  //
+  // Two CHECKs in `20261024000000_program_set_load_step`, which Prisma cannot
+  // say and will offer to drop: the first set has no step, because nothing
+  // comes before it, and no step takes the bar to zero or below.
+  loadStepPercent Int?
 
   @@unique([programSlotMovementId, order])
 }

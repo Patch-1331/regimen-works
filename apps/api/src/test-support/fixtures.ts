@@ -284,7 +284,7 @@ export async function createEnrollment(
 
 /**
  * `count` identical sets for a program line's `sets: { create }` (DN-190).
- * Every line the app writes today is this shape; DN-186 is what varies them.
+ * A "same for all sets" line; a spec that wants an RPT one writes its rows.
  */
 export function lineSets(count: number, set: Record<string, unknown>) {
   return {

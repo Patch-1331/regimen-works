@@ -10,7 +10,6 @@ import {
   DEFAULT_PROGRAM_ID,
   PROGRAM_EXPORT_FORMAT,
   PROGRAM_EXPORT_VERSION,
-  asUniform,
   createProgramSchema,
   defaultProgramSummary,
   exportProgramsSchema,
@@ -685,6 +684,7 @@ function toCreateProgram(program: ProgramContent): CreateProgram {
           repsMax: s.repsMax,
           toFailure: s.toFailure,
           restSeconds: s.restSeconds,
+          loadStepPercent: s.loadStepPercent,
         })),
       })),
     }))
@@ -702,22 +702,11 @@ function toCreateProgram(program: ProgramContent): CreateProgram {
 }
 
 /**
- * The body as a program this release can run (DN-190). A line is stored as
- * its list of sets (ADR 0011), but every reader still prescribes one count of
- * one shape -- the scheduler, the session, the editor -- so a line whose sets
- * differ is refused here, on every write path, until those readers vary them.
+ * The body as a program, on every write path. A line's sets may differ from
+ * one another (ADR 0011): each is stored as written, load step and all.
  */
 function validateProgram(body: unknown): CreateProgram {
-  const program = validateBody(createProgramSchema, body);
-  const varied = program.days.some((day) =>
-    day.lines.some((line) => asUniform(line.sets) === null),
-  );
-  if (varied) {
-    throw new BadRequestException(
-      'Every set on a line has to be the same, for now.',
-    );
-  }
-  return program;
+  return validateBody(createProgramSchema, body);
 }
 
 /** Whether two bodies describe the same week, whatever they are called. */
@@ -732,7 +721,13 @@ function sameStructure(a: CreateProgram, b: CreateProgram): boolean {
           lines: d.lines.map((l) => [
             l.movementGroup,
             l.exerciseId,
-            l.sets.map((s) => [s.reps, s.repsMax, s.toFailure, s.restSeconds]),
+            l.sets.map((s) => [
+              s.reps,
+              s.repsMax,
+              s.toFailure,
+              s.restSeconds,
+              s.loadStepPercent,
+            ]),
           ]),
         })),
     });

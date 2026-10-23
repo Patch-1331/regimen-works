@@ -4,6 +4,7 @@ import {
   createProgramSchema,
   defaultProgramSummary,
   LEGACY_PROGRAM_EXPORT_FORMAT,
+  loadStepLabel,
   PROGRAM_EXPORT_FORMAT,
   programExportEnvelopeSchema,
   type CreateProgram,
@@ -331,7 +332,13 @@ describe("programExportEnvelopeSchema", () => {
 });
 
 describe("asUniform", () => {
-  const fixed = { reps: 5, repsMax: null, toFailure: false, restSeconds: 90 };
+  const fixed = {
+    reps: 5,
+    repsMax: null,
+    toFailure: false,
+    restSeconds: 90,
+    loadStepPercent: null,
+  };
 
   it("reads N identical sets back as N of one", () => {
     expect(asUniform(uniformSets(5, fixed))).toEqual({ count: 5, set: fixed });
@@ -348,5 +355,64 @@ describe("asUniform", () => {
   it("is null where the sets differ, or there are none", () => {
     expect(asUniform([fixed, { ...fixed, reps: 6 }])).toBeNull();
     expect(asUniform([])).toBeNull();
+  });
+
+  it("is null where any load step is stated, even the same weight on every set", () => {
+    expect(asUniform([fixed, { ...fixed, loadStepPercent: -10 }])).toBeNull();
+    expect(asUniform([fixed, { ...fixed, loadStepPercent: 0 }])).toBeNull();
+  });
+});
+
+/** ADR 0011, decision 3: a step relative to the set before, never a load. */
+describe("a set's load step", () => {
+  it("takes a signed whole percentage on any set after the first", () => {
+    const body = withLine({
+      sets: [set(), set({ loadStepPercent: -10 }), set({ loadStepPercent: 5 }), set({ loadStepPercent: 0 })],
+    });
+    const parsed = createProgramSchema.parse(body);
+    expect(parsed.days[0].lines[0].sets.map((s) => s.loadStepPercent)).toEqual([
+      null, -10, 5, 0,
+    ]);
+  });
+
+  it("is null, never 0, where the set leaves it out", () => {
+    const parsed = createProgramSchema.parse(withLine({ sets: [set(), set()] }));
+    expect(parsed.days[0].lines[0].sets.map((s) => s.loadStepPercent)).toEqual([null, null]);
+  });
+
+  it("is refused on the first set, which has nothing before it", () => {
+    expect(messages(withSet({ loadStepPercent: -10 }))).toEqual([
+      "the first set has no load step — there is no set before it",
+    ]);
+    expect(messages(withSet({ loadStepPercent: 0 }))).toHaveLength(1);
+  });
+
+  it("refuses a fraction, and a drop of the whole bar or more", () => {
+    for (const loadStepPercent of [-7.5, -100, -150]) {
+      expect(
+        messages(withLine({ sets: [set(), set({ loadStepPercent })] })),
+      ).toHaveLength(1);
+    }
+  });
+
+  it("lets one line vary its count from set to set", () => {
+    const rpt = [
+      set({ reps: 6, repsMax: 8 }),
+      set({ reps: 8, repsMax: 10, loadStepPercent: -10 }),
+      set({ reps: 10, repsMax: 12, loadStepPercent: -10 }),
+    ];
+    expect(messages(withLine({ sets: rpt }))).toEqual([]);
+  });
+});
+
+describe("loadStepLabel", () => {
+  it("reads lighter with a true minus, heavier with a plus", () => {
+    expect(loadStepLabel(-10)).toBe("\u221210%");
+    expect(loadStepLabel(5)).toBe("+5%");
+  });
+
+  it("says a stated 0 out loud, and says nothing for an unstated step", () => {
+    expect(loadStepLabel(0)).toBe("same weight");
+    expect(loadStepLabel(null)).toBeNull();
   });
 });

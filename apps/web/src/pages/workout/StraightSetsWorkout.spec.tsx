@@ -47,9 +47,7 @@ const PRESCRIBED = [
   fixtures.prescribedMovement({
     id: "program-slot-movement-2",
     order: 1,
-    sets: 3,
-    reps: 8,
-    restSeconds: 60,
+    sets: fixtures.prescribedSets(3, { reps: 8, restSeconds: 60 }),
     movementGroup: "push_horizontal",
     exercise: { id: "exercise-push-up", name: "Push-up", movementGroup: "push_horizontal" },
   }),
@@ -297,5 +295,96 @@ describe("the straight-sets runner", () => {
 
     await screen.findByText("CHIN-UP");
     expect(screen.queryByText("ROUND COMPLETE")).not.toBeInTheDocument();
+  });
+});
+
+describe("a line prescribed set by set (ADR 0011)", () => {
+  /** Chin-up RPT: 6-8, 8-10 at -10%, 10-12 at -10%, two minutes between. */
+  const RPT = fixtures.sessionMovement({
+    sets: 3,
+    reps: 6,
+    repsMax: 8,
+    restSeconds: 120,
+    prescribedSets: [
+      { reps: 6, repsMax: 8, toFailure: false, loadStepPercent: null, restSeconds: 120 },
+      { reps: 8, repsMax: 10, toFailure: false, loadStepPercent: -10, restSeconds: 120 },
+      { reps: 10, repsMax: 12, toFailure: false, loadStepPercent: -10, restSeconds: 90 },
+    ],
+  });
+  /** To failure, then two drops of 20% with no rest between them. */
+  const DROP = fixtures.sessionMovement({
+    sets: 3,
+    reps: null,
+    toFailure: true,
+    restSeconds: 0,
+    prescribedSets: [
+      { reps: null, repsMax: null, toFailure: true, loadStepPercent: null, restSeconds: 0 },
+      { reps: null, repsMax: null, toFailure: true, loadStepPercent: -20, restSeconds: 0 },
+      { reps: null, repsMax: null, toFailure: true, loadStepPercent: -20, restSeconds: 60 },
+    ],
+  });
+
+  it("shows the first set's own target and no load step", async () => {
+    running({ movements: [RPT] });
+    renderRoute(`/workout/${ID}`);
+
+    expect(await screen.findByText("6-8")).toBeInTheDocument();
+    expect(screen.getByText("SET 1 OF 3")).toBeInTheDocument();
+  });
+
+  it("shows each later set's target with its load step", async () => {
+    running({ movements: [RPT], setsCompleted: 1 });
+    renderRoute(`/workout/${ID}`);
+
+    expect(await screen.findByText("8-10")).toBeInTheDocument();
+    expect(screen.getByText("SET 2 OF 3 · \u221210%")).toBeInTheDocument();
+  });
+
+  it("says same weight for a step of 0, which is not an unstated one", async () => {
+    const backOff = fixtures.sessionMovement({
+      sets: 2,
+      prescribedSets: [
+        { reps: 5, repsMax: null, toFailure: false, loadStepPercent: null, restSeconds: 90 },
+        { reps: 5, repsMax: null, toFailure: false, loadStepPercent: 0, restSeconds: 90 },
+      ],
+    });
+    running({ movements: [backOff], setsCompleted: 1 });
+    renderRoute(`/workout/${ID}`);
+
+    expect(await screen.findByText("SET 2 OF 2 · SAME WEIGHT")).toBeInTheDocument();
+  });
+
+  it("counts down the rest after the set just done, not the next one's", async () => {
+    // Set 2 rests 120 and set 3 rests 90: 30 seconds into the rest after set 2.
+    running({
+      movements: [RPT],
+      setsCompleted: 2,
+      startedAt: new Date(Date.now() - 40_000).toISOString(),
+      restStartedAtSeconds: 10,
+    });
+    renderRoute(`/workout/${ID}`);
+
+    expect(await screen.findByText("REST")).toBeInTheDocument();
+    expect(screen.getByText("90")).toBeInTheDocument();
+  });
+
+  it("runs a drop set straight through, with no rest between the drops", async () => {
+    const posted = running({ movements: [DROP, fixtures.sessionMovement()], setsCompleted: 1 });
+    renderRoute(`/workout/${ID}`);
+
+    expect(await screen.findByText("SET 2 OF 3 · \u221220%")).toBeInTheDocument();
+    await userEvent.click(screen.getByText("SET DONE"));
+
+    expect(posted[0]).toEqual({ setsCompleted: 2, restStartedAtSeconds: null });
+  });
+
+  it("rests after the last drop, before the next movement", async () => {
+    const posted = running({ movements: [DROP, fixtures.sessionMovement()], setsCompleted: 2 });
+    renderRoute(`/workout/${ID}`);
+
+    await userEvent.click(await screen.findByText("SET DONE"));
+
+    expect(posted[0].setsCompleted).toBe(3);
+    expect(posted[0].restStartedAtSeconds).not.toBeNull();
   });
 });

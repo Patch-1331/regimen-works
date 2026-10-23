@@ -1,4 +1,11 @@
-import { asUniform, uniformSets, type CreateProgram, type MovementGroup } from "@regimen-works/shared";
+import {
+  asUniform,
+  loadStepLabel,
+  uniformSets,
+  type CreateProgram,
+  type MovementGroup,
+  type ProgramSet,
+} from "@regimen-works/shared";
 import type { ApiExercise } from "./api";
 import { lineLabel } from "./progressions";
 
@@ -12,6 +19,22 @@ import { lineLabel } from "./progressions";
  * the screen shows for every line that cannot be tightened yet.
  */
 
+/** One set of a line written set by set (ADR 0011), loose like the line. */
+export type DraftSet = {
+  reps: number | null;
+  repsMax: number | null;
+  toFailure: boolean;
+  /** Relative to the set before; ignored on the first set, which has none. */
+  loadStepPercent: number | null;
+  restSeconds: number | null;
+};
+
+/**
+ * One line of a day. "Same for all sets" is the default and the common case:
+ * a count beside one set's fields. `perSet` is the line written set by set --
+ * by hand or from a preset -- and while it is there the flat fields are not
+ * read. A convenience of the editor only: both save as a list of sets.
+ */
 export type DraftLine = {
   id: string;
   exerciseId: string | null;
@@ -21,6 +44,8 @@ export type DraftLine = {
   repsMax: number | null;
   toFailure: boolean;
   restSeconds: number | null;
+  /** The line set by set, or null for "same for all sets". */
+  perSet: DraftSet[] | null;
 };
 
 export type ProgramDraft = {
@@ -58,6 +83,7 @@ export function blankLine(): DraftLine {
     repsMax: null,
     toFailure: false,
     restSeconds: null,
+    perSet: null,
   };
 }
 
@@ -77,17 +103,39 @@ export function trainingDays(draft: ProgramDraft): number[] {
 export function lineProblems(line: DraftLine): string[] {
   const out: string[] = [];
   if (!line.exerciseId && !line.movementGroup) out.push("Choose a movement.");
-  if (line.sets === null || line.sets < 1) out.push("How many sets?");
-  if (!line.toFailure && (line.reps === null || line.reps < 1)) {
-    out.push("How many reps — or to failure?");
+  if (line.perSet === null) {
+    if (line.sets === null || line.sets < 1) out.push("How many sets?");
+    out.push(...countProblems(line, ""));
+    return out;
+  }
+  if (line.perSet.length === 0) out.push("Add at least one set.");
+  line.perSet.forEach((set, i) => {
+    const at = `Set ${i + 1}: `;
+    out.push(...countProblems(set, at));
+    // The first set's step is never saved, so it is never a problem.
+    if (i > 0 && set.loadStepPercent !== null && set.loadStepPercent <= -100) {
+      out.push(`${at}a load can drop by less than 100%.`);
+    }
+  });
+  return out;
+}
+
+/** One set's count, held to ADR 0005's three shapes. */
+function countProblems(
+  set: Pick<DraftSet, "reps" | "repsMax" | "toFailure">,
+  at: string,
+): string[] {
+  const out: string[] = [];
+  if (!set.toFailure && (set.reps === null || set.reps < 1)) {
+    out.push(`${at}How many reps — or to failure?`);
   }
   if (
-    !line.toFailure &&
-    line.repsMax !== null &&
-    line.reps !== null &&
-    line.repsMax <= line.reps
+    !set.toFailure &&
+    set.repsMax !== null &&
+    set.reps !== null &&
+    set.repsMax <= set.reps
   ) {
-    out.push("The top of the range must be above the bottom.");
+    out.push(`${at}The top of the range must be above the bottom.`);
   }
   return out;
 }
@@ -121,15 +169,30 @@ export function toCreateProgram(draft: ProgramDraft): CreateProgram {
       lines: (draft.days[dayOfWeek] ?? []).map((line) => ({
         movementGroup: line.exerciseId ? null : line.movementGroup,
         exerciseId: line.exerciseId,
-        sets: uniformSets(line.sets ?? 0, {
-          reps: line.toFailure ? null : line.reps,
-          repsMax: line.toFailure ? null : line.repsMax,
-          toFailure: line.toFailure,
-          restSeconds: line.restSeconds,
-        }),
+        sets: lineSets(line),
       })),
     })),
   };
+}
+
+/** A line's sets for the body: one set copied N times, or each as written. */
+function lineSets(line: DraftLine): ProgramSet[] {
+  if (line.perSet === null) {
+    return uniformSets(line.sets ?? 0, {
+      reps: line.toFailure ? null : line.reps,
+      repsMax: line.toFailure ? null : line.repsMax,
+      toFailure: line.toFailure,
+      restSeconds: line.restSeconds,
+    });
+  }
+  return line.perSet.map((set, i) => ({
+    reps: set.toFailure ? null : set.reps,
+    repsMax: set.toFailure ? null : set.repsMax,
+    toFailure: set.toFailure,
+    restSeconds: set.restSeconds,
+    // Nothing comes before the first set, so it has no step to state.
+    loadStepPercent: i === 0 ? null : set.loadStepPercent,
+  }));
 }
 
 /** A day's name for the body, left out where it has none. */
@@ -151,17 +214,27 @@ export function fromProgram(program: CreateProgram): ProgramDraft {
     days: Object.fromEntries(
       program.days.map((day) => [
         day.dayOfWeek,
-        day.lines.map((line) => {
-          const { count, set } = uniform(line.sets);
-          return {
+        day.lines.map((line): DraftLine => {
+          const movement = {
             id: lineId(),
             exerciseId: line.exerciseId,
             movementGroup: line.movementGroup,
-            sets: count,
-            reps: set.reps,
-            repsMax: set.repsMax,
-            toFailure: set.toFailure,
-            restSeconds: set.restSeconds,
+          };
+          // A line opens "same for all sets" wherever it can, and set by set
+          // wherever that would lose something.
+          const uniform = asUniform(line.sets);
+          if (uniform === null) {
+            const [first] = line.sets;
+            return {
+              ...movement,
+              ...flatFields(line.sets.length, first),
+              perSet: line.sets.map((s) => ({ ...s })),
+            };
+          }
+          return {
+            ...movement,
+            ...flatFields(uniform.count, uniform.set),
+            perSet: null,
           };
         }),
       ]),
@@ -172,15 +245,104 @@ export function fromProgram(program: CreateProgram): ProgramDraft {
   };
 }
 
+/** "Same for all sets" fields: `count` of this one set. */
+function flatFields(
+  count: number,
+  set: Omit<DraftSet, "loadStepPercent">,
+): Pick<DraftLine, "sets" | "reps" | "repsMax" | "toFailure" | "restSeconds"> {
+  return {
+    sets: count,
+    reps: set.reps,
+    repsMax: set.repsMax,
+    toFailure: set.toFailure,
+    restSeconds: set.restSeconds,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Set by set (ADR 0011)
+// ---------------------------------------------------------------------------
+
 /**
- * A saved line's sets as the editor holds them: a count of one set (DN-190).
- * The API refuses a line whose sets differ, so one here is a bug, not a
- * program to open half-understood.
+ * The line written set by set: each of its sets as its own row, starting as
+ * copies of the one set it had. Nothing changes until a row is edited.
  */
-function uniform(sets: CreateProgram["days"][number]["lines"][number]["sets"]) {
-  const line = asUniform(sets);
-  if (!line) throw new Error("A program line's sets differ; the editor cannot hold it.");
-  return line;
+export function toPerSet(line: DraftLine): DraftLine {
+  if (line.perSet !== null) return line;
+  const set: DraftSet = {
+    reps: line.toFailure ? null : line.reps,
+    repsMax: line.toFailure ? null : line.repsMax,
+    toFailure: line.toFailure,
+    loadStepPercent: null,
+    restSeconds: line.restSeconds,
+  };
+  return {
+    ...line,
+    perSet: Array.from({ length: Math.max(1, line.sets ?? 1) }, () => ({ ...set })),
+  };
+}
+
+/**
+ * Back to "same for all sets": as many sets as there were, each like the
+ * first. What the other sets said differently -- and every load step -- is
+ * dropped, which is what going back to one set's fields means.
+ */
+export function toSameForAll(line: DraftLine): DraftLine {
+  if (line.perSet === null) return line;
+  const [first] = line.perSet;
+  return {
+    ...line,
+    ...(first ? flatFields(line.perSet.length, first) : { sets: null }),
+    perSet: null,
+  };
+}
+
+/** The presets a line can be filled from. Never stored: the sets are the line (ADR 0011). */
+export const SET_PRESETS = [
+  { id: "rpt", label: "RPT" },
+  { id: "pyramid-up", label: "Ascending pyramid" },
+  { id: "pyramid-down", label: "Descending pyramid" },
+  { id: "top-backoff", label: "Top set + back-offs" },
+  { id: "drop", label: "Drop set" },
+  { id: "5-5-5plus", label: "5/5/5+" },
+] as const;
+export type SetPreset = (typeof SET_PRESETS)[number]["id"];
+
+/**
+ * Fills the line's sets from a preset, which the author then edits like any
+ * other row. Every set rests what the line rested, except between a drop
+ * set's drops, where no rest is the point (ADR 0011, decision 4).
+ */
+export function applyPreset(line: DraftLine, preset: SetPreset): DraftLine {
+  const rest = line.perSet === null ? line.restSeconds : (line.perSet[0]?.restSeconds ?? null);
+  const set = (
+    reps: number | null,
+    repsMax: number | null,
+    loadStepPercent: number | null,
+    restSeconds: number | null = rest,
+  ): DraftSet => ({
+    reps,
+    repsMax,
+    toFailure: reps === null,
+    loadStepPercent,
+    restSeconds,
+  });
+  const perSet: Record<SetPreset, DraftSet[]> = {
+    // Heaviest first, then about 10% lighter for more reps each time.
+    rpt: [set(6, 8, null), set(8, 10, -10), set(10, 12, -10)],
+    // Load up, reps down.
+    "pyramid-up": [set(12, null, null), set(10, null, 10), set(8, null, 10)],
+    // Load down, reps up.
+    "pyramid-down": [set(8, null, null), set(10, null, -10), set(12, null, -10)],
+    // One heavy set, then back-offs at -15% and the same weight after it.
+    "top-backoff": [set(5, null, null), set(5, null, -15), set(5, null, 0), set(5, null, 0)],
+    // To failure, then drop and go again with no rest between drops.
+    drop: [set(null, null, null, 0), set(null, null, -20, 0), set(null, null, -20)],
+    // 5/3/1's rep pattern: the last set as many as you can. Its percentages
+    // of a training max are out (DN-85), so the steps are left unstated.
+    "5-5-5plus": [set(5, null, null), set(5, null, null), set(null, null, null)],
+  };
+  return { ...line, perSet: perSet[preset] };
 }
 
 /**
@@ -282,16 +444,41 @@ export function lineMovementName(line: DraftLine, library: ApiExercise[]) {
   return "Choose a movement";
 }
 
+/** One set's count as the sheet reads it: "8", "8–10", "failure", "?". */
+function formatCount(set: Pick<DraftSet, "reps" | "repsMax" | "toFailure">, unit: string) {
+  if (set.toFailure) return "failure";
+  if (set.reps === null) return "?";
+  const reps = set.repsMax ? `${set.reps}–${set.repsMax}` : `${set.reps}`;
+  return `${reps}${unit === "seconds" ? "s" : ""}`;
+}
+
+/**
+ * The line's scheme on the sheet: "3 × 8–10", or set by set,
+ * "6–8 / 8–10 −10% / 10–12 −10%".
+ */
 export function formatScheme(line: DraftLine, unit: string = "reps") {
+  if (line.perSet !== null) {
+    return line.perSet
+      .map((set, i) => {
+        const step = i === 0 ? null : loadStepLabel(set.loadStepPercent);
+        return step ? `${formatCount(set, unit)} ${step}` : formatCount(set, unit);
+      })
+      .join(" / ");
+  }
   const sets = line.sets ?? "?";
   if (line.toFailure) return `${sets} × failure`;
-  if (line.reps === null) return `${sets} × ?`;
-  const reps = line.repsMax ? `${line.reps}–${line.repsMax}` : `${line.reps}`;
-  return `${sets} × ${reps}${unit === "seconds" ? "s" : ""}`;
+  return `${sets} × ${formatCount(line, unit)}`;
+}
+
+function formatOneRest(restSeconds: number | null) {
+  if (restSeconds === null) return "rest —";
+  if (restSeconds === 0) return "no rest";
+  return `rest ${restSeconds}s`;
 }
 
 export function formatRest(line: DraftLine) {
-  if (line.restSeconds === null) return "rest —";
-  if (line.restSeconds === 0) return "no rest";
-  return `rest ${line.restSeconds}s`;
+  if (line.perSet === null) return formatOneRest(line.restSeconds);
+  const rests = new Set(line.perSet.map((s) => s.restSeconds));
+  if (rests.size > 1) return "rest varies";
+  return formatOneRest(line.perSet[0]?.restSeconds ?? null);
 }

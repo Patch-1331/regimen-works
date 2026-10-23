@@ -16,6 +16,7 @@ import {
   finishSecondsAt,
   hasRepScheme,
   resolveIntervalConfig,
+  sessionSetAt,
   straightSetsStateAt,
 } from '@regimen-works/shared';
 import { loadPrescribedSlot } from '../programs/prescribed-slot';
@@ -285,14 +286,18 @@ export class SessionsService {
           movements.map((m) => ({ sets: m.sets ?? 0 })),
           finished - 1,
         );
+        // This set's own count, which on an RPT line is not the first set's
+        // (ADR 0011).
         const movement = movements[at.movementIndex];
+        const set = sessionSetAt(movement, at.setNumber);
         // What the day asked for, copied whole rather than flattened to a
         // number (DN-142). A range recorded as its floor would have history
-        // claim the day asked for 8 when it asked for 8-10.
+        // claim the day asked for 8 when it asked for 8-10. The load step is
+        // not copied: a set log holds no load, relative or otherwise (DN-85).
         const prescribed = {
-          prescribedReps: movement.reps,
-          prescribedRepsMax: movement.repsMax,
-          prescribedToFailure: movement.toFailure,
+          prescribedReps: set.reps,
+          prescribedRepsMax: set.repsMax,
+          prescribedToFailure: set.toFailure,
         };
         // The runner records the day as prescribed, so what the athlete did is
         // what they were asked for -- except on a set prescribed to failure,
@@ -300,7 +305,7 @@ export class SessionsService {
         // did not witness the count, and 0 is already taken by "attempted and
         // not made". The athlete supplies it at log time, the way a corrected
         // set is supplied.
-        const actualReps = movement.toFailure ? null : movement.reps;
+        const actualReps = set.toFailure ? null : set.reps;
 
         await tx.workoutSetLog.upsert({
           // Upsert rather than create because the counter is what decides a

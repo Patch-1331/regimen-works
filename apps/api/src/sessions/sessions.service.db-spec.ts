@@ -1338,6 +1338,96 @@ describe('SessionsService, on a day prescribed in ranges and to failure', () => 
   });
 });
 
+describe('SessionsService, on a day prescribed set by set (ADR 0011)', () => {
+  async function running() {
+    const day = await prescribedDay({
+      movements: [
+        {
+          order: 0,
+          movementGroup: 'pull',
+          sets: {
+            create: [
+              { order: 0, reps: 6, repsMax: 8, restSeconds: 120 },
+              {
+                order: 1,
+                reps: 8,
+                repsMax: 10,
+                loadStepPercent: -10,
+                restSeconds: 120,
+              },
+              {
+                order: 2,
+                reps: null,
+                toFailure: true,
+                loadStepPercent: -10,
+                restSeconds: 60,
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const session = await service().start(day.user.id, day.assignment.id);
+    return { ...day, session };
+  }
+
+  it('snapshots every set as written, load steps included', async () => {
+    const { session } = await running();
+
+    expect(session.movements[0].sets).toBe(3);
+    expect(session.movements[0].prescribedSets).toEqual([
+      {
+        reps: 6,
+        repsMax: 8,
+        toFailure: false,
+        loadStepPercent: null,
+        restSeconds: 120,
+      },
+      {
+        reps: 8,
+        repsMax: 10,
+        toFailure: false,
+        loadStepPercent: -10,
+        restSeconds: 120,
+      },
+      {
+        reps: null,
+        repsMax: null,
+        toFailure: true,
+        loadStepPercent: -10,
+        restSeconds: 60,
+      },
+    ]);
+  });
+
+  it('logs each set against its own prescription, and never a weight', async () => {
+    const { user, assignment } = await running();
+    for (let n = 1; n <= 3; n++) {
+      await service().logSet(user.id, assignment.id, {
+        setsCompleted: n,
+        restStartedAtSeconds: null,
+      });
+    }
+
+    const logs = await service().setLogs(user.id, assignment.id);
+    expect(
+      logs.map((l) => [
+        l.prescribedReps,
+        l.prescribedRepsMax,
+        l.prescribedToFailure,
+        l.actualReps,
+      ]),
+    ).toEqual([
+      [6, 8, false, 6],
+      [8, 10, false, 8],
+      [null, null, true, null],
+    ]);
+    for (const log of logs) {
+      expect(Object.keys(log).some((k) => /load|weight/i.test(k))).toBe(false);
+    }
+  });
+});
+
 /**
  * Rest, resolved through the run's pace as the session starts (ADR 0005,
  * DN-143). The snapshot is what the runner's clock reads, so this is where

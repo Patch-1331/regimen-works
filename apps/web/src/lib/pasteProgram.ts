@@ -82,10 +82,11 @@ export function pasteProblems(
 const IN_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
 /**
- * The accepted lines as an unsaved week sheet. One sheet line per scheme,
- * since a sheet line has one: "2x10-15 & 2x5-8" is two lines of the same
- * movement. A line that gave no scheme keeps blank counts, which the sheet
- * then asks for.
+ * The accepted lines as an unsaved week sheet. One sheet line per pasted
+ * line: "1x10 & 2xfailure" is one line of three sets, in the order written
+ * (ADR 0011) -- set by set where the schemes differ, "same for all sets" where
+ * there is only one. A line that gave no scheme keeps blank counts, which the
+ * sheet then asks for. Every set rests what the line said.
  */
 export function toPastedDraft(
   program: PastedProgram,
@@ -100,28 +101,32 @@ export function toPastedDraft(
     const choice = choiceOf(l);
     if (l.leftOut || !choice) continue;
     const weekday = program.days[l.day].dayOfWeek ?? IN_ORDER[l.day];
-    const base = { ...choice, restSeconds: l.line.restSeconds };
-    const out: DraftLine[] =
-      l.line.schemes.length === 0
-        ? [
-            {
-              id: lineId(),
-              ...base,
-              sets: null,
-              reps: null,
-              repsMax: null,
-              toFailure: false,
-            },
-          ]
-        : l.line.schemes.map((s) => ({
-            id: lineId(),
-            ...base,
-            sets: s.sets,
-            reps: s.reps,
-            repsMax: s.repsMax,
-            toFailure: s.toFailure,
-          }));
-    days[weekday] = [...(days[weekday] ?? []), ...out];
+    const restSeconds = l.line.restSeconds;
+    const [only, ...more] = l.line.schemes;
+    const out: DraftLine = {
+      id: lineId(),
+      ...choice,
+      sets: only?.sets ?? null,
+      reps: only?.reps ?? null,
+      repsMax: only?.repsMax ?? null,
+      toFailure: only?.toFailure ?? false,
+      restSeconds,
+      // Load steps are not read from a paste yet (DN-189), so every one is
+      // the silence it was.
+      perSet:
+        more.length === 0
+          ? null
+          : l.line.schemes.flatMap((s) =>
+              Array.from({ length: s.sets }, () => ({
+                reps: s.reps,
+                repsMax: s.repsMax,
+                toFailure: s.toFailure,
+                loadStepPercent: null,
+                restSeconds,
+              })),
+            ),
+    };
+    days[weekday] = [...(days[weekday] ?? []), out];
   }
   return {
     name: "",

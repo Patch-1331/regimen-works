@@ -32,6 +32,7 @@ function snapshot(overrides: Partial<SessionMovement> = {}): SessionMovement {
     wodMovementId: 'wm-1',
     programSlotMovementId: null,
     sets: null,
+    prescribedSets: null,
     restSeconds: null,
     order: 0,
     reps: 30,

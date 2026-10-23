@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { createProgramSchema } from "@regimen-works/shared";
 import * as fixtures from "../test/fixtures";
+import { toCreateProgram } from "./programDraft";
 import {
   pasteProblems,
   readBack,
@@ -80,7 +82,7 @@ describe("unresolved and pasteProblems", () => {
 });
 
 describe("toPastedDraft", () => {
-  it("puts weekday-headed days on their weekdays, one line per scheme", () => {
+  it("puts weekday-headed days on their weekdays, one line per pasted line", () => {
     const { program, lines } = readBack(
       "Tuesday\nBarbell Squat 2x10-15 & 2xfailure @ 225 rest 90s\nThursday\nPlank 3x60s",
       LIBRARY,
@@ -88,26 +90,29 @@ describe("toPastedDraft", () => {
     const draft = toPastedDraft(program, lines);
     expect(draft.scheduleMode).toBe("fixed");
     expect(Object.keys(draft.days)).toEqual(["2", "4"]);
+    const range = { reps: 10, repsMax: 15, toFailure: false, loadStepPercent: null, restSeconds: 90 };
+    const failure = { reps: null, repsMax: null, toFailure: true, loadStepPercent: null, restSeconds: 90 };
     expect(draft.days[2]).toEqual([
-      expect.objectContaining({
-        exerciseId: "squat",
-        sets: 2,
-        reps: 10,
-        repsMax: 15,
-        toFailure: false,
-        restSeconds: 90,
-      }),
-      expect.objectContaining({
-        exerciseId: "squat",
-        sets: 2,
-        reps: null,
-        toFailure: true,
-        restSeconds: 90,
-      }),
+      expect.objectContaining({ exerciseId: "squat", perSet: [range, range, failure, failure] }),
     ]);
     expect(draft.days[4]).toEqual([
-      expect.objectContaining({ exerciseId: "plank", sets: 3, reps: 60 }),
+      expect.objectContaining({ exerciseId: "plank", sets: 3, reps: 60, perSet: null }),
     ]);
+  });
+
+  it("joins `1x10 & 2xfailure` into one line of three sets, in order (ADR 0011)", () => {
+    const { program, lines } = readBack("Barbell Squat 1x10 & 2xfailure", LIBRARY);
+    const draft = toPastedDraft(program, lines);
+    const [only, ...more] = Object.values(draft.days).flat();
+
+    expect(more).toEqual([]);
+    expect(only?.perSet?.map((s) => [s.reps, s.toFailure, s.loadStepPercent])).toEqual([
+      [10, false, null],
+      [null, true, null],
+      [null, true, null],
+    ]);
+    const body = toCreateProgram({ ...draft, name: "Pasted" });
+    expect(createProgramSchema.safeParse(body).success).toBe(true);
   });
 
   it("lays Day N days on the week in order, Monday first", () => {

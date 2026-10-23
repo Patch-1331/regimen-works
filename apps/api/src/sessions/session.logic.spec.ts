@@ -126,6 +126,7 @@ describe('snapshotMovements', () => {
         // sets, so the three straight-sets fields are absent facts (DN-20).
         programSlotMovementId: null,
         sets: null,
+        prescribedSets: null,
         restSeconds: null,
         order: 1,
         reps: 45,
@@ -194,11 +195,13 @@ describe('snapshotPrescribedMovements', () => {
   const resolved = {
     id: 'psm-1',
     order: 1,
-    sets: 5,
-    reps: 3,
-    repsMax: null,
-    toFailure: false,
-    restSeconds: 90,
+    sets: Array.from({ length: 5 }, () => ({
+      reps: 3,
+      repsMax: null,
+      toFailure: false,
+      loadStepPercent: null,
+      restSeconds: 90,
+    })),
     isSwapped: false,
     prescribedName: 'Chin-up',
     prescribedReason: 'equipment' as const,
@@ -229,6 +232,44 @@ describe('snapshotPrescribedMovements', () => {
     // asks what one set is, and 15 would be a number nobody was asked to do
     // in one go.
     expect(snapshot.reps).toBe(3);
+  });
+
+  it('keeps every set as prescribed, so an RPT line logs set by set', () => {
+    // ADR 0011: the top-level count is the first set's, kept so a reader
+    // that predates per-set prescriptions still has one to show.
+    const rpt = {
+      ...resolved,
+      sets: [
+        {
+          reps: 6,
+          repsMax: 8,
+          toFailure: false,
+          loadStepPercent: null,
+          restSeconds: 120,
+        },
+        {
+          reps: 8,
+          repsMax: 10,
+          toFailure: false,
+          loadStepPercent: -10,
+          restSeconds: 120,
+        },
+        {
+          reps: 10,
+          repsMax: 12,
+          toFailure: false,
+          loadStepPercent: -10,
+          restSeconds: 90,
+        },
+      ],
+    };
+    const [snapshot] = snapshotPrescribedMovements([rpt]);
+
+    expect(snapshot.sets).toBe(3);
+    expect(snapshot.prescribedSets).toEqual(rpt.sets);
+    expect(snapshot.prescribedSets).not.toBe(rpt.sets);
+    expect(snapshot.reps).toBe(6);
+    expect(snapshot.repsMax).toBe(8);
   });
 
   it('records no group, because a prescribed movement has none', () => {

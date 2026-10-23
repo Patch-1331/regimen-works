@@ -24,7 +24,7 @@ import {
   scheduleRuleSchema,
   trainingDaysSchema,
 } from "./schedule.js";
-import { sessionMovementSchema, workoutSessionSchema } from "./session.js";
+import { sessionMovementSchema, sessionSetAt, workoutSessionSchema } from "./session.js";
 import {
   scheduleLockSchema,
   settingsSchema,
@@ -371,6 +371,46 @@ describe("sessionMovementSchema", () => {
     expect(parsed.sets).toBeNull();
     expect(parsed.restSeconds).toBeNull();
     expect(parsed.programSlotMovementId).toBeNull();
+    expect(parsed.prescribedSets).toBeNull();
+  });
+
+  describe("sessionSetAt (ADR 0011)", () => {
+    const { wodMovementId: _omitted, ...base } = sessionMovement();
+    const straight = (overrides: Record<string, unknown> = {}) =>
+      sessionMovementSchema.parse({
+        ...base,
+        programSlotMovementId: "psm-1",
+        repScheme: [],
+        sets: 3,
+        reps: 6,
+        repsMax: 8,
+        restSeconds: 120,
+        ...overrides,
+      });
+
+    it("reads each set as it was prescribed, load step and rest included", () => {
+      const rpt = [
+        { reps: 6, repsMax: 8, toFailure: false, loadStepPercent: null, restSeconds: 120 },
+        { reps: 8, repsMax: 10, toFailure: false, loadStepPercent: -10, restSeconds: 120 },
+        { reps: 10, repsMax: 12, toFailure: false, loadStepPercent: -10, restSeconds: 120 },
+      ];
+      const m = straight({ prescribedSets: rpt });
+      expect(sessionSetAt(m, 1)).toEqual(rpt[0]);
+      expect(sessionSetAt(m, 2)).toEqual(rpt[1]);
+      expect(sessionSetAt(m, 3)).toEqual(rpt[2]);
+    });
+
+    it("reads a session snapshotted before sets could differ as its one shape, with no load step", () => {
+      const m = straight();
+      expect(m.prescribedSets).toBeNull();
+      expect(sessionSetAt(m, 2)).toEqual({
+        reps: 6,
+        repsMax: 8,
+        toFailure: false,
+        loadStepPercent: null,
+        restSeconds: 120,
+      });
+    });
   });
 });
 
@@ -1233,14 +1273,17 @@ describe("todayResponseSchema", () => {
   });
 
   describe("a day that is a prescription rather than a WOD (DN-19)", () => {
-    const prescribed = {
-      id: "psm-1",
-      order: 0,
-      sets: 5,
+    const fiveOf3 = {
       reps: 3,
       repsMax: null,
       toFailure: false,
+      loadStepPercent: null,
       restSeconds: 90,
+    };
+    const prescribed = {
+      id: "psm-1",
+      order: 0,
+      sets: [fiveOf3, fiveOf3, fiveOf3, fiveOf3, fiveOf3],
       movementGroup: "pull",
       exercise: movement().exercise,
       isSwapped: false,
@@ -1265,6 +1308,27 @@ describe("todayResponseSchema", () => {
       expect(
         day({ wod: null, prescription: { movements: [prescribed] } }).success,
       ).toBe(true);
+    });
+
+    it("parses a line whose sets differ, each with its own load step (ADR 0011)", () => {
+      const rpt = [
+        { ...fiveOf3, reps: 6, repsMax: 8 },
+        { ...fiveOf3, reps: 8, repsMax: 10, loadStepPercent: -10 },
+        { ...fiveOf3, reps: 10, repsMax: 12, loadStepPercent: -10 },
+      ];
+      expect(
+        day({ wod: null, prescription: { movements: [{ ...prescribed, sets: rpt }] } })
+          .success,
+      ).toBe(true);
+    });
+
+    it("rejects a movement with no sets, or a set of no shape", () => {
+      for (const sets of [[], [{ ...fiveOf3, reps: null }]]) {
+        expect(
+          day({ wod: null, prescription: { movements: [{ ...prescribed, sets }] } })
+            .success,
+        ).toBe(false);
+      }
     });
 
     it("rejects a day carrying both", () => {

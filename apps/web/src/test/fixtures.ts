@@ -4,6 +4,7 @@ import type {
   Settings,
   SkillLevel,
   PrescribedMovement,
+  PrescribedSet,
   SwapOption,
   SessionMovement,
   TodayProgram,
@@ -61,6 +62,24 @@ export function movement(overrides: Partial<WodMovement> = {}): WodMovement {
 }
 
 /**
+ * `count` alike sets for a prescribed movement or a session snapshot: 5 × 3,
+ * rest 90s unless told otherwise. An RPT line is a hand-written list.
+ */
+export function prescribedSets(
+  count: number,
+  set: Partial<PrescribedSet> = {},
+): PrescribedSet[] {
+  return Array.from({ length: count }, () => ({
+    reps: 3,
+    repsMax: null,
+    toFailure: false,
+    loadStepPercent: null,
+    restSeconds: 90,
+    ...set,
+  }));
+}
+
+/**
  * One movement of a prescribed day (DN-125) — the resolved shape the athlete
  * is handed, not the authored one. `id` is a ProgramSlotMovement's.
  */
@@ -75,11 +94,7 @@ export function prescribedMovement(
   return {
     id: "program-slot-movement-1",
     order: 0,
-    sets: 5,
-    reps: 3,
-    repsMax: null,
-    toFailure: false,
-    restSeconds: 90,
+    sets: prescribedSets(5),
     movementGroup: "pull",
     isSwapped: false,
     prescribedName: null,
@@ -116,6 +131,7 @@ export function sessionMovement(
     wodMovementId: null,
     programSlotMovementId: "program-slot-movement-1",
     sets: 5,
+    prescribedSets: null,
     restSeconds: 90,
     order: 0,
     reps: 3,
