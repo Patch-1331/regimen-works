@@ -5,8 +5,6 @@ import { ProgramCompletionCard } from "../components/ProgramCompletionCard";
 import {
   DEFAULT_PROGRAM_ID,
   effectiveRounds,
-  loadStepLabel,
-  repsLabel,
   type MakeupOffer as MakeupOfferBlock,
   type PrescribedMovement,
   type TodayProgram,
@@ -17,6 +15,7 @@ import { InstructionsCaret, InstructionsPanel } from "../components/MovementInst
 import { hasInstructions } from "../lib/instructions";
 import { LiveSwapPanel, SwapButton } from "../components/MovementSwap";
 import { canSwap as swappable } from "../lib/swapOptions";
+import { setByStep, uniformCount } from "../lib/prescribedSets";
 
 export function TodayPage() {
   const navigate = useNavigate();
@@ -604,34 +603,6 @@ function totalSets(movements: PrescribedMovement[]): number {
 }
 
 /**
- * The line's sets when every one is alike -- the same count and no load step
- * -- or null where they differ (ADR 0011). A uniform line reads "5 × 3"; one
- * that varies has no single count to put after the ×.
- */
-function uniformCount(movement: PrescribedMovement): string | null {
-  const [first, ...more] = movement.sets;
-  const alike = more.every(
-    (s) =>
-      s.reps === first.reps &&
-      s.repsMax === first.repsMax &&
-      s.toFailure === first.toFailure &&
-      s.loadStepPercent === null,
-  );
-  return alike ? repsLabel(first, movement.exercise.unit) : null;
-}
-
-/** Each set in order with its load step: "6-8 · 8-10 −10% · 10-12 −10%". */
-function setByStep(movement: PrescribedMovement): string {
-  return movement.sets
-    .map((s) => {
-      const step = loadStepLabel(s.loadStepPercent);
-      const reps = repsLabel(s, movement.exercise.unit);
-      return step ? `${reps} ${step}` : reps;
-    })
-    .join(" · ");
-}
-
-/**
  * The rest between the line's sets, or "varies" where they differ. The rest
  * after the last set is left out: it is the pace's, not the line's, and it is
  * what lets a drop set read as straight through (ADR 0011, decision 4).
@@ -669,7 +640,7 @@ function PrescribedName({
   movement: PrescribedMovement;
   onToggle: () => void;
 }) {
-  const eachCount = uniformCount(movement);
+  const eachCount = uniformCount(movement.sets, movement.exercise.unit);
   const rest = lineRest(movement);
   const name = (
     <span className="flex min-w-0 flex-col gap-0.5">
@@ -703,7 +674,7 @@ function PrescribedName({
           className="text-xs tracking-[0.05em] text-[var(--ink-soft)]"
           style={{ fontFamily: "var(--font-mono)" }}
         >
-          {setByStep(movement)}
+          {setByStep(movement.sets, movement.exercise.unit)}
         </span>
       )}
       {rest !== null && (

@@ -261,3 +261,96 @@ describe("putting a movement on your own warm-up or cool-down (DN-173)", () => {
     expect(screen.queryByRole("button", { name: /add to my list/i })).not.toBeInTheDocument();
   });
 });
+
+describe("a movement's prescribed days (DN-192)", () => {
+  const { movementHistory, movementHistoryDay, movementHistorySet } = fixtures;
+
+  /** The bench page, with these days in its history and another movement's beside it. */
+  function trained(days: ReturnType<typeof movementHistoryDay>[]) {
+    server.use(
+      http.get("/api/movement-history", () =>
+        HttpResponse.json([
+          movementHistory({ exerciseId: "db-bench", name: "Dumbbell bench press", days }),
+          movementHistory({ exerciseId: "push-up", name: "Push-up" }),
+        ]),
+      ),
+    );
+    showing();
+  }
+
+  async function rows() {
+    const list = await screen.findByRole("list", { name: /prescribed days/i });
+    return within(list).getAllByRole("listitem").map((li) => li.textContent);
+  }
+
+  it("lists a reverse-pyramid day set by set, each with its load step", async () => {
+    trained([
+      movementHistoryDay({
+        date: "2026-10-20",
+        name: "Strength",
+        reps: 6,
+        repsMax: 8,
+        sets: [
+          movementHistorySet({ reps: 6, repsMax: 8 }),
+          movementHistorySet({ reps: 8, repsMax: 10, loadStepPercent: -10 }),
+          movementHistorySet({ reps: 10, repsMax: 12, loadStepPercent: -10 }),
+        ],
+      }),
+    ]);
+
+    const [day] = await rows();
+    expect(day).toContain("6-8 · 8-10 −10% · 10-12 −10%");
+    expect(day).toContain("Strength");
+    // Relative steps only: the history holds no weight, and none is invented.
+    expect(day).not.toMatch(/kg|lb/i);
+  });
+
+  it("reads a day of identical sets as sets × reps", async () => {
+    trained([
+      movementHistoryDay({
+        date: "2026-10-13",
+        name: "Strength",
+        reps: 5,
+        sets: Array.from({ length: 5 }, () => movementHistorySet()),
+      }),
+    ]);
+
+    expect((await rows())[0]).toContain("5 × 5");
+  });
+
+  it("gives a WOD day its whole count, since it had rounds rather than sets", async () => {
+    trained([movementHistoryDay({ date: "2026-09-14", name: "Cindy", reps: 30 })]);
+
+    const [day] = await rows();
+    expect(day).toContain("30");
+    expect(day).toContain("Cindy");
+    expect(day).not.toContain("×");
+  });
+
+  it("keeps the days newest first, as the history gives them", async () => {
+    trained([
+      movementHistoryDay({ date: "2026-10-20", name: "Strength", sets: [movementHistorySet()] }),
+      movementHistoryDay({ date: "2026-09-14", name: "Cindy" }),
+    ]);
+
+    const [first, second] = await rows();
+    expect(first).toContain("Strength");
+    expect(second).toContain("Cindy");
+  });
+
+  it("says nothing for a movement never trained, rather than a count of nothing", async () => {
+    let served = false;
+    server.use(
+      http.get("/api/movement-history", () => {
+        served = true;
+        // Another movement's days only.
+        return HttpResponse.json([movementHistory({ exerciseId: "push-up" })]);
+      }),
+    );
+    showing();
+
+    await screen.findByText("Lie back on the bench.");
+    await waitFor(() => expect(served).toBe(true));
+    expect(screen.queryByText("PRESCRIBED")).not.toBeInTheDocument();
+  });
+});

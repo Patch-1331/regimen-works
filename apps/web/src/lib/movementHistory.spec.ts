@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MovementHistory } from "@regimen-works/shared";
-import { buildLineRuns, describeLineHistory } from "./movementHistory";
+import { buildLineRuns, describeLineHistory, prescribedDayLabel } from "./movementHistory";
+import * as fixtures from "../test/fixtures";
 
 /**
  * What the Stats panel says has been happening (DN-96).
@@ -175,5 +176,45 @@ describe("describeLineHistory", () => {
 
     expect(summary).toContain("Negative chin-up before that");
     expect(summary).not.toContain("Ring row");
+  });
+});
+
+describe("prescribedDayLabel (DN-192)", () => {
+  const { movementHistoryDay: day, movementHistorySet: set } = fixtures;
+
+  it("reads identical sets as sets × reps, like the plate", () => {
+    expect(
+      prescribedDayLabel(day({ sets: [set(), set(), set(), set(), set()] }), "reps"),
+    ).toBe("5 × 5");
+  });
+
+  it("lists sets that vary in order, each with its load step", () => {
+    const rpt = day({
+      sets: [
+        set({ reps: 6, repsMax: 8 }),
+        set({ reps: 8, repsMax: 10, loadStepPercent: -10 }),
+        set({ reps: 10, repsMax: 12, loadStepPercent: -10 }),
+      ],
+    });
+    expect(prescribedDayLabel(rpt, "reps")).toBe("6-8 · 8-10 \u221210% · 10-12 \u221210%");
+  });
+
+  it("treats a stated load step as a variation, even 'same weight'", () => {
+    const held = day({ sets: [set(), set({ loadStepPercent: 0 })] });
+    expect(prescribedDayLabel(held, "reps")).toBe("5 · 5 same weight");
+  });
+
+  it("gives a WOD day, which has no sets, its whole count", () => {
+    expect(prescribedDayLabel(day({ reps: 30 }), "reps")).toBe("30");
+  });
+
+  it("counts a hold in seconds and a set to failure in words", () => {
+    expect(prescribedDayLabel(day({ sets: [set({ reps: 45 }), set({ reps: 45 })] }), "seconds")).toBe("2 × 45s");
+    expect(
+      prescribedDayLabel(
+        day({ sets: [set({ reps: null, toFailure: true })], reps: null, toFailure: true }),
+        "reps",
+      ),
+    ).toBe("1 × to failure");
   });
 });
