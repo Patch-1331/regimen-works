@@ -210,6 +210,8 @@ describe("the wizard (DN-193)", () => {
     await goTo("Review");
     await userEvent.click(screen.getByRole("button", { name: "Save program" }));
 
+    // Review's own heading says "Pull days" too: wait for the list first.
+    await screen.findByRole("link", { name: "+ New program" });
     expect(await screen.findByText("Pull days")).toBeInTheDocument();
     expect(sent).toEqual([
       {
