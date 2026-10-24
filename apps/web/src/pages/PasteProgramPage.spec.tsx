@@ -159,6 +159,8 @@ describe("pasting a program", () => {
     expect(search).toHaveValue("Low Cable Fly");
     await userEvent.clear(search);
     await userEvent.type(search, "crossover");
+    // The cable isn't in the athlete's kit, so it sits under the fold until asked for.
+    await userEvent.click(within(fly).getByRole("checkbox", { name: "Only what my kit can do" }));
     await userEvent.click(
       within(fly).getByRole("button", { name: /^Low cable crossover/ }),
     );

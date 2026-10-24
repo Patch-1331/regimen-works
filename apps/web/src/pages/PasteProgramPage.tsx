@@ -286,6 +286,9 @@ function ReadBackRow({
         <MovementPicker
           library={library}
           initialQuery={pasted}
+          context="Pasted line"
+          heading={`Read “${pasted}” as`}
+          allowCreate
           onClose={() => onPick(false)}
           onPick={(picked) => {
             onChange({ ...l, picked });

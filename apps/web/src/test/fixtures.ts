@@ -1,6 +1,8 @@
 import type {
   AthleteChecklistEntry,
   ChecklistExercise,
+  Equipment,
+  Muscle,
   Settings,
   SkillLevel,
   PrescribedMovement,
@@ -680,3 +682,35 @@ export function checklistEntry(
     ...overrides,
   };
 }
+
+/**
+ * A library with muscles and kit on record, for the movement picker (DN-194):
+ * enough pushes that "press" finds some the kit can do and some it can't, and
+ * one exact match -- Barbell Bench Press -- the example kit has no barbell for.
+ */
+export function pickerLibrary(): ApiExercise[] {
+  const e = (
+    id: string,
+    name: string,
+    equipment: Equipment[],
+    primaryMuscles: Muscle[],
+    secondaryMuscles: Muscle[],
+    movementGroup: ApiExercise["movementGroup"] = null,
+  ) => apiExercise({ id, name, equipment, primaryMuscles, secondaryMuscles, movementGroup });
+  return [
+    e("db-bench", "Dumbbell Bench Press", ["dumbbell", "bench"], ["chest"], ["triceps", "shoulders"], "push_horizontal"),
+    e("db-floor", "Dumbbell Floor Press", ["dumbbell"], ["chest"], ["triceps"], "push_horizontal"),
+    e("band-chest", "Band Chest Press", ["bands"], ["chest"], ["shoulders"], "push_horizontal"),
+    e("bb-bench", "Barbell Bench Press", ["barbell", "bench"], ["chest"], ["triceps", "shoulders"], "push_horizontal"),
+    e("db-shoulder", "Dumbbell Shoulder Press", ["dumbbell"], ["shoulders"], ["triceps"], "push_vertical"),
+    e("push-press", "Push Press", ["barbell"], ["shoulders"], ["triceps", "quadriceps"], "push_vertical"),
+    e("pike", "Pike Push-up", [], ["shoulders"], ["triceps"], "push_vertical"),
+    e("leg-press", "Leg Press", ["gym_machines"], ["quadriceps"], ["glutes"], "squat"),
+    e("goblet", "Goblet Squat", ["dumbbell"], ["quadriceps"], ["glutes"], "squat"),
+    e("pull-up", "Pull-up", ["bar"], ["lats"], ["biceps"], "pull"),
+    e("db-row", "One-arm Dumbbell Row", ["dumbbell", "bench"], ["lats"], ["biceps", "middle_back"], "pull"),
+  ];
+}
+
+/** The example athlete's kit in the picker's designs: no barbell, no machines. */
+export const PICKER_KIT: Equipment[] = ["bar", "dumbbell", "bench", "bands"];
