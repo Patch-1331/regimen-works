@@ -8,10 +8,14 @@ import {
   blankLine,
   changesWeek,
   copyDay,
+  dayProblems,
   draftProblems,
   duplicateLine,
   fromProgram,
   lineProblems,
+  moveLine,
+  pickDay,
+  pickedDays,
   searchExercises,
   toCreateProgram,
   toPerSet,
@@ -69,8 +73,47 @@ describe("draftProblems", () => {
   it("wants a name and a day", () => {
     expect(draftProblems({ ...EMPTY_PROGRAM })).toEqual([
       "Name the program.",
-      "Add a movement to at least one day.",
+      "Pick at least one training day.",
     ]);
+  });
+
+  it("wants every picked day written, and says which (DN-193)", () => {
+    expect(draftProblems(draft({ days: { 1: [line()], 3: [] } }))).toEqual([
+      "Wednesday: No movements yet.",
+    ]);
+    expect(draftProblems(draft({ days: { 0: [line({ reps: null })] } }))).toEqual([
+      "Sunday: How many reps — or to failure?",
+    ]);
+  });
+});
+
+describe("picking the days (DN-193)", () => {
+  it("lists the picked days in week order, written or not", () => {
+    expect(pickedDays(draft({ days: { 0: [], 3: [line()], 1: [] } }))).toEqual([1, 3, 0]);
+  });
+
+  it("picks a day empty, and drops it with its lines", () => {
+    const picked = pickDay(draft(), 2, true);
+    expect(picked.days[2]).toEqual([]);
+    expect(dayProblems(picked, 2)).toEqual(["No movements yet."]);
+
+    const dropped = pickDay(draft(), 1, false);
+    expect(pickedDays(dropped)).toEqual([4]);
+  });
+
+  it("brings a dropped day's lines back when it is picked again", () => {
+    const d = draft();
+    const kept = d.days[1]!;
+    expect(pickDay(pickDay(d, 1, false), 1, true, kept).days[1]).toBe(kept);
+    // A day still picked keeps what it has.
+    expect(pickDay(d, 1, true, []).days[1]).toBe(kept);
+  });
+
+  it("moves a line up or down within its day, and no further", () => {
+    const [a, b] = [line(), line({ movementGroup: "hinge" })];
+    const d = draft({ days: { 1: [a, b] } });
+    expect(moveLine(d, 1, b.id, -1).days[1]).toEqual([b, a]);
+    expect(moveLine(d, 1, b.id, 1)).toBe(d);
   });
 });
 

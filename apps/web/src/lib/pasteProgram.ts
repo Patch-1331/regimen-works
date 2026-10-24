@@ -11,8 +11,8 @@ import { lineId, type DraftLine, type ProgramDraft } from "./programDraft";
 /**
  * The paste box's read-back (DN-152): every pasted line with the matcher's
  * answer, and what the athlete did about it. Only once nothing is left
- * unanswered does it become a draft for the week sheet -- which then holds
- * it to the sheet's own rules, like any program typed there.
+ * unanswered does it become a draft for the program wizard -- which then holds
+ * it to the wizard's own rules, like any program typed there.
  */
 
 export type MovementChoice = Pick<DraftLine, "exerciseId" | "movementGroup">;
@@ -82,7 +82,7 @@ export function pasteProblems(
 const IN_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
 /**
- * The accepted lines as an unsaved week sheet. One sheet line per pasted
+ * The accepted lines as an unsaved program draft. One draft line per pasted
  * line: "1x10 & 2xfailure" is one line of three sets, in the order written
  * (ADR 0011) -- set by set where the schemes differ, "same for all sets" where
  * there is only one. A line that gave no scheme keeps blank counts, which the
