@@ -1,4 +1,10 @@
-import type { MovementHistory } from "@regimen-works/shared";
+import {
+  repsLabel,
+  type ExerciseUnit,
+  type MovementHistory,
+  type MovementHistoryDay,
+} from "@regimen-works/shared";
+import { setByStep, uniformCount } from "./prescribedSets";
 
 /**
  * The training behind a movement group, as a sentence rather than a score
@@ -99,4 +105,24 @@ export function describeLineHistory(runs: MovementRun[]): string | null {
       : `${latest.name} ${latest.sessions}× since ${shortDate(latest.from)}`;
 
   return previous ? `${current} · ${previous.name} before that` : current;
+}
+
+/**
+ * What one past day prescribed of a movement, the way Today's plate said it
+ * (DN-192): "5 × 5" where every set was alike, each set with its load step
+ * where they varied, and a WOD day's whole count where it had rounds rather
+ * than sets.
+ *
+ * Never a weight. The history has none to give -- a load step is relative to
+ * the set before (DN-85) -- and this would be the wrong place to invent one.
+ */
+export function prescribedDayLabel(
+  day: MovementHistoryDay,
+  unit: ExerciseUnit,
+): string {
+  if (day.sets === null || day.sets.length === 0) return repsLabel(day, unit);
+  const each = uniformCount(day.sets, unit);
+  return each === null
+    ? setByStep(day.sets, unit)
+    : `${day.sets.length} × ${each}`;
 }

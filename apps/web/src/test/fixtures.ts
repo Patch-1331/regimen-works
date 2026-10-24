@@ -14,6 +14,9 @@ import type {
   WorkoutLogListItem,
   WorkoutSession,
   MovementVolume,
+  MovementHistory,
+  MovementHistoryDay,
+  MovementHistorySet,
   SetupOptions,
   SetupProgram,
   WorkoutSetLog,
@@ -403,6 +406,50 @@ export function skillLevel(overrides: Partial<SkillLevel> = {}): SkillLevel {
     exerciseName: "Push-up",
     updatedAt: "2026-09-16T10:00:00.000Z",
     ...overrides,
+  };
+}
+
+/** One set of a past straight-sets day (DN-191): fixed, no load step. */
+export function movementHistorySet(
+  overrides: Partial<MovementHistorySet> = {},
+): MovementHistorySet {
+  return { reps: 5, repsMax: null, toFailure: false, loadStepPercent: null, ...overrides };
+}
+
+/** One past day of a movement: a WOD's whole count, with no sets. */
+export function movementHistoryDay(
+  overrides: Partial<MovementHistoryDay> = {},
+): MovementHistoryDay {
+  return {
+    date: "2026-09-14",
+    name: "Cindy",
+    reps: 30,
+    repsMax: null,
+    toFailure: false,
+    sets: null,
+    isSwapped: false,
+    prescribedName: null,
+    prescribedReason: null,
+    ...overrides,
+  };
+}
+
+/** Every day one movement was trained -- the default Push-up, on one WOD day. */
+export function movementHistory(
+  overrides: Partial<MovementHistory> = {},
+): MovementHistory {
+  const days = overrides.days ?? [movementHistoryDay()];
+  return {
+    exerciseId: "exercise-1",
+    name: "Push-up",
+    movementGroup: "push_horizontal",
+    unit: "reps",
+    sessions: days.length,
+    total: 0,
+    firstTrained: days.at(-1)!.date,
+    lastTrained: days[0].date,
+    ...overrides,
+    days,
   };
 }
 

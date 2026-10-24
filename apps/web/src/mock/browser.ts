@@ -124,6 +124,32 @@ function strengthToday(setsDone: number | null) {
   };
 }
 
+// The default movement page's history (DN-192): a reverse-pyramid day, a
+// uniform one and a WOD, newest first, so its PRESCRIBED section has all three
+// shapes to show.
+const pushUpHistory = fixtures.movementHistory({
+  days: [
+    fixtures.movementHistoryDay({
+      date: "2026-10-20",
+      name: "Strength",
+      reps: 6,
+      repsMax: 8,
+      sets: [
+        fixtures.movementHistorySet({ reps: 6, repsMax: 8 }),
+        fixtures.movementHistorySet({ reps: 8, repsMax: 10, loadStepPercent: -10 }),
+        fixtures.movementHistorySet({ reps: 10, repsMax: 12, loadStepPercent: -10 }),
+      ],
+    }),
+    fixtures.movementHistoryDay({
+      date: "2026-10-13",
+      name: "Strength",
+      reps: 5,
+      sets: Array.from({ length: 5 }, () => fixtures.movementHistorySet()),
+    }),
+    fixtures.movementHistoryDay({ date: "2026-09-14", name: "Cindy", reps: 30 }),
+  ],
+});
+
 const extras = [
   http.get(api("/today"), () => {
     const page = new URLSearchParams(window.location.search);
@@ -143,6 +169,7 @@ const extras = [
       needsEquipment: [asOption(pushFamily[3])],
     }),
   ),
+  http.get(api("/movement-history"), () => HttpResponse.json([pushUpHistory])),
   http.get(api("/checklist-entries"), () => HttpResponse.json(ownChecklistEntries)),
   http.post(api("/checklist-entries"), () =>
     HttpResponse.json(ownChecklistEntries[0], { status: 201 }),

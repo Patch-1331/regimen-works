@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { equipmentLabel, type Equipment } from "@regimen-works/shared";
+import { equipmentLabel, type Equipment, type MovementHistory } from "@regimen-works/shared";
 import { ApiError, api } from "../lib/api";
 import { humanize } from "../lib/libraryFilters";
 import { lineLabel, patternLabel } from "../lib/progressions";
+import { prescribedDayLabel, shortDate } from "../lib/movementHistory";
 import { SectionLabel } from "../components/Panel";
 import { DatasetCredit } from "../components/DatasetCredit";
 import { ExerciseChecklists } from "../components/ChecklistEntries";
@@ -33,6 +34,14 @@ export function ExerciseDetailPage() {
   });
   const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: api.settings });
   const owned = new Set<string>(settings?.equipment ?? []);
+  // Shared with Stats, which reads the same history (DN-89). An addition to
+  // the page rather than part of it: nothing waits on it, and a failure here
+  // leaves the movement readable.
+  const { data: history } = useQuery({
+    queryKey: ["movementHistory"],
+    queryFn: api.movementHistory,
+  });
+  const trained = history?.find((movement) => movement.exerciseId === id);
 
   const back = (
     <Link
@@ -170,9 +179,52 @@ export function ExerciseDetailPage() {
 
       <ExerciseChecklists exercise={exercise} />
 
+      {trained && <PrescribedDays movement={trained} />}
+
       {/* Only under the dataset's own rows: an athlete's movement is theirs. */}
       {exercise.key !== null && <DatasetCredit />}
     </div>
+  );
+}
+
+/**
+ * What each past day prescribed of this movement, newest first (DN-192), in
+ * the words Today's plate used: "5 × 5", or each set with its load step where
+ * they varied. A record of what was asked for -- what was done is the log's --
+ * and never a weight, which the history does not hold.
+ *
+ * Absent rather than "never trained" for a movement with no days: a count of
+ * nothing reads as a mark against the athlete for a movement they may simply
+ * not have met yet.
+ */
+function PrescribedDays({ movement }: { movement: MovementHistory }) {
+  return (
+    <>
+      <SectionLabel>PRESCRIBED</SectionLabel>
+      <ul aria-label="Prescribed days" className="mt-2 space-y-2">
+        {movement.days.map((day, i) => (
+          <li key={`${day.date}-${i}`} className="flex items-baseline gap-3 text-[14px]">
+            <span
+              className="w-14 shrink-0 text-[11px] tracking-[0.06em] text-[var(--ink-faint)]"
+              style={{ fontFamily: "var(--font-mono)" }}
+            >
+              {shortDate(day.date)}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span
+                className="block text-[var(--ink)]"
+                style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}
+              >
+                {prescribedDayLabel(day, movement.unit)}
+              </span>
+              <span className="block truncate text-[12px] text-[var(--ink-faint)]">
+                {day.name}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 
