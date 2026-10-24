@@ -48,6 +48,7 @@ function history(overrides: Partial<MovementHistory>[] = []): MovementHistory[] 
         reps: 30,
         repsMax: null,
         toFailure: false,
+        sets: null,
         isSwapped: false,
         prescribedName: null,
         prescribedReason: null,
@@ -74,8 +75,8 @@ describe("the movement panel history", () => {
       history([
         {
           days: [
-            { date: "2026-09-14", name: "Cindy", reps: 30, repsMax: null, toFailure: false, isSwapped: false, prescribedName: null, prescribedReason: null },
-            { date: "2026-09-05", name: "Cindy", reps: 30, repsMax: null, toFailure: false, isSwapped: false, prescribedName: null, prescribedReason: null },
+            { date: "2026-09-14", name: "Cindy", reps: 30, repsMax: null, toFailure: false, sets: null, isSwapped: false, prescribedName: null, prescribedReason: null },
+            { date: "2026-09-05", name: "Cindy", reps: 30, repsMax: null, toFailure: false, sets: null, isSwapped: false, prescribedName: null, prescribedReason: null },
           ],
         },
       ]),
@@ -89,12 +90,12 @@ describe("the movement panel history", () => {
 
   it("names what came before the movement they are on now", async () => {
     statsShowing([
-      ...history([{ days: [{ date: "2026-09-14", name: "Cindy", reps: 30, repsMax: null, toFailure: false, isSwapped: false, prescribedName: null, prescribedReason: null }] }]),
+      ...history([{ days: [{ date: "2026-09-14", name: "Cindy", reps: 30, repsMax: null, toFailure: false, sets: null, isSwapped: false, prescribedName: null, prescribedReason: null }] }]),
       ...history([
         {
           exerciseId: "negative",
           name: "Negative chin-up",
-          days: [{ date: "2026-08-20", name: "Cindy", reps: 30, repsMax: null, toFailure: false, isSwapped: false, prescribedName: null, prescribedReason: null }],
+          days: [{ date: "2026-08-20", name: "Cindy", reps: 30, repsMax: null, toFailure: false, sets: null, isSwapped: false, prescribedName: null, prescribedReason: null }],
         },
       ]),
     ]);
@@ -121,8 +122,8 @@ describe("the movement panel history", () => {
       history([
         {
           days: [
-            { date: "2026-09-14", name: "Cindy", reps: 30, repsMax: null, toFailure: false, isSwapped: false, prescribedName: null, prescribedReason: null },
-            { date: "2026-09-05", name: "Cindy", reps: 30, repsMax: null, toFailure: false, isSwapped: false, prescribedName: null, prescribedReason: null },
+            { date: "2026-09-14", name: "Cindy", reps: 30, repsMax: null, toFailure: false, sets: null, isSwapped: false, prescribedName: null, prescribedReason: null },
+            { date: "2026-09-05", name: "Cindy", reps: 30, repsMax: null, toFailure: false, sets: null, isSwapped: false, prescribedName: null, prescribedReason: null },
           ],
         },
       ]),

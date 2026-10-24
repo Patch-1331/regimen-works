@@ -24,6 +24,7 @@
     "node": ">=22.10.0"
   },
   "overrides": {
+    "body-parser": "^2.4.0",
     "deepmerge-ts": "^8.0.2",
     "multer": "^2.3.0",
     "mysql2": "^3.24.4"

@@ -214,4 +214,124 @@ describe('buildMovementHistory', () => {
       ['reps', 45],
     ]);
   });
+
+  describe('a straight-sets day (DN-191)', () => {
+    /** A prescribed line: `sets` of the snapshot, each set in `prescribedSets`. */
+    function line(
+      prescribedSets: SessionMovement['prescribedSets'] & object,
+    ): SessionMovement {
+      const [first] = prescribedSets;
+      return movement({
+        wodMovementId: null,
+        programSlotMovementId: 'psm-1',
+        sets: prescribedSets.length,
+        prescribedSets,
+        reps: first.reps,
+        repsMax: first.repsMax,
+        toFailure: first.toFailure,
+        restSeconds: first.restSeconds,
+      });
+    }
+
+    function set(
+      reps: number | null,
+      repsMax: number | null = null,
+      loadStepPercent: number | null = null,
+    ) {
+      return {
+        reps,
+        repsMax,
+        toFailure: reps === null,
+        loadStepPercent,
+        restSeconds: 120,
+      };
+    }
+
+    it('carries every set of an RPT day in order, with its load steps', () => {
+      const history = buildMovementHistory([
+        day(
+          '2026-10-20',
+          [line([set(6, 8), set(8, 10, -10), set(10, 12, -10)])],
+          'Strength',
+        ),
+      ]);
+
+      expect(history[0].days[0].sets).toEqual([
+        { reps: 6, repsMax: 8, toFailure: false, loadStepPercent: null },
+        { reps: 8, repsMax: 10, toFailure: false, loadStepPercent: -10 },
+        { reps: 10, repsMax: 12, toFailure: false, loadStepPercent: -10 },
+      ]);
+      // The day's own shape stays the first set's, as the snapshot holds it.
+      expect(history[0].days[0]).toMatchObject({ reps: 6, repsMax: 8 });
+    });
+
+    it('counts the floor of every set of an RPT day', () => {
+      const history = buildMovementHistory([
+        day('2026-10-20', [line([set(6, 8), set(8, 10), set(10, 12)])]),
+      ]);
+      expect(history[0].total).toBe(24);
+    });
+
+    it('counts a uniform 5 x 5 as 25, and keeps its sets alike', () => {
+      const fives = Array.from({ length: 5 }, () => set(5));
+      const history = buildMovementHistory([day('2026-10-20', [line(fives)])]);
+
+      expect(history[0].total).toBe(25);
+      expect(history[0].days[0].sets).toHaveLength(5);
+      expect(new Set(history[0].days[0].sets!.map((s) => s.reps))).toEqual(
+        new Set([5]),
+      );
+    });
+
+    it('carries a drop set, and counts nothing for the sets worked to failure', () => {
+      const history = buildMovementHistory([
+        day('2026-10-20', [
+          line([set(8), set(null, null, -20), set(null, null, -20)]),
+        ]),
+      ]);
+
+      expect(history[0].total).toBe(8);
+      expect(history[0].days[0].sets).toEqual([
+        { reps: 8, repsMax: null, toFailure: false, loadStepPercent: null },
+        { reps: null, repsMax: null, toFailure: true, loadStepPercent: -20 },
+        { reps: null, repsMax: null, toFailure: true, loadStepPercent: -20 },
+      ]);
+    });
+
+    it('reads a day snapshotted before sets could differ as its one shape, every set', () => {
+      // `prescribedSets` null: every set was the row's own shape, and the app
+      // knew of no load step (DN-186).
+      const history = buildMovementHistory([
+        day('2026-09-16', [
+          movement({
+            wodMovementId: null,
+            programSlotMovementId: 'psm-1',
+            sets: 3,
+            prescribedSets: null,
+            reps: 8,
+            repsMax: 10,
+          }),
+        ]),
+      ]);
+
+      expect(history[0].days[0].sets).toEqual(
+        Array.from({ length: 3 }, () => ({
+          reps: 8,
+          repsMax: 10,
+          toFailure: false,
+          loadStepPercent: null,
+        })),
+      );
+      expect(history[0].total).toBe(24);
+    });
+
+    it('leaves a WOD movement as it was: no sets, and its reps are the day', () => {
+      const history = buildMovementHistory([
+        day('2026-10-20', [movement({ reps: 45, repScheme: [21, 15, 9] })]),
+      ]);
+
+      expect(history[0].days[0].sets).toBeNull();
+      expect(history[0].total).toBe(45);
+    });
+  });
 });

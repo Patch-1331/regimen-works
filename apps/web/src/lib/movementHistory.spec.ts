@@ -33,6 +33,7 @@ function movement(
       reps: 30,
       repsMax: null,
       toFailure: false,
+      sets: null,
       isSwapped: false,
       prescribedName: null,
       prescribedReason: null,
