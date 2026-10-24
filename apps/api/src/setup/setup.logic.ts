@@ -175,7 +175,11 @@ function weeksRejection(
   return null;
 }
 
-function startDateRejection(
+/**
+ * Exported for starting a waiting program today (DN-200), which judges the
+ * one date by the same rule and owes the athlete the same sentence.
+ */
+export function startDateRejection(
   startDate: string,
   range: StartDateRange,
 ): string | null {

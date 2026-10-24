@@ -63,6 +63,10 @@ function recordingPrisma() {
         (calls['dailyAssignment.count'] ??= []).push(args);
         return Promise.resolve(0);
       }),
+      deleteMany: jest.fn((args: unknown) => {
+        (calls['dailyAssignment.deleteMany'] ??= []).push(args);
+        return Promise.resolve({ count: 0 });
+      }),
     },
     assignmentSubstitution: {
       findMany: jest.fn((args: unknown) => {
@@ -229,6 +233,40 @@ describe('per-user query scoping', () => {
     // The history driving the pattern cooldown must be this user's alone.
     for (const where of whereOf(prisma, 'dailyAssignment.findMany')) {
       expect(where).toContain(ALICE);
+    }
+  });
+
+  it('scopes every read and write behind starting a program today (DN-200)', async () => {
+    // The move rewrites an enrollment's start date and discards today's
+    // assignment. Unscoped, either would reach another athlete's rows.
+    const prisma = recordingPrisma();
+    prisma.programEnrollment.findFirst = jest.fn((args: unknown) => {
+      (prisma.calls['programEnrollment.findFirst'] ??= []).push(args);
+      return Promise.resolve({ id: 'enrollment-1', startDate: '2026-09-21' });
+    }) as unknown as typeof prisma.programEnrollment.findFirst;
+    const wods = {
+      getChecklists: jest.fn(),
+    } as unknown as ConstructorParameters<typeof SchedulerService>[1];
+    // The day it answers with runs on into WOD generation, which throws with
+    // an empty catalogue -- after every query under test has been issued.
+    await new SchedulerService(
+      prisma,
+      wods,
+      new MovementResolutionService(prisma),
+      new EnrollmentsService(prisma),
+    )
+      .startProgramToday(ALICE, '2026-09-14')
+      .catch(() => undefined);
+
+    for (const key of [
+      'programEnrollment.findFirst',
+      'programEnrollment.updateMany',
+      'dailyAssignment.findFirst',
+      'dailyAssignment.deleteMany',
+    ]) {
+      for (const where of whereOf(prisma, key)) {
+        expect(where).toContain(ALICE);
+      }
     }
   });
 
