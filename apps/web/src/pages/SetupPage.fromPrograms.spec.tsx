@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   DEFAULT_PROGRAM_ID,
@@ -248,6 +248,28 @@ describe("starting a program from Programs", () => {
         defaultRestSeconds: null,
       },
     ]);
+  });
+
+  it("neither asks for kit nor saves any (DN-195)", async () => {
+    // The athlete's kit was set before they ever reached Programs; this
+    // start has no answer to it and must not overwrite the one they gave.
+    let settingsWrites = 0;
+    const sent = athlete(MID_RUN);
+    server.use(
+      http.patch("/api/settings", () => {
+        settingsWrites += 1;
+        return HttpResponse.json(fixtures.settings());
+      }),
+    );
+    await startToConfirm("Pull-Up Builder");
+    expect(
+      screen.queryByRole("heading", { name: "What do you have to train with?" }),
+    ).not.toBeInTheDocument();
+
+    await click("Start Pull-Up Builder");
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(settingsWrites).toBe(0);
   });
 
   it.each([
