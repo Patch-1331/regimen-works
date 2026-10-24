@@ -160,8 +160,29 @@ const extras = [
   // The active library only; retired rows fall through to the default.
   http.get(api("/exercises"), ({ request }) => {
     if (new URL(request.url).searchParams.get("includeArchived") === "true") return;
-    return HttpResponse.json([fixtures.apiExercise(), ...pushFamily]);
+    return HttpResponse.json([fixtures.apiExercise(), ...pushFamily, ...fixtures.pickerLibrary()]);
   }),
+  // The movement picker's example kit (DN-194): no barbell, no machines, so
+  // "press" finds some to fold away and "barbell bench press" has an answer.
+  http.get(api("/settings"), () =>
+    HttpResponse.json(fixtures.settings({ equipment: fixtures.PICKER_KIT })),
+  ),
+  // "You use these most", when the picker opens.
+  http.get(api("/movement-volume"), () =>
+    HttpResponse.json(
+      ["db-bench", "goblet", "pull-up", "db-row"].map((exerciseId, i) =>
+        fixtures.movementVolume({
+          exerciseId,
+          name: fixtures.pickerLibrary().find((e) => e.id === exerciseId)!.name,
+          sessions: Array.from({ length: 6 - i }, (_, d) => ({
+            date: addIsoDays("2026-10-01", d * 2),
+            assignmentId: `${exerciseId}-${d}`,
+            sets: [8, 8, 8],
+          })),
+        }),
+      ),
+    ),
+  ),
   http.get(api("/exercises/:id/alternatives"), () =>
     HttpResponse.json({
       main: [asOption(pushFamily[0]), asOption(pushFamily[2])],

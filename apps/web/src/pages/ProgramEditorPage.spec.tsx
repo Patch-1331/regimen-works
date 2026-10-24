@@ -773,8 +773,10 @@ describe("the global library (DN-148)", () => {
     const holding = within(monday).getAllByRole("button", { name: /^Towel row/ }).length;
     await userEvent.click(within(monday).getByRole("button", { name: "+ ADD MOVEMENT" }));
     await userEvent.type(within(monday).getByLabelText("Search movements"), "towel");
-    expect(within(monday).getByText(/Nothing in the library is/)).toBeInTheDocument();
+    expect(within(monday).getByRole("heading", { name: "No “towel” in the library" })).toBeInTheDocument();
     expect(within(monday).getAllByRole("button", { name: /^Towel row/ })).toHaveLength(holding);
+    // A global program names library movements only: no adding one of the admin's own.
+    expect(within(monday).queryByRole("button", { name: /to my movements/ })).not.toBeInTheDocument();
   });
 
   it("does not offer publishing to an athlete", async () => {

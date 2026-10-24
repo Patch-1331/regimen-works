@@ -419,12 +419,14 @@ export function ProgramEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
               )}
 
               <ul className="mt-1">
-                {lines.map((line) => (
+                {lines.map((line, i) => (
                   <LineRow
                     key={line.id}
                     line={line}
                     library={everything}
                     pickable={library}
+                    where={`${WEEKDAYS.find((d) => d.value === day)!.full} · movement ${i + 1}`}
+                    canCreate={tier !== "global"}
                     open={open === line.id}
                     picking={picking === line.id}
                     swapping={swapping === line.id}
@@ -527,6 +529,8 @@ function LineRow({
   line,
   library,
   pickable,
+  where,
+  canCreate,
   open,
   picking,
   swapping,
@@ -542,6 +546,10 @@ function LineRow({
   library: ApiExercise[];
   /** What this program's tier may name, for choosing a new one. */
   pickable: ApiExercise[];
+  /** Where the line sits, for the picker's header: "Monday · movement 4". */
+  where: string;
+  /** The athlete may add a movement of their own; a global program may not. */
+  canCreate: boolean;
   open: boolean;
   picking: boolean;
   swapping: boolean;
@@ -624,6 +632,9 @@ function LineRow({
           {picking && (
             <MovementPicker
               library={pickable}
+              context={where}
+              heading={line.exerciseId || line.movementGroup ? "Change movement" : "Add a movement"}
+              allowCreate={canCreate}
               onClose={() => onPick(false)}
               onPick={(choice) => {
                 onChange({ ...line, ...choice });
