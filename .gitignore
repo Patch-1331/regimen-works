@@ -15,3 +15,6 @@ test-results/
 playwright-report/
 .turbo/
 /.impeccable/
+
+# Node 24 downloaded by scripts/cloud-session-start.sh in cloud sessions (DN-188)
+/.cache/
