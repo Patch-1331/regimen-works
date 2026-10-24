@@ -57,6 +57,8 @@ by a signed-in stand-in, and msw answers `/api` from the same handlers and
 fixtures the vitest suite uses (`src/test/handlers.ts`, plus extras in
 `src/mock/browser.ts`). It is stateless: a write answers, then the next read is
 unchanged. If a screen has nothing to show, add a handler to `src/mock/browser.ts`.
+Add `?signed-out` to the URL to see the sign-in page (with a placeholder where
+Clerk's form goes).
 
 Use **real mode** (`api` + `web`) only when the change needs the API itself.
 `.worktreeinclude` copies both `.env` files into new worktrees. Clerk's sign-in
