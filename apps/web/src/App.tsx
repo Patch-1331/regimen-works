@@ -26,6 +26,7 @@ import { ProgramsPage } from "./pages/ProgramsPage";
 import { PasteProgramPage } from "./pages/PasteProgramPage";
 import { ProgramEditorPage } from "./pages/ProgramEditorPage";
 import { SignInPage } from "./pages/SignInPage";
+import { FindingSession } from "./components/FindingSession";
 
 function TabbedLayout() {
   return (
@@ -58,27 +59,28 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * Where an athlete who has not finished setup may be: the wizard, and the
+ * program editor its "Build your own" card opens (DN-145).
+ */
+const SETUP_PATHS = new Set(["/setup", "/programs/new"]);
+
+/**
  * Sends an athlete who has not finished setup into it (DN-15).
  *
  * `onboardedAt` is the only input, and it is stamped last of everything the
  * commit writes — so an athlete who abandoned the wizard halfway comes back
  * to the start of it rather than to a program they never confirmed.
  *
- * Nothing renders while `/me` is in flight. A gate that rendered the app
+ * The app does not render while `/me` is in flight. A gate that rendered it
  * first would flash Today at someone about to be redirected away from it,
- * and Today is a screen that starts fetching a workout.
+ * and Today is a screen that starts fetching a workout. A loading screen
+ * stands in instead, once the wait is long enough to notice (DN-197).
  *
  * It fails open: a `/me` that errors leaves the app rendered rather than
  * trapping the athlete in a wizard whose own commit would fail too. This is
  * not access control — the API owns what setup writes — it is the difference
  * between a configured app and an unconfigured one.
  */
-/**
- * Where an athlete who has not finished setup may be: the wizard, and the
- * program editor its "Build your own" card opens (DN-145).
- */
-const SETUP_PATHS = new Set(["/setup", "/programs/new"]);
-
 function SetupGate({ children }: { children: React.ReactNode }) {
   const { data: me, isPending } = useQuery({
     queryKey: ["me"],
@@ -86,7 +88,7 @@ function SetupGate({ children }: { children: React.ReactNode }) {
   });
   const location = useLocation();
 
-  if (isPending) return null;
+  if (isPending) return <FindingSession />;
   if (me?.onboardedAt === null && !SETUP_PATHS.has(location.pathname)) {
     return <Navigate to="/setup" replace />;
   }

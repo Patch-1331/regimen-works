@@ -1,5 +1,6 @@
 import type { ComponentProps } from "react";
 import { SignIn } from "@clerk/clerk-react";
+import { Mark } from "../components/Mark";
 
 /**
  * The tokens in index.css, as values rather than `var()`s: Clerk derives
@@ -102,19 +103,6 @@ const signInAppearance = {
     socialButtonsBlockButtonText: { fontSize: "1rem", fontWeight: 400 },
   },
 } satisfies ComponentProps<typeof SignIn>["appearance"];
-
-/** A barbell end-on: the plates either side of the bar. */
-function Mark() {
-  return (
-    <svg width="28" height="24" viewBox="0 0 28 24" fill="var(--glow)" aria-hidden="true">
-      <rect x="0" y="6" width="3" height="12" />
-      <rect x="5" y="1" width="3" height="22" />
-      <rect x="8" y="10.5" width="12" height="3" />
-      <rect x="20" y="1" width="3" height="22" />
-      <rect x="25" y="6" width="3" height="12" />
-    </svg>
-  );
-}
 
 /**
  * What a signed-out visitor sees (DN-196): what the app is, Clerk's sign-in
