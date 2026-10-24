@@ -970,6 +970,7 @@ describe("from the setup wizard", () => {
     renderRoute("/setup");
 
     await userEvent.click(await screen.findByRole("button", { name: "Begin" }));
+    await userEvent.click(screen.getByRole("button", { name: "Next: your program" }));
     await userEvent.click(screen.getByRole("link", { name: /Build your own/ }));
 
     await userEvent.type(await screen.findByLabelText("Program name"), "Pull days");
@@ -978,5 +979,31 @@ describe("from the setup wizard", () => {
 
     const chosen = await screen.findByRole("button", { name: /Pull days/ });
     expect(chosen).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it.each([
+    ["saving", "Save program"],
+    ["cancelling", "← CANCEL"],
+  ])("keeps the kit the athlete answered when %s the editor (DN-195)", async (_, leave) => {
+    api({ onboarded: false });
+    renderRoute("/setup");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Begin" }));
+    await userEvent.click(screen.getByRole("button", { name: /Nothing/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Next: your program" }));
+    await userEvent.click(screen.getByRole("link", { name: /Build your own/ }));
+
+    if (leave === "Save program") {
+      await userEvent.type(await screen.findByLabelText("Program name"), "Pull days");
+      await writeMondayPull();
+      await userEvent.click(screen.getByRole("button", { name: leave }));
+    } else {
+      await userEvent.click(await screen.findByRole("link", { name: leave }));
+    }
+
+    // Back on the picker, not on welcome, and the kit still says nothing.
+    expect(await screen.findByRole("heading", { name: "Pick your program" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByRole("checkbox", { name: /pull-up bar/i })).not.toBeChecked();
   });
 });

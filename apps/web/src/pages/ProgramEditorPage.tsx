@@ -9,6 +9,7 @@ import {
 } from "react-router-dom";
 import { defaultProgramSummary } from "@regimen-works/shared";
 import { ApiError, api, type ApiExercise, type LibraryTier } from "../lib/api";
+import type { SetupHandBack } from "./SetupPage";
 import { MovementPicker } from "../components/MovementPicker";
 import { SwapButton, SwapPanel } from "../components/MovementSwap";
 import { buildAlternativeRows, canSwap } from "../lib/swapOptions";
@@ -77,6 +78,11 @@ export function ProgramEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
   const { id } = useParams();
   const fromSetup = params.get("from") === "setup";
   const back = fromSetup ? "/setup" : "/programs";
+  // The wizard's kit answer (DN-195), handed back however the editor is left,
+  // so going to write a program does not undo the question before it.
+  const setupKit = (useLocation().state as SetupHandBack | null)?.kit;
+  const handBack: SetupHandBack | undefined =
+    fromSetup && setupKit ? { kit: setupKit } : undefined;
   const copyId = id === undefined ? params.get("copy") : null;
 
   const saved = useQuery({
@@ -179,7 +185,9 @@ export function ProgramEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
         }),
       ]);
       if (fromSetup) {
-        void navigate("/setup", { state: { programId: created.id } });
+        void navigate("/setup", {
+          state: { ...handBack, programId: created.id } satisfies SetupHandBack,
+        });
       } else {
         void navigate("/programs");
       }
@@ -189,7 +197,7 @@ export function ProgramEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
   if (copyId !== null && !source.data) {
     return (
       <div className="mx-auto max-w-md p-6">
-        <Link to={back} className="text-xs text-[var(--ink-faint)]" style={mono}>
+        <Link to={back} state={handBack} className="text-xs text-[var(--ink-faint)]" style={mono}>
           ← BACK
         </Link>
         <p
@@ -208,7 +216,7 @@ export function ProgramEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
   if (id !== undefined && !editing) {
     return (
       <div className="mx-auto max-w-md p-6">
-        <Link to={back} className="text-xs text-[var(--ink-faint)]" style={mono}>
+        <Link to={back} state={handBack} className="text-xs text-[var(--ink-faint)]" style={mono}>
           ← BACK
         </Link>
         <p
@@ -236,7 +244,7 @@ export function ProgramEditorPage({ tier: routeTier = "own" }: { tier?: LibraryT
 
   return (
     <div className="mx-auto max-w-md p-6 pb-32">
-      <Link to={back} className="text-xs text-[var(--ink-faint)]" style={mono}>
+      <Link to={back} state={handBack} className="text-xs text-[var(--ink-faint)]" style={mono}>
         ← CANCEL
       </Link>
 

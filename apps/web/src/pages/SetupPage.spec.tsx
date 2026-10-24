@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { CommitSetup } from "@regimen-works/shared";
+import type {
+  CommitSetup,
+  Equipment,
+  UpdateSettings,
+} from "@regimen-works/shared";
 import { addIsoDays } from "@regimen-works/shared";
 import { renderRoute } from "../test/renderRoute";
 import { server, http, HttpResponse } from "../test/server";
@@ -17,8 +21,8 @@ vi.mock("@clerk/clerk-react", async () => {
 /**
  * The first-run wizard (DN-15).
  *
- * Three questions and then training, which makes this the first screen an
- * athlete ever sees and the one place a wrong answer is expensive: the three
+ * Four questions and then training, which makes this the first screen an
+ * athlete ever sees and the one place a wrong answer is expensive: the four
  * it collects decide what every later day of the app is.
  */
 
@@ -36,10 +40,21 @@ function newAthlete(
   options: {
     setup?: Partial<ReturnType<typeof fixtures.setupOptions>>;
     commitFails?: string;
+    owned?: Equipment[];
   } = {},
 ) {
   const sent: CommitSetup[] = [];
+  kitSaves = [];
+  writes = [];
   server.use(
+    http.get("/api/settings", () =>
+      HttpResponse.json(fixtures.settings({ equipment: options.owned ?? ["bar"] })),
+    ),
+    http.patch("/api/settings", async ({ request }) => {
+      kitSaves.push((await request.json()) as UpdateSettings);
+      writes.push("settings");
+      return HttpResponse.json(fixtures.settings());
+    }),
     // Answered from what has actually been committed, rather than pinned to
     // null: the wizard invalidates every query on success, so a `/me` frozen
     // at un-onboarded would send the athlete it just onboarded straight back
@@ -56,6 +71,7 @@ function newAthlete(
     ),
     http.post("/api/setup", async ({ request }) => {
       sent.push((await request.json()) as CommitSetup);
+      writes.push("setup");
       if (options.commitFails) {
         return HttpResponse.json(
           { message: options.commitFails },
@@ -68,6 +84,11 @@ function newAthlete(
   return sent;
 }
 
+/** Every settings PATCH the last `newAthlete` saw: the kit, saved. */
+let kitSaves: UpdateSettings[] = [];
+/** Which endpoint was written to, in order. */
+let writes: ("settings" | "setup")[] = [];
+
 /**
  * Clicks a button once it is there.
  *
@@ -78,11 +99,14 @@ function newAthlete(
 const click = async (name: string | RegExp) =>
   userEvent.click(await screen.findByRole("button", { name }));
 
-/** Welcome, program, then whichever cadence screen that program has. */
+/** Welcome, kit as it stands, program, then that program's cadence screen. */
 async function walkTo(program: string) {
   await click("Begin");
+  await click("Next: your program");
   await click(new RegExp(program));
 }
+
+const kitBox = (name: RegExp) => screen.getByRole("checkbox", { name });
 
 describe("the setup gate", () => {
   it("sends an athlete who has not finished setup into the wizard", async () => {
@@ -123,12 +147,17 @@ describe("the setup gate", () => {
   });
 });
 
-describe("the three questions", () => {
-  it("asks for a program, then days, then a start date", async () => {
+describe("the four questions", () => {
+  it("asks for kit, then a program, then days, then a start date", async () => {
     newAthlete();
     renderRoute("/setup");
 
     await click("Begin");
+    expect(
+      screen.getByRole("heading", { name: "What do you have to train with?" }),
+    ).toBeInTheDocument();
+
+    await click("Next: your program");
     expect(
       screen.getByRole("heading", { name: "Pick your program" }),
     ).toBeInTheDocument();
@@ -174,7 +203,7 @@ describe("the three questions", () => {
     expect(await screen.findByText("4")).toBeInTheDocument();
   });
 
-  it("commits the three answers together", async () => {
+  it("commits the answers together", async () => {
     const sent = newAthlete();
     renderRoute("/setup");
     await walkTo("Pull-Up Builder");
@@ -585,6 +614,7 @@ describe("a program of your own, with no end (DN-154)", () => {
     withAuthored();
     renderRoute("/setup");
     await click("Begin");
+    await click("Next: your program");
 
     expect(
       await screen.findByText(/1–52 weeks or no end/),
@@ -849,5 +879,130 @@ describe("a commit the API refuses", () => {
     expect(
       screen.getByRole("heading", { name: "You're ready" }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("your kit (DN-195)", () => {
+  it("is promised first on welcome, of four", async () => {
+    newAthlete();
+    renderRoute("/setup");
+
+    expect(
+      await screen.findByText(/Four questions and you're training/),
+    ).toBeInTheDocument();
+    const promised = screen
+      .getAllByRole("listitem")
+      .map((item) => item.textContent);
+    expect(promised).toEqual([
+      expect.stringMatching(/^01 — Your kit/),
+      "02 — Your program",
+      "03 — Training days",
+      "04 — Start date",
+    ]);
+  });
+
+  it("starts from what the athlete already owns, and counts it", async () => {
+    newAthlete({ owned: ["bar"] });
+    renderRoute("/setup");
+    await click("Begin");
+
+    expect(kitBox(/pull-up bar/i)).toBeChecked();
+    expect(kitBox(/jump rope/i)).not.toBeChecked();
+    expect(screen.getByText("1 of 14 ticked")).toBeInTheDocument();
+    // Nothing is a real answer, and the step says so before anyone picks it.
+    expect(screen.getByText(/bodyweight covers a full program/)).toBeInTheDocument();
+    expect(
+      screen.getByText("You can change this any time in Settings."),
+    ).toBeInTheDocument();
+  });
+
+  it("lists every piece in catalog order", async () => {
+    newAthlete();
+    renderRoute("/setup");
+    await click("Begin");
+
+    const names = screen
+      .getAllByRole("checkbox")
+      .map((box) => box.getAttribute("aria-labelledby"));
+    expect(names).toHaveLength(14);
+    expect(names[0]).toBe("equipment-bar-label");
+    expect(names[13]).toBe("equipment-gym_machines-label");
+  });
+
+  it("ticks a preset's kit, and forgets which preset it was", async () => {
+    newAthlete();
+    renderRoute("/setup");
+    await click("Begin");
+
+    await click(/Home/);
+    for (const name of [/pull-up bar/i, /resistance bands/i, /^bench$/i, /^dumbbell$/i]) {
+      expect(kitBox(name)).toBeChecked();
+    }
+    expect(kitBox(/jump rope/i)).not.toBeChecked();
+    expect(screen.getByText("4 of 14 ticked")).toBeInTheDocument();
+    // A shortcut, not an answer: nothing is left pressed.
+    expect(screen.getByRole("button", { name: /Home/ })).not.toHaveAttribute(
+      "aria-pressed",
+    );
+
+    await click(/Gym/);
+    expect(screen.getByText("13 of 14 ticked")).toBeInTheDocument();
+
+    await click(/Nothing/);
+    expect(screen.getByText("0 of 14 ticked")).toBeInTheDocument();
+  });
+
+  it("keeps the kit when the athlete goes back to it and forward again", async () => {
+    newAthlete();
+    renderRoute("/setup");
+    await click("Begin");
+    await userEvent.click(kitBox(/kettlebell/i));
+    await click("Next: your program");
+    await click(/Pull-Up Builder/);
+
+    await click("Back");
+    await click("Back");
+    expect(kitBox(/kettlebell/i)).toBeChecked();
+    expect(kitBox(/pull-up bar/i)).toBeChecked();
+
+    await click("Back");
+    await click("Begin");
+    expect(kitBox(/kettlebell/i)).toBeChecked();
+  });
+
+  it("saves nothing until the commit, then saves the kit as Settings does", async () => {
+    const sent = newAthlete({ owned: ["bar"] });
+    renderRoute("/setup");
+    await click("Begin");
+    await userEvent.click(kitBox(/kettlebell/i));
+    await userEvent.click(kitBox(/jump rope/i));
+    await click("Next: your program");
+    await click(/Pull-Up Builder/);
+    await click("Continue");
+    await click("Continue");
+    expect(writes).toEqual([]);
+
+    await click("Go to today");
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    // The whole set, in catalog order, whatever order it was ticked in.
+    expect(kitSaves).toEqual([
+      { equipment: ["bar", "jump_rope", "kettlebell"] },
+    ]);
+    expect(writes).toEqual(["settings", "setup"]);
+  });
+
+  it("saves an empty kit as an answer", async () => {
+    newAthlete({ owned: ["bar"] });
+    renderRoute("/setup");
+    await click("Begin");
+    await click(/Nothing/);
+    await click("Next: your program");
+    await click(/Pull-Up Builder/);
+    await click("Continue");
+    await click("Continue");
+    await click("Go to today");
+
+    await waitFor(() => expect(kitSaves).toEqual([{ equipment: [] }]));
   });
 });

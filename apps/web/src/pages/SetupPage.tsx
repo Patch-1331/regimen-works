@@ -8,17 +8,25 @@ import {
   useParams,
 } from "react-router-dom";
 import type {
+  Equipment,
   Me,
   ProgramRun,
   SetupOptions,
   SetupProgram,
 } from "@regimen-works/shared";
+import { EQUIPMENT_CATALOG } from "@regimen-works/shared";
 import { api } from "../lib/api";
+import { EquipmentChecklist } from "../components/EquipmentChecklist";
 import { endsLine } from "../lib/programRuns";
 import {
+  KIT_PRESETS,
+  SETUP_QUESTIONS,
+  type SetupQuestion,
   dayCountWarning,
   formatStartDate,
+  inCatalogOrder,
   listDays,
+  questionNumber,
   restPaceWarning,
   startDateChoices,
   weekdayOf,
@@ -28,27 +36,39 @@ import { parseRestDraft, restDraftOf, restSecondsOf } from "../lib/rest";
 import { WEEKDAYS, localIsoDate } from "../lib/weekdays";
 
 /**
- * The first-run wizard (DN-15): three questions, then training.
+ * The first-run wizard (DN-15): four questions, then training. Kit comes
+ * first (DN-195), so nothing after it is chosen before the app knows what the
+ * athlete owns; `SETUP_QUESTIONS` is the order.
  *
  * Every answer lives here rather than in the step that asks for it, which is
  * the whole of "back navigation preserving answers" — a step is a way of
  * looking at this state, not a place it is kept. Going back and forward again
  * changes nothing, and the commit at the end is the only write.
  *
- * There is deliberately no fourth question about what the athlete can do.
+ * There is deliberately no fifth question about what the athlete can do.
+ * Kit is what they have, not what they can do with it.
  * Everyone is handed each group's default movement and changes it in one tap
  * on their first workout, which is a better first impression than a form
  * asking how many pull-ups you can do before you have done one here.
  *
  * The same steps start a program from the Programs tab (DN-180, ADR 0009
  * decision 8), at `/programs/:id/start`: the program is already chosen, so it
- * opens on the days, and welcome is for someone who has never been here.
+ * opens on the days, welcome is for someone who has never been here, and the
+ * kit is already set -- that start never asks for it or saves it.
  * Cancelling goes back to Programs having written nothing, and the confirm
  * step says what the start ends.
  */
 
-const STEPS = ["welcome", "program", "cadence", "start", "ready"] as const;
-type Step = (typeof STEPS)[number];
+type Step = "welcome" | SetupQuestion | "ready";
+
+/**
+ * What the wizard hands the program editor on "Build your own" (DN-145), and
+ * gets back from it: the program written, and the kit already answered.
+ */
+export interface SetupHandBack {
+  programId?: string;
+  kit?: Equipment[];
+}
 
 export function SetupPage() {
   // Only on `/programs/:id/start`; the first-run wizard has no id.
@@ -68,11 +88,25 @@ export function SetupPage() {
     queryFn: api.programRuns,
     enabled: startId !== undefined,
   });
+  // Where the kit question starts: what the athlete already owns, which for a
+  // new one is the default kit provisioning gave them.
+  const {
+    data: settings,
+    isLoading: settingsLoading,
+    error: settingsError,
+  } = useQuery({
+    queryKey: ["settings"],
+    queryFn: api.settings,
+    enabled: startId === undefined,
+  });
 
-  if (isLoading || (startId !== undefined && runsLoading)) {
+  if (
+    isLoading ||
+    (startId !== undefined ? runsLoading : settingsLoading)
+  ) {
     return <Frame>{null}</Frame>;
   }
-  if (error || !options) {
+  if (error || settingsError || !options) {
     return (
       <Frame>
         <p className="text-[var(--danger)]">
@@ -96,7 +130,7 @@ export function SetupPage() {
   }
   // Keyed remount is unnecessary — the query settles once — but the answers
   // below are seeded from `options`, so they are only sound once it is here.
-  return <Wizard options={options} />;
+  return <Wizard options={options} owned={settings?.equipment ?? []} />;
 }
 
 /** A start from the Programs tab: the program chosen, and the run it leaves. */
@@ -107,9 +141,12 @@ interface StartFromPrograms {
 
 function Wizard({
   options,
+  owned = [],
   start,
 }: {
   options: SetupOptions;
+  /** The kit the athlete has now; unread on a start from Programs. */
+  owned?: Equipment[];
   start?: StartFromPrograms;
 }) {
   const navigate = useNavigate();
@@ -117,15 +154,23 @@ function Wizard({
 
   // Back from "Build your own" (DN-145): the editor hands over the program it
   // just saved, and the wizard picks up at the picker with it chosen.
-  const handedBack = (useLocation().state as { programId?: string } | null)
-    ?.programId;
+  // Cancelling the editor hands back the kit alone, and still lands on the
+  // picker it left from.
+  const handedBack = useLocation().state as SetupHandBack | null;
   const authored = options.programs.find(
-    (p) => p.id === (start?.programId ?? handedBack),
+    (p) => p.id === (start?.programId ?? handedBack?.programId),
   );
   const first = authored ?? options.programs[0];
 
   const [step, setStep] = useState<Step>(
-    start ? "cadence" : authored ? "program" : "welcome",
+    start
+      ? "cadence"
+      : authored || handedBack?.kit
+        ? "program"
+        : "welcome",
+  );
+  const [kit, setKit] = useState<Equipment[]>(() =>
+    inCatalogOrder(handedBack?.kit ?? owned),
   );
   const [programId, setProgramId] = useState(first.id);
   const [days, setDays] = useState<number[]>(() =>
@@ -147,8 +192,12 @@ function Wizard({
   const restWarning = restPaceWarning(program, rest);
 
   const commit = useMutation({
-    mutationFn: () =>
-      api.commitSetup({
+    mutationFn: async () => {
+      // Saved as Settings saves it, and only here: the kit is one more answer
+      // the commit carries, not a write of its own on leaving its step. A
+      // start from Programs never asked, so it has nothing to say about kit.
+      if (!start) await api.updateSettings({ equipment: kit });
+      return api.commitSetup({
         programId: program.id,
         // Null for a fixed program, whose days are not the athlete's to
         // choose — the API refuses days here rather than ignoring them.
@@ -160,7 +209,8 @@ function Wizard({
         defaultRestSeconds: program.hasStraightSets
           ? restSecondsOf(rest)
           : null,
-      }),
+      });
+    },
     onSuccess: async ({ onboardedAt }) => {
       // Written straight into the cache the route guard reads, so the
       // redirect back into the app does not race a refetch of the very field
@@ -196,14 +246,24 @@ function Wizard({
 
   return (
     <Frame>
-      {step === "welcome" && <Welcome onBegin={() => setStep("program")} />}
+      {step === "welcome" && <Welcome onBegin={() => setStep("kit")} />}
+
+      {step === "kit" && (
+        <KitStep
+          kit={kit}
+          onKit={(next) => setKit(inCatalogOrder(next))}
+          onBack={() => setStep("welcome")}
+          onNext={() => setStep("program")}
+        />
+      )}
 
       {step === "program" && (
         <ProgramStep
           programs={options.programs}
           chosenId={programId}
+          kit={kit}
           onChoose={chooseProgram}
-          onBack={() => setStep("welcome")}
+          onBack={() => setStep("kit")}
         />
       )}
 
@@ -221,6 +281,7 @@ function Wizard({
             )
           }
           onWeeks={setWeeks}
+          numbered={!start}
           // From Programs there is no picker behind this step: the program
           // was chosen there, and Cancel below goes back to it.
           onBack={start ? undefined : () => setStep("program")}
@@ -233,6 +294,7 @@ function Wizard({
           options={options}
           chosen={startDate}
           onChoose={setStartDate}
+          numbered={!start}
           onBack={() => setStep("cadence")}
           onNext={() => setStep("ready")}
         />
@@ -319,6 +381,20 @@ function Lede({ children }: { children: React.ReactNode }) {
   return <p className="mt-2 text-sm text-[var(--ink-soft)]">{children}</p>;
 }
 
+/** "01 of 04 · Your kit": where a question sits in the wizard. */
+function QuestionMark({ step }: { step: SetupQuestion }) {
+  const question = SETUP_QUESTIONS.find((q) => q.step === step);
+  return (
+    <p
+      className="mb-3 text-xs uppercase tracking-[0.1em] text-[var(--ink-faint)]"
+      style={{ fontFamily: "var(--font-mono)" }}
+    >
+      {questionNumber(step)} of{" "}
+      {String(SETUP_QUESTIONS.length).padStart(2, "0")} · {question?.title}
+    </p>
+  );
+}
+
 function PrimaryButton({
   children,
   onClick,
@@ -363,7 +439,7 @@ function Welcome({ onBegin }: { onBegin: () => void }) {
     <div>
       <Title>Let's set up your training</Title>
       <Lede>
-        Three questions and you're training. We don't ask what you can do —
+        Four questions and you're training. We don't ask what you can do —
         you'll set that yourself on your first workout, one tap per movement.
       </Lede>
       <ol
@@ -373,11 +449,103 @@ function Welcome({ onBegin }: { onBegin: () => void }) {
           border: "1px solid var(--border)",
         }}
       >
-        <li className="text-[var(--ink-soft)]">01 — Your program</li>
-        <li className="text-[var(--ink-soft)]">02 — Training days</li>
-        <li className="text-[var(--ink-soft)]">03 — Start date</li>
+        {SETUP_QUESTIONS.map((question) => (
+          <li key={question.step} className="flex gap-1 text-[var(--ink-soft)]">
+            {/* The spaces are for whoever reads this as one line: a flex
+                row drops them on screen, and textContent keeps them. */}
+            <span>{questionNumber(question.step)} —</span>{" "}
+            <span>
+              {question.title}
+              {question.hint && (
+                <span className="block text-xs text-[var(--ink-faint)]">
+                  {" "}
+                  {question.hint}
+                </span>
+              )}
+            </span>
+          </li>
+        ))}
       </ol>
       <PrimaryButton onClick={onBegin}>Begin</PrimaryButton>
+    </div>
+  );
+}
+
+/**
+ * What the athlete has to train with (DN-195), asked before anything is
+ * chosen with it.
+ *
+ * "Start from" only ticks boxes. Nothing remembers which was pressed -- the
+ * boxes are the answer, and a preset that stayed lit after the athlete
+ * unticked half of it would be claiming a kit they no longer have.
+ */
+function KitStep({
+  kit,
+  onKit,
+  onBack,
+  onNext,
+}: {
+  kit: Equipment[];
+  onKit: (kit: Equipment[]) => void;
+  onBack: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div>
+      <QuestionMark step="kit" />
+      <Title>What do you have to train with?</Title>
+      <Lede>
+        We only give you movements you can do with it. Nothing at all is fine;
+        bodyweight covers a full program.
+      </Lede>
+
+      <p className="mt-5 text-xs uppercase tracking-[0.1em] text-[var(--ink-faint)]">
+        Start from
+      </p>
+      <ul className="mt-2 grid grid-cols-3 gap-2">
+        {KIT_PRESETS.map((preset) => (
+          <li key={preset.name}>
+            <button
+              type="button"
+              onClick={() => onKit([...preset.kit])}
+              className="h-full w-full p-3 text-left"
+              style={{
+                background: "var(--panel)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              <span className="block text-sm text-[var(--ink)]">
+                {preset.name}
+              </span>
+              <span className="mt-0.5 block text-xs text-[var(--ink-faint)]">
+                {preset.hint}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <fieldset className="mt-5">
+        <legend className="flex w-full justify-between text-xs uppercase tracking-[0.1em]">
+          <span className="text-[var(--ink-faint)]">Then adjust</span>
+          <span className="text-[var(--glow)]">
+            {kit.length} of {EQUIPMENT_CATALOG.length} ticked
+          </span>
+        </legend>
+        <EquipmentChecklist
+          owned={kit}
+          onToggle={(piece, next) =>
+            onKit(next ? [...kit, piece] : kit.filter((p) => p !== piece))
+          }
+        />
+      </fieldset>
+
+      <p className="mt-3 text-xs text-[var(--ink-faint)]">
+        You can change this any time in Settings.
+      </p>
+
+      <PrimaryButton onClick={onNext}>Next: your program</PrimaryButton>
+      <BackButton onClick={onBack} />
     </div>
   );
 }
@@ -385,16 +553,20 @@ function Welcome({ onBegin }: { onBegin: () => void }) {
 function ProgramStep({
   programs,
   chosenId,
+  kit,
   onChoose,
   onBack,
 }: {
   programs: SetupProgram[];
   chosenId: string;
+  /** Carried through the editor, so "Build your own" does not lose it. */
+  kit: Equipment[];
   onChoose: (program: SetupProgram) => void;
   onBack: () => void;
 }) {
   return (
     <div>
+      <QuestionMark step="program" />
       <Title>Pick your program</Title>
       <Lede>
         A program decides what each training day is. You can change it later.
@@ -444,6 +616,7 @@ function ProgramStep({
               what was written already chosen. */}
           <Link
             to="/programs/new?from=setup"
+            state={{ kit } satisfies SetupHandBack}
             className="block w-full p-4"
             style={{
               background: "var(--panel)",
@@ -494,6 +667,7 @@ function CadenceStep({
   warning,
   onToggleDay,
   onWeeks,
+  numbered,
   onBack,
   onNext,
 }: {
@@ -504,6 +678,8 @@ function CadenceStep({
   onToggleDay: (day: number) => void;
   /** Null is "No end", on a program that offers it (DN-154). */
   onWeeks: (weeks: number | null) => void;
+  /** Off on a start from Programs, which asks two of the four. */
+  numbered: boolean;
   onBack?: () => void;
   onNext: () => void;
 }) {
@@ -523,6 +699,7 @@ function CadenceStep({
 
   return (
     <div>
+      {numbered && <QuestionMark step="cadence" />}
       <Title>
         {isFixed ? "Your training week" : "Which days do you train?"}
       </Title>
@@ -746,12 +923,14 @@ function StartDateStep({
   options,
   chosen,
   onChoose,
+  numbered,
   onBack,
   onNext,
 }: {
   options: SetupOptions;
   chosen: string;
   onChoose: (date: string) => void;
+  numbered: boolean;
   onBack: () => void;
   onNext: () => void;
 }) {
@@ -767,6 +946,7 @@ function StartDateStep({
 
   return (
     <div>
+      {numbered && <QuestionMark step="start" />}
       <Title>When do you start?</Title>
       <Lede>
         {todayIsSpokenFor
