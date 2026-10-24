@@ -6,7 +6,9 @@ import {
   DEFAULT_PROGRAM_ID,
   effectiveRounds,
   type MakeupOffer as MakeupOfferBlock,
+  type NotStartedProgram,
   type PrescribedMovement,
+  type RunningProgram,
   type TodayProgram,
 } from "@regimen-works/shared";
 import { api } from "../lib/api";
@@ -16,6 +18,7 @@ import { hasInstructions } from "../lib/instructions";
 import { LiveSwapPanel, SwapButton } from "../components/MovementSwap";
 import { canSwap as swappable } from "../lib/swapOptions";
 import { setByStep, uniformCount } from "../lib/prescribedSets";
+import { WEEKDAYS, weekdayName } from "../lib/weekdays";
 
 export function TodayPage() {
   const navigate = useNavigate();
@@ -45,6 +48,11 @@ export function TodayPage() {
   async function handleSkip() {
     await api.skipToday();
     await queryClient.invalidateQueries({ queryKey: ["today"] });
+  }
+
+  async function handleStartToday() {
+    const day = await api.startProgramToday();
+    queryClient.setQueryData(["today"], day);
   }
 
   async function handleMakeup() {
@@ -96,6 +104,20 @@ export function TodayPage() {
   // telling the athlete about a program they never chose. Everything below
   // reads `program` rather than `data.program` for that reason.
   const program = namedProgram(data.program);
+
+  // Before the start date there is nothing to train (DN-200), so the day is
+  // the wait itself. Only with no assignment: a day already under way from
+  // before the athlete chose the program is still theirs to finish.
+  if (data.program?.status === "not-started" && !data.assignment) {
+    return (
+      <ProgramNotStarted
+        program={data.program}
+        today={data.date}
+        onStartToday={handleStartToday}
+        onLookThrough={() => navigate("/programs")}
+      />
+    );
+  }
 
   if (data.isRestDay || !data.assignment) {
     return (
@@ -799,11 +821,14 @@ function ToggleStart({
  * The program worth naming, or null.
  *
  * Null covers three situations the athlete experiences identically: no
- * enrollment, a program that has not started, and Just WODs — which is a real
- * enrollment and deliberately not a program anyone chose.
+ * enrollment, a program that has not started — which has a screen of its own
+ * (DN-200) — and Just WODs, which is a real enrollment and deliberately not a
+ * program anyone chose.
  */
-function namedProgram(program: TodayProgram | null): TodayProgram | null {
-  return program && program.programId !== DEFAULT_PROGRAM_ID ? program : null;
+function namedProgram(program: TodayProgram | null): RunningProgram | null {
+  return program?.status === "running" && program.programId !== DEFAULT_PROGRAM_ID
+    ? program
+    : null;
 }
 
 /**
@@ -856,7 +881,7 @@ function MakeupOffer({
   );
 }
 
-function restDayCopy(program: TodayProgram | null, date: string): string {
+function restDayCopy(program: RunningProgram | null, date: string): string {
   // "Planned rest" only when the program actually planned one. A flexible
   // program defers to the athlete's own training days, and telling them the
   // program planned a day they themselves took off would be the app taking
@@ -868,7 +893,7 @@ function restDayCopy(program: TodayProgram | null, date: string): string {
 }
 
 /** Where the athlete is in their program, above the plate. */
-function ProgramStrip({ program, date }: { program: TodayProgram; date: string }) {
+function ProgramStrip({ program, date }: { program: RunningProgram; date: string }) {
   const parts = [
     program.name.toUpperCase(),
     program.totalWeeks === null
@@ -889,4 +914,137 @@ function ProgramStrip({ program, date }: { program: TodayProgram; date: string }
       {parts.join(" · ")}
     </p>
   );
+}
+
+/**
+ * Today before the program's start date (DN-200): how long to go, when it
+ * begins and what comes first, and the way to begin now instead.
+ *
+ * No rest-day plate and no makeup: nothing is owed on a day the athlete chose
+ * not to start yet, and dimmed instruments would say otherwise.
+ */
+function ProgramNotStarted({
+  program,
+  today,
+  onStartToday,
+  onLookThrough,
+}: {
+  program: NotStartedProgram;
+  today: string;
+  onStartToday: () => Promise<void>;
+  onLookThrough: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+  const daysToGo = daysBetween(today, program.startDate);
+  const first = program.firstSession;
+  const picked = WEEKDAYS.filter((d) => program.trainingDays.includes(d.value))
+    .map((d) => d.short)
+    .join(" · ");
+
+  async function startToday() {
+    setBusy(true);
+    setFailed(null);
+    try {
+      await onStartToday();
+    } catch (e) {
+      setFailed(e instanceof Error ? e.message : "Couldn't start the program.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-1 flex-col justify-center p-6">
+      <p
+        className="text-xs font-bold tracking-[0.18em] text-[var(--glow)]"
+        style={{ fontFamily: "var(--font-mono)" }}
+      >
+        {daysToGo} {daysToGo === 1 ? "DAY" : "DAYS"} TO GO
+      </p>
+      <h1
+        className="mt-3 text-4xl font-extrabold uppercase leading-none"
+        style={{ fontFamily: "var(--font-display)" }}
+      >
+        {program.name} starts {startsWord(today, program.startDate)}
+      </h1>
+      <p className="mt-3 text-[var(--ink-soft)]">
+        {picked ? `You picked ${picked}. ` : ""}Nothing to do today.
+      </p>
+
+      {first && (
+        <section
+          className="mt-6 rounded-sm p-4"
+          style={{ background: "var(--panel)", border: "1px solid var(--ink-faint)" }}
+        >
+          <p
+            className="text-xs tracking-[0.18em] text-[var(--ink-soft)]"
+            style={{ fontFamily: "var(--font-mono)" }}
+          >
+            {shortDate(first.date)} · FIRST UP
+          </p>
+          <h2 className="mt-2 text-2xl font-bold">{sessionName(first)}</h2>
+          {sessionFacts(first) && (
+            <p className="mt-1 text-[var(--ink-soft)]">{sessionFacts(first)}</p>
+          )}
+        </section>
+      )}
+
+      <button
+        onClick={startToday}
+        disabled={busy}
+        className="mt-8 self-start text-sm font-semibold tracking-[0.14em] text-[var(--glow)] underline underline-offset-4"
+        style={{ fontFamily: "var(--font-mono)" }}
+      >
+        START TODAY INSTEAD →
+      </button>
+      {failed && <p className="mt-2 text-sm text-[var(--danger)]">{failed}</p>}
+
+      <button
+        onClick={onLookThrough}
+        className="mt-8 self-start text-sm tracking-[0.14em] text-[var(--ink-soft)]"
+        style={{ fontFamily: "var(--font-mono)" }}
+      >
+        LOOK THROUGH THE PROGRAM
+      </button>
+    </div>
+  );
+}
+
+function daysBetween(from: string, to: string): number {
+  const ms = Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`);
+  return Math.round(ms / 86_400_000);
+}
+
+/** "tomorrow", a weekday within the week, or the date beyond it. */
+function startsWord(today: string, startDate: string): string {
+  const days = daysBetween(today, startDate);
+  if (days === 1) return "tomorrow";
+  if (days < 7) return weekdayName(new Date(`${startDate}T00:00:00Z`).getUTCDay());
+  return shortDate(startDate).toLowerCase().replace(/^\w+ /, "");
+}
+
+/** "MON 21 SEP" — the plate's own date style. */
+function shortDate(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  const weekday = WEEKDAYS.find((w) => w.value === d.getUTCDay())?.short ?? "";
+  return `${weekday} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`.toUpperCase();
+}
+
+// Spelled out rather than asked of the locale, which says "Sept" in some.
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function sessionName(first: NonNullable<NotStartedProgram["firstSession"]>): string {
+  if (first.name) return first.name;
+  return first.slotKind === "movements" ? "Strength" : "A WOD picked on the day";
+}
+
+function sessionFacts(first: NonNullable<NotStartedProgram["firstSession"]>): string {
+  return [
+    first.movementCount === null
+      ? null
+      : `${first.movementCount} ${first.movementCount === 1 ? "movement" : "movements"}`,
+    first.minutes === null ? null : `about ${first.minutes} minutes`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }

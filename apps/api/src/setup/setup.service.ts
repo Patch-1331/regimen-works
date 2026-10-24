@@ -16,6 +16,7 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { snapshotMovements } from '../enrollments/starting-movements';
 import { fixedDaysOf, setupRejection, startDateRange } from './setup.logic';
+import { todayIsTouched } from './today-touched';
 
 /**
  * What a program's first week needs to be read for, and nothing else: the
@@ -90,7 +91,7 @@ export class SetupService {
         where: { userId },
         select: { trainingDays: true },
       }),
-      this.todayIsTouched(userId, today),
+      todayIsTouched(this.prisma, userId, today),
       this.lastRestSeconds(userId),
     ]);
     const rest = await this.restShapeOf(programs.map((p) => p.id));
@@ -136,7 +137,7 @@ export class SetupService {
 
     const range = startDateRange(
       today,
-      await this.todayIsTouched(userId, today),
+      await todayIsTouched(this.prisma, userId, today),
     );
     const { unstated } = await this.restShapeOf([program.id]);
     const rejection = setupRejection(
@@ -317,30 +318,6 @@ export class SetupService {
       select: { defaultRestSeconds: true },
     });
     return last?.defaultRestSeconds ?? null;
-  }
-
-  /**
-   * Whether anything has been done on today's workout yet.
-   *
-   * A session or a log, because those are the two rows that mean training
-   * happened. The assignment itself does not count: `getToday` creates one on
-   * the first read of the day, so an athlete who opened the app this morning
-   * and trained nothing would otherwise be told they cannot start until
-   * tomorrow.
-   */
-  private async todayIsTouched(
-    userId: string,
-    today: string,
-  ): Promise<boolean> {
-    const touched = await this.prisma.dailyAssignment.findFirst({
-      where: {
-        userId,
-        date: today,
-        OR: [{ session: { isNot: null } }, { log: { isNot: null } }],
-      },
-      select: { id: true },
-    });
-    return touched !== null;
   }
 }
 

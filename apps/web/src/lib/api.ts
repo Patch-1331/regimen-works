@@ -318,6 +318,8 @@ export const api = {
   skipToday: () => postJson<TodayResponse>("/today/skip"),
   /** Take the makeup offer: train on a rest day while the week is short (DN-17). */
   trainMakeup: () => postJson<TodayResponse>("/today/makeup"),
+  /** Start a program waiting for its start date today instead (DN-200). */
+  startProgramToday: () => postJson<TodayResponse>("/today/start-program"),
 
   startSession: (assignmentId: string) =>
     postJson<WorkoutSession>(`/assignments/${assignmentId}/session`),

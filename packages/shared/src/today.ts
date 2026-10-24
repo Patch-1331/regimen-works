@@ -46,7 +46,8 @@ export type TodayAssignment = z.infer<typeof todayAssignmentSchema>;
  * a program definition. The full shapes are `programEnrollmentSchema` and
  * `programDetailSchema`, fetched by the screens that actually need them.
  */
-export const todayProgramSchema = z.object({
+export const runningProgramSchema = z.object({
+  status: z.literal("running"),
   enrollmentId: z.string(),
   programId: z.string(),
   /** The program's name, for the heading above the plate. */
@@ -72,6 +73,60 @@ export const todayProgramSchema = z.object({
    */
   slotKind: programSlotKind.nullable(),
 });
+export type RunningProgram = z.infer<typeof runningProgramSchema>;
+
+/**
+ * The first session a program that has not started will hand over (DN-200),
+ * so Today can say what is coming rather than only when.
+ */
+export const firstSessionSchema = z.object({
+  /** The date it falls on — the start date, or the first trained day after it. */
+  date: z.string(),
+  /**
+   * The day's own name, or a pinned WOD's. Null on a day that generates its
+   * WOD, which has no name until the day arrives and one is picked.
+   */
+  name: z.string().nullable(),
+  slotKind: programSlotKind,
+  /** How many movements it prescribes. Null where that is not yet decided: a generated WOD. */
+  movementCount: z.number().int().positive().nullable(),
+  /** Roughly how long it takes, in whole minutes. Null where nothing says. */
+  minutes: z.number().int().positive().nullable(),
+});
+export type FirstSession = z.infer<typeof firstSessionSchema>;
+
+/**
+ * An enrollment whose start date is still ahead (DN-200).
+ *
+ * Its own shape rather than the running one with blanks: there is no week to
+ * be in yet, and a `week: 1` here would be a day the athlete is not on. Before
+ * the start there is nothing to train — the days no longer fall back to a
+ * generated WOD — so this is what Today has to say instead.
+ */
+export const notStartedProgramSchema = z.object({
+  status: z.literal("not-started"),
+  enrollmentId: z.string(),
+  programId: z.string(),
+  name: z.string(),
+  startDate: z.string(),
+  /**
+   * The days the run trains, 0 = Sunday, ascending: the athlete's own on a
+   * flexible program, the first week's on a fixed one.
+   */
+  trainingDays: z.array(z.number().int().min(0).max(6)),
+  /** Null only for a program that authors no session at all in its first two weeks. */
+  firstSession: firstSessionSchema.nullable(),
+});
+export type NotStartedProgram = z.infer<typeof notStartedProgramSchema>;
+
+/**
+ * Where the athlete is in their program today: part-way through it, or
+ * waiting for it to start (DN-200).
+ */
+export const todayProgramSchema = z.discriminatedUnion("status", [
+  runningProgramSchema,
+  notStartedProgramSchema,
+]);
 export type TodayProgram = z.infer<typeof todayProgramSchema>;
 
 /**
@@ -117,8 +172,8 @@ export const todayResponseSchema = z.object({
   cooldown: z.array(checklistExerciseSchema).nullable(),
   /**
    * The program context for today (DN-10), or null when there is none to
-   * report: no active enrollment, or an enrollment whose start date has not
-   * arrived and whose days still fall back to Just WODs.
+   * report: no active enrollment, or a run that has just ended. An enrollment
+   * whose start date has not arrived is `not-started` (DN-200).
    *
    * Nullable rather than a second response shape, so every existing client
    * path keeps working untouched while the program UI is built — a client
