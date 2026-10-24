@@ -8,7 +8,7 @@ import {
 } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./lib/api";
-import { SignedIn, SignedOut, SignIn, UserButton } from "@clerk/clerk-react";
+import { SignedIn, SignedOut, UserButton } from "@clerk/clerk-react";
 import { TabBar } from "./components/TabBar";
 import { TodayPage } from "./pages/TodayPage";
 import { HistoryPage } from "./pages/HistoryPage";
@@ -25,6 +25,7 @@ import { SetupPage } from "./pages/SetupPage";
 import { ProgramsPage } from "./pages/ProgramsPage";
 import { PasteProgramPage } from "./pages/PasteProgramPage";
 import { ProgramEditorPage } from "./pages/ProgramEditorPage";
+import { SignInPage } from "./pages/SignInPage";
 
 function TabbedLayout() {
   return (
@@ -50,9 +51,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     <>
       <SignedIn>{children}</SignedIn>
       <SignedOut>
-        <div className="flex min-h-screen items-center justify-center bg-[var(--bg)] p-4">
-          <SignIn routing="hash" />
-        </div>
+        <SignInPage />
       </SignedOut>
     </>
   );
