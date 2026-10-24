@@ -1,7 +1,64 @@
-import { addIsoDays } from "@regimen-works/shared";
-import type { SetupProgram } from "@regimen-works/shared";
+import { EQUIPMENT_CATALOG, addIsoDays } from "@regimen-works/shared";
+import type { Equipment, SetupProgram } from "@regimen-works/shared";
 import type { RestDraft } from "./rest";
 import { WEEKDAYS } from "./weekdays";
+
+/**
+ * The wizard's questions, in the order it asks them (DN-195).
+ *
+ * The one list of them: Welcome numbers its promise from it, and each step
+ * reads its own number here, so a reordered or added question cannot leave
+ * a screen saying "01" that is now the second.
+ */
+export const SETUP_QUESTIONS = [
+  { step: "kit", title: "Your kit", hint: "What you have to train with" },
+  { step: "program", title: "Your program", hint: null },
+  { step: "cadence", title: "Training days", hint: null },
+  { step: "start", title: "Start date", hint: null },
+] as const;
+
+export type SetupQuestion = (typeof SETUP_QUESTIONS)[number]["step"];
+
+/** "01", for the question a step asks. */
+export function questionNumber(step: SetupQuestion): string {
+  const index = SETUP_QUESTIONS.findIndex((q) => q.step === step);
+  return String(index + 1).padStart(2, "0");
+}
+
+/**
+ * Where "Start from" on the kit step puts the ticks (DN-195).
+ *
+ * Shortcuts, not answers: picking one replaces the ticks and is then
+ * forgotten, so what is saved is only ever the boxes. Home is the design's
+ * few pieces; Gym is everything but the suspension trainer, which most gyms
+ * do not have hanging up.
+ */
+export const KIT_PRESETS: {
+  name: string;
+  hint: string;
+  kit: readonly Equipment[];
+}[] = [
+  { name: "Nothing", hint: "Bodyweight", kit: [] },
+  {
+    name: "Home",
+    hint: "A few pieces",
+    kit: ["bar", "bands", "bench", "dumbbell"],
+  },
+  {
+    name: "Gym",
+    hint: "Most of it",
+    kit: EQUIPMENT_CATALOG.map((piece) => piece.value).filter(
+      (piece) => piece !== "suspension_trainer",
+    ),
+  },
+];
+
+/** The kit in catalog order, so what is sent reads like the list it came from. */
+export function inCatalogOrder(kit: readonly Equipment[]): Equipment[] {
+  return EQUIPMENT_CATALOG.map((piece) => piece.value).filter((piece) =>
+    kit.includes(piece),
+  );
+}
 
 /**
  * What the first-run wizard works out for itself (DN-15).

@@ -229,6 +229,14 @@ const extras = [
       latestStartDate: addIsoDays(localIsoDate(), 20),
     });
   }),
+  // Settings and the setup wizard's kit (DN-195) both write here. Answered
+  // with the patch applied, and forgotten on the next read.
+  http.patch(api("/settings"), async ({ request }) =>
+    HttpResponse.json({
+      ...fixtures.settings(),
+      ...((await request.json()) as object),
+    }),
+  ),
 ];
 
 export async function startMockApi() {
