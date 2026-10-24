@@ -1043,7 +1043,7 @@ describe('SchedulerService.getToday, under a program', () => {
     expect(saturday.program).toMatchObject({ name: program.name, week: 1 });
     // Null rather than the slot's own kind -- the day is off because the
     // athlete said so, not because the program planned a rest.
-    expect(saturday.program?.slotKind).toBeNull();
+    expect(saturday.program).toMatchObject({ slotKind: null });
   });
 
   it('overrides them on a fixed program, whose slots are the schedule', async () => {
@@ -1078,7 +1078,7 @@ describe('SchedulerService.getToday, under a program', () => {
     const today = await programService().getToday(user.id, MONDAY);
 
     expect(today.isRestDay).toBe(true);
-    expect(today.program?.slotKind).toBe('rest');
+    expect(today.program).toMatchObject({ slotKind: 'rest' });
   });
 
   it('trains the WOD the program pinned', async () => {
@@ -1097,7 +1097,7 @@ describe('SchedulerService.getToday, under a program', () => {
     const today = await programService().getToday(user.id, MONDAY);
 
     expect(today.assignment?.wod!.id).toBe(pinned.id);
-    expect(today.program?.slotKind).toBe('wod_pinned');
+    expect(today.program).toMatchObject({ slotKind: 'wod_pinned' });
   });
 
   it('honours a generated slot’s pattern', async () => {
@@ -1314,9 +1314,10 @@ describe('SchedulerService.getToday, under a program', () => {
 });
 
 describe('SchedulerService.getToday, at the edges of a run', () => {
-  it('falls back before the start date without touching the enrollment', async () => {
-    // How enrolling on Thursday to start Monday works: one active
-    // enrollment, and the days in between are ordinary Just WODs days.
+  it('waits for the start date without touching the enrollment (DN-200)', async () => {
+    // Enrolling on Monday to start the Monday after: one active enrollment,
+    // and the days in between have nothing to train -- not a generated WOD
+    // from a program the athlete has just chosen to leave.
     const user = await athlete();
     const program = await everyDayProgram('rest');
     const enrollment = await createEnrollment(user.id, {
@@ -1328,15 +1329,79 @@ describe('SchedulerService.getToday, at the edges of a run', () => {
 
     const today = await programService().getToday(user.id, MONDAY);
 
-    expect(today.program).toBeNull();
-    // A rest-authored program did not make today a rest day, because it has
-    // not started: the athlete trains.
-    expect(today.assignment).not.toBeNull();
+    expect(today).toMatchObject({
+      isRestDay: true,
+      assignment: null,
+      makeup: null,
+      program: {
+        status: 'not-started',
+        enrollmentId: enrollment.id,
+        name: program.name,
+        startDate: NEXT_MONDAY,
+        trainingDays: [1, 2, 3, 4, 5],
+      },
+    });
+    // Nothing recorded for a day that was never offered.
+    expect(
+      await testPrisma().dailyAssignment.count({ where: { userId: user.id } }),
+    ).toBe(0);
     expect(
       await testPrisma().programEnrollment.findUniqueOrThrow({
         where: { id: enrollment.id },
       }),
     ).toMatchObject({ status: 'active', completedAt: null });
+  });
+
+  it('names the first session it will hand over (DN-200)', async () => {
+    const user = await athlete([1, 3, 5]);
+    const program = await createProgram({
+      weeks: {
+        create: [
+          {
+            order: 0,
+            phase: 'core',
+            slots: {
+              create: [
+                {
+                  dayOfWeek: 1,
+                  kind: 'movements',
+                  label: 'Full body A',
+                  movements: {
+                    create: [0, 1].map((order) => ({
+                      order,
+                      movementGroup: 'pull',
+                      sets: lineSets(3, { reps: 5, restSeconds: 90 }),
+                    })),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+    await createEnrollment(user.id, {
+      programId: program.id,
+      startDate: NEXT_MONDAY,
+      weeks: 4,
+    });
+
+    const today = await programService().getToday(user.id, SATURDAY);
+
+    expect(today.program).toEqual(
+      expect.objectContaining({
+        status: 'not-started',
+        trainingDays: [1, 3, 5],
+        firstSession: {
+          date: NEXT_MONDAY,
+          name: 'Full body A',
+          slotKind: 'movements',
+          movementCount: 2,
+          // Six sets at 45s of work and 90s of rest: 13.5 minutes, to five.
+          minutes: 15,
+        },
+      }),
+    );
   });
 
   it('completes a run past its last day and falls back the same request', async () => {
@@ -1428,6 +1493,88 @@ describe('SchedulerService.getToday, at the edges of a run', () => {
 
     expect(again.program).toMatchObject({ name: program.name, week: 1 });
     expect(again.assignment).not.toBeNull();
+  });
+});
+
+describe('SchedulerService.startProgramToday (DN-200)', () => {
+  async function waiting() {
+    const user = await athlete();
+    const program = await everyDayProgram('wod_generated', {
+      allowNamed: true,
+    });
+    const enrollment = await createEnrollment(user.id, {
+      programId: program.id,
+      startDate: NEXT_MONDAY,
+      weeks: 4,
+    });
+    await createWod();
+    return { user, program, enrollment };
+  }
+
+  it('moves the start date to today and answers with day one', async () => {
+    const { user, enrollment } = await waiting();
+
+    const today = await programService().startProgramToday(user.id, MONDAY);
+
+    expect(
+      await testPrisma().programEnrollment.findUniqueOrThrow({
+        where: { id: enrollment.id },
+      }),
+    ).toMatchObject({ startDate: MONDAY, status: 'active' });
+    expect(today.program).toMatchObject({ status: 'running', week: 1 });
+    expect(today.assignment).not.toBeNull();
+  });
+
+  it('discards an untouched assignment so day one is the program’s', async () => {
+    const { user, enrollment } = await waiting();
+    const stale = await createAssignment(user.id, { date: MONDAY });
+
+    await programService().startProgramToday(user.id, MONDAY);
+
+    const row = await testPrisma().dailyAssignment.findUniqueOrThrow({
+      where: { userId_date: { userId: user.id, date: MONDAY } },
+    });
+    expect(row.id).not.toBe(stale.id);
+    expect(row.enrollmentId).toBe(enrollment.id);
+  });
+
+  it('refuses once today has been trained, in setup’s words', async () => {
+    const { user, enrollment } = await waiting();
+    const touched = await createAssignment(user.id, { date: MONDAY });
+    await testPrisma().workoutSession.create({
+      data: { userId: user.id, assignmentId: touched.id, capSeconds: 720 },
+    });
+
+    await expect(
+      programService().startProgramToday(user.id, MONDAY),
+    ).rejects.toThrow('the earliest you can start is tomorrow');
+    expect(
+      await testPrisma().programEnrollment.findUniqueOrThrow({
+        where: { id: enrollment.id },
+      }),
+    ).toMatchObject({ startDate: NEXT_MONDAY });
+  });
+
+  it('refuses a run that has already started', async () => {
+    const { user } = await waiting();
+
+    await expect(
+      programService().startProgramToday(user.id, NEXT_MONDAY),
+    ).rejects.toThrow('already started');
+  });
+
+  it('moves only the caller’s own run', async () => {
+    const { enrollment } = await waiting();
+    const stranger = await athlete();
+
+    await expect(
+      programService().startProgramToday(stranger.id, MONDAY),
+    ).rejects.toThrow('no program to start');
+    expect(
+      await testPrisma().programEnrollment.findUniqueOrThrow({
+        where: { id: enrollment.id },
+      }),
+    ).toMatchObject({ startDate: NEXT_MONDAY });
   });
 });
 

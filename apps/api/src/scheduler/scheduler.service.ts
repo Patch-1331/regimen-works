@@ -1,9 +1,19 @@
-import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Exercise } from '@prisma/client';
 import {
   DEFAULT_EQUIPMENT,
   DEFAULT_PATTERN_COOLDOWN_DAYS,
   DEFAULT_TRAINING_DAYS,
+  type FirstSession,
+  type ProgramSlotKind,
+  type TodayProgram,
 } from '@regimen-works/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { RNG, type Rng } from './rng';
@@ -19,6 +29,13 @@ import {
 import { EnrollmentsService } from '../enrollments/enrollments.service';
 import { loadActiveProgram } from '../programs/active-program';
 import { resolveScheduleLock } from '../programs/schedule-lock';
+import {
+  firstSessionDay,
+  prescribedMinutes,
+  runTrainingDays,
+} from '../programs/first-session';
+import { startDateRange, startDateRejection } from '../setup/setup.logic';
+import { todayIsTouched } from '../setup/today-touched';
 import { alsoTraining, resolveMakeup } from './makeup';
 import {
   narrowToSlot,
@@ -125,7 +142,7 @@ export class SchedulerService {
       resolveProgramDay(program, trainingDays, today, completed),
       userId,
     );
-    const strip = programBlock(day);
+    const strip = await this.programBlockFor(day, program, trainingDays);
 
     if (existing) {
       // A WOD-less row is either today's prescription (DN-19) or the older
@@ -193,10 +210,11 @@ export class SchedulerService {
     // behaviour they had before. Under a program the calendar question has
     // already been asked -- a flexible program defers to these same training
     // days, a fixed one overrides them on purpose.
-    const resting =
-      day.kind === 'fallback'
-        ? isRestDay(today, trainingDays)
-        : day.kind === 'rest';
+    //
+    // Before the start date there is nothing to train (DN-200): the athlete
+    // has chosen a program and a day to begin it, and a generated WOD in the
+    // gap would be a session from a program they have just left.
+    const resting = restsOn(day, today, trainingDays);
 
     if (resting) {
       return {
@@ -341,6 +359,125 @@ export class SchedulerService {
     return { kind: 'fallback', reason: 'no-enrollment' };
   }
 
+  /**
+   * The today response's program block: where the athlete is in their run,
+   * or -- before its start date -- when it begins and what comes first
+   * (DN-200).
+   */
+  private async programBlockFor(
+    day: ProgramDay,
+    program: ActiveProgram | null,
+    trainingDays: number[],
+  ): Promise<TodayProgram | null> {
+    if (day.kind !== 'fallback' || day.reason !== 'before-start' || !program) {
+      return programBlock(day);
+    }
+    return {
+      status: 'not-started',
+      enrollmentId: program.enrollmentId,
+      programId: program.programId,
+      name: program.programName,
+      startDate: program.startDate,
+      trainingDays: runTrainingDays(program, trainingDays),
+      firstSession: await this.firstSessionOf(program, trainingDays),
+    };
+  }
+
+  /** The waiting run's first session, filled in where a pinned WOD has to be read. */
+  private async firstSessionOf(
+    program: ActiveProgram,
+    trainingDays: number[],
+  ): Promise<FirstSession | null> {
+    const first = firstSessionDay(program, trainingDays);
+    if (!first) return null;
+    const { date, day } = first;
+    const slotKind = authoredKind(day.day.slotKind) ?? 'wod_generated';
+
+    if (day.kind === 'prescribed') {
+      return {
+        date,
+        name: day.day.dayLabel,
+        slotKind,
+        movementCount: day.movements.length,
+        minutes: prescribedMinutes(day.movements, day.defaultRestSeconds),
+      };
+    }
+
+    if (day.kind === 'pinned') {
+      // The program's own pinned WOD, read the way `wodForDay` reads it: the
+      // program chose it, so neither tier nor archive decides whether it is
+      // shown.
+      const wod = await this.prisma.wod.findUnique({
+        where: { id: day.wodId },
+        select: {
+          name: true,
+          timeCapMinutes: true,
+          _count: { select: { movements: true } },
+        },
+      });
+      return {
+        date,
+        name: day.day.dayLabel ?? wod?.name ?? null,
+        slotKind,
+        movementCount:
+          wod && wod._count.movements > 0 ? wod._count.movements : null,
+        minutes: wod?.timeCapMinutes ?? null,
+      };
+    }
+
+    // A generated day picks its WOD on the day, so only its cap is known.
+    return {
+      date,
+      name: day.day.dayLabel,
+      slotKind,
+      movementCount: null,
+      minutes: day.constraints.maxTimeCapMinutes,
+    };
+  }
+
+  /**
+   * Starts a run that is waiting for its start date today instead (DN-200),
+   * and answers with the day that makes.
+   *
+   * Judged by setup's own start-date rule, so the two places an athlete can
+   * pick today agree on when they may: once today has a session or a log on
+   * it, the earliest is tomorrow, and the athlete is told so in setup's
+   * words. Today's untouched assignment is discarded for the reason setup
+   * discards it -- day one of the program should really be day one.
+   */
+  async startProgramToday(userId: string, today: string) {
+    const active = await this.prisma.programEnrollment.findFirst({
+      where: { userId, status: 'active' },
+      select: { id: true, startDate: true },
+    });
+    if (!active) {
+      throw new NotFoundException('There is no program to start.');
+    }
+    if (active.startDate <= today) {
+      throw new ConflictException('That program has already started.');
+    }
+
+    const rejection = startDateRejection(
+      today,
+      startDateRange(today, await todayIsTouched(this.prisma, userId, today)),
+    );
+    if (rejection) throw new BadRequestException(rejection);
+
+    await this.prisma.$transaction([
+      this.prisma.dailyAssignment.deleteMany({
+        where: { userId, date: today, session: null, log: null },
+      }),
+      // Scoped by the athlete as well as the id, and to the run still being
+      // active, so a stale request cannot move a run that has since ended.
+      this.prisma.programEnrollment.updateMany({
+        where: { id: active.id, userId, status: 'active' },
+        data: { startDate: today },
+      }),
+    ]);
+
+    return this.getToday(userId, today);
+  }
+
   /** The day's WOD: the one the program pinned, or one picked for its slot. */
   /**
    * The makeup offer for today, counting only this Monday-to-Sunday week.
@@ -362,6 +499,9 @@ export class SchedulerService {
     trainingDays: number[],
     completedWeekdays: number[],
   ) {
+    // Nothing to make up before the run begins (DN-200): the week being
+    // "short" is a week the athlete chose not to start yet.
+    if (program !== null && today < program.startDate) return null;
     return resolveMakeup({
       resting,
       scheduleFixed: resolveScheduleLock(program, today) !== null,
@@ -620,7 +760,7 @@ export class SchedulerService {
     const warmupCooldownEnabled = rule?.warmupCooldownEnabled ?? false;
     return {
       date: today,
-      program: programBlock(day),
+      program: await this.programBlockFor(day, program, trainingDays),
       completedProgram: await this.enrollments.cardFor(userId),
       isRestDay: false,
       // Taken, so there is nothing left to offer.
@@ -651,15 +791,11 @@ export class SchedulerService {
     today: string,
     completedWeekdays: number[],
   ): boolean {
-    const day = resolveProgramDay(
-      program,
-      trainingDays,
+    return restsOn(
+      resolveProgramDay(program, trainingDays, today, completedWeekdays),
       today,
-      completedWeekdays,
+      trainingDays,
     );
-    return day.kind === 'fallback'
-      ? isRestDay(today, trainingDays)
-      : day.kind === 'rest';
   }
 
   async skipToday(userId: string, today: string) {
@@ -677,13 +813,11 @@ export class SchedulerService {
     // program, so the strip that says which week the athlete is in is still
     // true afterwards. Nothing is settled here -- an enrollment past its last
     // day completes on the next `getToday`, not on a skip.
-    const strip = programBlock(
-      resolveProgramDay(
-        program,
-        rule?.trainingDays ?? [...DEFAULT_TRAINING_DAYS],
-        today,
-        completed,
-      ),
+    const trainingDays = rule?.trainingDays ?? [...DEFAULT_TRAINING_DAYS];
+    const strip = await this.programBlockFor(
+      resolveProgramDay(program, trainingDays, today, completed),
+      program,
+      trainingDays,
     );
     return {
       date: today,
@@ -693,13 +827,7 @@ export class SchedulerService {
       assignment: null,
       // Marking the day as rest does not close it: the week is still the unit
       // of completion, so the offer to train anyway stands (DN-17).
-      makeup: this.makeupFor(
-        true,
-        program,
-        today,
-        rule?.trainingDays ?? [...DEFAULT_TRAINING_DAYS],
-        completed,
-      ),
+      makeup: this.makeupFor(true, program, today, trainingDays, completed),
       warmupCooldownEnabled: rule?.warmupCooldownEnabled ?? false,
       warmup: null,
       cooldown: null,
@@ -827,16 +955,18 @@ export class SchedulerService {
  * The today response's program block, or null when no program is deciding
  * today.
  *
- * Null covers the athlete with no enrollment, the one whose program has not
- * started, and the one whose program just ended -- three situations, one
- * answer, because from the screen's point of view they are the same: there is
- * no program context to show above today's plate.
+ * Null covers the athlete with no enrollment and the one whose program just
+ * ended -- two situations, one answer, because from the screen's point of
+ * view they are the same: there is no program context to show above today's
+ * plate. A program that has not started is told apart since DN-200, by
+ * `programBlockFor`, because that one is something the athlete is waiting on.
  */
-function programBlock(day: ProgramDay) {
+function programBlock(day: ProgramDay): TodayProgram | null {
   // `completed` answers null alongside `fallback` because it is the same fact
   // for the screen: the run that just ended is no longer context for today.
   if (day.kind === 'fallback' || day.kind === 'completed') return null;
   return {
+    status: 'running',
     enrollmentId: day.day.enrollmentId,
     programId: day.day.programId,
     name: day.day.programName,
@@ -844,6 +974,26 @@ function programBlock(day: ProgramDay) {
     totalWeeks: day.day.totalWeeks,
     weekLabel: day.day.weekLabel,
     dayLabel: day.day.dayLabel,
-    slotKind: day.day.slotKind,
+    slotKind: authoredKind(day.day.slotKind),
   };
+}
+
+/**
+ * Whether a resolved day is one with nothing to train: the athlete's own day
+ * off when no program decides, the program's rest under one, and every day
+ * before a run's start date (DN-200).
+ */
+function restsOn(day: ProgramDay, today: string, trainingDays: number[]) {
+  if (day.kind === 'fallback') {
+    return day.reason === 'before-start' || isRestDay(today, trainingDays);
+  }
+  return day.kind === 'rest';
+}
+
+/**
+ * A slot's kind as the response types it. The column is a plain string, but
+ * every slot is written through `programSlotSchema`, which only admits these.
+ */
+function authoredKind(kind: string | null): ProgramSlotKind | null {
+  return kind as ProgramSlotKind | null;
 }

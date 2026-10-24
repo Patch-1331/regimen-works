@@ -1222,6 +1222,7 @@ describe("todayResponseSchema", () => {
   });
 
   const programBlock = (overrides: Record<string, unknown> = {}) => ({
+    status: "running",
     enrollmentId: "enrollment-1",
     programId: "program-1",
     name: "Pull-Up Builder",
@@ -1253,6 +1254,52 @@ describe("todayResponseSchema", () => {
       todayResponseSchema.safeParse(todayPayload({ program: programBlock({ dayLabel: null }) }))
         .success,
     ).toBe(true);
+  });
+
+  describe("a program that has not started yet (DN-200)", () => {
+    const notStarted = (overrides: Record<string, unknown> = {}) => ({
+      status: "not-started",
+      enrollmentId: "enrollment-1",
+      programId: "program-1",
+      name: "Foundations",
+      startDate: "2026-09-21",
+      trainingDays: [1, 3, 5],
+      firstSession: {
+        date: "2026-09-21",
+        name: "Full body A",
+        slotKind: "movements",
+        movementCount: 5,
+        minutes: 35,
+      },
+      ...overrides,
+    });
+    const restDay = (program: unknown) =>
+      todayPayload({
+        isRestDay: true,
+        assignment: null,
+        warmup: null,
+        cooldown: null,
+        program,
+      });
+
+    it("parses the countdown, with and without a first session", () => {
+      expect(todayResponseSchema.safeParse(restDay(notStarted())).success).toBe(true);
+      expect(
+        todayResponseSchema.safeParse(restDay(notStarted({ firstSession: null }))).success,
+      ).toBe(true);
+    });
+
+    it("refuses a countdown without its start date", () => {
+      const { startDate: _omitted, ...undated } = notStarted();
+      expect(todayResponseSchema.safeParse(restDay(undated)).success).toBe(false);
+    });
+
+    it("refuses a program block that names no status", () => {
+      const { status: _omitted, ...unmarked } = programBlock();
+      expect(todayResponseSchema.safeParse(todayPayload({ program: unmarked })).success).toBe(
+        false,
+      );
+    });
   });
 
   it("parses a day with an assignment", () => {

@@ -150,13 +150,41 @@ const pushUpHistory = fixtures.movementHistory({
   ],
 });
 
+// Today before the program's start date (DN-200), served by `/today` when the
+// page's URL has `?mock=not-started`: Foundations, starting two days from now.
+// Starting it today answers with day one, which the next read forgets.
+function notStartedToday() {
+  const today = localIsoDate();
+  const startDate = addIsoDays(today, 2);
+  return fixtures.today({
+    date: today,
+    isRestDay: true,
+    assignment: null,
+    warmup: null,
+    cooldown: null,
+    program: fixtures.notStartedProgram({
+      startDate,
+      firstSession: { ...fixtures.notStartedProgram().firstSession!, date: startDate },
+    }),
+  });
+}
+
 const extras = [
   http.get(api("/today"), () => {
     const page = new URLSearchParams(window.location.search);
+    if (page.get("mock") === "not-started") return HttpResponse.json(notStartedToday());
     if (page.get("mock") !== "strength") return;
     const set = page.get("set");
     return HttpResponse.json(strengthToday(set === null ? null : Number(set)));
   }),
+  http.post(api("/today/start-program"), () =>
+    HttpResponse.json(
+      fixtures.today({
+        date: localIsoDate(),
+        program: fixtures.todayProgram({ name: "Foundations", week: 1, totalWeeks: 6 }),
+      }),
+    ),
+  ),
   // The active library only; retired rows fall through to the default.
   http.get(api("/exercises"), ({ request }) => {
     if (new URL(request.url).searchParams.get("includeArchived") === "true") return;

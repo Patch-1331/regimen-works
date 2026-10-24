@@ -17,6 +17,12 @@ export class SchedulerController {
     return this.schedulerService.skipToday(userId, todayIsoDate());
   }
 
+  /** Start a program that is waiting for its start date today instead (DN-200). */
+  @Post('today/start-program')
+  startProgramToday(@CurrentUser() userId: string) {
+    return this.schedulerService.startProgramToday(userId, todayIsoDate());
+  }
+
   /** Train on a rest day while the week is short (DN-17). */
   @Post('today/makeup')
   trainMakeup(@CurrentUser() userId: string) {

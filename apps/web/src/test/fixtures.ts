@@ -7,7 +7,8 @@ import type {
   PrescribedSet,
   SwapOption,
   SessionMovement,
-  TodayProgram,
+  NotStartedProgram,
+  RunningProgram,
   TodayResponse,
   Wod,
   WodMovement,
@@ -343,8 +344,9 @@ export function restDay(): TodayResponse {
  * Deliberately not Just WODs: that program is the absence of programming, and
  * every screen that reads this block treats it as "no program to name".
  */
-export function todayProgram(overrides: Partial<TodayProgram> = {}): TodayProgram {
+export function todayProgram(overrides: Partial<RunningProgram> = {}): RunningProgram {
   return {
+    status: "running",
     enrollmentId: "enrollment-1",
     programId: "program-pull-up-builder",
     name: "Pull-Up Builder",
@@ -353,6 +355,31 @@ export function todayProgram(overrides: Partial<TodayProgram> = {}): TodayProgra
     weekLabel: null,
     dayLabel: null,
     slotKind: "wod_generated",
+    ...overrides,
+  };
+}
+
+/**
+ * A program chosen to start on a later day (DN-200): Foundations, three days a
+ * week, starting Monday 2026-09-21 — five days after `today()`'s Wednesday.
+ */
+export function notStartedProgram(
+  overrides: Partial<NotStartedProgram> = {},
+): NotStartedProgram {
+  return {
+    status: "not-started",
+    enrollmentId: "enrollment-1",
+    programId: "program-foundations",
+    name: "Foundations",
+    startDate: "2026-09-21",
+    trainingDays: [1, 3, 5],
+    firstSession: {
+      date: "2026-09-21",
+      name: "Full body A",
+      slotKind: "movements",
+      movementCount: 5,
+      minutes: 35,
+    },
     ...overrides,
   };
 }
