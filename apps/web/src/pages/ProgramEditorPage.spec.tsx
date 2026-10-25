@@ -22,8 +22,8 @@ vi.mock("@clerk/clerk-react", async () => {
 });
 
 /**
- * Writing a program (DN-145): the week sheet, "Your programs", and the way in
- * from the setup wizard.
+ * Writing a program (DN-145), one page per step (DN-193): the wizard, "Your
+ * programs", and the way in from the setup wizard.
  */
 
 const CHIN_UP = fixtures.apiExercise({
@@ -104,34 +104,100 @@ function api(
   return sent;
 }
 
-/** Monday: add a line, and pick "any pull" beneath the chin-up. */
-async function writeMondayPull() {
-  const monday = await screen.findByRole("region", { name: "Mon" });
-  await userEvent.click(within(monday).getByRole("button", { name: "+ ADD MOVEMENT" }));
-  await userEvent.type(within(monday).getByLabelText("Search movements"), "chin");
+const steps = () => screen.getByRole("navigation", { name: "Steps" });
+/** Goes to a step from the step bar: "Basics", "Mon", "Day 2", "Review". */
+async function goTo(step: string) {
+  await userEvent.click(within(steps()).getByRole("button", { name: new RegExp(`^${step}`) }));
+}
+/** Basics: ticks or unticks a training day. */
+async function toggleDay(short: string) {
+  const days = await screen.findByRole("group", { name: "TRAINING DAYS" });
+  await userEvent.click(within(days).getByRole("button", { name: short }));
+}
+/** On a day's page: opens the picker, searches, and picks -- landing on the movement's page. */
+async function addMovement(query: string, pick: RegExp) {
   await userEvent.click(
-    await within(monday).findByRole("button", { name: /or: any pull/ }),
+    await screen.findByRole("button", { name: /^\+ Add (first )?movement$/ }),
   );
+  await userEvent.type(screen.getByLabelText("Search movements"), query);
+  await userEvent.click(await screen.findByRole("button", { name: pick }));
+}
+const done = () => userEvent.click(screen.getByRole("button", { name: /^Done · back to/ }));
+
+/** From Basics: Monday ticked and opened, a line added as "any pull" beneath the chin-up. */
+async function writeMondayPull() {
+  await toggleDay("Mon");
+  await userEvent.click(screen.getByRole("button", { name: /^Next: / }));
+  await addMovement("chin", /or: any pull/);
 }
 
-describe("the week sheet", () => {
+describe("the wizard (DN-193)", () => {
+  it("builds its steps from the days picked in Basics", async () => {
+    api();
+    renderRoute("/programs/new");
+
+    for (const day of ["Mon", "Wed", "Fri"]) await toggleDay(day);
+    await userEvent.click(screen.getByRole("button", { name: /On these weekdays/ }));
+
+    const names = () =>
+      within(steps())
+        .getAllByRole("button")
+        // The label alone, without a ✓ or ! beside it.
+        .map((b) => b.textContent!.replace(/ [✓!].*$/, ""));
+    expect(names()).toEqual(["Basics", "Mon", "Wed", "Fri", "Review"]);
+    expect(screen.getByText("STEP 1 OF 5")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Next: Monday →" }));
+    expect(screen.getByRole("heading", { name: "Monday" })).toBeInTheDocument();
+    expect(screen.getByText("DAY 1 OF 3")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Next: Wednesday →" }));
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByRole("heading", { name: "Monday" })).toBeInTheDocument();
+
+    // In order, whenever you can: the days are first, second and third.
+    await goTo("Basics");
+    await userEvent.click(screen.getByRole("button", { name: /Any 3 days a week/ }));
+    expect(names()).toEqual(["Basics", "Day 1", "Day 2", "Day 3", "Review"]);
+  });
+
   it("refuses to save until the program is named and has a day", async () => {
     api();
     renderRoute("/programs/new");
 
-    const save = await screen.findByRole("button", { name: "Save program" });
+    await screen.findByLabelText("Program name");
+    await goTo("Review");
+    const save = screen.getByRole("button", { name: "Save program" });
     expect(save).toBeDisabled();
-    expect(screen.getByText(/2 things to fix before saving/)).toBeInTheDocument();
+    expect(screen.getByText(/2 things to fix before saving — starting with a name/)).toBeInTheDocument();
   });
 
-  it("shows every weekday, empty ones as rest", async () => {
+  it("flags a day left empty, in the step bar and on Review, and goes back to it", async () => {
     api();
     renderRoute("/programs/new");
 
-    for (const day of ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]) {
-      expect(await screen.findByRole("region", { name: day })).toBeInTheDocument();
-    }
-    expect(screen.getAllByText("Rest")).toHaveLength(7);
+    await userEvent.type(await screen.findByLabelText("Program name"), "Pull days");
+    await toggleDay("Wed");
+    await writeMondayPull();
+    await done();
+    await userEvent.click(screen.getByRole("button", { name: /^Next: Day 2/ }));
+    expect(screen.getByText("Nothing on Day 2 yet.")).toBeInTheDocument();
+    // Not wrong until it has been left: only the day being shown so far.
+    expect(within(steps()).queryByText(/needs fixing/)).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Next: Review →" }));
+
+    const week = screen.getByRole("list", { name: "The week" });
+    const wednesday = within(week).getByRole("button", { name: /^Day 2/ });
+    expect(wednesday).toHaveTextContent("No movements yet");
+    expect(wednesday).toHaveTextContent("FIX");
+    expect(within(steps()).getByRole("button", { name: /^Day 2/ })).toHaveTextContent(
+      /needs fixing/,
+    );
+    expect(within(week).getAllByText("Rest")).toHaveLength(5);
+    expect(screen.getByText(/1 thing to fix before saving/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save program" })).toBeDisabled();
+
+    await userEvent.click(wednesday);
+    expect(screen.getByRole("heading", { name: "Day 2" })).toBeInTheDocument();
   });
 
   it("saves a program and lists it", async () => {
@@ -140,8 +206,12 @@ describe("the week sheet", () => {
 
     await userEvent.type(await screen.findByLabelText("Program name"), "Pull days");
     await writeMondayPull();
+    await done();
+    await goTo("Review");
     await userEvent.click(screen.getByRole("button", { name: "Save program" }));
 
+    // Review's own heading says "Pull days" too: wait for the list first.
+    await screen.findByRole("link", { name: "+ New program" });
     expect(await screen.findByText("Pull days")).toBeInTheDocument();
     expect(sent).toEqual([
       {
@@ -175,19 +245,26 @@ describe("the week sheet", () => {
 
     await userEvent.type(await screen.findByLabelText("Program name"), "RPT days");
     await writeMondayPull();
-    const monday = screen.getByRole("region", { name: "Mon" });
-    expect(within(monday).getByLabelText("same for all sets")).toBeChecked();
-    await userEvent.click(within(monday).getByRole("button", { name: "RPT" }));
+    expect(screen.getByRole("button", { name: "Same for all sets" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "RPT" }));
 
-    expect(within(monday).getByLabelText("same for all sets")).not.toBeChecked();
-    expect(within(monday).queryByLabelText("Set 1 load step percent")).not.toBeInTheDocument();
-    const step = within(monday).getByLabelText("Set 3 load step percent");
+    expect(screen.getByRole("button", { name: "Set by set" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.queryByLabelText("Set 1 load step percent")).not.toBeInTheDocument();
+    const step = screen.getByLabelText("Set 3 load step percent");
     expect(step).toHaveValue("-10");
     await userEvent.clear(step);
     await userEvent.type(step, "-15");
-    const reps = within(monday).getByLabelText("Set 2 reps");
+    const reps = screen.getByLabelText("Set 2 reps");
     await userEvent.clear(reps);
     await userEvent.type(reps, "9");
+    await done();
+    await goTo("Review");
     await userEvent.click(screen.getByRole("button", { name: "Save program" }));
 
     await screen.findByRole("link", { name: "+ New program" });
@@ -207,16 +284,15 @@ describe("the week sheet", () => {
     api();
     renderRoute("/programs/new");
     await writeMondayPull();
-    const monday = screen.getByRole("region", { name: "Mon" });
-    await userEvent.click(within(monday).getByRole("button", { name: "Drop set" }));
-    expect(within(monday).getAllByText("failure")).not.toHaveLength(0);
-    await userEvent.click(within(monday).getByRole("button", { name: "Remove set 3" }));
-    expect(within(monday).queryByLabelText("Set 3 rest seconds")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Drop set" }));
+    expect(screen.getAllByText("failure")).not.toHaveLength(0);
+    await userEvent.click(screen.getByRole("button", { name: "Remove set 3" }));
+    expect(screen.queryByLabelText("Set 3 rest seconds")).not.toBeInTheDocument();
 
-    await userEvent.click(within(monday).getByLabelText("same for all sets"));
+    await userEvent.click(screen.getByRole("button", { name: "Same for all sets" }));
 
-    expect(within(monday).getByLabelText("Sets")).toHaveValue("2");
-    expect(within(monday).getByLabelText("Rest seconds")).toHaveValue("0");
+    expect(screen.getByLabelText("Sets")).toHaveValue("2");
+    expect(screen.getByLabelText("Rest seconds")).toHaveValue("0");
   });
 
   it("names a specific exercise when one is picked", async () => {
@@ -224,11 +300,13 @@ describe("the week sheet", () => {
     renderRoute("/programs/new");
 
     await userEvent.type(await screen.findByLabelText("Program name"), "Rows");
-    const monday = await screen.findByRole("region", { name: "Mon" });
-    await userEvent.click(within(monday).getByRole("button", { name: "+ ADD MOVEMENT" }));
-    await userEvent.type(within(monday).getByLabelText("Search movements"), "ring");
-    await userEvent.click(within(monday).getByRole("button", { name: /^Ring row/ }));
+    await toggleDay("Mon");
+    await userEvent.click(screen.getByRole("button", { name: /^Next: / }));
+    await addMovement("ring", /^Ring row/);
+    await done();
+    await goTo("Basics");
     await userEvent.click(screen.getByRole("button", { name: /On these weekdays/ }));
+    await goTo("Review");
     await userEvent.click(screen.getByRole("button", { name: "Save program" }));
 
     await screen.findByRole("link", { name: "+ New program" });
@@ -239,18 +317,57 @@ describe("the week sheet", () => {
     });
   });
 
-  it("copies a day to another weekday", async () => {
+  it("reorders, duplicates and removes a day's movements", async () => {
+    const sent = api();
+    renderRoute("/programs/new");
+
+    await userEvent.type(await screen.findByLabelText("Program name"), "Pulls");
+    await writeMondayPull();
+    await done();
+    await addMovement("ring", /^Ring row/);
+    await userEvent.click(screen.getByRole("button", { name: "DUPLICATE" }));
+    expect(screen.getByText("MOVEMENT 3 OF 3")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "REMOVE FROM DAY 1" }));
+    await userEvent.click(screen.getByRole("button", { name: "Move Ring row up" }));
+    expect(screen.getByRole("button", { name: "Move Ring row up" })).toBeDisabled();
+    await goTo("Review");
+    await userEvent.click(screen.getByRole("button", { name: "Save program" }));
+
+    await screen.findByRole("link", { name: "+ New program" });
+    expect(sent[0].days[0].lines.map((l) => l.exerciseId ?? l.movementGroup)).toEqual([
+      "ring",
+      "pull",
+    ]);
+  });
+
+  it("copies a written day onto an empty one", async () => {
+    api();
+    renderRoute("/programs/new");
+
+    await toggleDay("Thu");
+    await writeMondayPull();
+    await done();
+    await goTo("Day 2");
+    await userEvent.click(screen.getByRole("button", { name: /^Copy Monday/ }));
+
+    expect(screen.getByRole("button", { name: /^Any pull/ })).toBeInTheDocument();
+    await goTo("Review");
+    const week = screen.getByRole("list", { name: "The week" });
+    expect(within(week).getByRole("button", { name: /^Day 2/ })).toHaveTextContent("Any pull");
+  });
+
+  it("keeps a dropped day's movements if it is picked again", async () => {
     api();
     renderRoute("/programs/new");
 
     await writeMondayPull();
-    const monday = screen.getByRole("region", { name: "Mon" });
-    await userEvent.click(within(monday).getByRole("button", { name: "COPY TO…" }));
-    await userEvent.click(within(monday).getByRole("button", { name: "Thu" }));
-
-    const thursday = screen.getByRole("region", { name: "Thu" });
-    expect(within(thursday).getByText("Any pull")).toBeInTheDocument();
-    expect(within(thursday).queryByText("Rest")).not.toBeInTheDocument();
+    await done();
+    await goTo("Basics");
+    await toggleDay("Mon");
+    expect(within(steps()).getAllByRole("button")).toHaveLength(2);
+    await toggleDay("Mon");
+    await goTo("Day 1");
+    expect(screen.getByRole("button", { name: /^Any pull/ })).toBeInTheDocument();
   });
 });
 
@@ -305,6 +422,12 @@ function editing(overrides: Partial<EditableProgram> = {}) {
   return sent;
 }
 
+/** Review's row for a day: "Mon", or "Day 1" when trained in order. */
+const reviewDay = (label: string) =>
+  within(screen.getByRole("list", { name: "The week" })).getByRole("button", {
+    name: new RegExp(`^${label}`),
+  });
+
 describe("alternatives on a line (DN-185)", () => {
   const PLANK = fixtures.apiExercise({
     id: "plank",
@@ -323,11 +446,9 @@ describe("alternatives on a line (DN-185)", () => {
         }),
       ),
     );
-    const monday = await screen.findByRole("region", { name: "Mon" });
-    await userEvent.click(within(monday).getByRole("button", { name: "+ ADD MOVEMENT" }));
-    await userEvent.type(within(monday).getByLabelText("Search movements"), "chin");
-    await userEvent.click(within(monday).getByRole("button", { name: /^Chin-up/ }));
-    return monday;
+    await toggleDay("Mon");
+    await userEvent.click(screen.getByRole("button", { name: /^Next: / }));
+    await addMovement("chin", /^Chin-up/);
   }
 
   it("swaps the line's movement and keeps its scheme", async () => {
@@ -335,13 +456,16 @@ describe("alternatives on a line (DN-185)", () => {
     renderRoute("/programs/new");
 
     await userEvent.type(await screen.findByLabelText("Program name"), "Rows");
-    const monday = await writeMondayChinUp();
-    const reps = within(monday).getByLabelText("Reps");
+    await writeMondayChinUp();
+    const reps = screen.getByLabelText("Reps");
     await userEvent.clear(reps);
     await userEvent.type(reps, "8");
 
-    await userEvent.click(within(monday).getByRole("button", { name: "Swap chin-up" }));
-    await userEvent.click(await within(monday).findByRole("button", { name: /Ring row/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Alternatives" }));
+    await userEvent.click(await screen.findByRole("button", { name: /Ring row/ }));
+    expect(screen.getByRole("heading", { name: "Ring row" })).toBeInTheDocument();
+    await done();
+    await goTo("Review");
     await userEvent.click(screen.getByRole("button", { name: "Save program" }));
 
     await screen.findByRole("link", { name: "+ New program" });
@@ -356,12 +480,12 @@ describe("alternatives on a line (DN-185)", () => {
     api();
     renderRoute("/programs/new");
 
-    const monday = await writeMondayChinUp();
-    await userEvent.click(within(monday).getByRole("button", { name: "Swap chin-up" }));
+    await writeMondayChinUp();
+    await userEvent.click(screen.getByRole("button", { name: "Alternatives" }));
 
-    const current = await within(monday).findByRole("button", { current: true });
+    const current = await screen.findByRole("button", { current: true });
     expect(current).toHaveTextContent("Chin-up");
-    expect(within(monday).getByText("ALTERNATIVES")).toBeInTheDocument();
+    expect(screen.getByText("ALTERNATIVES")).toBeInTheDocument();
   });
 
   it("offers no swap on a line that names a whole group", async () => {
@@ -370,8 +494,8 @@ describe("alternatives on a line (DN-185)", () => {
 
     await writeMondayPull();
 
-    const monday = screen.getByRole("region", { name: "Mon" });
-    expect(within(monday).queryByRole("button", { name: /^Swap / })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Any pull" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Alternatives" })).toBeNull();
   });
 
   it("offers no swap on a movement with nothing to match on", async () => {
@@ -381,45 +505,45 @@ describe("alternatives on a line (DN-185)", () => {
     );
     renderRoute("/programs/new");
 
-    const monday = await screen.findByRole("region", { name: "Mon" });
-    await userEvent.click(within(monday).getByRole("button", { name: "+ ADD MOVEMENT" }));
-    await userEvent.type(within(monday).getByLabelText("Search movements"), "plank");
-    await userEvent.click(within(monday).getByRole("button", { name: /^Plank/ }));
+    await toggleDay("Mon");
+    await userEvent.click(screen.getByRole("button", { name: /^Next: / }));
+    await addMovement("plank", /^Plank/);
 
-    expect(within(monday).queryByRole("button", { name: "Swap plank" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Plank" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Alternatives" })).toBeNull();
   });
 
   it("shows the alternatives or the search, never both", async () => {
     api();
     renderRoute("/programs/new");
 
-    const monday = await writeMondayChinUp();
-    await userEvent.click(within(monday).getByRole("button", { name: "Swap chin-up" }));
-    expect(await within(monday).findByText("ALTERNATIVES")).toBeInTheDocument();
+    await writeMondayChinUp();
+    await userEvent.click(screen.getByRole("button", { name: "Alternatives" }));
+    expect(await screen.findByText("ALTERNATIVES")).toBeInTheDocument();
 
-    await userEvent.click(within(monday).getByRole("button", { name: "Change movement" }));
-    expect(within(monday).getByLabelText("Search movements")).toBeInTheDocument();
-    expect(within(monday).queryByText("ALTERNATIVES")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Change movement" }));
+    expect(screen.getByLabelText("Search movements")).toBeInTheDocument();
+    expect(screen.queryByText("ALTERNATIVES")).toBeNull();
 
-    await userEvent.click(within(monday).getByRole("button", { name: "Swap chin-up" }));
-    expect(within(monday).queryByLabelText("Search movements")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Alternatives" }));
+    expect(screen.queryByLabelText("Search movements")).toBeNull();
   });
 });
 
 describe("editing a program (DN-146)", () => {
-  it("loads the saved program into the sheet and saves it back", async () => {
+  it("opens on Review, and saves a change made in Basics", async () => {
     const sent = editing();
     renderRoute(`/programs/${SAVED.id}/edit`);
 
-    const name = await screen.findByLabelText("Program name");
-    expect(name).toHaveValue("Pull days");
-    expect(
-      within(screen.getByRole("region", { name: "Mon" })).getByText("Any pull"),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Pull days" })).toBeInTheDocument();
+    expect(reviewDay("Day 1")).toHaveTextContent("Any pull");
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
 
+    await userEvent.click(screen.getByRole("button", { name: "EDIT BASICS" }));
+    const name = screen.getByLabelText("Program name");
     await userEvent.clear(name);
     await userEvent.type(name, "Pull mornings");
+    await goTo("Review");
     await userEvent.click(screen.getByRole("button", { name: "Save program" }));
 
     await screen.findByRole("link", { name: "+ New program" });
@@ -440,7 +564,11 @@ describe("editing a program (DN-146)", () => {
     const sent = editing({ hasRuns: true });
     renderRoute(`/programs/${SAVED.id}/edit`);
 
-    await writeMondayPull();
+    await screen.findByRole("heading", { name: "Pull days" });
+    await userEvent.click(reviewDay("Day 1"));
+    await addMovement("chin", /or: any pull/);
+    await done();
+    await goTo("Review");
 
     expect(screen.getByRole("status")).toHaveTextContent(
       /saves a new version\. Runs already under way finish on this one/,
@@ -461,12 +589,15 @@ describe("editing a program (DN-146)", () => {
     });
     renderRoute(`/programs/${SAVED.id}/edit`);
 
-    const name = await screen.findByLabelText("Name for Mon");
+    expect(await screen.findByRole("heading", { name: "Pull days" })).toBeInTheDocument();
+    expect(reviewDay("Day 1")).toHaveTextContent("Pull");
+    await goTo("Day 1");
+    const name = screen.getByLabelText("Name for Mon");
     expect(name).toHaveValue("Pull");
-    expect(screen.queryByLabelText("Name for Tue")).not.toBeInTheDocument();
 
     await userEvent.clear(name);
     await userEvent.type(name, "Back and Biceps");
+    await goTo("Review");
 
     expect(screen.getByRole("status")).toHaveTextContent(
       /Renaming it or its days changes it for them too/,
@@ -492,7 +623,7 @@ describe("editing a program (DN-146)", () => {
     renderRoute("/programs/someone-elses/edit");
 
     expect(await screen.findByText("There's no program of yours here.")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Program name")).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Steps" })).not.toBeInTheDocument();
   });
 });
 
@@ -747,6 +878,8 @@ describe("the global library (DN-148)", () => {
     await userEvent.type(await screen.findByLabelText("Program name"), "Starter strength");
     await userEvent.click(screen.getByRole("checkbox", { name: /Publish to the global library/ }));
     await writeMondayPull();
+    await done();
+    await goTo("Review");
     await userEvent.click(screen.getByRole("button", { name: "Save program" }));
 
     await screen.findByRole("link", { name: "+ New program" });
@@ -758,25 +891,29 @@ describe("the global library (DN-148)", () => {
     renderRoute("/programs/new");
 
     await userEvent.type(await screen.findByLabelText("Program name"), "Rows");
-    const monday = await screen.findByRole("region", { name: "Mon" });
-    await userEvent.click(within(monday).getByRole("button", { name: "+ ADD MOVEMENT" }));
-    await userEvent.type(within(monday).getByLabelText("Search movements"), "towel");
-    await userEvent.click(within(monday).getByRole("button", { name: /^Towel row/ }));
+    await toggleDay("Mon");
+    await userEvent.click(screen.getByRole("button", { name: /^Next: / }));
+    await addMovement("towel", /^Towel row/);
+    await done();
 
+    await goTo("Basics");
     await userEvent.click(screen.getByRole("checkbox", { name: /Publish to the global library/ }));
+    await goTo("Review");
 
-    expect(within(monday).getByText("Towel row")).toBeInTheDocument();
+    expect(reviewDay("Day 1")).toHaveTextContent("Towel row");
+    expect(screen.getByText("Only you have Towel row; pick a library movement.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save program" })).toBeDisabled();
     expect(screen.getByText(/1 thing to fix before saving/)).toBeInTheDocument();
 
-    // The line already holding it stays a button; the picker adds none.
-    const holding = within(monday).getAllByRole("button", { name: /^Towel row/ }).length;
-    await userEvent.click(within(monday).getByRole("button", { name: "+ ADD MOVEMENT" }));
-    await userEvent.type(within(monday).getByLabelText("Search movements"), "towel");
-    expect(within(monday).getByRole("heading", { name: "No “towel” in the library" })).toBeInTheDocument();
-    expect(within(monday).getAllByRole("button", { name: /^Towel row/ })).toHaveLength(holding);
+    // The line already holding it stays a card; the picker adds none.
+    await goTo("Day 1");
+    expect(screen.getByRole("button", { name: /^Towel row/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "+ Add movement" }));
+    await userEvent.type(screen.getByLabelText("Search movements"), "towel");
+    expect(screen.getByRole("heading", { name: "No “towel” in the library" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^Towel row/ })).toHaveLength(1);
     // A global program names library movements only: no adding one of the admin's own.
-    expect(within(monday).queryByRole("button", { name: /to my movements/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /to my movements/ })).not.toBeInTheDocument();
   });
 
   it("does not offer publishing to an athlete", async () => {
@@ -790,11 +927,13 @@ describe("the global library (DN-148)", () => {
     const calls = admin();
     renderRoute("/programs/global/global-1/edit");
 
-    const name = await screen.findByLabelText("Program name");
-    expect(screen.getByText(/EVERY ATHLETE IS OFFERED THIS/)).toBeInTheDocument();
+    expect(await screen.findByText(/EVERY ATHLETE IS OFFERED THIS/)).toBeInTheDocument();
+    await goTo("Basics");
     expect(screen.queryByRole("checkbox", { name: /Publish/ })).not.toBeInTheDocument();
+    const name = screen.getByLabelText("Program name");
     await userEvent.clear(name);
     await userEvent.type(name, "Pull for all");
+    await goTo("Review");
     await userEvent.click(screen.getByRole("button", { name: "Save program" }));
 
     await screen.findByRole("link", { name: "+ New program" });
@@ -918,18 +1057,17 @@ describe("copying a global program (DN-149)", () => {
     ).toHaveAttribute("href", "/programs/new?copy=global-1");
   });
 
-  it("fills the sheet from the original and saves it as the athlete's own", async () => {
+  it("opens the original on Review and saves it as the athlete's own", async () => {
     const sent = library();
     renderRoute("/programs/new?copy=global-1");
 
-    expect(await screen.findByLabelText("Program name")).toHaveValue(
-      "Starter strength (copy)",
-    );
+    expect(
+      await screen.findByRole("heading", { name: "Starter strength (copy)" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("note")).toHaveTextContent(
       "Copied from Starter strength in the library",
     );
-    const monday = screen.getByRole("region", { name: "Mon" });
-    expect(within(monday).getByText("Any pull")).toBeInTheDocument();
+    expect(reviewDay("Day 1")).toHaveTextContent("Any pull");
 
     await userEvent.click(screen.getByRole("button", { name: "Save program" }));
 
@@ -937,7 +1075,7 @@ describe("copying a global program (DN-149)", () => {
     expect(sent).toEqual([{ ...PULL_DAYS, name: "Starter strength (copy)" }]);
   });
 
-  it("keeps an admin's copy their own, with no way to publish it from the sheet", async () => {
+  it("keeps an admin's copy their own, with no way to publish it from the wizard", async () => {
     library();
     server.use(
       http.get("/api/me", () =>
@@ -950,7 +1088,8 @@ describe("copying a global program (DN-149)", () => {
     );
     renderRoute("/programs/new?copy=global-1");
 
-    await screen.findByLabelText("Program name");
+    await screen.findByRole("heading", { name: "Starter strength (copy)" });
+    await goTo("Basics");
     expect(
       screen.queryByRole("checkbox", { name: /Publish to the global library/ }),
     ).not.toBeInTheDocument();
@@ -977,6 +1116,8 @@ describe("from the setup wizard", () => {
 
     await userEvent.type(await screen.findByLabelText("Program name"), "Pull days");
     await writeMondayPull();
+    await done();
+    await goTo("Review");
     await userEvent.click(screen.getByRole("button", { name: "Save program" }));
 
     const chosen = await screen.findByRole("button", { name: /Pull days/ });
@@ -998,6 +1139,8 @@ describe("from the setup wizard", () => {
     if (leave === "Save program") {
       await userEvent.type(await screen.findByLabelText("Program name"), "Pull days");
       await writeMondayPull();
+      await done();
+      await goTo("Review");
       await userEvent.click(screen.getByRole("button", { name: leave }));
     } else {
       await userEvent.click(await screen.findByRole("link", { name: leave }));

@@ -8,6 +8,7 @@ import {
 } from "@regimen-works/shared";
 import type { ApiExercise } from "./api";
 import { lineLabel } from "./progressions";
+import { WEEKDAYS, weekdayName } from "./weekdays";
 
 /**
  * The program editor's working copy (DN-145).
@@ -53,7 +54,11 @@ export type ProgramDraft = {
   summary: string;
   /** "On these weekdays" (fixed) or "any N days a week, in this order" (flexible). */
   scheduleMode: CreateProgram["scheduleMode"];
-  /** Weekday → its lines. A weekday with no lines is a rest day. */
+  /**
+   * Weekday → its lines. A weekday that is not here is a rest day; one that
+   * is here with no lines is a training day not written yet (DN-193), which
+   * the editor flags and the save refuses.
+   */
   days: Partial<Record<number, DraftLine[]>>;
   /**
    * Weekday → the day's own name, e.g. "Chest and Triceps" (DN-155). Kept
@@ -93,6 +98,53 @@ export function trainingDays(draft: ProgramDraft): number[] {
     .filter(([, lines]) => (lines?.length ?? 0) > 0)
     .map(([day]) => Number(day))
     .sort((a, b) => a - b);
+}
+
+/**
+ * The weekdays picked to train on, written or not, in the order the week is
+ * shown (Monday first): the wizard's day steps (DN-193).
+ */
+export function pickedDays(draft: ProgramDraft): number[] {
+  return WEEKDAYS.map((d) => d.value).filter((day) => draft.days[day] !== undefined);
+}
+
+/**
+ * Picks a weekday to train on, or drops it. A picked day starts with no lines;
+ * a dropped one takes its lines with it, so `restore` is how a day dropped by
+ * mistake comes back as it was.
+ */
+export function pickDay(
+  draft: ProgramDraft,
+  day: number,
+  on: boolean,
+  restore: DraftLine[] = [],
+): ProgramDraft {
+  const days = { ...draft.days };
+  if (on) days[day] = days[day] ?? restore;
+  else delete days[day];
+  return { ...draft, days };
+}
+
+/** Moves a line one place up (-1) or down (+1) within its day. */
+export function moveLine(
+  draft: ProgramDraft,
+  day: number,
+  id: string,
+  by: -1 | 1,
+): ProgramDraft {
+  const lines = [...(draft.days[day] ?? [])];
+  const at = lines.findIndex((l) => l.id === id);
+  const to = at + by;
+  if (at < 0 || to < 0 || to >= lines.length) return draft;
+  [lines[at], lines[to]] = [lines[to], lines[at]];
+  return { ...draft, days: { ...draft.days, [day]: lines } };
+}
+
+/** What stops one picked day being saved: no lines yet, or a line's own. */
+export function dayProblems(draft: ProgramDraft, day: number): string[] {
+  const lines = draft.days[day] ?? [];
+  if (lines.length === 0) return ["No movements yet."];
+  return lines.flatMap(lineProblems);
 }
 
 /**
@@ -140,13 +192,14 @@ function countProblems(
   return out;
 }
 
-/** Everything stopping a save: the name, an empty week, and every line. */
+/** Everything stopping a save: the name, an empty week, and every picked day. */
 export function draftProblems(draft: ProgramDraft): string[] {
   const out: string[] = [];
   if (draft.name.trim() === "") out.push("Name the program.");
-  if (trainingDays(draft).length === 0) out.push("Add a movement to at least one day.");
-  for (const lines of Object.values(draft.days)) {
-    for (const line of lines ?? []) out.push(...lineProblems(line));
+  const days = pickedDays(draft);
+  if (days.length === 0) out.push("Pick at least one training day.");
+  for (const day of days) {
+    out.push(...dayProblems(draft, day).map((p) => `${weekdayName(day)}: ${p}`));
   }
   return out;
 }

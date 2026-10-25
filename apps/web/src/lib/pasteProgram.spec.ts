@@ -12,7 +12,7 @@ import {
 /**
  * The paste box's read-back and hand-off (DN-152). What a line matches is
  * the shared matcher's business and tested there; this is what the athlete
- * does about each answer, and what reaches the week sheet.
+ * does about each answer, and what reaches the program wizard.
  */
 
 const SQUAT = fixtures.apiExercise({
