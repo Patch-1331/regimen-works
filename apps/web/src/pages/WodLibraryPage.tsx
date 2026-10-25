@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CreateWod } from "@regimen-works/shared";
 import { ApiError, api, type ApiWod, type LibraryTier } from "../lib/api";
@@ -49,6 +49,9 @@ function WodRow({
   onEdit,
   onArchive,
   onUnarchive,
+  onChoose,
+  choosing,
+  chooseError,
   busy,
 }: {
   wod: ApiWod;
@@ -58,6 +61,11 @@ function WodRow({
   onEdit: () => void;
   onArchive: () => void;
   onUnarchive: () => void;
+  /** Train this workout today in place of whatever today was (DN-201). */
+  onChoose: () => void;
+  choosing: boolean;
+  /** Why the API refused this row's choice, shown beside the button. */
+  chooseError: string | null;
   busy: boolean;
 }) {
   const retired = wod.archivedAt !== null;
@@ -179,6 +187,32 @@ function WodRow({
               </li>
             ))}
           </ol>
+          {/* Not on a retired workout: retiring takes it out of future
+            sessions, and the API refuses one for the same reason. */}
+          {!retired && (
+            <div className="mt-3">
+              <button
+                type="button"
+                disabled={choosing}
+                onClick={onChoose}
+                className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] disabled:opacity-50"
+                style={{
+                  background: "var(--panel-2)",
+                  border: "1px solid var(--border)",
+                  color: "var(--glow)",
+                  fontFamily: "var(--font-mono)",
+                }}
+                aria-label={`Do ${wod.name} today`}
+              >
+                {choosing ? "Setting up…" : "Do this today"}
+              </button>
+              {chooseError && (
+                <p role="alert" className="mt-2 text-[12px] text-[var(--danger)]">
+                  {chooseError}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </li>
@@ -196,6 +230,7 @@ function WodRow({
  */
 export function WodLibraryPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [editing, setEditing] = useState<Editing>({ kind: "none" });
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -260,6 +295,22 @@ export function WodLibraryPage() {
       api.unarchiveWod(tier, id),
     ...mutationOptions,
   });
+
+  // Answered with today as it now stands, so Today opens on the chosen
+  // workout without a second round trip -- the same hand-off the makeup uses.
+  const choose = useMutation({
+    mutationFn: (wodId: string) => api.chooseToday(wodId),
+    onSuccess: (day) => {
+      queryClient.setQueryData(["today"], day);
+      navigate("/");
+    },
+  });
+  const chooseError =
+    choose.error instanceof ApiError
+      ? choose.error.message
+      : choose.error
+        ? "Couldn't reach the API."
+        : null;
 
   if (isLoading)
     return <p className="p-6 text-[var(--ink-faint)]">Loading workouts…</p>;
@@ -359,6 +410,9 @@ export function WodLibraryPage() {
             }}
             onArchive={() => archive.mutate({ tier, id: wod.id })}
             onUnarchive={() => unarchive.mutate({ tier, id: wod.id })}
+            onChoose={() => choose.mutate(wod.id)}
+            choosing={choose.isPending && choose.variables === wod.id}
+            chooseError={choose.variables === wod.id ? chooseError : null}
           />
         ))}
       </ul>

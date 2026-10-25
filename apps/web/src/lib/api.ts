@@ -320,6 +320,9 @@ export const api = {
   trainMakeup: () => postJson<TodayResponse>("/today/makeup"),
   /** Start a program waiting for its start date today instead (DN-200). */
   startProgramToday: () => postJson<TodayResponse>("/today/start-program"),
+  /** Train a workout picked from the library today instead (DN-201). */
+  chooseToday: (wodId: string) =>
+    postJson<TodayResponse>("/today/choose", { wodId }),
 
   startSession: (assignmentId: string) =>
     postJson<WorkoutSession>(`/assignments/${assignmentId}/session`),

@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { ConflictException, Logger, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
 import { testPrisma } from '../test-support/database';
@@ -7,6 +7,7 @@ import {
   createChecklistEntry,
   createEnrollment,
   createExercise,
+  createPrescribedDay,
   createProgram,
   createSkillLevel,
   createUser,
@@ -2557,5 +2558,237 @@ describe('SchedulerService.getToday, on a prescribed day', () => {
     expect(taken.assignment.prescription!.movements[0].exercise.id).toBe(
       ring.id,
     );
+  });
+});
+
+describe('SchedulerService.chooseToday (DN-201)', () => {
+  it('replaces today’s workout with the one the athlete chose', async () => {
+    const user = await createUser();
+    const planned = await createAssignment(user.id, { date: TODAY });
+    const chosen = await createWod({ name: 'Chosen Chipper' });
+
+    const today = await service().chooseToday(user.id, TODAY, chosen.id);
+
+    expect(today.isRestDay).toBe(false);
+    expect(today.assignment).toMatchObject({
+      id: planned.id,
+      status: 'scheduled',
+    });
+    expect(today.assignment!.wod!.name).toBe('Chosen Chipper');
+    // And it stays chosen: the next read of Today is the same day.
+    expect((await service().getToday(user.id, TODAY)).assignment!.wod!.id).toBe(
+      chosen.id,
+    );
+  });
+
+  it('refuses another athlete’s own workout, and leaves the day as it was', async () => {
+    const user = await createUser();
+    const other = await createUser();
+    const planned = await createAssignment(user.id, { date: TODAY });
+    const theirs = await createWod({ ownerId: other.id });
+
+    await expect(
+      service().chooseToday(user.id, TODAY, theirs.id),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(
+      (
+        await testPrisma().dailyAssignment.findUnique({
+          where: { id: planned.id },
+        })
+      )?.wodId,
+    ).toBe(planned.wodId);
+  });
+
+  it('trains the athlete’s own workout', async () => {
+    const user = await createUser();
+    await createAssignment(user.id, { date: TODAY });
+    const mine = await createWod({ ownerId: user.id });
+
+    const today = await service().chooseToday(user.id, TODAY, mine.id);
+
+    expect(today.assignment!.wod!.id).toBe(mine.id);
+  });
+
+  it('refuses a retired workout', async () => {
+    // Retiring takes a workout out of future sessions, and choosing one is a
+    // future session.
+    const user = await createUser();
+    await createAssignment(user.id, { date: TODAY });
+    const retired = await createWod({ archivedAt: new Date() });
+
+    await expect(
+      service().chooseToday(user.id, TODAY, retired.id),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it.each(['in_progress', 'completed'])(
+    'refuses once the day is %s, so nothing logged is overwritten',
+    async (status) => {
+      const user = await createUser();
+      const planned = await createAssignment(user.id, { date: TODAY, status });
+      const chosen = await createWod();
+
+      await expect(
+        service().chooseToday(user.id, TODAY, chosen.id),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(
+        (
+          await testPrisma().dailyAssignment.findUnique({
+            where: { id: planned.id },
+          })
+        )?.wodId,
+      ).toBe(planned.wodId);
+    },
+  );
+
+  it('trains a day the athlete marked as rest', async () => {
+    const user = await createUser();
+    await createAssignment(user.id, { date: TODAY });
+    await service().skipToday(user.id, TODAY);
+    const chosen = await createWod();
+
+    const today = await service().chooseToday(user.id, TODAY, chosen.id);
+
+    expect(today.isRestDay).toBe(false);
+    expect(today.assignment).toMatchObject({ status: 'scheduled' });
+    expect(today.assignment!.wod!.id).toBe(chosen.id);
+  });
+
+  it('trains a day the athlete does not train, writing its row', async () => {
+    // No row and no offer needed: the athlete asked for this workout, and the
+    // makeup's limits are about what the app offers.
+    const user = await createUser();
+    await testPrisma().scheduleRule.create({
+      data: { userId: user.id, trainingDays: [1] },
+    });
+    const chosen = await createWod();
+    expect((await service().getToday(user.id, TODAY)).isRestDay).toBe(true);
+
+    const today = await service().chooseToday(user.id, TODAY, chosen.id);
+
+    expect(today.isRestDay).toBe(false);
+    expect(today.assignment!.wod!.id).toBe(chosen.id);
+  });
+
+  it('clears today’s swaps, which belonged to the day as it was', async () => {
+    // A swap is keyed by the movement row it replaced, so on another WOD it
+    // would point at nothing. Choosing the planned WOD again is where a stale
+    // one would show, and choosing is a fresh start on the day either way.
+    const { chinUp, pullUp } = await pullGroup();
+    const { user, wod, assignment, movement } = await assignedDay(pullUp.id, {
+      equipment: ['bar'],
+    });
+    await testPrisma().assignmentSubstitution.create({
+      data: {
+        userId: user.id,
+        assignmentId: assignment.id,
+        wodMovementId: movement.id,
+        exerciseId: chinUp.id,
+      },
+    });
+    expect((await servedMovement(user.id)).exercise.name).toBe('Chin-up');
+
+    const today = await service().chooseToday(user.id, TODAY, wod.id);
+
+    const served = today.assignment!.wod!.movements[0];
+    expect(served.exercise.name).toBe('Pull-up');
+    expect(served.isSwapped).toBe(false);
+  });
+
+  describe('under a program', () => {
+    const programColumns = (userId: string) =>
+      testPrisma().dailyAssignment.findUniqueOrThrow({
+        where: { userId_date: { userId, date: MONDAY } },
+        select: {
+          enrollmentId: true,
+          programSlotId: true,
+          programDayIndex: true,
+        },
+      });
+
+    it('replaces the program’s day and keeps which day it was', async () => {
+      const user = await athlete();
+      await createWod();
+      const program = await everyDayProgram('wod_generated');
+      const enrollment = await createEnrollment(user.id, {
+        programId: program.id,
+        startDate: MONDAY,
+        weeks: null,
+      });
+      await programService().getToday(user.id, MONDAY);
+      const planned = await programColumns(user.id);
+      const chosen = await createWod({ name: 'Chosen Chipper' });
+
+      const today = await programService().chooseToday(
+        user.id,
+        MONDAY,
+        chosen.id,
+      );
+
+      expect(today.assignment!.wod!.id).toBe(chosen.id);
+      expect(await programColumns(user.id)).toEqual(planned);
+      expect(planned).toMatchObject({
+        enrollmentId: enrollment.id,
+        programDayIndex: 0,
+      });
+      expect(planned.programSlotId).not.toBeNull();
+    });
+
+    it('records the program’s day on a row it writes, too', async () => {
+      // Chosen from the library before Today was ever opened: the row is
+      // written here, and it is still that program day.
+      const user = await athlete();
+      const program = await everyDayProgram('wod_generated');
+      const enrollment = await createEnrollment(user.id, {
+        programId: program.id,
+        startDate: MONDAY,
+        weeks: null,
+      });
+      const chosen = await createWod();
+
+      await programService().chooseToday(user.id, MONDAY, chosen.id);
+
+      const written = await programColumns(user.id);
+      expect(written).toMatchObject({
+        enrollmentId: enrollment.id,
+        programDayIndex: 0,
+      });
+      expect(written.programSlotId).not.toBeNull();
+    });
+
+    it('trains a WOD in place of straight sets', async () => {
+      const user = await createUser();
+      await createPrescribedDay(user.id, { date: TODAY });
+      const chosen = await createWod();
+
+      const today = await service().chooseToday(user.id, TODAY, chosen.id);
+
+      expect(today.assignment!.wod!.id).toBe(chosen.id);
+      expect(today.assignment!.prescription).toBeNull();
+    });
+
+    it('trains on a fixed program’s rest day', async () => {
+      // No makeup is offered here, on purpose; choosing is the athlete's call.
+      const user = await athlete();
+      const program = await fixedProgram('rest');
+      await createEnrollment(user.id, {
+        programId: program.id,
+        startDate: MONDAY,
+        weeks: null,
+      });
+      const chosen = await createWod();
+      expect(
+        (await programService().getToday(user.id, SATURDAY)).makeup,
+      ).toBeNull();
+
+      const today = await programService().chooseToday(
+        user.id,
+        SATURDAY,
+        chosen.id,
+      );
+
+      expect(today.isRestDay).toBe(false);
+      expect(today.assignment!.wod!.id).toBe(chosen.id);
+    });
   });
 });
