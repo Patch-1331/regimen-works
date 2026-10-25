@@ -17,6 +17,7 @@ import { InstructionsCaret, InstructionsPanel } from "../components/MovementInst
 import { hasInstructions } from "../lib/instructions";
 import { LiveSwapPanel, SwapButton } from "../components/MovementSwap";
 import { canSwap as swappable } from "../lib/swapOptions";
+import { movementCount } from "../lib/movementCount";
 import { setByStep, uniformCount } from "../lib/prescribedSets";
 import { WEEKDAYS, weekdayName } from "../lib/weekdays";
 
@@ -602,21 +603,6 @@ export function TodayPage() {
       </div>
     </div>
   );
-}
-
-/**
- * What the plate shows for a movement: the ladder as prescribed ("21-15-9")
- * where there is one, otherwise the flat count. `reps` is the ladder's total,
- * which is the one number that would tell the athlete nothing.
- */
-function movementCount(m: {
-  reps: number;
-  repScheme: number[];
-  exercise: { unit: string };
-}): string {
-  const suffix = m.exercise.unit === "seconds" ? "s" : "";
-  if (m.repScheme.length > 0) return `${m.repScheme.join("-")}${suffix}`;
-  return `${m.reps}${suffix}`;
 }
 
 /** How many working sets the whole day comes to. */

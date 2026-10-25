@@ -193,6 +193,35 @@ const extras = [
     ),
   ),
   // The active library only; retired rows fall through to the default.
+  // The workout library, so a row has movements to open onto: the default
+  // Fran-shaped ladder, and a flat chipper on movements the pool above holds.
+  http.get(api("/wods"), () =>
+    HttpResponse.json([
+      fixtures.apiWod({ id: "wod-fran", name: "Fran" }),
+      fixtures.apiWod({
+        id: "wod-chipper",
+        name: "Push Chipper",
+        type: "amrap",
+        timeCapMinutes: 15,
+        description: "As many rounds as possible.",
+        movements: [
+          fixtures.movement({ id: "wm-1", order: 0, reps: 10, repScheme: [] }),
+          fixtures.movement({
+            id: "wm-2",
+            order: 1,
+            reps: 30,
+            repScheme: [],
+            exercise: {
+              ...fixtures.movement().exercise,
+              id: "exercise-plank",
+              name: "High plank hold",
+              unit: "seconds",
+            },
+          }),
+        ],
+      }),
+    ]),
+  ),
   http.get(api("/exercises"), ({ request }) => {
     if (new URL(request.url).searchParams.get("includeArchived") === "true") return;
     return HttpResponse.json([fixtures.apiExercise(), ...pushFamily, ...fixtures.pickerLibrary()]);

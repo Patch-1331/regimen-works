@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useId, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CreateWod } from "@regimen-works/shared";
 import { ApiError, api, type ApiWod, type LibraryTier } from "../lib/api";
@@ -7,6 +8,7 @@ import { LibraryNav } from "../components/LibraryNav";
 import { SeededNote } from "../components/SeededNote";
 import { SectionLabel } from "../components/Panel";
 import { patternLabel } from "../lib/progressions";
+import { movementCount } from "../lib/movementCount";
 import {
   EMPTY_WOD_DRAFT,
   movementChoicesFor,
@@ -59,78 +61,124 @@ function WodRow({
   busy: boolean;
 }) {
   const retired = wod.archivedAt !== null;
+  // The name opens the row onto what the workout is made of. Every athlete can
+  // read a workout, editable or not, so this is not behind `editable`; and the
+  // movements are already in the list response, so opening one costs nothing.
+  const [open, setOpen] = useState(false);
+  const movementsId = useId();
+  const movements = [...wod.movements].sort((a, b) => a.order - b.order);
   return (
-    <li
-      className="flex items-center gap-3 px-4 py-3"
-      style={{ borderTop: "1px solid var(--border)" }}
-    >
-      <div className="min-w-0 flex-1">
-        <p
-          className="truncate text-[14px]"
-          style={{ color: retired ? "var(--ink-faint)" : "var(--ink)" }}
-        >
-          {wod.name}
-          {/* In words rather than by a strikethrough, which a screen reader
-              does not read out. Same as the movement library. */}
-          {retired && (
-            <span className="ml-2 text-[11px] uppercase tracking-[0.14em] text-[var(--ink-faint)]">
-              Retired
-            </span>
-          )}
-        </p>
-        <p className="truncate text-[11px] text-[var(--ink-faint)]">
-          {summarise(wod)}
-        </p>
-        {seeded && <SeededNote kind="wod" />}
-      </div>
-      {editable && (
-        <div className="flex shrink-0 gap-2">
-          {retired ? (
+    <li style={{ borderTop: "1px solid var(--border)" }}>
+      <div className="flex items-center gap-3 px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <p
+            className="truncate text-[14px]"
+            style={{ color: retired ? "var(--ink-faint)" : "var(--ink)" }}
+          >
             <button
               type="button"
-              disabled={busy}
-              onClick={onUnarchive}
-              className="px-2 py-1 text-[11px] uppercase tracking-[0.14em] disabled:opacity-50"
-              style={{
-                border: "1px solid var(--border)",
-                color: "var(--ink-soft)",
-                fontFamily: "var(--font-mono)",
-              }}
-              aria-label={`Bring back ${wod.name}`}
+              onClick={() => setOpen(!open)}
+              aria-expanded={open}
+              aria-controls={movementsId}
+              className="text-left underline-offset-2 hover:underline"
             >
-              Bring back
+              <span
+                aria-hidden
+                className="mr-1.5 inline-block w-2 text-[var(--ink-faint)]"
+              >
+                {open ? "▾" : "▸"}
+              </span>
+              {wod.name}
             </button>
-          ) : (
-            <>
+            {/* In words rather than by a strikethrough, which a screen reader
+              does not read out. Same as the movement library. */}
+            {retired && (
+              <span className="ml-2 text-[11px] uppercase tracking-[0.14em] text-[var(--ink-faint)]">
+                Retired
+              </span>
+            )}
+          </p>
+          <p className="truncate text-[11px] text-[var(--ink-faint)]">
+            {summarise(wod)}
+          </p>
+          {seeded && <SeededNote kind="wod" />}
+        </div>
+        {editable && (
+          <div className="flex shrink-0 gap-2">
+            {retired ? (
               <button
                 type="button"
-                onClick={onEdit}
-                className="px-2 py-1 text-[11px] uppercase tracking-[0.14em]"
+                disabled={busy}
+                onClick={onUnarchive}
+                className="px-2 py-1 text-[11px] uppercase tracking-[0.14em] disabled:opacity-50"
                 style={{
                   border: "1px solid var(--border)",
                   color: "var(--ink-soft)",
                   fontFamily: "var(--font-mono)",
                 }}
-                aria-label={`Edit ${wod.name}`}
+                aria-label={`Bring back ${wod.name}`}
               >
-                Edit
+                Bring back
               </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={onArchive}
-                className="px-2 py-1 text-[11px] uppercase tracking-[0.14em] disabled:opacity-50"
-                style={{
-                  border: "1px solid var(--danger)",
-                  color: "var(--danger)",
-                  fontFamily: "var(--font-mono)",
-                }}
-                aria-label={`Retire ${wod.name}`}
-              >
-                Retire
-              </button>
-            </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="px-2 py-1 text-[11px] uppercase tracking-[0.14em]"
+                  style={{
+                    border: "1px solid var(--border)",
+                    color: "var(--ink-soft)",
+                    fontFamily: "var(--font-mono)",
+                  }}
+                  aria-label={`Edit ${wod.name}`}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={onArchive}
+                  className="px-2 py-1 text-[11px] uppercase tracking-[0.14em] disabled:opacity-50"
+                  style={{
+                    border: "1px solid var(--danger)",
+                    color: "var(--danger)",
+                    fontFamily: "var(--font-mono)",
+                  }}
+                  aria-label={`Retire ${wod.name}`}
+                >
+                  Retire
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+      {open && (
+        <div id={movementsId} className="px-4 pb-3 pl-8">
+          {wod.description && (
+            <p className="mb-2 text-[12px] text-[var(--ink-soft)]">
+              {wod.description}
+            </p>
           )}
+          <ol aria-label={`Movements in ${wod.name}`} className="space-y-1">
+            {movements.map((m) => (
+              <li key={m.id} className="flex gap-3 text-[13px]">
+                <span
+                  className="w-16 shrink-0 text-right text-[var(--ink-soft)]"
+                  style={{ fontFamily: "var(--font-mono)" }}
+                >
+                  {movementCount(m)}
+                </span>
+                <Link
+                  to={`/library/movements/${m.exercise.id}`}
+                  className="min-w-0 truncate text-[var(--ink)] underline-offset-2 hover:underline"
+                >
+                  {m.exercise.name}
+                </Link>
+              </li>
+            ))}
+          </ol>
         </div>
       )}
     </li>
@@ -275,7 +323,12 @@ export function WodLibraryPage() {
     );
   }
 
-  function list(rows: ApiWod[], tier: LibraryTier, editable: boolean, label: string) {
+  function list(
+    rows: ApiWod[],
+    tier: LibraryTier,
+    editable: boolean,
+    label: string,
+  ) {
     if (rows.length === 0)
       return (
         <p className="mt-3 text-[13px] text-[var(--ink-faint)]">
@@ -286,7 +339,10 @@ export function WodLibraryPage() {
       <ul
         aria-label={label}
         className="mt-3"
-        style={{ background: "var(--panel)", border: "1px solid var(--border)" }}
+        style={{
+          background: "var(--panel)",
+          border: "1px solid var(--border)",
+        }}
       >
         {rows.map((wod) => (
           <WodRow

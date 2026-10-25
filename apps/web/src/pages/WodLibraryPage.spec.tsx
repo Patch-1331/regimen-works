@@ -162,6 +162,55 @@ describe("the workout library", () => {
     ).toBeInTheDocument();
   });
 
+  it("opens a workout onto its movements, in order, when its name is selected", async () => {
+    const chipper = fixtures.apiWod({
+      id: "w4",
+      name: "Squat Chipper",
+      ownerId: null,
+      movements: [
+        fixtures.movement({
+          id: "m2",
+          order: 1,
+          reps: 30,
+          repScheme: [],
+          exercise: { ...fixtures.movement().exercise, id: "e2", name: "Air squat" },
+        }),
+        onPushup({ id: "m1", order: 0, reps: 20, repScheme: [] }),
+      ],
+    });
+    library([chipper]);
+    renderRoute("/library/wods");
+
+    // Readable by every athlete, not only on a row they can edit: an athlete
+    // has no controls on the shared library and still wants to know what it
+    // holds.
+    const name = await screen.findByRole("button", { name: "Squat Chipper" });
+    expect(name).toHaveAttribute("aria-expanded", "false");
+    expect(
+      screen.queryByRole("list", { name: /movements in squat chipper/i }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(name);
+
+    expect(name).toHaveAttribute("aria-expanded", "true");
+    const movements = within(
+      screen.getByRole("list", { name: /movements in squat chipper/i }),
+    );
+    const rows = movements.getAllByRole("listitem");
+    // By `order`, not by the order the API happened to send them in.
+    expect(rows[0]).toHaveTextContent("20Push-up");
+    expect(rows[1]).toHaveTextContent("30Air squat");
+    expect(movements.getByRole("link", { name: "Air squat" })).toHaveAttribute(
+      "href",
+      "/library/movements/e2",
+    );
+
+    await userEvent.click(name);
+    expect(
+      screen.queryByRole("list", { name: /movements in squat chipper/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("says a workout is retired in words rather than by styling alone", async () => {
     library();
     renderRoute("/library/wods");
