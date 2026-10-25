@@ -17,7 +17,7 @@ vi.mock("@clerk/clerk-react", async () => {
 
 /**
  * Pasting a program in (DN-152): the read-back, answering its refusals, and
- * the hand-off to the week sheet -- which is where it is saved, like any
+ * the hand-off to the wizard -- which is where it is saved, like any
  * program typed there.
  */
 
@@ -115,7 +115,7 @@ describe("pasting a program", () => {
 
     expect(screen.getByText("2 lines to pick or leave out.")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Open on the week sheet" }),
+      screen.getByRole("button", { name: "Open as a new program" }),
     ).toBeDisabled();
   });
 
@@ -147,7 +147,7 @@ describe("pasting a program", () => {
     expect(screen.getByText("2 lines to pick or leave out.")).toBeInTheDocument();
   });
 
-  it("hands the answered lines to the week sheet, and saves from there", async () => {
+  it("hands the answered lines to the wizard, and saves from there", async () => {
     const sent = api();
     renderRoute("/programs/paste");
     await pasteAndRead();
@@ -171,14 +171,19 @@ describe("pasting a program", () => {
     const dips = within(wednesday).getByText("✕ Dips").closest("li")!;
     await userEvent.click(within(dips).getByRole("button", { name: "LEAVE IT OUT" }));
 
-    await userEvent.click(screen.getByRole("button", { name: "Open on the week sheet" }));
+    await userEvent.click(screen.getByRole("button", { name: "Open as a new program" }));
 
     expect(
       await screen.findByText("Pasted in. Nothing is saved until you save it."),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Name for Mon")).toHaveValue("Legs");
-    expect(screen.getByLabelText("Name for Wed")).toHaveValue("");
+    // Opened on Basics, to be named; the days it read are the steps after.
     await userEvent.type(screen.getByLabelText("Program name"), "Pasted");
+    const steps = screen.getByRole("navigation", { name: "Steps" });
+    await userEvent.click(within(steps).getByRole("button", { name: /^Mon/ }));
+    expect(screen.getByLabelText("Name for Mon")).toHaveValue("Legs");
+    await userEvent.click(within(steps).getByRole("button", { name: /^Wed/ }));
+    expect(screen.getByLabelText("Name for Wed")).toHaveValue("");
+    await userEvent.click(within(steps).getByRole("button", { name: /^Review/ }));
     await userEvent.click(screen.getByRole("button", { name: "Save program" }));
 
     await vi.waitFor(() => expect(sent).toHaveLength(1));

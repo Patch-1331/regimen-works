@@ -23,7 +23,7 @@ import { WEEKDAYS } from "../lib/weekdays";
  * Not a second editor: the text is read back line by line, each line ✓ with
  * the library movement it was read as, or ✕ with why not. A ✕ is answered
  * here -- picked from the library or left out -- and then everything lands
- * on the week sheet as an unsaved draft, where the sheet's own rules apply.
+ * in the program wizard as an unsaved draft, where its own rules apply.
  *
  * Nothing is approximated. A line that matches nothing, or several things
  * equally, is refused; a line read as a different name says so; a load is
@@ -166,7 +166,7 @@ export function PasteProgramPage() {
               className="w-full py-3 text-sm font-semibold uppercase tracking-[0.1em] disabled:opacity-40"
               style={{ ...mono, background: "var(--glow)", color: "var(--bg)" }}
             >
-              Open on the week sheet
+              Open as a new program
             </button>
           </div>
         </footer>
