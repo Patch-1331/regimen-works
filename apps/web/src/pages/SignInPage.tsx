@@ -1,5 +1,6 @@
 import type { ComponentProps } from "react";
 import { SignIn } from "@clerk/clerk-react";
+import { useLocation } from "react-router-dom";
 import { Mark } from "../components/Mark";
 
 /**
@@ -108,8 +109,16 @@ const signInAppearance = {
  * What a signed-out visitor sees (DN-196): what the app is, Clerk's sign-in
  * (email code or Google, whatever the instance has switched on), and how
  * someone new gets in, since nothing here lets them.
+ *
+ * The gate renders this in place, at whatever link was opened, and signing in
+ * goes back to that link (DN-199). Clerk's own default is `/`, for both the
+ * email code and Google's redirect, so the path has to be handed over; the
+ * hash is left off because it is Clerk's (`#/factor-one`, `#/sso-callback`).
+ * Setup still comes first for anyone who has not finished it: `SetupGate`
+ * sees the link before the page does.
  */
 export function SignInPage() {
+  const { pathname, search } = useLocation();
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col px-6 pt-16 pb-10">
       <div className="flex items-center gap-4">
@@ -130,7 +139,11 @@ export function SignInPage() {
       <p className="mt-5 text-lg text-[var(--ink-soft)]">Sign in and it's waiting for you.</p>
 
       <div className="mt-16">
-        <SignIn routing="hash" appearance={signInAppearance} />
+        <SignIn
+          routing="hash"
+          fallbackRedirectUrl={pathname + search}
+          appearance={signInAppearance}
+        />
       </div>
 
       <footer className="mt-auto border-t border-[var(--border)] pt-6">
