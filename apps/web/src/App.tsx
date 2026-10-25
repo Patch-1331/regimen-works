@@ -164,6 +164,9 @@ function App() {
             path="/programs/global/:id/edit"
             element={<ProgramEditorPage tier="global" />}
           />
+          {/* A link to nowhere lands on Today, signed in or on the way back
+            from signing in (DN-199), rather than on a blank screen. */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </SetupGate>
     </AuthGate>

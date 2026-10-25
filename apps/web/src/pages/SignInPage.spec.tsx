@@ -62,4 +62,20 @@ describe("signed out", () => {
       },
     });
   });
+
+  it("sends the athlete back to the link they opened once they have signed in", () => {
+    // Clerk's default after sign-in is `/`, Today, whichever method is used;
+    // the link only survives if it is handed over (DN-199).
+    renderRoute("/log/assignment-123?from=share");
+
+    expect(signInProps.current).toMatchObject({
+      fallbackRedirectUrl: "/log/assignment-123?from=share",
+    });
+  });
+
+  it("sends a plain visit back to Today", () => {
+    renderRoute("/");
+
+    expect(signInProps.current).toMatchObject({ fallbackRedirectUrl: "/" });
+  });
 });

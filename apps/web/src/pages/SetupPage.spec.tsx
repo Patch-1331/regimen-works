@@ -126,6 +126,26 @@ describe("the setup gate", () => {
     expect(await screen.findByRole("heading", { name: "Fran" })).toBeInTheDocument();
   });
 
+  // Where signing in from a link lands (DN-199): the link, once setup is done.
+  it("leaves an athlete who has finished setup on the page a link opened", async () => {
+    renderRoute(`/log/${fixtures.ASSIGNMENT_ID}`);
+
+    // The log form, not Today: the same WOD heads both, but only the log is
+    // full-screen, with a way back and no tab bar.
+    expect(await screen.findByRole("heading", { name: "Fran" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
+  });
+
+  it("puts setup ahead of the page a link opened, for an athlete who has not finished it", async () => {
+    newAthlete();
+    renderRoute(`/log/${fixtures.ASSIGNMENT_ID}`);
+
+    expect(
+      await screen.findByRole("heading", { name: "Let's set up your training" }),
+    ).toBeInTheDocument();
+  });
+
   it("does not mount the app on the way to the wizard", async () => {
     // Asserted as a request rather than as pixels: Today renders a loading
     // state before it renders a workout, so "no heading yet" would pass even

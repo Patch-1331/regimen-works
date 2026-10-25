@@ -53,6 +53,18 @@ describe("tabbed routes", () => {
   });
 });
 
+describe("unknown paths", () => {
+  it("lands on Today rather than a blank screen (DN-199)", async () => {
+    renderRoute("/no/such/page");
+    expect(await screen.findByRole("heading", { name: "Fran" })).toBeInTheDocument();
+    const nav = screen.getByRole("navigation");
+    expect(within(nav).getByRole("link", { name: "TODAY" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+});
+
 describe("full-screen routes", () => {
   it("renders the warm-up checklist at /warmup/:assignmentId", async () => {
     renderRoute(`/warmup/${ID}`);
