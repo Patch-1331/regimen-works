@@ -211,7 +211,12 @@ const extras = [
             order: 1,
             reps: 30,
             repScheme: [],
-            exercise: { id: "exercise-plank", name: "High plank hold", unit: "seconds" },
+            exercise: {
+              ...fixtures.movement().exercise,
+              id: "exercise-plank",
+              name: "High plank hold",
+              unit: "seconds",
+            },
           }),
         ],
       }),
