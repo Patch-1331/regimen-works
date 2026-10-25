@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type {
   CommitSetup,
@@ -1004,5 +1004,212 @@ describe("your kit (DN-195)", () => {
     await click("Go to today");
 
     await waitFor(() => expect(kitSaves).toEqual([{ equipment: [] }]));
+  });
+});
+
+describe("leaving setup partway (DN-198)", () => {
+  /**
+   * Leaves the wizard and signs back in: a fresh app, with nothing of the
+   * first visit left but what it put in storage.
+   */
+  async function comeBack(unmount: () => void) {
+    unmount();
+    renderRoute("/");
+    await screen.findByText("Welcome back");
+  }
+
+  it("offers to carry on with the kit answered", async () => {
+    newAthlete({ owned: [] });
+    const { unmount } = renderRoute("/setup");
+    await click("Begin");
+    await click(/Home/);
+    await click("Next: your program");
+
+    await comeBack(unmount);
+
+    expect(
+      screen.getByRole("heading", { name: "Three answers left" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/You got halfway through setup last time/),
+    ).toBeInTheDocument();
+    const rows = screen.getAllByRole("listitem").map((row) => row.textContent);
+    expect(rows).toEqual([
+      expect.stringMatching(/^01 Your kit Pull-up bar, Resistance bands and 2 more/),
+      "02 Your program Not answered yet",
+      "03 Training days Not answered yet",
+      "04 Start date Not answered yet",
+    ]);
+    expect(screen.getAllByRole("img", { name: "Answered" })).toHaveLength(1);
+
+    await click("Carry on: your program");
+    expect(
+      screen.getByRole("heading", { name: "Pick your program" }),
+    ).toBeInTheDocument();
+    await click("Back");
+    expect(kitBox(/^bench$/i)).toBeChecked();
+    expect(kitBox(/jump rope/i)).not.toBeChecked();
+  });
+
+  it("opens at the first unanswered step, with Back working through the answers", async () => {
+    const sent = newAthlete();
+    const { unmount } = renderRoute("/setup");
+    await walkTo("Pull-Up Builder");
+    await click("Tuesday");
+    await click("Continue");
+
+    await comeBack(unmount);
+
+    expect(
+      screen.getByRole("heading", { name: "One answer left" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Monday, Tuesday, Wednesday and Friday · 6 weeks"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Pull-Up Builder")).toBeInTheDocument();
+
+    await click("Carry on: start date");
+    expect(
+      screen.getByRole("heading", { name: "When do you start?" }),
+    ).toBeInTheDocument();
+    await click("Back");
+    expect(screen.getByRole("button", { name: "Tuesday" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    await click("Continue");
+    await click("Continue");
+    await click("Go to today");
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]).toMatchObject({
+      programId: "program-pull-up-builder",
+      trainingDays: [1, 2, 3, 5],
+      weeks: 6,
+    });
+  });
+
+  it("re-asks the days after a different program is picked", async () => {
+    // The new program's suggestion is on screen, not anything the athlete
+    // chose, so a draft saved there should not claim it as their answer.
+    newAthlete();
+    const { unmount } = renderRoute("/setup");
+    await walkTo("Pull-Up Builder");
+    await click("Continue");
+    await click("Back");
+    await click("Back");
+    await click(/Just WODs/);
+
+    await comeBack(unmount);
+
+    expect(
+      screen.getByRole("heading", { name: "Two answers left" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Carry on: training days" }))
+      .toBeInTheDocument();
+  });
+
+  it("starts over at Welcome, and forgets the draft", async () => {
+    newAthlete();
+    const { unmount } = renderRoute("/setup");
+    await walkTo("Pull-Up Builder");
+
+    await comeBack(unmount);
+    await click("Start over");
+
+    expect(
+      screen.getByRole("heading", { name: "Let's set up your training" }),
+    ).toBeInTheDocument();
+    expect(localStorage.length).toBe(0);
+    await click("Begin");
+    await click("Next: your program");
+    // The program step again, with nothing carried from the draft.
+    expect(
+      screen.getByRole("button", { name: /Pull-Up Builder/ }),
+    ).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("lands on Welcome again after starting over and leaving straight away", async () => {
+    newAthlete();
+    const { unmount } = renderRoute("/setup");
+    await walkTo("Pull-Up Builder");
+    unmount();
+    renderRoute("/setup");
+    await click("Start over");
+
+    cleanup();
+    renderRoute("/setup");
+    expect(
+      await screen.findByRole("heading", { name: "Let's set up your training" }),
+    ).toBeInTheDocument();
+  });
+
+  it("forgets the draft once setup is finished", async () => {
+    const sent = newAthlete();
+    renderRoute("/setup");
+    await walkTo("Pull-Up Builder");
+    await click("Continue");
+    await click("Continue");
+    expect(localStorage.length).toBe(1);
+
+    await click("Go to today");
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    await screen.findByRole("heading", { name: "Fran" });
+    expect(localStorage.length).toBe(0);
+  });
+
+  it("keeps nothing before the first answer", async () => {
+    newAthlete();
+    renderRoute("/setup");
+    await click("Begin");
+
+    expect(localStorage.length).toBe(0);
+  });
+
+  it("never hands one athlete another's draft", async () => {
+    newAthlete();
+    const { unmount } = renderRoute("/setup");
+    await walkTo("Pull-Up Builder");
+    unmount();
+
+    server.use(
+      http.get("/api/me", () =>
+        HttpResponse.json({ id: "user_bob", isAdmin: false, onboardedAt: null }),
+      ),
+    );
+    renderRoute("/");
+
+    expect(
+      await screen.findByRole("heading", { name: "Let's set up your training" }),
+    ).toBeInTheDocument();
+  });
+
+  it("lands on Welcome, and still works, when storage is unavailable", async () => {
+    // A private window or blocked site data: every access throws.
+    vi.stubGlobal("localStorage", {
+      getItem: () => {
+        throw new DOMException("blocked", "SecurityError");
+      },
+      setItem: () => {
+        throw new DOMException("blocked", "SecurityError");
+      },
+      removeItem: () => {
+        throw new DOMException("blocked", "SecurityError");
+      },
+      clear: () => {},
+    });
+    try {
+      const sent = newAthlete();
+      renderRoute("/setup");
+      await walkTo("Pull-Up Builder");
+      await click("Continue");
+      await click("Continue");
+      await click("Go to today");
+
+      await waitFor(() => expect(sent).toHaveLength(1));
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

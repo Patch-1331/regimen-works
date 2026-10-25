@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Link,
   Navigate,
@@ -33,6 +33,14 @@ import {
   weeksChoice,
 } from "../lib/setup";
 import { parseRestDraft, restDraftOf, restSecondsOf } from "../lib/rest";
+import {
+  type SetupDraft,
+  answersLeft,
+  clearDraft,
+  kitLine,
+  readDraft,
+  writeDraft,
+} from "../lib/setupDraft";
 import { WEEKDAYS, localIsoDate } from "../lib/weekdays";
 
 /**
@@ -44,6 +52,10 @@ import { WEEKDAYS, localIsoDate } from "../lib/weekdays";
  * the whole of "back navigation preserving answers" — a step is a way of
  * looking at this state, not a place it is kept. Going back and forward again
  * changes nothing, and the commit at the end is the only write.
+ *
+ * Except to this browser (DN-198): the answers so far are kept as a draft
+ * under the athlete's id, so leaving halfway and coming back offers to carry
+ * on rather than starting again at Welcome. See `lib/setupDraft`.
  *
  * There is deliberately no fifth question about what the athlete can do.
  * Kit is what they have, not what they can do with it.
@@ -59,7 +71,7 @@ import { WEEKDAYS, localIsoDate } from "../lib/weekdays";
  * step says what the start ends.
  */
 
-type Step = "welcome" | SetupQuestion | "ready";
+type Step = "welcome" | "resume" | SetupQuestion | "ready";
 
 /**
  * What the wizard hands the program editor on "Build your own" (DN-145), and
@@ -99,10 +111,18 @@ export function SetupPage() {
     queryFn: api.settings,
     enabled: startId === undefined,
   });
+  // Whose draft to look for (DN-198). Already cached by the setup gate, so
+  // this is never a request of its own; a `/me` that failed just means no
+  // draft, and Welcome.
+  const { data: me, isLoading: meLoading } = useQuery({
+    queryKey: ["me"],
+    queryFn: api.me,
+    enabled: startId === undefined,
+  });
 
   if (
     isLoading ||
-    (startId !== undefined ? runsLoading : settingsLoading)
+    (startId !== undefined ? runsLoading : settingsLoading || meLoading)
   ) {
     return <Frame>{null}</Frame>;
   }
@@ -130,7 +150,51 @@ export function SetupPage() {
   }
   // Keyed remount is unnecessary — the query settles once — but the answers
   // below are seeded from `options`, so they are only sound once it is here.
-  return <Wizard options={options} owned={settings?.equipment ?? []} />;
+  return (
+    <FirstRun
+      options={options}
+      owned={settings?.equipment ?? []}
+      userId={me?.id}
+    />
+  );
+}
+
+/**
+ * The first-run wizard with the draft it carries on from (DN-198).
+ *
+ * Read once, on arrival: from then on the wizard's own state is the answer,
+ * and the draft only follows it. Start over is a fresh wizard -- a remount,
+ * so every answer goes back to what a first visit would seed, with no list
+ * of setters to keep in step with the state.
+ */
+function FirstRun({
+  options,
+  owned,
+  userId,
+}: {
+  options: SetupOptions;
+  owned: Equipment[];
+  userId: string | undefined;
+}) {
+  const [draft, setDraft] = useState(() =>
+    userId ? readDraft(userId, options) : null,
+  );
+  const [round, setRound] = useState(0);
+
+  return (
+    <Wizard
+      key={round}
+      options={options}
+      owned={owned}
+      userId={userId}
+      draft={draft}
+      onStartOver={() => {
+        if (userId) clearDraft(userId);
+        setDraft(null);
+        setRound((n) => n + 1);
+      }}
+    />
+  );
 }
 
 /** A start from the Programs tab: the program chosen, and the run it leaves. */
@@ -143,11 +207,19 @@ function Wizard({
   options,
   owned = [],
   start,
+  userId,
+  draft = null,
+  onStartOver,
 }: {
   options: SetupOptions;
   /** The kit the athlete has now; unread on a start from Programs. */
   owned?: Equipment[];
   start?: StartFromPrograms;
+  /** Whose draft this is. Absent on a start from Programs, which keeps none. */
+  userId?: string;
+  /** What a first run left off with last time (DN-198). */
+  draft?: SetupDraft | null;
+  onStartOver?: () => void;
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -160,29 +232,74 @@ function Wizard({
   const authored = options.programs.find(
     (p) => p.id === (start?.programId ?? handedBack?.programId),
   );
-  const first = authored ?? options.programs[0];
+  // A hand-back is newer than any draft -- the athlete is mid-wizard, not
+  // returning to it -- so the draft only counts on a plain arrival. Of it,
+  // only the answered questions seed anything; the rest start as a first
+  // visit would.
+  const resumed = start || authored || handedBack?.kit ? null : draft;
+  const has = (question: SetupQuestion) =>
+    resumed !== null && resumed.answered > questionIndex(question);
+  const first =
+    (has("program") &&
+      options.programs.find((p) => p.id === resumed?.programId)) ||
+    (authored ?? options.programs[0]);
 
   const [step, setStep] = useState<Step>(
     start
       ? "cadence"
       : authored || handedBack?.kit
         ? "program"
-        : "welcome",
+        : resumed
+          ? "resume"
+          : "welcome",
   );
   const [kit, setKit] = useState<Equipment[]>(() =>
-    inCatalogOrder(handedBack?.kit ?? owned),
+    inCatalogOrder(
+      handedBack?.kit ?? (has("kit") ? (resumed?.kit ?? owned) : owned),
+    ),
   );
   const [programId, setProgramId] = useState(first.id);
   const [days, setDays] = useState<number[]>(() =>
-    initialDays(first, options.trainingDays),
+    has("cadence") && resumed
+      ? resumed.days
+      : initialDays(first, options.trainingDays),
   );
-  const [weeks, setWeeks] = useState<number | null>(
-    () => weeksChoice(first)?.start ?? null,
+  const [weeks, setWeeks] = useState<number | null>(() =>
+    has("cadence") && resumed
+      ? resumed.weeks
+      : (weeksChoice(first)?.start ?? null),
   );
-  const [startDate, setStartDate] = useState(options.earliestStartDate);
+  const [startDate, setStartDate] = useState(
+    has("start") && resumed ? resumed.startDate : options.earliestStartDate,
+  );
   // Null until the athlete types, so the prefill can follow the program: see
   // `restPrefill`.
-  const [restEdit, setRestEdit] = useState<string | null>(null);
+  const [restEdit, setRestEdit] = useState<string | null>(
+    resumed?.restEdit ?? null,
+  );
+  // How many questions are behind the athlete, in order (DN-198). Coming
+  // back from the editor, the kit is.
+  const [answered, setAnswered] = useState(
+    resumed?.answered ?? (handedBack?.kit ? 1 : 0),
+  );
+  const answer = (question: SetupQuestion) =>
+    setAnswered((n) => Math.max(n, questionIndex(question) + 1));
+
+  // The draft follows every change, so leaving from any screen -- a closed
+  // tab, a sign-out -- keeps what was answered. Nothing is kept before the
+  // first answer, and a start from Programs keeps nothing at all.
+  useEffect(() => {
+    if (start || !userId || answered === 0) return;
+    writeDraft(userId, {
+      answered,
+      kit,
+      programId,
+      days,
+      weeks,
+      startDate,
+      restEdit,
+    });
+  }, [start, userId, answered, kit, programId, days, weeks, startDate, restEdit]);
 
   const program =
     options.programs.find((p) => p.id === programId) ?? options.programs[0];
@@ -212,6 +329,8 @@ function Wizard({
       });
     },
     onSuccess: async ({ onboardedAt }) => {
+      // Finished, so there is nothing left to carry on with.
+      if (!start && userId) clearDraft(userId);
       // Written straight into the cache the route guard reads, so the
       // redirect back into the app does not race a refetch of the very field
       // that decides whether the athlete is allowed to leave this screen.
@@ -237,6 +356,11 @@ function Wizard({
       setProgramId(next.id);
       setDays(initialDays(next, options.trainingDays));
       setWeeks(weeksChoice(next)?.start ?? null);
+      // The days now on screen are the new program's, not the athlete's, so
+      // a draft saved from here counts them as still to ask.
+      setAnswered(questionIndex("program") + 1);
+    } else {
+      answer("program");
     }
     setStep("cadence");
   }
@@ -248,12 +372,30 @@ function Wizard({
     <Frame>
       {step === "welcome" && <Welcome onBegin={() => setStep("kit")} />}
 
+      {step === "resume" && (
+        <ResumeStep
+          answered={answered}
+          kit={kit}
+          program={program}
+          days={isFixed ? program.fixedDays : days}
+          weeks={weeks}
+          startDate={startDate}
+          onCarryOn={() =>
+            setStep(SETUP_QUESTIONS[answered]?.step ?? "ready")
+          }
+          onStartOver={onStartOver ?? (() => setStep("welcome"))}
+        />
+      )}
+
       {step === "kit" && (
         <KitStep
           kit={kit}
           onKit={(next) => setKit(inCatalogOrder(next))}
           onBack={() => setStep("welcome")}
-          onNext={() => setStep("program")}
+          onNext={() => {
+            answer("kit");
+            setStep("program");
+          }}
         />
       )}
 
@@ -285,7 +427,10 @@ function Wizard({
           // From Programs there is no picker behind this step: the program
           // was chosen there, and Cancel below goes back to it.
           onBack={start ? undefined : () => setStep("program")}
-          onNext={() => setStep("start")}
+          onNext={() => {
+            answer("cadence");
+            setStep("start");
+          }}
         />
       )}
 
@@ -296,7 +441,10 @@ function Wizard({
           onChoose={setStartDate}
           numbered={!start}
           onBack={() => setStep("cadence")}
-          onNext={() => setStep("ready")}
+          onNext={() => {
+            answer("start");
+            setStep("ready");
+          }}
         />
       )}
 
@@ -356,6 +504,9 @@ function initialDays(program: SetupProgram, stored: number[]): number[] {
     ? [...program.defaultDays]
     : [...stored];
 }
+
+const questionIndex = (question: SetupQuestion) =>
+  SETUP_QUESTIONS.findIndex((q) => q.step === question);
 
 /** The wizard's own chrome: no tab bar, because there is nowhere else to be. */
 function Frame({ children }: { children: React.ReactNode }) {
@@ -467,6 +618,126 @@ function Welcome({ onBegin }: { onBegin: () => void }) {
         ))}
       </ol>
       <PrimaryButton onClick={onBegin}>Begin</PrimaryButton>
+    </div>
+  );
+}
+
+/**
+ * Where an athlete who left setup partway lands (DN-198): what they answered,
+ * what is left, and the way back in.
+ *
+ * Each question with its answer rather than a bare "two to go", so the
+ * athlete can see the earlier answers are really kept before trusting
+ * Carry on with them. The first unanswered number is lit, because that is
+ * where Carry on opens.
+ */
+function ResumeStep({
+  answered,
+  kit,
+  program,
+  days,
+  weeks,
+  startDate,
+  onCarryOn,
+  onStartOver,
+}: {
+  answered: number;
+  kit: Equipment[];
+  program: SetupProgram;
+  days: number[];
+  weeks: number | null;
+  startDate: string;
+  onCarryOn: () => void;
+  onStartOver: () => void;
+}) {
+  const answers: Record<SetupQuestion, string> = {
+    kit: kitLine(kit),
+    program: program.name,
+    cadence: `${listDays(days)} · ${weeks === null ? "Open-ended" : `${weeks} weeks`}`,
+    start: formatStartDate(startDate),
+  };
+  const next = SETUP_QUESTIONS[answered];
+
+  return (
+    <div>
+      <p
+        className="mb-3 text-xs uppercase tracking-[0.14em] text-[var(--glow)]"
+        style={{ fontFamily: "var(--font-mono)" }}
+      >
+        Welcome back
+      </p>
+      <Title>{answersLeft(answered)}</Title>
+      <Lede>
+        You got halfway through setup last time. Your answers are kept; carry
+        on from where you stopped.
+      </Lede>
+      <ol
+        className="mt-6 flex flex-col"
+        style={{
+          background: "var(--panel)",
+          border: "1px solid var(--border)",
+        }}
+      >
+        {SETUP_QUESTIONS.map((question, index) => {
+          const done = index < answered;
+          return (
+            <li
+              key={question.step}
+              className="flex min-h-11 items-center gap-3 px-4 py-3"
+              style={{
+                borderTop: index > 0 ? "1px solid var(--border)" : undefined,
+              }}
+            >
+              <span
+                className="text-xs"
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  color:
+                    index === answered ? "var(--glow)" : "var(--ink-faint)",
+                }}
+              >
+                {questionNumber(question.step)}
+              </span>{" "}
+              <span className="flex flex-1 flex-col gap-0.5">
+                <span className="text-sm text-[var(--ink)]">
+                  {question.title}
+                </span>{" "}
+                <span className="text-xs text-[var(--ink-faint)]">
+                  {done ? answers[question.step] : "Not answered yet"}
+                </span>
+              </span>
+              {done && (
+                <svg
+                  role="img"
+                  aria-label="Answered"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--glow)"
+                  strokeWidth="2.5"
+                  strokeLinecap="square"
+                >
+                  <path d="M5 12l5 5 9-10" />
+                </svg>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      <PrimaryButton onClick={onCarryOn}>
+        {next
+          ? `Carry on: ${next.title.toLowerCase()}`
+          : "Carry on: review and start"}
+      </PrimaryButton>
+      <button
+        type="button"
+        onClick={onStartOver}
+        className="mt-3 w-full px-4 py-2 text-xs uppercase tracking-[0.1em] text-[var(--ink-faint)]"
+        style={{ fontFamily: "var(--font-mono)" }}
+      >
+        Start over
+      </button>
     </div>
   );
 }

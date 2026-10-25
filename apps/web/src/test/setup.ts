@@ -15,6 +15,9 @@ expect.extend(matchers);
 // every test after the first queries a document holding all its predecessors.
 afterEach(() => {
   cleanup();
+  // The setup wizard keeps a draft here as it goes (DN-198), so a test that
+  // walked halfway through would land the next one on "Welcome back".
+  localStorage.clear();
 });
 
 // The API is stubbed at the network boundary for every suite (DN-49).
