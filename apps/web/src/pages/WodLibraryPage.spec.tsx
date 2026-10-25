@@ -551,3 +551,100 @@ describe("finding the two halves of the library", () => {
     expect(await screen.findByText(/every workout the app can schedule/i)).toBeInTheDocument();
   });
 });
+
+describe("doing a workout today (DN-201)", () => {
+  /** Answers POST /today/choose with today as that workout, recording the body. */
+  function choose(wod = MY_WOD) {
+    const sent: unknown[] = [];
+    const day = fixtures.today({
+      assignment: { ...fixtures.today().assignment!, wod: fixtures.wod({ name: wod.name }) },
+    });
+    server.use(
+      http.post("/api/today/choose", async ({ request }) => {
+        sent.push(await request.json());
+        return HttpResponse.json(day);
+      }),
+      http.get("/api/today", () => HttpResponse.json(day)),
+    );
+    return sent;
+  }
+
+  async function open(name: string) {
+    await userEvent.click(await screen.findByRole("button", { name }));
+  }
+
+  it("offers it on an opened workout, shared or the athlete's own", async () => {
+    library();
+    renderRoute("/library/wods");
+
+    await open("Fran");
+    await open("Garage Chipper");
+
+    expect(
+      screen.getByRole("button", { name: "Do Fran today" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Do Garage Chipper today" }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not offer a retired workout", async () => {
+    library();
+    renderRoute("/library/wods");
+
+    await open("Old Fran");
+
+    expect(
+      screen.queryByRole("button", { name: /do old fran today/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("asks for the workout and lands on Today with it", async () => {
+    library();
+    const sent = choose();
+    renderRoute("/library/wods");
+
+    await open("Garage Chipper");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Do Garage Chipper today" }),
+    );
+
+    expect(sent).toEqual([{ wodId: "w2" }]);
+    // The library has to be gone first: until it is, its own row is a
+    // "Garage Chipper" for the lookup below to find and lose.
+    await waitFor(() =>
+      expect(
+        screen.queryByText(/every workout the app can schedule/i),
+      ).not.toBeInTheDocument(),
+    );
+    expect(await screen.findByText("Garage Chipper")).toBeInTheDocument();
+  });
+
+  it("says why, and stays, when today can no longer change", async () => {
+    library();
+    server.use(
+      http.post("/api/today/choose", () =>
+        HttpResponse.json(
+          {
+            message:
+              "Today's session has already started, so its workout can't change.",
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+    renderRoute("/library/wods");
+
+    await open("Garage Chipper");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Do Garage Chipper today" }),
+    );
+
+    expect(
+      await screen.findByText(/already started, so its workout can't change/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/every workout the app can schedule/i),
+    ).toBeInTheDocument();
+  });
+});

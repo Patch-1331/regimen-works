@@ -270,6 +270,50 @@ describe('per-user query scoping', () => {
     }
   });
 
+  it('scopes the workout, the day and its swaps behind choosing today (DN-201)', async () => {
+    // The WOD read is the one that matters most: unscoped, an athlete could
+    // train -- and so read -- another athlete's private workout by its id.
+    const prisma = Object.assign(recordingPrisma(), {
+      $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
+    });
+    prisma.wod.findFirst = jest.fn((args: unknown) => {
+      (prisma.calls['wod.findFirst'] ??= []).push(args);
+      return Promise.resolve({ id: 'wod-1' });
+    }) as unknown as typeof prisma.wod.findFirst;
+    prisma.dailyAssignment.upsert = jest.fn((args: unknown) => {
+      (prisma.calls['dailyAssignment.upsert'] ??= []).push(args);
+      return Promise.resolve(null);
+    }) as unknown as typeof prisma.dailyAssignment.upsert;
+    prisma.assignmentSubstitution.deleteMany = jest.fn((args: unknown) => {
+      (prisma.calls['assignmentSubstitution.deleteMany'] ??= []).push(args);
+      return Promise.resolve({ count: 0 });
+    }) as unknown as typeof prisma.assignmentSubstitution.deleteMany;
+    const wods = {
+      getChecklists: jest.fn(),
+    } as unknown as ConstructorParameters<typeof SchedulerService>[1];
+    await new SchedulerService(
+      prisma,
+      wods,
+      new MovementResolutionService(prisma),
+      new EnrollmentsService(prisma),
+    )
+      .chooseToday(ALICE, '2026-09-14', 'wod-1')
+      .catch(() => undefined);
+
+    for (const where of whereOf(prisma, 'wod.findFirst')) {
+      expectLibraryScope(where);
+    }
+    for (const key of [
+      'dailyAssignment.findUnique',
+      'dailyAssignment.upsert',
+      'assignmentSubstitution.deleteMany',
+    ]) {
+      for (const where of whereOf(prisma, key)) {
+        expect(where).toContain(ALICE);
+      }
+    }
+  });
+
   it('scopes the week-so-far read behind the makeup offer', async () => {
     // A Saturday, so the rest-day fork runs (DN-17). Unscoped this would
     // total every athlete's completed sessions, and a busy database would

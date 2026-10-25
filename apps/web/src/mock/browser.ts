@@ -17,6 +17,34 @@ import { localIsoDate } from "../lib/weekdays";
 
 const api = (path: string) => `/api${path}`;
 
+// The workout library, so a row has movements to open onto: the default
+// Fran-shaped ladder, and a flat chipper on movements `pushFamily` holds.
+const libraryWods = [
+  fixtures.apiWod({ id: "wod-fran", name: "Fran" }),
+  fixtures.apiWod({
+    id: "wod-chipper",
+    name: "Push Chipper",
+    type: "amrap",
+    timeCapMinutes: 15,
+    description: "As many rounds as possible.",
+    movements: [
+      fixtures.movement({ id: "wm-1", order: 0, reps: 10, repScheme: [] }),
+      fixtures.movement({
+        id: "wm-2",
+        order: 1,
+        reps: 30,
+        repScheme: [],
+        exercise: {
+          ...fixtures.movement().exercise,
+          id: "exercise-plank",
+          name: "High plank hold",
+          unit: "seconds",
+        },
+      }),
+    ],
+  }),
+];
+
 const yours: ProgramSummary = {
   id: "program-pull-days",
   name: "Pull days",
@@ -193,35 +221,26 @@ const extras = [
     ),
   ),
   // The active library only; retired rows fall through to the default.
-  // The workout library, so a row has movements to open onto: the default
-  // Fran-shaped ladder, and a flat chipper on movements the pool above holds.
-  http.get(api("/wods"), () =>
-    HttpResponse.json([
-      fixtures.apiWod({ id: "wod-fran", name: "Fran" }),
-      fixtures.apiWod({
-        id: "wod-chipper",
-        name: "Push Chipper",
-        type: "amrap",
-        timeCapMinutes: 15,
-        description: "As many rounds as possible.",
-        movements: [
-          fixtures.movement({ id: "wm-1", order: 0, reps: 10, repScheme: [] }),
-          fixtures.movement({
-            id: "wm-2",
-            order: 1,
-            reps: 30,
-            repScheme: [],
-            exercise: {
-              ...fixtures.movement().exercise,
-              id: "exercise-plank",
-              name: "High plank hold",
-              unit: "seconds",
-            },
-          }),
-        ],
-      }),
-    ]),
-  ),
+  http.get(api("/wods"), () => HttpResponse.json(libraryWods)),
+  // Doing one today (DN-201) answers with today as that workout. Stateless
+  // like the rest: the next read of /today is the default day again.
+  http.post(api("/today/choose"), async ({ request }) => {
+    const { wodId } = (await request.json()) as { wodId: string };
+    const chosen = libraryWods.find((w) => w.id === wodId);
+    if (!chosen)
+      return HttpResponse.json(
+        { message: "There is no such workout to choose." },
+        { status: 404 },
+      );
+    const day = fixtures.today({ date: localIsoDate() });
+    return HttpResponse.json({
+      ...day,
+      assignment: {
+        ...day.assignment!,
+        wod: fixtures.wod({ id: chosen.id, name: chosen.name }),
+      },
+    });
+  }),
   http.get(api("/exercises"), ({ request }) => {
     if (new URL(request.url).searchParams.get("includeArchived") === "true") return;
     return HttpResponse.json([fixtures.apiExercise(), ...pushFamily, ...fixtures.pickerLibrary()]);

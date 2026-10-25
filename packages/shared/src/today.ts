@@ -201,3 +201,13 @@ export const todayResponseSchema = z.object({
   makeup: makeupOfferSchema.nullable(),
 });
 export type TodayResponse = z.infer<typeof todayResponseSchema>;
+
+/**
+ * The workout the athlete picked from the library to train today (DN-201).
+ * Whether they may see it, and whether today can still change, are the API's
+ * to answer: a well-formed id is all a body can promise.
+ */
+export const chooseTodayRequestSchema = z.object({
+  wodId: z.string().min(1),
+});
+export type ChooseTodayRequest = z.infer<typeof chooseTodayRequestSchema>;

@@ -784,6 +784,22 @@ export class SchedulerService {
     };
   }
 
+  /** What the program makes of `today`, or null when no program decides it. */
+  private async programDayFor(userId: string, today: string) {
+    const [rule, program, completed] = await Promise.all([
+      this.prisma.scheduleRule.findUnique({ where: { userId } }),
+      loadActiveProgram(this.prisma, userId),
+      this.completedWeekdays(userId, today),
+    ]);
+    const day = resolveProgramDay(
+      program,
+      rule?.trainingDays ?? [...DEFAULT_TRAINING_DAYS],
+      today,
+      completed,
+    );
+    return day.kind === 'fallback' || day.kind === 'completed' ? null : day.day;
+  }
+
   /** Today's rest-day answer, on the same fork `getToday` uses. */
   private restsToday(
     program: ActiveProgram | null,
@@ -796,6 +812,67 @@ export class SchedulerService {
       today,
       trainingDays,
     );
+  }
+
+  /**
+   * Trains the workout the athlete picked from the library today (DN-201).
+   */
+  async chooseToday(userId: string, today: string, wodId: string) {
+    // One answer for someone else's workout and a retired one, as the library
+    // gives: neither is in the pool this athlete can see, and telling them
+    // apart would say that another athlete's private workout exists.
+    const wod = await this.prisma.wod.findFirst({
+      where: { id: wodId, ...libraryVisibleTo(userId) },
+      select: { id: true },
+    });
+    if (!wod)
+      throw new NotFoundException('There is no such workout to choose.');
+
+    // A started or finished day has a session behind it, and replacing its
+    // WOD would detach what was logged from what was trained. A skipped day
+    // has nothing behind it and goes back to being a training day.
+    const existing = await this.prisma.dailyAssignment.findUnique({
+      where: { userId_date: { userId, date: today } },
+      select: { status: true },
+    });
+    if (
+      existing?.status === 'in_progress' ||
+      existing?.status === 'completed'
+    ) {
+      throw new ConflictException(
+        "Today's session has already started, so its workout can't change.",
+      );
+    }
+
+    // The program columns are left alone: the row still records which program
+    // day this was, and the session the program planned for it is not offered
+    // back, the same as a skipped day's. A row written here records the day
+    // too, as `getToday` would have had the athlete opened Today first.
+    const programDay = existing
+      ? null
+      : await this.programDayFor(userId, today);
+
+    // Today's swaps go, because they were keyed to the movements of the day
+    // as it was.
+    await this.prisma.$transaction([
+      this.prisma.assignmentSubstitution.deleteMany({
+        where: { userId, assignment: { date: today } },
+      }),
+      this.prisma.dailyAssignment.upsert({
+        where: { userId_date: { userId, date: today } },
+        update: { wodId, status: 'scheduled' },
+        create: {
+          userId,
+          date: today,
+          wodId,
+          status: 'scheduled',
+          enrollmentId: programDay?.enrollmentId ?? null,
+          programSlotId: programDay?.programSlotId ?? null,
+          programDayIndex: programDay?.programDayIndex ?? null,
+        },
+      }),
+    ]);
+    return this.getToday(userId, today);
   }
 
   async skipToday(userId: string, today: string) {

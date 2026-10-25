@@ -1,6 +1,8 @@
-import { Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post } from '@nestjs/common';
+import { chooseTodayRequestSchema } from '@regimen-works/shared';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { todayIsoDate } from '../common/today';
+import { validateBody } from '../common/validate';
 import { SchedulerService } from './scheduler.service';
 
 @Controller()
@@ -27,6 +29,13 @@ export class SchedulerController {
   @Post('today/makeup')
   trainMakeup(@CurrentUser() userId: string) {
     return this.schedulerService.trainMakeup(userId, todayIsoDate());
+  }
+
+  /** Train a workout picked from the library today instead (DN-201). */
+  @Post('today/choose')
+  chooseToday(@CurrentUser() userId: string, @Body() body: unknown) {
+    const { wodId } = validateBody(chooseTodayRequestSchema, body);
+    return this.schedulerService.chooseToday(userId, todayIsoDate(), wodId);
   }
 
   @Get('schedule-rule')
