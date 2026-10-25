@@ -84,3 +84,26 @@ body {
   outline: 2px solid var(--glow);
   outline-offset: 2px;
 }
+
+/* The loading screen's bar (DN-197): a lit segment that sweeps from end to
+   end of its track, since nothing reports how far along `/me` is. Held still
+   for anyone who has asked for less motion. */
+@keyframes finding-session-sweep {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(150%);
+  }
+}
+
+.finding-session-bar {
+  box-shadow: 0 0 8px var(--glow);
+  animation: finding-session-sweep 1.4s ease-in-out infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .finding-session-bar {
+    animation: none;
+  }
+}

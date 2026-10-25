@@ -1,5 +1,5 @@
 import { setupWorker } from "msw/browser";
-import { http, HttpResponse } from "msw";
+import { delay, http, HttpResponse } from "msw";
 import { addIsoDays, type ProgramSummary, type SwapOption } from "@regimen-works/shared";
 import { handlers } from "../test/handlers";
 import * as fixtures from "../test/fixtures";
@@ -170,6 +170,13 @@ function notStartedToday() {
 }
 
 const extras = [
+  // `?mock=finding` holds `/me` open, to look at the loading screen that
+  // stands in while the gate decides where to land (DN-197).
+  http.get(api("/me"), async () => {
+    if (new URLSearchParams(window.location.search).get("mock") === "finding") {
+      await delay("infinite");
+    }
+  }),
   http.get(api("/today"), () => {
     const page = new URLSearchParams(window.location.search);
     if (page.get("mock") === "not-started") return HttpResponse.json(notStartedToday());
