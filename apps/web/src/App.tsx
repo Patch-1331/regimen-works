@@ -69,7 +69,8 @@ const SETUP_PATHS = new Set(["/setup", "/programs/new"]);
  *
  * `onboardedAt` is the only input, and it is stamped last of everything the
  * commit writes — so an athlete who abandoned the wizard halfway comes back
- * to the start of it rather than to a program they never confirmed.
+ * to the wizard rather than to a program they never confirmed. Their answers
+ * so far come back with them, from this browser (DN-198).
  *
  * The app does not render while `/me` is in flight. A gate that rendered it
  * first would flash Today at someone about to be redirected away from it,
