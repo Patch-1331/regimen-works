@@ -10,6 +10,7 @@
     "hooks:install": "git config core.hooksPath .githooks",
     "security:scan": "gitleaks git --no-banner --redact --verbose -c .gitleaks.toml .",
     "security:audit": "npm audit --omit=dev --audit-level=moderate",
+    "dev": "scripts/dev.sh",
     "dev:api": "npm run start:dev --workspace apps/api",
     "dev:web": "npm run dev --workspace apps/web",
     "dev:web:mock": "npm run dev:mock --workspace apps/web",

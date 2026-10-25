@@ -36,19 +36,31 @@ npm install   # postinstall builds packages/shared (apps/api needs its compiled
               # dist) and generates the Prisma client (without it, typecheck
               # and lint fail across apps/api with hundreds of errors)
 
+npm run dev    # everything: API on http://localhost:3001, web on http://localhost:5173
+```
+
+Copy `apps/api/.env.example` to `apps/api/.env` and `apps/web/.env.example`
+to `apps/web/.env` first if they aren't there already, and have Docker
+running.
+
+`npm run dev` ([`scripts/dev.sh`](scripts/dev.sh)) starts the compose
+Postgres, waits for its healthcheck, applies committed migrations
+(`prisma migrate deploy`), runs the idempotent seed, then runs both apps in one
+terminal with their output prefixed `[api]` and `[web]`. Ctrl-C stops the apps;
+Postgres keeps running until `docker compose stop`.
+
+The same steps by hand, if you want them in separate terminals:
+
+```bash
 docker compose up -d   # local Postgres; the API's Prisma datasource needs it
 
 # API: run the migration, seed the WOD library
 npm run prisma:migrate --workspace apps/api
 npm run prisma:seed --workspace apps/api
 
-# run both apps (separate terminals)
 npm run dev:api   # http://localhost:3001
 npm run dev:web   # http://localhost:5173
 ```
-
-Copy `apps/api/.env.example` to `apps/api/.env` first if it isn't there
-already.
 
 ### If you had a local database before the rename
 
@@ -77,12 +89,13 @@ docker volume ls | grep pgdata        # find it — see the note below
 docker volume rm <old-volume-name>
 ```
 
-Compose prefixes volume names with the **project name, which defaults to the
-directory name**. From a clone in `wod-engine/` the old volume is
-`wod-engine_wod-engine-pgdata`, but from a git worktree it is prefixed with
-that worktree's directory instead — which also means a worktree gets its own
-containers and volumes, and `docker compose down` there does not touch the
-stack your main checkout is running.
+Compose prefixes volume names with the **project name**. That used to default
+to the directory name, so from a clone in `wod-engine/` the old volume is
+`wod-engine_wod-engine-pgdata`, and each git worktree that ran compose has its
+own `<worktree-dir>_…-pgdata` volume. The project name is now fixed to
+`regimenworks` (DN-204), so every checkout and worktree shares one container
+and the `regimenworks_regimen-works-pgdata` volume — and `docker compose down`
+from a worktree stops the database your main checkout uses too.
 
 Update `apps/api/.env` to the new `DATABASE_URL` as well — `.env.example`
 has it, but your own `.env` is not tracked and will still point at the old
