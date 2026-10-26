@@ -40,6 +40,7 @@ npm run typecheck     # all workspaces
 npm run test          # all workspaces
 npm run lint          # eslint in api, oxlint in web + shared
 npm run build
+npm run dev           # Postgres (compose), migrate, seed, then api + web together
 npm run dev:api
 npm run dev:web
 npm run dev:web:mock  # the web app on :5174 with no API, database or Clerk

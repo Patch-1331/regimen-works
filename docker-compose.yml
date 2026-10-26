@@ -1,9 +1,17 @@
 # Local Postgres for development. The API's Prisma datasource is postgresql,
-# so `npm run dev:api` needs this running:
+# so `npm run dev:api` needs this running. `npm run dev` starts it, migrates
+# and seeds it for you (scripts/dev.sh); by hand that is:
 #
 #   docker compose up -d
 #   npm run prisma:migrate --workspace apps/api
 #   npm run prisma:seed --workspace apps/api
+#
+# The project name is fixed (DN-204) so that every git worktree uses the main
+# checkout's container and volume, regimenworks_regimen-works-pgdata, rather
+# than a new empty one named after the worktree's folder. It also means
+# `docker compose down` from a worktree stops the shared database.
+name: regimenworks
+
 services:
   postgres:
     image: postgres:16-alpine
