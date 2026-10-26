@@ -344,6 +344,8 @@ export function LibraryPage() {
         // Remounted per target, so opening a second row doesn't inherit the
         // first row's half-finished edits from the form's own state.
         key={exercise?.id ?? `new-${editing.tier}`}
+        tier={editing.tier}
+        selfId={exercise?.id ?? null}
         initial={exercise ? toDraft(exercise) : EMPTY_DRAFT}
         alternatives={alternativesFor(pool, editing.tier, exercise?.id ?? null)}
         saving={create.isPending || updateExercise.isPending}

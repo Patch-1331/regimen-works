@@ -84,11 +84,14 @@ export type Exercise = z.infer<typeof exerciseSchema>;
  * missing on purpose: `id` is the database's, and `ownerId`/`archivedAt` are
  * the server's answer to *which route was called*, never the body's to choose.
  *
- * Nor are the library import's fields — `key`, the muscles, `force`,
- * `mechanic`, `level`, `category` (DN-165). They describe an exercise in the
- * dataset's terms, and the import is the one thing that writes them; an
- * athlete's own movement carries none, which the matcher reads as "cannot be
- * matched".
+ * Nor is `key` (DN-165): it is the library import's identity for a row, and
+ * the import is the one thing that writes it.
+ *
+ * The muscles, `force`, `mechanic`, `level` and `category` are writable
+ * (DN-205). They are what the muscle match reads, and a movement nobody can
+ * describe in them is one the match can never stand in for — which is what
+ * left every athlete's own movement needing a hand-written alternative. A
+ * prime mover is the least a movement says about itself, so it is required.
  */
 export const createExerciseSchema = z.object({
   name: z.string().min(1),
@@ -99,8 +102,37 @@ export const createExerciseSchema = z.object({
   instructions: instructionSteps,
   movementGroup: movementGroup.nullable(),
   fallbackExerciseId: z.string().nullable(),
+  /** The prime mover first, as on `exerciseSchema`. */
+  primaryMuscles: z.array(muscle).min(1),
+  secondaryMuscles: z.array(muscle),
+  force: exerciseForce.nullable(),
+  mechanic: exerciseMechanic.nullable(),
+  level: exerciseLevel.nullable(),
+  category: exerciseCategory.nullable(),
 });
 export type CreateExercise = z.infer<typeof createExerciseSchema>;
+
+/**
+ * What the library form asks for alternative suggestions with (DN-205): the
+ * movement as written so far, in the terms the muscle match reads. `selfId`
+ * is the movement being edited, so it is never suggested as its own way out;
+ * null on a create.
+ */
+export const alternativeSuggestionsRequestSchema = z.object({
+  selfId: z.string().nullable(),
+  unit: exerciseUnit,
+  equipment: z.array(equipment),
+  movementGroup: movementGroup.nullable(),
+  primaryMuscles: z.array(muscle).min(1),
+  secondaryMuscles: z.array(muscle),
+  force: exerciseForce.nullable(),
+  mechanic: exerciseMechanic.nullable(),
+  level: exerciseLevel.nullable(),
+  category: exerciseCategory.nullable(),
+});
+export type AlternativeSuggestionsRequest = z.infer<
+  typeof alternativeSuggestionsRequestSchema
+>;
 
 /**
  * A PATCH carries only what is changing, so two editors never have to restate

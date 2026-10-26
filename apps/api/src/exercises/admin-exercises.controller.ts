@@ -1,5 +1,6 @@
 import { Body, Controller, Param, Patch, Post } from '@nestjs/common';
 import {
+  alternativeSuggestionsRequestSchema,
   createExerciseSchema,
   updateExerciseSchema,
 } from '@regimen-works/shared';
@@ -28,6 +29,19 @@ import { ExercisesService } from './exercises.service';
 @AdminOnly()
 export class AdminExercisesController {
   constructor(private readonly exercisesService: ExercisesService) {}
+
+  /**
+   * Alternatives for a movement still being written (DN-205). A POST because
+   * the draft is a body, not a lookup; it writes nothing. Declared before the
+   * `:id` routes so "suggest-alternatives" is never read as a movement's id.
+   */
+  @Post('suggest-alternatives')
+  suggestAlternatives(@Body() body: unknown) {
+    return this.exercisesService.suggestAlternatives(
+      { ownerId: null },
+      validateBody(alternativeSuggestionsRequestSchema, body),
+    );
+  }
 
   @Post()
   create(@Body() body: unknown) {

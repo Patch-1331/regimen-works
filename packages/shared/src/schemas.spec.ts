@@ -14,6 +14,7 @@ import {
   exerciseSchema,
   createExerciseSchema,
   exerciseSearchQuerySchema,
+  updateExerciseSchema,
 } from "./exercise.js";
 import { movementHistorySchema } from "./history.js";
 import { logResultRequestSchema, workoutLogListItemSchema } from "./log.js";
@@ -913,6 +914,25 @@ describe("exerciseSchema", () => {
     ...overrides,
   });
 
+  /** A complete, valid write — each test changes only the field it is about. */
+  const writeBody = (overrides: Record<string, unknown> = {}) => ({
+    name: "Arm circles",
+    pattern: "push",
+    equipment: [],
+    scalable: false,
+    unit: "reps",
+    instructions: [],
+    movementGroup: null,
+    fallbackExerciseId: null,
+    primaryMuscles: ["shoulders"],
+    secondaryMuscles: [],
+    force: null,
+    mechanic: null,
+    level: null,
+    category: null,
+    ...overrides,
+  });
+
   it("parses a library exercise", () => {
     expect(exerciseSchema.safeParse(libraryExercise()).success).toBe(true);
   });
@@ -930,18 +950,38 @@ describe("exerciseSchema", () => {
     // there, not to the exercise (DN-172). An old client still sending the
     // field must not be able to write it back somewhere.
     const written = createExerciseSchema.safeParse({
-      name: "Arm circles",
-      pattern: "push",
-      equipment: [],
-      scalable: false,
-      unit: "reps",
-      instructions: [],
-      movementGroup: null,
-      fallbackExerciseId: null,
+      ...writeBody(),
       phase: "warmup",
     });
     expect(written.success).toBe(true);
     expect(written.success && "phase" in written.data).toBe(false);
+  });
+
+  it("takes what the muscle match reads on a write (DN-205)", () => {
+    const written = createExerciseSchema.safeParse(
+      writeBody({
+        primaryMuscles: ["chest"],
+        secondaryMuscles: ["triceps"],
+        force: "push",
+        mechanic: "compound",
+        level: "beginner",
+        category: "strength",
+      }),
+    );
+    expect(written.success && written.data.secondaryMuscles).toEqual(["triceps"]);
+  });
+
+  it("refuses a write that names no prime mover (DN-205)", () => {
+    expect(
+      createExerciseSchema.safeParse(writeBody({ primaryMuscles: [] })).success,
+    ).toBe(false);
+  });
+
+  it("lets an edit leave the muscles alone, but not empty them (DN-205)", () => {
+    expect(updateExerciseSchema.safeParse({ scalable: true }).success).toBe(true);
+    expect(
+      updateExerciseSchema.safeParse({ primaryMuscles: [] }).success,
+    ).toBe(false);
   });
 
   it("accepts an exercise with no movementGroup", () => {
@@ -1017,25 +1057,12 @@ describe("exerciseSchema", () => {
     ).toBe(false);
   });
 
-  it("keeps the dataset's fields out of a write", () => {
-    // The import writes them; the editor does not (DN-165).
-    const written = createExerciseSchema.safeParse({
-      name: "Push-up",
-      pattern: "push",
-      equipment: [],
-      scalable: true,
-      unit: "reps",
-      instructions: [],
-      movementGroup: null,
-      fallbackExerciseId: null,
-      key: "Pushups",
-      level: "beginner",
-      primaryMuscles: ["chest"],
-    });
+  it("keeps the import's key out of a write", () => {
+    // The import's identity for a row (DN-165). The muscles and facts are
+    // writable now (DN-205); the key is not.
+    const written = createExerciseSchema.safeParse(writeBody({ key: "Pushups" }));
     expect(written.success).toBe(true);
     expect(written.success && "key" in written.data).toBe(false);
-    expect(written.success && "level" in written.data).toBe(false);
-    expect(written.success && "primaryMuscles" in written.data).toBe(false);
   });
 
   it("carries which tier the row is in and whether it is retired", () => {
@@ -1054,17 +1081,7 @@ describe("exerciseSchema", () => {
     // `ownerId` and `archivedAt` are the server's answer to which route was
     // called. If they ever became writable, an athlete could post one naming
     // `ownerId: null` and write straight into the shared library.
-    const written = createExerciseSchema.safeParse({
-      name: "Push-up",
-      pattern: "push",
-      equipment: [],
-      scalable: true,
-      unit: "reps",
-      instructions: [],
-      movementGroup: null,
-      fallbackExerciseId: null,
-      ownerId: null,
-    });
+    const written = createExerciseSchema.safeParse(writeBody({ ownerId: null }));
     expect(written.success).toBe(true);
     expect(written.success && "ownerId" in written.data).toBe(false);
   });
@@ -1079,7 +1096,9 @@ describe("exerciseSchema", () => {
   });
 
   it("drops the id for a create payload", () => {
-    const { id: _omitted, ...withoutId } = libraryExercise();
+    const { id: _omitted, ...withoutId } = libraryExercise({
+      primaryMuscles: ["chest"],
+    });
     expect(createExerciseSchema.safeParse(withoutId).success).toBe(true);
   });
 });

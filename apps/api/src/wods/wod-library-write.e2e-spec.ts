@@ -93,6 +93,12 @@ function exerciseBody(overrides: Record<string, unknown> = {}) {
     instructions: [],
     movementGroup: null,
     fallbackExerciseId: null,
+    primaryMuscles: ['middle_back'],
+    secondaryMuscles: [],
+    force: null,
+    mechanic: null,
+    level: null,
+    category: null,
     ...overrides,
   };
 }

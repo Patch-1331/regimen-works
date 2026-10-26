@@ -1,5 +1,6 @@
 import {
   MATCH_THRESHOLD,
+  alternativeSuggestions,
   MATCH_WEIGHTS,
   matchScore,
   muscleMatch,
@@ -518,5 +519,54 @@ describe('swapCandidatesWhere', () => {
       movementGroup: 'push_horizontal',
     });
     expect(swapCandidatesWhere(barbellBench).OR).toHaveLength(1);
+  });
+});
+
+describe('alternativeSuggestions (DN-205)', () => {
+  // A movement still being written: no key, no id yet, and only what its
+  // author has said about it so far.
+  const draft = (overrides: Partial<MatchableExercise> = {}) =>
+    ex('', {
+      equipment: ['dumbbell'],
+      primaryMuscles: ['shoulders'],
+      secondaryMuscles: ['triceps'],
+      category: null,
+      level: null,
+      ...overrides,
+    });
+  const bodyweight = library.filter((e) => e.equipment.length === 0);
+  const suggest = (target: MatchableExercise, limit = 3) =>
+    alternativeSuggestions(target, bodyweight, limit).map((e) => e.key);
+
+  it('ranks by the automatic swap’s score, best first', () => {
+    // Undescribed difficulty proves nothing either way, so the harder
+    // handstand push-up is offered -- a person is choosing, not the app.
+    expect(suggest(draft())).toEqual(['Handstand_Push-Ups', 'rw-pike-push-up']);
+  });
+
+  it('never suggests a harder movement where both levels are known', () => {
+    expect(suggest(draft({ level: 'beginner' }))).toEqual(['rw-pike-push-up']);
+  });
+
+  it('keeps to the draft’s category class when it names one', () => {
+    expect(suggest(draft({ category: 'stretching' }))).toEqual([]);
+  });
+
+  it('suggests only movements counted in the same unit', () => {
+    const hold = draft({
+      unit: 'seconds',
+      primaryMuscles: ['abdominals'],
+      secondaryMuscles: [],
+      force: 'static',
+    });
+    expect(suggest(hold)).toEqual(['Plank']);
+  });
+
+  it('suggests nothing for a draft with no prime mover yet', () => {
+    expect(suggest(draft({ primaryMuscles: [] }))).toEqual([]);
+  });
+
+  it('stops at the limit', () => {
+    expect(suggest(draft(), 1)).toEqual(['Handstand_Push-Ups']);
   });
 });

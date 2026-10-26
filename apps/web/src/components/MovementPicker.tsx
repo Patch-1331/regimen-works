@@ -3,10 +3,21 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   EQUIPMENT_CATALOG,
   equipmentLabel,
+  exerciseCategory,
+  exerciseLevel,
   type Equipment,
-  type ExerciseUnit,
 } from "@regimen-works/shared";
 import { api, type ApiExercise } from "../lib/api";
+import {
+  EMPTY_DRAFT,
+  type ExerciseDraft,
+  problemsWith,
+  suggestionRequest,
+  toWriteBody,
+} from "../lib/exerciseDraft";
+import { humanize } from "../lib/libraryFilters";
+import { AlternativeSuggestions } from "./AlternativeSuggestions";
+import { MusclePicker } from "./MusclePicker";
 import { lineLabel } from "../lib/progressions";
 import type { DraftLine } from "../lib/programDraft";
 import {
@@ -853,7 +864,15 @@ const titleCase = (s: string) => s.replace(/\b[a-z]/g, (c) => c.toUpperCase());
 
 /**
  * The athlete's own movement, made without leaving the program. Only what a
- * line needs: the library page is where its instructions and swaps are written.
+ * line needs: the library page is where its instructions are written.
+ *
+ * What it works is asked for every time (DN-205): it is what the muscle match
+ * reads, so it is what lets the movement be swapped at all. What happens
+ * without the kit is asked only once kit is ticked — an alternative to take,
+ * or the category and level the match needs to find one on the day.
+ *
+ * The same draft, rules and write body as the library page's form, so the
+ * two cannot disagree about what saves.
  */
 function NewMovement({
   name: initialName,
@@ -867,34 +886,42 @@ function NewMovement({
   onCancel: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [name, setName] = useState(titleCase(initialName));
-  const [unit, setUnit] = useState<ExerciseUnit>("reps");
-  const [kit, setKit] = useState<Equipment[]>([]);
+  const [draft, setDraft] = useState<ExerciseDraft>({
+    ...EMPTY_DRAFT,
+    name: titleCase(initialName),
+  });
+  // The chosen suggestion, kept so the rules can read its kit and unit.
+  const [alternative, setAlternative] = useState<ApiExercise | null>(null);
+  const [attempted, setAttempted] = useState(false);
+  const problems = problemsWith(draft, alternative ? [alternative] : []);
+  const set = <K extends keyof ExerciseDraft>(key: K, value: ExerciseDraft[K]) =>
+    setDraft((d) => ({ ...d, [key]: value }));
+  const choose = (e: ApiExercise | null) => {
+    setAlternative(e);
+    set("fallbackExerciseId", e?.id ?? "");
+  };
+
   const create = useMutation({
-    mutationFn: () =>
-      api.createExercise("own", {
-        name: name.trim(),
-        pattern: null,
-        equipment: kit,
-        scalable: false,
-        unit,
-        instructions: [],
-        movementGroup: null,
-        fallbackExerciseId: null,
-      }),
+    mutationFn: () => api.createExercise("own", toWriteBody(draft)),
     onSuccess: async (created) => {
       queryClient.setQueryData<ApiExercise[]>(["exercises"], (old) => (old ? [...old, created] : old));
       onPick({ exerciseId: created.id, movementGroup: null });
       await queryClient.invalidateQueries({ queryKey: ["exercises"] });
     },
   });
+  const legend = (text: string) => (
+    <legend className="text-[11px] tracking-[0.14em] text-[var(--ink-soft)]" style={mono}>
+      {text}
+    </legend>
+  );
   return (
     <form
       aria-label="New movement"
       className="mt-6 border border-[var(--glow-dim)] p-5"
       onSubmit={(e) => {
         e.preventDefault();
-        if (name.trim()) create.mutate();
+        setAttempted(true);
+        if (problems.length === 0) create.mutate();
       }}
     >
       <label className="block">
@@ -902,45 +929,101 @@ function NewMovement({
           NAME
         </span>
         <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          value={draft.name}
+          onChange={(e) => set("name", e.target.value)}
           aria-label="Movement name"
           className="mt-1 block min-h-11 w-full border border-[var(--border)] bg-[var(--panel)] px-3 text-base text-[var(--ink)]"
         />
       </label>
+      <div className="mt-4">
+        <MusclePicker
+          legend="WORKS"
+          hint="Pick the main muscle first."
+          value={draft.primaryMuscles}
+          onChange={(next) => set("primaryMuscles", next)}
+        />
+      </div>
       <fieldset className="mt-4">
-        <legend className="text-[11px] tracking-[0.14em] text-[var(--ink-soft)]" style={mono}>
-          COUNTED IN
-        </legend>
+        {legend("COUNTED IN")}
         <div className="mt-1 flex gap-2">
           {(["reps", "seconds"] as const).map((u) => (
-            <Chip key={u} pressed={unit === u} onClick={() => setUnit(u)}>
+            <Chip key={u} pressed={draft.unit === u} onClick={() => set("unit", u)}>
               {u === "reps" ? "Reps" : "Seconds"}
             </Chip>
           ))}
         </div>
       </fieldset>
       <fieldset className="mt-4">
-        <legend className="text-[11px] tracking-[0.14em] text-[var(--ink-soft)]" style={mono}>
-          NEEDS
-        </legend>
+        {legend("NEEDS")}
         <div className="mt-1 flex flex-wrap gap-2">
-          {EQUIPMENT_CATALOG.filter((p) => owned === null || owned.includes(p.value) || kit.includes(p.value)).map(
-            (p) => (
-              <Chip
-                key={p.value}
-                pressed={kit.includes(p.value)}
-                onClick={() =>
-                  setKit(kit.includes(p.value) ? kit.filter((k) => k !== p.value) : [...kit, p.value])
-                }
-              >
-                {p.label}
-              </Chip>
-            ),
-          )}
+          {EQUIPMENT_CATALOG.filter(
+            (p) => owned === null || owned.includes(p.value) || draft.equipment.includes(p.value),
+          ).map((p) => (
+            <Chip
+              key={p.value}
+              pressed={draft.equipment.includes(p.value)}
+              onClick={() =>
+                set(
+                  "equipment",
+                  draft.equipment.includes(p.value)
+                    ? draft.equipment.filter((k) => k !== p.value)
+                    : [...draft.equipment, p.value],
+                )
+              }
+            >
+              {p.label}
+            </Chip>
+          ))}
         </div>
         <p className="mt-1 text-xs text-[var(--ink-faint)]">Nothing ticked means bodyweight.</p>
       </fieldset>
+      {draft.equipment.length > 0 && (
+        <>
+          <fieldset className="mt-4">
+            {legend("WITHOUT THE KIT")}
+            <p className="mt-1 text-xs text-[var(--ink-faint)]">
+              Optional. Use one of these, or leave it and one is found by muscle on the day.
+            </p>
+            <AlternativeSuggestions
+              tier="own"
+              request={suggestionRequest(draft, null)}
+              chosenId={draft.fallbackExerciseId}
+              onChoose={choose}
+            />
+          </fieldset>
+          {draft.fallbackExerciseId === "" && (
+            <>
+              <fieldset className="mt-4">
+                {legend("CATEGORY")}
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {exerciseCategory.options.map((c) => (
+                    <Chip key={c} pressed={draft.category === c} onClick={() => set("category", c)}>
+                      {humanize(c)}
+                    </Chip>
+                  ))}
+                </div>
+              </fieldset>
+              <fieldset className="mt-4">
+                {legend("LEVEL")}
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {exerciseLevel.options.map((l) => (
+                    <Chip key={l} pressed={draft.level === l} onClick={() => set("level", l)}>
+                      {humanize(l)}
+                    </Chip>
+                  ))}
+                </div>
+              </fieldset>
+            </>
+          )}
+        </>
+      )}
+      {attempted && problems.length > 0 && (
+        <ul role="alert" className="mt-3 flex flex-col gap-1 text-sm text-[var(--danger)]">
+          {problems.map((p) => (
+            <li key={p}>{p}</li>
+          ))}
+        </ul>
+      )}
       {create.isError && (
         <p className="mt-3 text-sm text-[var(--danger)]">
           Couldn't add it: {(create.error as Error).message}
@@ -949,7 +1032,7 @@ function NewMovement({
       <div className="mt-5 flex gap-3">
         <button
           type="submit"
-          disabled={!name.trim() || create.isPending}
+          disabled={!draft.name.trim() || create.isPending}
           className="min-h-11 bg-[var(--glow)] px-5 text-sm font-bold uppercase tracking-[0.1em] text-[var(--bg)] disabled:opacity-50"
           style={display}
         >

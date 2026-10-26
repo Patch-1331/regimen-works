@@ -84,6 +84,12 @@ describe('Exercise.key', () => {
         instructions: ['Lean back.', 'Pull the rings to your chest.'],
         movementGroup: null,
         fallbackExerciseId: null,
+        primaryMuscles: ['middle_back'],
+        secondaryMuscles: [],
+        force: null,
+        mechanic: null,
+        level: null,
+        category: null,
       },
     );
 
