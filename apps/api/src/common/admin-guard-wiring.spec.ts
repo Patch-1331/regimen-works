@@ -55,6 +55,12 @@ const BODY = {
   instructions: [],
   movementGroup: null,
   fallbackExerciseId: null,
+  primaryMuscles: ['quadriceps'],
+  secondaryMuscles: [],
+  force: null,
+  mechanic: null,
+  level: null,
+  category: null,
 };
 
 /**

@@ -151,13 +151,23 @@ describe("the movement picker", () => {
     const name = screen.getByLabelText("Movement name");
     await userEvent.clear(name);
     await userEvent.type(name, "Landmine Press");
-    await userEvent.click(screen.getByRole("button", { name: "Dumbbell" }));
+    const form = within(screen.getByRole("form", { name: "New movement" }));
+    await userEvent.click(form.getByRole("button", { name: "Shoulders" }));
+    await userEvent.click(form.getByRole("button", { name: "Dumbbell" }));
+    // The muscle match's suggestion, taken with one tap (DN-205).
+    await userEvent.click(await form.findByRole("button", { name: "Use Push-up" }));
     await userEvent.click(screen.getByRole("button", { name: "Add and use it" }));
 
     await vi.waitFor(() =>
       expect(onPick).toHaveBeenCalledWith({ exerciseId: "landmine", movementGroup: null }),
     );
-    expect(posted[0]).toMatchObject({ name: "Landmine Press", equipment: ["dumbbell"], unit: "reps" });
+    expect(posted[0]).toMatchObject({
+      name: "Landmine Press",
+      equipment: ["dumbbell"],
+      unit: "reps",
+      primaryMuscles: ["shoulders"],
+      fallbackExerciseId: "exercise-1",
+    });
   });
 
   it("offers no movement of their own where the program can't hold one", async () => {

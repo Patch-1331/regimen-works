@@ -3,17 +3,25 @@ import {
   EQUIPMENT_CATALOG,
   type CreateExercise,
   type Equipment,
+  exerciseCategory,
+  exerciseForce,
+  exerciseLevel,
+  exerciseMechanic,
   exerciseUnit,
   movementPattern,
   movementGroup,
 } from "@regimen-works/shared";
-import type { ApiExercise } from "../lib/api";
+import type { ApiExercise, LibraryTier } from "../lib/api";
+import { humanize } from "../lib/libraryFilters";
 import { lineLabel, patternLabel } from "../lib/progressions";
 import {
   type ExerciseDraft,
   problemsWith,
+  suggestionRequest,
   toWriteBody,
 } from "../lib/exerciseDraft";
+import { AlternativeSuggestions } from "./AlternativeSuggestions";
+import { MusclePicker } from "./MusclePicker";
 
 const field = "mt-1 w-full px-3 py-2 text-sm";
 const fieldStyle = {
@@ -35,6 +43,41 @@ function Label({ htmlFor, children }: { htmlFor: string; children: string }) {
   );
 }
 
+/** A `<select>` over one of the shared enums, with "" for not said. */
+function FactSelect<T extends string>({
+  id,
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: T | "";
+  options: readonly T[];
+  onChange: (value: T | "") => void;
+}) {
+  return (
+    <div className="flex-1">
+      <Label htmlFor={id}>{label}</Label>
+      <select
+        id={id}
+        className={field}
+        style={fieldStyle}
+        value={value}
+        onChange={(e) => onChange(e.target.value as T | "")}
+      >
+        <option value="">Not said</option>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {humanize(o)}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 /**
  * The whole of a movement, as an author states it (DN-28).
  *
@@ -48,6 +91,8 @@ function Label({ htmlFor, children }: { htmlFor: string; children: string }) {
  * "you cannot save this yet" is one question however it was answered.
  */
 export function ExerciseForm({
+  tier,
+  selfId,
   initial,
   alternatives,
   saving,
@@ -56,6 +101,9 @@ export function ExerciseForm({
   onSubmit,
   onCancel,
 }: {
+  tier: LibraryTier;
+  /** The movement being edited, so it is never suggested as its own way out. */
+  selfId: string | null;
   initial: ExerciseDraft;
   alternatives: ApiExercise[];
   saving: boolean;
@@ -163,6 +211,54 @@ export function ExerciseForm({
         />
       </div>
 
+      <MusclePicker
+        legend="Primary muscles"
+        hint="Required. The first you pick is the prime mover."
+        value={draft.primaryMuscles}
+        onChange={(next) => set("primaryMuscles", next)}
+      />
+
+      <MusclePicker
+        legend="Secondary muscles"
+        value={draft.secondaryMuscles}
+        exclude={draft.primaryMuscles}
+        onChange={(next) => set("secondaryMuscles", next)}
+      />
+
+      <div className="flex gap-3">
+        <FactSelect
+          id="exercise-category"
+          label="Category"
+          value={draft.category}
+          options={exerciseCategory.options}
+          onChange={(v) => set("category", v)}
+        />
+        <FactSelect
+          id="exercise-level"
+          label="Level"
+          value={draft.level}
+          options={exerciseLevel.options}
+          onChange={(v) => set("level", v)}
+        />
+      </div>
+
+      <div className="flex gap-3">
+        <FactSelect
+          id="exercise-force"
+          label="Force"
+          value={draft.force}
+          options={exerciseForce.options}
+          onChange={(v) => set("force", v)}
+        />
+        <FactSelect
+          id="exercise-mechanic"
+          label="Mechanic"
+          value={draft.mechanic}
+          options={exerciseMechanic.options}
+          onChange={(v) => set("mechanic", v)}
+        />
+      </div>
+
       <div>
         <Label htmlFor="exercise-movementGroup">
           Movement group
@@ -197,7 +293,7 @@ export function ExerciseForm({
         </legend>
         <p className="mt-1 text-[11px] text-[var(--ink-faint)]">
           Leave every box empty for a bodyweight movement. Anything ticked means
-          an athlete without it is given the alternative instead.
+          an athlete without it is given an alternative instead.
         </p>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
           {EQUIPMENT_CATALOG.map((piece) => (
@@ -219,8 +315,16 @@ export function ExerciseForm({
       <div>
         <Label htmlFor="exercise-fallback">Alternative</Label>
         <p className="mt-1 text-[11px] text-[var(--ink-faint)]">
-          What an athlete is given instead when they don't own the equipment.
+          Optional. What an athlete is given instead when they don't own the
+          equipment. Leave it empty and one is found by muscle, which needs a
+          category and a level.
         </p>
+        <AlternativeSuggestions
+          tier={tier}
+          request={suggestionRequest(draft, selfId)}
+          chosenId={draft.fallbackExerciseId}
+          onChoose={(e) => set("fallbackExerciseId", e?.id ?? "")}
+        />
         <select
           id="exercise-fallback"
           className={field}

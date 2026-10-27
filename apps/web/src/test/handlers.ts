@@ -59,6 +59,14 @@ export const handlers = [
     HttpResponse.json({ items: [fixtures.apiExercise()], total: 1, page: 1, pageSize: 25 }),
   ),
   http.get(api("/exercises/retired"), () => HttpResponse.json([])),
+  // One bodyweight suggestion for either tier (DN-205): the fixture movement
+  // that the library form's pool also holds, so choosing it saves.
+  http.post(api("/exercises/suggest-alternatives"), () =>
+    HttpResponse.json([fixtures.apiExercise()]),
+  ),
+  http.post(api("/admin/exercises/suggest-alternatives"), () =>
+    HttpResponse.json([fixtures.apiExercise()]),
+  ),
   // Nothing to move to by default (DN-185), like the swap panel's options.
   http.get(api("/exercises/:id/alternatives"), () =>
     HttpResponse.json({ main: [], harder: [], needsEquipment: [] }),

@@ -32,6 +32,12 @@ function body(overrides: Partial<CreateExercise> = {}): CreateExercise {
     instructions: [],
     movementGroup: null,
     fallbackExerciseId: null,
+    primaryMuscles: ['middle_back'],
+    secondaryMuscles: [],
+    force: null,
+    mechanic: null,
+    level: null,
+    category: null,
     ...overrides,
   };
 }
@@ -212,7 +218,7 @@ describe('what a patch means', () => {
 
     await expect(
       exercises().update(ADMIN, loaded.id, { fallbackExerciseId: null }),
-    ).rejects.toThrow(/must name an alternative/i);
+    ).rejects.toThrow(/no alternative needs a category, a level/i);
   });
 
   it('takes every field at once', async () => {
@@ -314,10 +320,39 @@ describe('what an alternative may be', () => {
 describe('a movement needing equipment needs a way out', () => {
   // DN-83. Every runtime layer passes the gap through rather than throwing,
   // so an athlete owning nothing is simply handed a movement they cannot do.
-  it('refuses equipment with no alternative at all', async () => {
+  // The way out is a written alternative, or what the muscle match needs to
+  // find one (DN-205).
+  it('refuses equipment with neither an alternative nor what the match needs', async () => {
     await expect(
       exercises().create(ADMIN, body({ equipment: ['dumbbell'] })),
-    ).rejects.toThrow(/must name an alternative/i);
+    ).rejects.toThrow(/no alternative needs a category, a level/i);
+  });
+
+  it('names only what is missing', async () => {
+    await expect(
+      exercises().create(
+        ADMIN,
+        body({ equipment: ['dumbbell'], category: 'strength' }),
+      ),
+    ).rejects.toThrow(/needs a level, so/i);
+  });
+
+  it('accepts equipment with no alternative once the match can run (DN-205)', async () => {
+    const alice = await createUser();
+
+    const created = await exercises().create(
+      { ownerId: alice.id },
+      body({
+        name: 'Dumbbell row',
+        equipment: ['dumbbell'],
+        category: 'strength',
+        level: 'beginner',
+      }),
+    );
+
+    expect(created.fallbackExerciseId).toBeNull();
+    expect(created.primaryMuscles).toEqual(['middle_back']);
+    expect(created.level).toBe('beginner');
   });
 
   it('refuses an alternative that itself needs equipment', async () => {
@@ -349,12 +384,98 @@ describe('a movement needing equipment needs a way out', () => {
   });
 
   // The rule is judged against the row as it will be, not against the patch.
-  it('refuses a patch that adds equipment to a row with no alternative', async () => {
+  // A row from before DN-205 has no muscles, so it is named as missing too.
+  it('refuses a patch that adds equipment to a row with no way out', async () => {
     const global = await createExercise({ name: 'Air squat', equipment: [] });
 
     await expect(
       exercises().update(ADMIN, global.id, { equipment: ['dumbbell'] }),
-    ).rejects.toThrow(/must name an alternative/i);
+    ).rejects.toThrow(/needs a primary muscle, a category, a level/i);
+  });
+});
+
+describe('suggesting an alternative (DN-205)', () => {
+  const draft = {
+    selfId: null,
+    unit: 'reps' as const,
+    equipment: ['dumbbell' as const],
+    movementGroup: null,
+    primaryMuscles: ['middle_back' as const],
+    secondaryMuscles: ['lats' as const, 'biceps' as const],
+    force: 'pull' as const,
+    mechanic: 'compound' as const,
+    level: null,
+    category: null,
+  };
+  const row = {
+    primaryMuscles: ['middle_back'],
+    secondaryMuscles: ['lats', 'biceps'],
+    force: 'pull',
+    mechanic: 'compound',
+  };
+
+  it('offers only what the write would take: no kit, the same unit', async () => {
+    const alice = await createUser();
+    await createExercise({ name: 'Inverted row', ...row });
+    await createExercise({ name: 'Barbell row', equipment: ['bar'], ...row });
+    await createExercise({ name: 'Row hold', unit: 'seconds', ...row });
+
+    const suggested = await exercises().suggestAlternatives(
+      { ownerId: alice.id },
+      draft,
+    );
+
+    expect(suggested.map((e) => e.name)).toEqual(['Inverted row']);
+  });
+
+  // Every query scoped (CLAUDE.md): referenceableBy, the same rule the write
+  // enforces, so a suggestion is never refused on save.
+  it('offers an athlete their own and the shared library, never another athlete’s', async () => {
+    const [alice, bob] = [await createUser(), await createUser()];
+    await createExercise({ name: 'Inverted row', ...row });
+    await createExercise({ name: 'Towel row', ownerId: alice.id, ...row });
+    await createExercise({ name: 'Door row', ownerId: bob.id, ...row });
+
+    const suggested = await exercises().suggestAlternatives(
+      { ownerId: alice.id },
+      draft,
+    );
+
+    expect(suggested.map((e) => e.name).sort()).toEqual([
+      'Inverted row',
+      'Towel row',
+    ]);
+  });
+
+  it('offers an admin only the shared library', async () => {
+    const alice = await createUser();
+    await createExercise({ name: 'Inverted row', ...row });
+    await createExercise({ name: 'Towel row', ownerId: alice.id, ...row });
+
+    const suggested = await exercises().suggestAlternatives(ADMIN, draft);
+
+    expect(suggested.map((e) => e.name)).toEqual(['Inverted row']);
+  });
+
+  it('never offers the movement being edited, or a retired one', async () => {
+    const alice = await createUser();
+    const self = await createExercise({
+      name: 'Inverted row',
+      ownerId: alice.id,
+      ...row,
+    });
+    await createExercise({
+      name: 'Old row',
+      archivedAt: new Date(),
+      ...row,
+    });
+
+    const suggested = await exercises().suggestAlternatives(
+      { ownerId: alice.id },
+      { ...draft, selfId: self.id },
+    );
+
+    expect(suggested).toEqual([]);
   });
 });
 

@@ -8,6 +8,7 @@ import type {
   ExerciseLevel,
   ExerciseMechanic,
   Muscle,
+  AlternativeSuggestionsRequest,
   CreateExercise,
   ExerciseSearchPage,
   EditSetLogs,
@@ -288,6 +289,12 @@ export const api = {
   /** Every one of the athlete's entries of `kind`, in the new order. */
   reorderChecklistEntries: (body: ReorderChecklistEntries) =>
     putJson<AthleteChecklistEntry[]>("/checklist-entries/order", body),
+  /**
+   * Alternatives for a movement still being written (DN-205), best first.
+   * Every one is a fallback the write would accept for this tier.
+   */
+  suggestAlternatives: (tier: LibraryTier, body: AlternativeSuggestionsRequest) =>
+    postJson<ApiExercise[]>(`${exercisesBase(tier)}/suggest-alternatives`, body),
   createExercise: (tier: LibraryTier, body: CreateExercise) =>
     postJson<ApiExercise>(exercisesBase(tier), body),
   updateExercise: (tier: LibraryTier, id: string, body: UpdateExercise) =>

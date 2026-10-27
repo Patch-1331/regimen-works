@@ -25,7 +25,15 @@ const PUSHUP = fixtures.apiExercise({
   id: "g1",
   name: "Push-up",
   ownerId: null,
+  primaryMuscles: ["chest"],
 });
+/** A chip in the primary picker; the secondary one offers the same names. */
+const primaryMuscle = (name: string) =>
+  within(screen.getByRole("group", { name: /primary muscles/i })).getByRole(
+    "button",
+    { name },
+  );
+
 const SANDBAG = fixtures.apiExercise({
   id: "o1",
   name: "Sandbag carry",
@@ -262,6 +270,7 @@ describe("the movement library", () => {
       await screen.findByRole("button", { name: /add your own movement/i }),
     );
     await userEvent.type(await screen.findByLabelText(/^name$/i), "Wall walk");
+    await userEvent.click(primaryMuscle("Middle back"));
     await userEvent.click(
       screen.getByRole("button", { name: /add movement/i }),
     );
@@ -291,11 +300,13 @@ describe("the movement library", () => {
     );
     await userEvent.type(await screen.findByLabelText(/^name$/i), "Ring row");
     await userEvent.selectOptions(screen.getByLabelText(/pattern/i), "pull");
+    await userEvent.click(primaryMuscle("Middle back"));
+    await userEvent.click(primaryMuscle("Biceps"));
     await userEvent.click(
       screen.getByRole("checkbox", { name: /pull-up bar/i }),
     );
     await userEvent.selectOptions(
-      screen.getByLabelText(/alternative/i),
+      screen.getByLabelText(/^alternative$/i),
       "g1",
     );
     await userEvent.click(
@@ -309,11 +320,31 @@ describe("the movement library", () => {
         equipment: ["bar"],
         fallbackExerciseId: "g1",
         movementGroup: null,
+        primaryMuscles: ["middle_back", "biceps"],
       }),
     );
   });
 
-  it("holds back a movement that needs equipment and names no alternative", async () => {
+  it("holds back a movement with no muscle", async () => {
+    const writes = library();
+    renderRoute("/library");
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /add your own movement/i }),
+    );
+    await userEvent.type(await screen.findByLabelText(/^name$/i), "Wall walk");
+    await userEvent.click(
+      screen.getByRole("button", { name: /add movement/i }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /choose the muscle it works/i,
+    );
+    // Not sent, rather than sent and refused.
+    expect(writes).toEqual([]);
+  });
+
+  it("asks a movement needing equipment with no alternative for what the match needs", async () => {
     const writes = library();
     renderRoute("/library");
 
@@ -321,6 +352,7 @@ describe("the movement library", () => {
       await screen.findByRole("button", { name: /add your own movement/i }),
     );
     await userEvent.type(await screen.findByLabelText(/^name$/i), "Deadlift");
+    await userEvent.click(primaryMuscle("Hamstrings"));
     await userEvent.click(
       screen.getByRole("checkbox", { name: /pull-up bar/i }),
     );
@@ -329,10 +361,87 @@ describe("the movement library", () => {
     );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      /has to name an alternative/i,
+      /give it a category and a level/i,
     );
-    // Not sent, rather than sent and refused.
     expect(writes).toEqual([]);
+  });
+
+  it("saves a movement needing equipment with no alternative once it has a category and level", async () => {
+    let body: unknown;
+    library();
+    server.use(
+      http.post("/api/exercises", async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(PUSHUP);
+      }),
+    );
+    renderRoute("/library");
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /add your own movement/i }),
+    );
+    await userEvent.type(await screen.findByLabelText(/^name$/i), "Deadlift");
+    await userEvent.click(primaryMuscle("Hamstrings"));
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: /pull-up bar/i }),
+    );
+    await userEvent.selectOptions(screen.getByLabelText(/category/i), "strength");
+    await userEvent.selectOptions(screen.getByLabelText(/level/i), "beginner");
+    await userEvent.click(
+      screen.getByRole("button", { name: /add movement/i }),
+    );
+
+    await waitFor(() =>
+      expect(body).toMatchObject({
+        equipment: ["bar"],
+        fallbackExerciseId: null,
+        category: "strength",
+        level: "beginner",
+      }),
+    );
+  });
+
+  it("takes a suggested alternative with one tap", async () => {
+    let body: unknown;
+    let asked: unknown;
+    server.use(
+      http.get("/api/me", () =>
+        HttpResponse.json({ id: "user_alice", isAdmin: false }),
+      ),
+      http.get("/api/exercises", () => HttpResponse.json([PUSHUP])),
+      http.get("/api/exercises/search", () =>
+        HttpResponse.json({ items: [PUSHUP], total: 1, page: 1, pageSize: 25 }),
+      ),
+      http.post("/api/exercises/suggest-alternatives", async ({ request }) => {
+        asked = await request.json();
+        return HttpResponse.json([PUSHUP]);
+      }),
+      http.post("/api/exercises", async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(PUSHUP);
+      }),
+    );
+    renderRoute("/library");
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /add your own movement/i }),
+    );
+    await userEvent.type(await screen.findByLabelText(/^name$/i), "Ring dip");
+    await userEvent.click(primaryMuscle("Triceps"));
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: /pull-up bar/i }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: /use push-up/i }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /add movement/i }),
+    );
+
+    expect(asked).toMatchObject({ primaryMuscles: ["triceps"], selfId: null });
+    await waitFor(() =>
+      expect(body).toMatchObject({ fallbackExerciseId: "g1" }),
+    );
   });
 
   it("says nothing about a form nobody has tried to submit yet", async () => {
@@ -372,6 +481,7 @@ describe("the movement library", () => {
       await screen.findByRole("button", { name: /add your own movement/i }),
     );
     await userEvent.type(await screen.findByLabelText(/^name$/i), "Ring row");
+    await userEvent.click(primaryMuscle("Middle back"));
     await userEvent.click(
       screen.getByRole("button", { name: /add movement/i }),
     );

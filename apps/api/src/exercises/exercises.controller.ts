@@ -8,6 +8,7 @@ import {
   Query,
 } from '@nestjs/common';
 import {
+  alternativeSuggestionsRequestSchema,
   createExerciseSchema,
   exerciseSearchQuerySchema,
   updateExerciseSchema,
@@ -63,6 +64,19 @@ export class ExercisesController {
   @Get(':id')
   findOne(@CurrentUser() userId: string, @Param('id') id: string) {
     return this.exercisesService.findOne(userId, id);
+  }
+
+  /**
+   * Alternatives for a movement still being written (DN-205). A POST because
+   * the draft is a body, not a lookup; it writes nothing. Declared before the
+   * `:id` routes so "suggest-alternatives" is never read as a movement's id.
+   */
+  @Post('suggest-alternatives')
+  suggestAlternatives(@CurrentUser() userId: string, @Body() body: unknown) {
+    return this.exercisesService.suggestAlternatives(
+      { ownerId: userId },
+      validateBody(alternativeSuggestionsRequestSchema, body),
+    );
   }
 
   @Post()

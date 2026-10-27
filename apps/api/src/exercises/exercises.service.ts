@@ -10,6 +10,7 @@ import {
   LIBRARY_PAGE_SIZE,
   equipment as equipmentEnum,
   seededRefusal,
+  type AlternativeSuggestionsRequest,
   type CreateExercise,
   type ExerciseSearchPage,
   type ExerciseSearchQuery,
@@ -23,6 +24,10 @@ import {
   referenceableBy,
   type LibraryWriter,
 } from '../library/visible-to';
+import { alternativeSuggestions } from '../scheduler/muscle-match';
+
+/** How many alternatives the library form is offered at once (DN-205). */
+export const SUGGESTION_LIMIT = 3;
 
 /** The row as it will be once a PATCH is applied — what the rules judge. */
 function merged(existing: Exercise, patch: UpdateExercise) {
@@ -44,6 +49,9 @@ function merged(existing: Exercise, patch: UpdateExercise) {
       patch.fallbackExerciseId === undefined
         ? existing.fallbackExerciseId
         : patch.fallbackExerciseId,
+    primaryMuscles: patch.primaryMuscles ?? existing.primaryMuscles,
+    level: patch.level === undefined ? existing.level : patch.level,
+    category: patch.category === undefined ? existing.category : patch.category,
   };
 }
 
@@ -162,6 +170,41 @@ export class ExercisesService {
     });
     if (!exercise) throw new NotFoundException('No such movement');
     return exercise;
+  }
+
+  /**
+   * The alternatives worth suggesting for a movement being written (DN-205).
+   *
+   * Loaded through `referenceableBy` and narrowed to what `assertCoherent`
+   * accepts as a fallback -- no equipment, the same unit -- so every
+   * suggestion is one the write would take: an athlete is offered the global
+   * library and their own, an admin only the global.
+   */
+  async suggestAlternatives(
+    writer: LibraryWriter,
+    draft: AlternativeSuggestionsRequest,
+  ) {
+    const candidates = await this.prisma.exercise.findMany({
+      where: {
+        AND: [
+          referenceableBy(writer),
+          { equipment: { isEmpty: true }, unit: draft.unit },
+          ...(draft.selfId === null ? [] : [{ id: { not: draft.selfId } }]),
+        ],
+      },
+    });
+    return alternativeSuggestions(
+      {
+        ...draft,
+        id: draft.selfId ?? '',
+        key: null,
+        curated: false,
+        excludeFromMuscleMatch: false,
+        archivedAt: null,
+      },
+      candidates,
+      SUGGESTION_LIMIT,
+    );
   }
 
   async create(writer: LibraryWriter, body: CreateExercise) {
@@ -297,6 +340,9 @@ export class ExercisesService {
       unit: string;
       movementGroup: string | null;
       fallbackExerciseId: string | null;
+      primaryMuscles: string[];
+      level: string | null;
+      category: string | null;
     },
     selfId: string | null,
   ) {
@@ -310,13 +356,24 @@ export class ExercisesService {
     // runtime layer passes a gap through rather than throwing, by design —
     // the athlete is about to train — so nothing downstream will ever report
     // this. The seed catches it for seeded rows; this catches it for the rest.
+    //
+    // A written alternative is no longer the only way out (DN-205): with none,
+    // `applyEquipmentAvailability` asks the muscle match, which needs a prime
+    // mover, a category and a level on the movement it is matching for, and
+    // answers nothing without them.
     if (row.equipment.length > 0) {
       if (!fallback) {
-        throw new BadRequestException(
-          `An exercise needing ${row.equipment.join(', ')} must name an alternative, or an athlete without it gets a movement they cannot do`,
-        );
-      }
-      if (fallback.equipment.length > 0) {
+        const missing = [
+          row.primaryMuscles.length === 0 && 'a primary muscle',
+          row.category === null && 'a category',
+          row.level === null && 'a level',
+        ].filter((m): m is string => m !== false);
+        if (missing.length > 0) {
+          throw new BadRequestException(
+            `An exercise needing ${row.equipment.join(', ')} with no alternative needs ${missing.join(', ')}, so one can be found by muscle for an athlete without it`,
+          );
+        }
+      } else if (fallback.equipment.length > 0) {
         throw new BadRequestException(
           `The alternative "${fallback.name}" itself needs ${fallback.equipment.join(', ')} — the equipment fallback is one step, so this is where it has to stop`,
         );

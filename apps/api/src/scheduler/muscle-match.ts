@@ -284,6 +284,51 @@ export function swapSections<E extends MatchableExercise>(
 }
 
 /**
+ * The alternatives worth suggesting for a movement still being written
+ * (DN-205) -- what its author might name as its `fallbackExerciseId`.
+ *
+ * The caller loads only rows a write may point at, so this ranks rather than
+ * polices: the automatic swap's score and threshold, never harder where both
+ * levels are known, and the same category class where the draft names one.
+ * A draft that names neither still gets suggestions, because the author is
+ * asking, and a person takes the answer -- unlike `muscleMatch`, which acts
+ * on its own and so passes on anything it cannot vouch for.
+ *
+ * Best first, by score and then the automatic swap's own tie-break.
+ */
+export function alternativeSuggestions<E extends MatchableExercise>(
+  target: MatchableExercise,
+  candidates: readonly E[],
+  limit: number,
+): E[] {
+  if (target.primaryMuscles.length === 0) return [];
+  const targetLevel = LEVELS.indexOf(target.level ?? '');
+  const targetClass = categoryClass(target.category);
+
+  return candidates
+    .filter((candidate) => {
+      const level = LEVELS.indexOf(candidate.level ?? '');
+      return (
+        candidate.id !== target.id &&
+        candidate.archivedAt === null &&
+        candidate.primaryMuscles.length > 0 &&
+        candidate.unit === target.unit &&
+        matchable(target, candidate) &&
+        (targetClass === null ||
+          categoryClass(candidate.category) === targetClass) &&
+        (targetLevel === -1 || level === -1 || level <= targetLevel)
+      );
+    })
+    .map((exercise) => ({ exercise, score: matchScore(target, exercise) }))
+    .filter((r) => r.score >= MATCH_THRESHOLD)
+    .sort(
+      (a, b) => b.score - a.score || tieBreak(target, a.exercise, b.exercise),
+    )
+    .slice(0, limit)
+    .map((r) => r.exercise);
+}
+
+/**
  * Where a member of the movement's own group sits: harder only where both
  * levels are known and say so. An undescribed member is the athlete's own,
  * or older content, and the group already vouches for it.
