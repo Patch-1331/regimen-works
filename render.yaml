@@ -238,6 +238,11 @@ projects:
                 source: /*
                 destination: /index.html
             envVars:
+              # Same major as the API and CI. Unset, Render falls back to the root
+              # package.json engines range (>=22.10.0) and takes the newest Node it
+              # has, so the build changed major whenever Render added one (DN-206).
+              - key: NODE_VERSION
+                value: "24"
               # Vite inlines these at build time, so both are baked into the bundle.
               # That is correct for a publishable key and for a public API URL; never
               # put a secret here.
