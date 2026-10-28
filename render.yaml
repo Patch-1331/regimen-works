@@ -1,3 +1,15 @@
+# NOT LIVE. Production was shut down on 2026-10-28 (DN-207, ADR 0012): the
+# Blueprint was deleted in the dashboard and every resource below with it, so
+# nothing reads this file and a push that touches it deploys nothing. It stays
+# as the recipe for bringing production back, with the gotchas it took to get
+# right.
+#
+# To revive: New -> Blueprint on this repo, then re-enter every `sync: false`
+# value and re-attach the Cloudflare DNS records named under `domains`. The
+# database comes back EMPTY — the deploy re-runs migrations and the seed, but
+# training history only returns by restoring the DN-207 export into it (add your
+# IP to `ipAllowList` for the restore, then take it out again).
+#
 # Render Blueprint — https://render.com/docs/blueprint-spec
 #
 # Create via the Render dashboard: New -> Blueprint -> pick this repo. Render

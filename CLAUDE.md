@@ -84,10 +84,9 @@ somewhere other than the cause.
 - **Never `npm update`, and never regenerate the lockfile.** Both drop the Linux
   platform packages that Render's build needs (npm/cli#4828). Add a dependency with
   `npm install <pkg> --package-lock-only`, then `npm install`.
-- **The database refuses external connections.** You cannot query production
-  directly; go through the API, or add a CIDR allow-rule in `render.yaml`.
-- **Production is the only deployed environment.** There is no staging; dev is
-  local. Render preview environments need a paid plan the project does not have.
+- **Nothing is deployed.** Production was shut down on 2026-10-28 (ADR 0012);
+  dev is local and merging to `main` ships nothing. `render.yaml` is kept, not
+  live, as the recipe for bringing it back.
 
 ## Working agreements
 

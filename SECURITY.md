@@ -1,10 +1,8 @@
 # Security Policy
 
-Regimen Works is a personal project with a live deployment: the API at
-<https://api.regimenworks.com> and the web app at
-<https://regimenworks.com>, both auto-deployed from `main`. There is
-no released version line — `main` is what is running, so security fixes reach
-production as soon as they merge.
+Regimen Works is a personal project with no live deployment: production was
+shut down on 2026-10-28 and the app runs only locally. There is no released
+version line — `main` is the only version.
 
 ## Reporting a vulnerability
 
