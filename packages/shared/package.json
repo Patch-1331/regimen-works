@@ -25,8 +25,8 @@
     "zod": "^4.6.6"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^5.0.3",
-    "oxlint": "^1.86.0",
+    "@vitest/coverage-v8": "^5.0.5",
+    "oxlint": "^1.90.0",
     "oxlint-tsgolint": "^7.0.2004",
     "typescript": "^7.0.2",
     "vitest": "^5.0.0"
